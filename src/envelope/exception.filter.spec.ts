@@ -153,6 +153,44 @@ describe('BymaxExceptionFilter, HttpException mapping', () => {
   })
 
   /**
+   * A string response wins over the exception's own message.
+   *
+   * Nest normally keeps `exception.message` in sync with a string response, which
+   * hides whether extraction reads the response or the fallback. Forcing them
+   * apart proves the string-response branch returns the RESPONSE string, not
+   * `exception.message`: without that branch this envelope would carry the
+   * fallback instead.
+   */
+  it('returns the string response over a diverging exception message', () => {
+    const { filter, host, captured } = buildHarness()
+    const exception = new HttpException('response body wins', 409)
+    Object.defineProperty(exception, 'message', { value: 'exception fallback' })
+
+    filter.catch(exception, host)
+
+    expect(captured.body?.message).toBe('response body wins')
+  })
+
+  /**
+   * A response object's string message wins over the exception's own message.
+   *
+   * The object-response branch must read `response.message` when it is a string,
+   * not `exception.message`. Diverging the two proves both the outer object guard
+   * and the inner string-message return are load-bearing: emptying either would
+   * yield the fallback message instead of the response's.
+   */
+  it('returns the object response message over a diverging exception message', () => {
+    const { filter, host, captured } = buildHarness()
+    const exception = new HttpException({ message: 'object body wins' }, 403)
+    Object.defineProperty(exception, 'message', { value: 'exception fallback' })
+
+    filter.catch(exception, host)
+
+    expect(captured.body?.code).toBe('BYMAX_FORBIDDEN')
+    expect(captured.body?.message).toBe('object body wins')
+  })
+
+  /**
    * Object response without a string message falls back to the exception message.
    *
    * When the response object carries no usable string `message`, extraction must

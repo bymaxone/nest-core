@@ -140,6 +140,22 @@ describe('createMetricsController', () => {
     const options = normalizeCoreOptions({ metrics: { enabled: true, path: 'other' } })
     const { controller } = buildController({ path: 'metrics', options })
 
-    await expect(controller.scrape({})).rejects.toThrow(/metrics\.path/)
+    let thrown: unknown
+    try {
+      await controller.scrape({})
+    } catch (error) {
+      thrown = error
+    }
+
+    // Assert each segment of the guidance message so no part can silently empty
+    // out: it must name where the controller is registered, what was requested,
+    // why the mismatch is unavoidable on the async path, and how to resolve it.
+    expect(thrown).toBeInstanceOf(Error)
+    const message = (thrown as Error).message
+    expect(message).toContain('controller is registered at "metrics" but the resolved')
+    expect(message).toContain('request "other"')
+    expect(message).toContain("Route metadata is fixed before forRootAsync's options")
+    expect(message).toContain('a custom "metrics.path" is only honored through forRoot()')
+    expect(message).toContain('keep the default "metrics" route on the async path.')
   })
 })

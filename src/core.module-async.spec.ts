@@ -16,7 +16,7 @@ import request from 'supertest'
 import { normalizeCoreOptions } from './core.options'
 import type { BymaxCoreModuleOptions } from './core.options'
 import { BymaxCoreModule } from './core.module'
-import { BYMAX_CORE_OPTIONS } from './core.tokens'
+import { BYMAX_CORE_OPTIONS, BYMAX_METRICS_REGISTRY, BYMAX_TIMING_SINK } from './core.tokens'
 import { assertAsyncFeatureEnabled } from './passthrough.providers'
 
 /** Minimal controller whose responses reveal any pipeline interference. */
@@ -65,6 +65,22 @@ describe('BymaxCoreModule.forRootAsync', () => {
 
     expect(options).toEqual(normalizeCoreOptions({ health: { path: 'zzz' } }))
     expect(Object.isFrozen(options)).toBe(true)
+  })
+
+  /**
+   * The async path always exports its resolved tokens.
+   *
+   * The metrics registry and the timing-sink bridge are always registered on the
+   * async path (options are unknown at definition time), so all three tokens,
+   * the core options plus both metrics tokens, must appear in the module exports;
+   * an empty export list would leave consumers unable to inject them.
+   */
+  it('exports the core options and both metrics tokens', () => {
+    const def = BymaxCoreModule.forRootAsync({ inject: [], useFactory: () => ({}) })
+
+    expect(def.exports).toContain(BYMAX_CORE_OPTIONS)
+    expect(def.exports).toContain(BYMAX_TIMING_SINK)
+    expect(def.exports).toContain(BYMAX_METRICS_REGISTRY)
   })
 
   /**

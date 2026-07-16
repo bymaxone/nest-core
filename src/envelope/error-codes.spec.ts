@@ -108,3 +108,38 @@ describe('codeForStatus', () => {
     expect(BYMAX_VALIDATION_FAILED).toBe('BYMAX_VALIDATION_FAILED')
   })
 })
+
+describe('BYMAX_* code literals', () => {
+  /**
+   * Exact literal value of every exported code.
+   *
+   * The mapping table above asserts `codeForStatus(x)` equals the imported
+   * constant, so both sides shift together if a constant's literal value drifts.
+   * Pinning each constant to its exact string here closes that hole: the code
+   * strings are part of the machine-readable contract consumers switch on, so a
+   * silent change to any literal is a breaking change and must fail the suite.
+   */
+  const literals: ReadonlyArray<readonly [string, string]> = [
+    [BYMAX_BAD_REQUEST, 'BYMAX_BAD_REQUEST'],
+    [BYMAX_VALIDATION_FAILED, 'BYMAX_VALIDATION_FAILED'],
+    [BYMAX_UNAUTHORIZED, 'BYMAX_UNAUTHORIZED'],
+    [BYMAX_FORBIDDEN, 'BYMAX_FORBIDDEN'],
+    [BYMAX_NOT_FOUND, 'BYMAX_NOT_FOUND'],
+    [BYMAX_CONFLICT, 'BYMAX_CONFLICT'],
+    [BYMAX_PAYLOAD_TOO_LARGE, 'BYMAX_PAYLOAD_TOO_LARGE'],
+    [BYMAX_UNSUPPORTED_MEDIA_TYPE, 'BYMAX_UNSUPPORTED_MEDIA_TYPE'],
+    [BYMAX_UNPROCESSABLE_ENTITY, 'BYMAX_UNPROCESSABLE_ENTITY'],
+    [BYMAX_TOO_MANY_REQUESTS, 'BYMAX_TOO_MANY_REQUESTS'],
+    [BYMAX_CLIENT_ERROR, 'BYMAX_CLIENT_ERROR'],
+    [BYMAX_INTERNAL_ERROR, 'BYMAX_INTERNAL_ERROR'],
+    [BYMAX_NOT_IMPLEMENTED, 'BYMAX_NOT_IMPLEMENTED'],
+    [BYMAX_BAD_GATEWAY, 'BYMAX_BAD_GATEWAY'],
+    [BYMAX_SERVICE_UNAVAILABLE, 'BYMAX_SERVICE_UNAVAILABLE'],
+    [BYMAX_GATEWAY_TIMEOUT, 'BYMAX_GATEWAY_TIMEOUT']
+  ]
+
+  it.each(literals)('exposes the exact literal "%s"', (actual, expected) => {
+    // The constant's runtime value must equal its documented string verbatim.
+    expect(actual).toBe(expected)
+  })
+})
