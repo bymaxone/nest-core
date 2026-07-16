@@ -1,6 +1,6 @@
 # Phase 0: repository-scaffold
 
-> **Status**: 📋 ToDo · **Progress**: 0 / 6 tasks · **Last updated**: 2026-07-06
+> **Status**: 🔄 In Progress · **Progress**: 2 / 6 tasks · **Last updated**: 2026-07-16
 > **Source roadmap**: [`../development_plan.md`](../development_plan.md) (P0)
 > **Source spec**: [`../technical_specification.md`](../technical_specification.md) §3, §12, §13
 
@@ -40,8 +40,8 @@ Expected starting state: the repository contains only `docs/` (specification, de
 
 | ID | Task | Status | Priority | Size | Depends on |
 |---|---|---|---|---|---|
-| 0.1 | Branch, `package.json`, pnpm install | 📋 ToDo | P0 | S | none |
-| 0.2 | Build configs: tsconfig set, tsup, placeholder barrels | 📋 ToDo | P0 | S | 0.1 |
+| 0.1 | Branch, `package.json`, pnpm install | ✅ Done | P0 | S | none |
+| 0.2 | Build configs: tsconfig set, tsup, placeholder barrels | ✅ Done | P0 | S | 0.1 |
 | 0.3 | Lint, format, local governance (husky, commitlint, lint-staged) | 📋 ToDo | P0 | S | 0.1 |
 | 0.4 | Jest configs (100% threshold) and Stryker config | 📋 ToDo | P0 | S | 0.2 |
 | 0.5 | CI workflows, guard scripts, community files | 📋 ToDo | P0 | L | 0.2, 0.3, 0.4 |
@@ -53,7 +53,7 @@ Expected starting state: the repository contains only `docs/` (specification, de
 
 ### Task 0.1: Branch, `package.json`, pnpm install
 
-- **Status**: 📋 ToDo
+- **Status**: ✅ Done
 - **Priority**: P0
 - **Size**: S
 - **Depends on**: none
@@ -64,11 +64,11 @@ Create the phase branch, author `package.json` under the `@bymax-one` scope with
 
 #### Acceptance criteria
 
-- [ ] Branch `feat/phase-00-repository-scaffold` exists and is checked out (docs committed to `main` first if the repo had no initial commit).
-- [ ] `package.json` has `"name": "@bymax-one/nest-core"`, `"version": "0.1.0-alpha.0"`, `"dependencies": {}`, engines `node >= 24`, `publishConfig` public.
-- [ ] `exports` declares exactly `.`, `./pagination`, `./health`, each with `types`/`import`/`require` targets under `dist/`.
-- [ ] Peers: `@nestjs/common` ^11, `@nestjs/core` ^11, `reflect-metadata` ^0.2, `rxjs` ^7, `prom-client` ^15 with `peerDependenciesMeta` marking only `prom-client` optional.
-- [ ] `pnpm install` completes with no missing-peer warnings.
+- [x] Branch `feat/phase-00-repository-scaffold` exists and is checked out (docs committed to `main` first if the repo had no initial commit).
+- [x] `package.json` has `"name": "@bymax-one/nest-core"`, `"version": "0.1.0-alpha.0"`, `"dependencies": {}`, engines `node >= 24`, `publishConfig` public.
+- [x] `exports` declares exactly `.`, `./pagination`, `./health`, each with `types`/`import`/`require` targets under `dist/`.
+- [x] Peers: `@nestjs/common` ^11, `@nestjs/core` ^11, `reflect-metadata` ^0.2, `rxjs` ^7, `prom-client` ^15 with `peerDependenciesMeta` marking only `prom-client` optional.
+- [x] `pnpm install` completes with no missing-peer warnings.
 
 #### Files to create / modify
 
@@ -143,7 +143,7 @@ Completion Protocol (after you finish):
 
 ### Task 0.2: Build configs: tsconfig set, tsup, placeholder barrels
 
-- **Status**: 📋 ToDo
+- **Status**: ✅ Done
 - **Priority**: P0
 - **Size**: S
 - **Depends on**: 0.1
@@ -154,9 +154,9 @@ Create the strict tsconfig set and `tsup.config.ts` with three entries, plus pla
 
 #### Acceptance criteria
 
-- [ ] `tsconfig.json` (strict, ES2022, `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`) plus build/jest/e2e variants, adapted from the sibling reference.
-- [ ] `tsup.config.ts` declares three entries (`src/index.ts`, `src/pagination/index.ts`, `src/health/index.ts`), formats ESM + CJS, `dts: true`, peers externalized (`/^@nestjs\//`, `rxjs`, `reflect-metadata`, `prom-client`), `minify: false`.
-- [ ] Placeholder barrels exist (`export {}`) and `pnpm typecheck` and `pnpm build` pass; `dist/` shows `.mjs`, `.cjs`, `.d.ts` for the three subpaths.
+- [x] `tsconfig.json` (strict, ES2022, `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`) plus build/jest/e2e variants, adapted from the sibling reference.
+- [x] `tsup.config.ts` declares three entries (`src/index.ts`, `src/pagination/index.ts`, `src/health/index.ts`), formats ESM + CJS, `dts: true`, peers externalized (`/^@nestjs\//`, `rxjs`, `reflect-metadata`, `prom-client`), `minify: false`.
+- [x] Placeholder barrels exist (`export {}`) and `pnpm typecheck` and `pnpm build` pass; `dist/` shows `.mjs`, `.cjs`, `.d.ts` for the three subpaths.
 
 #### Files to create / modify
 
@@ -552,3 +552,5 @@ Completion Protocol (after you finish):
 ## Completion log
 
 <!-- Append one line per completed task: - <id> ✅ <YYYY-MM-DD>: <summary> -->
+- 0.1 ✅ 2026-07-16: package.json scaffolded (three-subpath exports, empty dependencies, peers per spec 12.1) and pnpm install completed with no missing-peer warnings; pnpm pinned to the local 10.8.1 (spec text mentioned 11.x, reconciled to reality).
+- 0.2 ✅ 2026-07-16: strict tsconfig set (base/build/jest/e2e), tsup config with three entries, and placeholder barrels landed; typecheck and build both pass, dist/ contains .mjs/.cjs/.d.ts for `.`, `./pagination`, `./health`.
