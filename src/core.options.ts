@@ -102,8 +102,12 @@ export interface ResolvedCoreOptions {
   metrics: ResolvedMetricsOptions
 }
 
-/** Default health route prefix. */
-const DEFAULT_HEALTH_PATH = 'health'
+/**
+ * Default health route prefix. Exported so the health controller factory can
+ * fall back to the same default the options resolver applies, without
+ * duplicating the literal.
+ */
+export const DEFAULT_HEALTH_PATH = 'health'
 
 /** Default per-indicator timeout in milliseconds. */
 const DEFAULT_INDICATOR_TIMEOUT_MS = 5000
