@@ -10,7 +10,7 @@ ships as a peer dependency; the package itself carries `"dependencies": {}`.
 [![npm version](https://img.shields.io/npm/v/@bymax-one/nest-core?style=flat-square)](https://www.npmjs.com/package/@bymax-one/nest-core)
 [![license](https://img.shields.io/github/license/bymaxone/nest-core?style=flat-square)](./LICENSE)
 [![coverage](https://img.shields.io/badge/coverage-100%25-brightgreen?style=flat-square)](https://github.com/bymaxone/nest-core/actions/workflows/ci.yml)
-[![mutation score](https://img.shields.io/badge/mutation-pending-lightgrey?style=flat-square)](./docs/mutation_testing_results.md)
+[![mutation score](https://img.shields.io/badge/mutation-pending-lightgrey?style=flat-square)](./docs/technical_specification.md)
 
 ## Install
 
@@ -25,6 +25,10 @@ pnpm add prom-client
 ```
 
 ## Quick start
+
+> This package is under active development and is not yet published. The
+> module and its options shown below become available as the feature phases
+> land; the snippet describes the target API.
 
 ```typescript
 import { Module } from '@nestjs/common'

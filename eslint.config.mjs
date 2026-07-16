@@ -151,7 +151,20 @@ export default [
     rules: {
       'no-eval': 'error',
       'no-new-func': 'error',
-      'security/detect-object-injection': 'warn'
+      'security/detect-object-injection': 'warn',
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            { name: 'crypto', message: "Use 'node:crypto' with the node: prefix instead." },
+            { name: 'bcrypt', message: 'Use node:crypto scrypt instead.' },
+            { name: 'argon2', message: 'Use node:crypto scrypt instead.' },
+            { name: 'uuid', message: 'Use crypto.randomUUID() from node:crypto instead.' },
+            { name: 'nanoid', message: 'Use crypto.randomBytes() from node:crypto instead.' },
+            { name: 'crypto-js', message: 'Use node:crypto instead.' }
+          ]
+        }
+      ]
     }
   },
 
