@@ -1,6 +1,6 @@
 # Phase 1: module-core
 
-> **Status**: 🔄 In Progress · **Progress**: 3 / 6 tasks · **Last updated**: 2026-07-16
+> **Status**: 🔄 In Progress · **Progress**: 4 / 6 tasks · **Last updated**: 2026-07-16
 > **Source roadmap**: [`../development_plan.md`](../development_plan.md) (P1)
 > **Source spec**: [`../technical_specification.md`](../technical_specification.md) §2, §4, §10
 
@@ -42,7 +42,7 @@ Expected starting state: phase 0 merged; the repository builds, lints, and tests
 | 1.1 | Branch, Symbol tokens, `BYMAX_*` error-code catalog       | ✅ Done | P0       | S    | none                    |
 | 1.2 | Options types, defaults, normalization (deep freeze)      | ✅ Done | P0       | M    | 1.1                     |
 | 1.3 | `BymaxCoreModule.forRoot` (sync conditional registration) | ✅ Done | P0       | M    | 1.2                     |
-| 1.4 | `forRootAsync` with gated pass-through slots              | 📋 ToDo | P0       | M    | 1.3                     |
+| 1.4 | `forRootAsync` with gated pass-through slots              | ✅ Done | P0       | M    | 1.3                     |
 | 1.5 | Default bindings, barrel exports, override tests          | 📋 ToDo | P0       | M    | 1.4                     |
 | 1.6 | Phase close: verification, PR, Copilot review, merge      | 📋 ToDo | P0       | S    | 1.1, 1.2, 1.3, 1.4, 1.5 |
 
@@ -284,7 +284,7 @@ Completion Protocol (after you finish):
 
 ### Task 1.4: `forRootAsync` with gated pass-through slots
 
-- **Status**: 📋 ToDo
+- **Status**: ✅ Done
 - **Priority**: P0
 - **Size**: M
 - **Depends on**: 1.3
@@ -295,10 +295,10 @@ The async path: options resolve from an injected factory; `APP_FILTER` and `APP_
 
 #### Acceptance criteria
 
-- [ ] `forRootAsync({ inject, useFactory })` resolves and normalizes options from the factory.
-- [ ] `APP_FILTER` and `APP_INTERCEPTOR` slots are always registered on the async path; with the feature disabled, the bound implementation is a transparent pass-through (request and response flow unchanged, asserted by test).
-- [ ] Controllers that cannot register conditionally on the async path fail fast with a descriptive configuration error if reached while disabled (per spec §2.2), covered by test.
-- [ ] 100% coverage holds.
+- [x] `forRootAsync({ inject, useFactory })` resolves and normalizes options from the factory.
+- [x] `APP_FILTER` and `APP_INTERCEPTOR` slots are always registered on the async path; with the feature disabled, the bound implementation is a transparent pass-through (request and response flow unchanged, asserted by test).
+- [x] Controllers that cannot register conditionally on the async path fail fast with a descriptive configuration error if reached while disabled (per spec §2.2), covered by test.
+- [x] 100% coverage holds.
 
 #### Files to create / modify
 
@@ -521,3 +521,4 @@ Completion Protocol (after you finish):
 - 1.1 ✅ 2026-07-16: Symbol DI tokens and the `BYMAX_*` error-code catalog with `codeForStatus`; 100% covered.
 - 1.2 ✅ 2026-07-16: options surface, per-feature defaults, and `normalizeCoreOptions` with recursive deep-freeze; 100% covered.
 - 1.3 ✅ 2026-07-16: `BymaxCoreModule.forRoot` on `ConfigurableModuleBuilder` with `isGlobal` via `setExtras` and empty conditional-registration seams; 100% covered.
+- 1.4 ✅ 2026-07-16: `forRootAsync` with always-on `APP_FILTER`/`APP_INTERCEPTOR` transparent pass-through slots and the disabled-feature guard; supertest proves transparency; 100% covered.
