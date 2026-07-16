@@ -68,7 +68,7 @@ The injectable monotonic clock seam and the neutral accessor that extracts metho
 
 #### Agent prompt
 
-```
+````
 You are a senior NestJS library engineer working on @bymax-one/nest-core.
 
 PROJECT: @bymax-one/nest-core, application foundation kit for NestJS 11. This phase implements
@@ -115,7 +115,7 @@ Completion Protocol (after you finish):
 5. Update the P3 row in ../development_plan.md (canonical) and mirror docs/tasks/README.md.
 6. Recompute the overall counter line in ../development_plan.md.
 7. Commit: `feat(timing): add monotonic clock seam and route accessor (3.1)`.
-```
+````
 
 ---
 
@@ -143,7 +143,7 @@ The `TimingInterceptor`: measures the full handler execution on success and on e
 
 #### Agent prompt
 
-```
+````
 You are a senior NestJS library engineer working on @bymax-one/nest-core.
 
 PROJECT: @bymax-one/nest-core, application foundation kit for NestJS 11. The timing interceptor
@@ -193,7 +193,7 @@ Completion Protocol (after you finish):
 5. Update the P3 row in ../development_plan.md (canonical) and mirror docs/tasks/README.md.
 6. Recompute the overall counter line in ../development_plan.md.
 7. Commit: `feat(timing): add timing interceptor with sink safety (3.2)`.
-```
+````
 
 ---
 
@@ -220,7 +220,7 @@ Wire the real interceptor into both registration paths, replacing the phase 1 se
 
 #### Agent prompt
 
-```
+````
 You are a senior NestJS library engineer working on @bymax-one/nest-core.
 
 PROJECT: @bymax-one/nest-core, application foundation kit for NestJS 11. Conditional
@@ -264,7 +264,7 @@ Completion Protocol (after you finish):
 5. Update the P3 row in ../development_plan.md (canonical) and mirror docs/tasks/README.md.
 6. Recompute the overall counter line in ../development_plan.md.
 7. Commit: `feat(timing): wire conditional registration for timing (3.3)`.
-```
+````
 
 ---
 
@@ -291,7 +291,7 @@ Audit the phase Definition of Done, update dashboards, open the phase PR, obtain
 
 #### Agent prompt
 
-```
+````
 You are a senior release engineer closing a development phase of @bymax-one/nest-core.
 
 PROJECT: @bymax-one/nest-core. One PR per phase; GitHub Copilot code review is a mandatory gate.
@@ -335,7 +335,7 @@ Completion Protocol (after you finish):
 3. Append: `- 3.4 ✅ <YYYY-MM-DD>: phase PR merged with Copilot review`.
 4. Update the P3 row (✅, 100%) and overall counter in ../development_plan.md; mirror README.md.
 5. Commit dashboard updates post-merge as `docs(core): close phase 3 dashboards (3.4)`.
-```
+````
 
 ---
 
