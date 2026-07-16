@@ -4,9 +4,11 @@
  * sample feeds two default HTTP metrics: `http_requests_total` (counter) and
  * `http_request_duration_seconds` (histogram). Both carry a deliberately
  * bounded label set, `method`, `route`, and `status_code` only, where `route`
- * is the route template from the sample rather than the raw URL, so metric
- * cardinality stays a hard contract and never explodes on high-cardinality
- * paths. `prom-client` is never imported at the top level here: the loaded
+ * is the sample's route template rather than the full URL with its query string.
+ * Cardinality is bounded for matched routes; an unmatched request has no
+ * template and falls back to its query-stripped path, so an endpoint exposed to
+ * unmatched traffic can see `route` cardinality grow and should bound or drop
+ * those series at the scraper. `prom-client` is never imported at the top level here: the loaded
  * module is passed in by the registry factory seam, keeping the optional-peer
  * boundary intact.
  * @layer Provider
