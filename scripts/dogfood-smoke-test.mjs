@@ -39,7 +39,14 @@ const SUBPATHS = [
     label: './pagination',
     distName: 'pagination/index',
     specifier: '@bymax-one/nest-core/pagination',
-    exports: []
+    exports: [
+      'normalizePageQuery',
+      'buildPageResult',
+      'normalizeCursorQuery',
+      'buildCursorResult',
+      'encodeCursor',
+      'decodeCursor'
+    ]
   },
   {
     label: './health',

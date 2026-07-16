@@ -1,6 +1,6 @@
 # Phase 4: pagination
 
-> **Status**: 🔄 In Progress · **Progress**: 3 / 5 tasks · **Last updated**: 2026-07-16
+> **Status**: 🔄 In Progress · **Progress**: 4 / 5 tasks · **Last updated**: 2026-07-16
 > **Source roadmap**: [`../development_plan.md`](../development_plan.md) (P4)
 > **Source spec**: [`../technical_specification.md`](../technical_specification.md) §7, §14.4
 
@@ -38,7 +38,7 @@ Expected starting state: phase 1 merged (the `BYMAX_*` catalog exists). Code-par
 | 4.1 | Branch, offset primitives (`normalizePageQuery`, `buildPageResult`) | ✅ Done | P0 | M | none |
 | 4.2 | Cursor codec (`encodeCursor`, `decodeCursor`) | ✅ Done | P0 | M | none |
 | 4.3 | `normalizeCursorQuery` and `buildCursorResult` | ✅ Done | P0 | S | 4.2 |
-| 4.4 | Subpath barrel, zero-provider proof, boundary suite | 📋 ToDo | P0 | S | 4.1, 4.3 |
+| 4.4 | Subpath barrel, zero-provider proof, boundary suite | ✅ Done | P0 | S | 4.1, 4.3 |
 | 4.5 | Phase close: verification, PR, Copilot review, merge | 📋 ToDo | P0 | S | 4.1, 4.2, 4.3, 4.4 |
 
 ---
@@ -272,7 +272,7 @@ Completion Protocol (after you finish):
 
 ### Task 4.4: Subpath barrel, zero-provider proof, boundary suite
 
-- **Status**: 📋 ToDo
+- **Status**: ✅ Done
 - **Priority**: P0
 - **Size**: S
 - **Depends on**: 4.1, 4.3
@@ -283,9 +283,9 @@ The `./pagination` barrel, proof that the subpath involves zero NestJS providers
 
 #### Acceptance criteria
 
-- [ ] `src/pagination/index.ts` exports the full §7 surface, nothing internal.
-- [ ] A test imports the built `./pagination` subpath and verifies it works without any Nest module or provider in scope.
-- [ ] Dogfood smoke test green (ESM and CJS for the subpath); bundle stays within the provisional budget; 100% coverage holds.
+- [x] `src/pagination/index.ts` exports the full §7 surface, nothing internal.
+- [x] A test imports the built `./pagination` subpath and verifies it works without any Nest module or provider in scope.
+- [x] Dogfood smoke test green (ESM and CJS for the subpath); bundle stays within the provisional budget; 100% coverage holds.
 
 #### Files to create / modify
 
@@ -421,3 +421,4 @@ Completion Protocol (after you finish):
 - 4.1 ✅ 2026-07-16: offset primitives with clamping (page floor, limit floor/cap, per-call defaults) and computed-meta page-result builder; 100% coverage.
 - 4.2 ✅ 2026-07-16: opaque base64url cursor codec; decode rejects non-base64url, non-JSON, wrong-shape, and disallowed-value input with a detail-free BYMAX_VALIDATION_FAILED 400; 100% coverage.
 - 4.3 ✅ 2026-07-16: cursor query normalization (shared limit clamp, string cursor pass-through) and fetch-one-extra result builder deriving nextCursor from the last returned item; 100% coverage.
+- 4.4 ✅ 2026-07-16: selective `./pagination` barrel and standalone subpath proof; build emits real subpath artifacts (0.87 kB brotli), dogfood ESM/CJS green, 100% coverage.
