@@ -1,6 +1,6 @@
 # Phase 0: repository-scaffold
 
-> **Status**: 🔄 In Progress · **Progress**: 3 / 6 tasks · **Last updated**: 2026-07-16
+> **Status**: 🔄 In Progress · **Progress**: 4 / 6 tasks · **Last updated**: 2026-07-16
 > **Source roadmap**: [`../development_plan.md`](../development_plan.md) (P0)
 > **Source spec**: [`../technical_specification.md`](../technical_specification.md) §3, §12, §13
 
@@ -43,7 +43,7 @@ Expected starting state: the repository contains only `docs/` (specification, de
 | 0.1 | Branch, `package.json`, pnpm install                            | ✅ Done | P0       | S    | none                    |
 | 0.2 | Build configs: tsconfig set, tsup, placeholder barrels          | ✅ Done | P0       | S    | 0.1                     |
 | 0.3 | Lint, format, local governance (husky, commitlint, lint-staged) | ✅ Done | P0       | S    | 0.1                     |
-| 0.4 | Jest configs (100% threshold) and Stryker config                | 📋 ToDo | P0       | S    | 0.2                     |
+| 0.4 | Jest configs (100% threshold) and Stryker config                | ✅ Done | P0       | S    | 0.2                     |
 | 0.5 | CI workflows, guard scripts, community files                    | 📋 ToDo | P0       | L    | 0.2, 0.3, 0.4           |
 | 0.6 | Phase close: verification, PR, Copilot review, merge            | 📋 ToDo | P0       | S    | 0.1, 0.2, 0.3, 0.4, 0.5 |
 
@@ -303,7 +303,7 @@ Completion Protocol (after you finish):
 
 ### Task 0.4: Jest configs (100% threshold) and Stryker config
 
-- **Status**: 📋 ToDo
+- **Status**: ✅ Done
 - **Priority**: P0
 - **Size**: S
 - **Depends on**: 0.2
@@ -314,10 +314,10 @@ Both Jest configs with the 100% coverage threshold and bounded workers, plus the
 
 #### Acceptance criteria
 
-- [ ] `jest.config.ts` (unit) and `jest.coverage.config.ts` (full-coverage run) both enforce `coverageThreshold` at 100% on all four axes and pin `maxWorkers: '50%'`.
-- [ ] `jest.e2e.config.ts` present for the later fixture suite (no threshold conflicts, `passWithNoTests` while empty).
-- [ ] `stryker.config.json` targets `src/**/*.ts`, jest runner, thresholds `high: 99, low: 95, break: 95`.
-- [ ] `pnpm test:cov` passes (placeholder sources only, threshold active).
+- [x] `jest.config.ts` (unit) and `jest.coverage.config.ts` (full-coverage run) both enforce `coverageThreshold` at 100% on all four axes and pin `maxWorkers: '50%'`.
+- [x] `jest.e2e.config.ts` present for the later fixture suite (no threshold conflicts, `passWithNoTests` while empty).
+- [x] `stryker.config.json` targets `src/**/*.ts`, jest runner, thresholds `high: 99, low: 95, break: 95`.
+- [x] `pnpm test:cov` passes (placeholder sources only, threshold active).
 
 #### Files to create / modify
 
@@ -556,3 +556,4 @@ Completion Protocol (after you finish):
 - 0.1 ✅ 2026-07-16: package.json scaffolded (three-subpath exports, empty dependencies, peers per spec 12.1) and pnpm install completed with no missing-peer warnings; pnpm pinned to the local 10.8.1 (spec text mentioned 11.x, reconciled to reality).
 - 0.2 ✅ 2026-07-16: strict tsconfig set (base/build/jest/e2e), tsup config with three entries, and placeholder barrels landed; typecheck and build both pass, dist/ contains .mjs/.cjs/.d.ts for `.`, `./pagination`, `./health`.
 - 0.3 ✅ 2026-07-16: flat ESLint config, Prettier, husky pre-commit/commit-msg, commitlint, and the lint-staged block landed; a non-conventional commit message was rejected locally by the commit-msg hook, then reset.
+- 0.4 ✅ 2026-07-16: unit, coverage, and e2e Jest configs (100% threshold, maxWorkers 50%) and the Stryker config landed; `pnpm test:cov` and `pnpm test:cov:all` both pass with the threshold active against the placeholder sources.
