@@ -26,7 +26,7 @@ const REQUESTS_TOTAL = 'http_requests_total'
 const REQUEST_DURATION_SECONDS = 'http_request_duration_seconds'
 
 /** The exact, bounded label names applied to both HTTP metrics. */
-const HTTP_METRIC_LABELS: readonly string[] = ['method', 'route', 'status_code']
+const HTTP_METRIC_LABELS: readonly HttpMetricLabel[] = ['method', 'route', 'status_code']
 
 /** Divisor converting a millisecond duration into the seconds a histogram expects. */
 const MILLISECONDS_PER_SECOND = 1000
@@ -44,15 +44,15 @@ const MILLISECONDS_PER_SECOND = 1000
 function getOrCreateCounter(
   promClient: PromClientModule,
   registry: MetricsRegistry
-): Counter<string> {
+): Counter<HttpMetricLabel> {
   const existing = registry.getSingleMetric(REQUESTS_TOTAL)
   if (existing !== undefined) {
-    return existing as Counter<string>
+    return existing as unknown as Counter<HttpMetricLabel>
   }
   return new promClient.Counter({
     name: REQUESTS_TOTAL,
     help: 'Total number of completed HTTP requests, labeled by method, route, and status_code.',
-    labelNames: HTTP_METRIC_LABELS,
+    labelNames: [...HTTP_METRIC_LABELS],
     registers: [registry]
   })
 }
@@ -69,15 +69,15 @@ function getOrCreateCounter(
 function getOrCreateHistogram(
   promClient: PromClientModule,
   registry: MetricsRegistry
-): Histogram<string> {
+): Histogram<HttpMetricLabel> {
   const existing = registry.getSingleMetric(REQUEST_DURATION_SECONDS)
   if (existing !== undefined) {
-    return existing as Histogram<string>
+    return existing as unknown as Histogram<HttpMetricLabel>
   }
   return new promClient.Histogram({
     name: REQUEST_DURATION_SECONDS,
     help: 'HTTP request duration in seconds, labeled by method, route, and status_code.',
-    labelNames: HTTP_METRIC_LABELS,
+    labelNames: [...HTTP_METRIC_LABELS],
     registers: [registry]
   })
 }
@@ -88,10 +88,10 @@ function getOrCreateHistogram(
  */
 export class TimingMetricsSink implements ITimingSink {
   /** The total request counter, shared with the injected registry. */
-  private readonly counter: Counter<string>
+  private readonly counter: Counter<HttpMetricLabel>
 
   /** The request-duration histogram, shared with the injected registry. */
-  private readonly histogram: Histogram<string>
+  private readonly histogram: Histogram<HttpMetricLabel>
 
   /**
    * @param registry - The dedicated metrics registry the samples feed.
