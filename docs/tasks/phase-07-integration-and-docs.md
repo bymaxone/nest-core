@@ -1,6 +1,6 @@
 # Phase 7: integration-and-docs
 
-> **Status**: 🔄 In Progress · **Progress**: 3 / 5 tasks · **Last updated**: 2026-07-16
+> **Status**: 🔄 In Progress · **Progress**: 4 / 5 tasks · **Last updated**: 2026-07-16
 > **Source roadmap**: [`../development_plan.md`](../development_plan.md) (P7)
 > **Source spec**: [`../technical_specification.md`](../technical_specification.md) §15, §13.2
 
@@ -38,7 +38,7 @@ Expected starting state: phases 2 through 6 merged; every feature works in isola
 | 7.1 | Branch, e2e fixture app, `forRoot` combinations | ✅ Done | P0 | M | none |
 | 7.2 | `forRootAsync` e2e and cross-feature assertions | ✅ Done | P0 | M | 7.1 |
 | 7.3 | Full README (feature tour, configuration reference, examples) | ✅ Done | P0 | M | 7.2 |
-| 7.4 | CHANGELOG entry, dogfood, docs polish | 📋 ToDo | P1 | S | 7.3 |
+| 7.4 | CHANGELOG entry, dogfood, docs polish | ✅ Done | P1 | S | 7.3 |
 | 7.5 | Phase close: verification, PR, Copilot review, merge | 📋 ToDo | P0 | S | 7.1, 7.2, 7.3, 7.4 |
 
 ---
@@ -310,7 +310,7 @@ Completion Protocol (after you finish):
 
 ### Task 7.4: CHANGELOG entry, dogfood, docs polish
 
-- **Status**: 📋 ToDo
+- **Status**: ✅ Done
 - **Priority**: P1
 - **Size**: S
 - **Depends on**: 7.3
@@ -321,9 +321,17 @@ The changelog entry for the upcoming release, the packaging proof, and a final d
 
 #### Acceptance criteria
 
-- [ ] `CHANGELOG.md` Unreleased section describes the full 0.1.0 surface (one bullet per feature area).
-- [ ] Dogfood smoke test green from the packed tarball (every subpath, ESM and CJS).
-- [ ] `SECURITY.md` and `CONTRIBUTING.md` reviewed against the final surface; stale statements corrected.
+- [x] `CHANGELOG.md` Unreleased section describes the full 0.1.0 surface (one bullet per feature area).
+- [x] Dogfood smoke test green from the packed tarball (every subpath, ESM and CJS).
+- [x] `SECURITY.md` and `CONTRIBUTING.md` reviewed against the final surface; stale statements corrected.
+
+#### Implementation note
+
+`SECURITY.md` was already accurate against the final surface (subpaths,
+correlation-id and cursor threat classes, error-detail leakage) and needed no
+change. `CONTRIBUTING.md` was stale: its verification command and checklist
+never mentioned `pnpm test:e2e`, the suite this phase added; both are updated
+to run and describe the end-to-end gate alongside the existing ones.
 
 #### Files to create / modify
 
@@ -458,3 +466,4 @@ Completion Protocol (after you finish):
 - 7.1 ✅ 2026-07-16: e2e fixture app (stub correlation provider, stub health indicator) and forRoot all-on/all-off suites; fixed a consumer-override DI bug found while wiring the fixture (see Task 7.1 implementation note).
 - 7.2 ✅ 2026-07-16: forRootAsync e2e suite (all-on parity, pass-through byte-for-byte proof) and cross-feature suite (live correlation id, exact http_requests_total accumulation, two-way readiness flip).
 - 7.3 ✅ 2026-07-16: complete public README (feature tour, full configuration reference, DI token table, error envelope/timing/pagination/health/metrics sections, nest-logger integration, compatibility); every compilable snippet verified via a temporary tsc pass.
+- 7.4 ✅ 2026-07-16: CHANGELOG Unreleased section covers the full 0.1.0 surface; dogfood smoke test and check-size green from a real build; CONTRIBUTING.md updated to include the e2e gate, SECURITY.md reviewed and already accurate.

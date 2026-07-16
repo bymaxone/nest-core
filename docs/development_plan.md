@@ -34,7 +34,7 @@
 | P4  | pagination           | ✅     | 100%     | M    | 2026-07-16   |
 | P5  | health               | ✅     | 100%     | M    | 2026-07-16   |
 | P6  | metrics              | ✅     | 100%     | M    | 2026-07-16   |
-| P7  | integration-and-docs | 🔄     | 60%      | M    | 2026-07-16   |
+| P7  | integration-and-docs | 🔄     | 80%      | M    | 2026-07-16   |
 | P8  | release-hardening    | 📋     | 0%       | L    | 2026-07-06   |
 
 ---
