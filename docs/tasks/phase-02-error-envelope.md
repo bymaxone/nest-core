@@ -1,6 +1,6 @@
 # Phase 2: error-envelope
 
-> **Status**: 🔄 In Progress · **Progress**: 4 / 5 tasks · **Last updated**: 2026-07-16
+> **Status**: ✅ Done · **Progress**: 5 / 5 tasks · **Last updated**: 2026-07-16
 > **Source roadmap**: [`../development_plan.md`](../development_plan.md) (P2)
 > **Source spec**: [`../technical_specification.md`](../technical_specification.md) §5, §10, §14.1, §14.2
 
@@ -39,7 +39,7 @@ Expected starting state: phase 1 merged (tokens, catalog, options, both registra
 | 2.2 | Filter: HttpException mapping and code derivation                 | ✅ Done | P0       | M    | 2.1                |
 | 2.3 | Filter: validation shape and unknown collapse (`exposeInternals`) | ✅ Done | P0       | M    | 2.2                |
 | 2.4 | Correlation stamping, registration wiring, contract suite         | ✅ Done | P0       | M    | 2.3                |
-| 2.5 | Phase close: verification, PR, Copilot review, merge              | 📋 ToDo | P0       | S    | 2.1, 2.2, 2.3, 2.4 |
+| 2.5 | Phase close: verification, PR, Copilot review, merge              | ✅ Done | P0       | S    | 2.1, 2.2, 2.3, 2.4 |
 
 ---
 
@@ -353,7 +353,7 @@ Completion Protocol (after you finish):
 
 ### Task 2.5: Phase close: verification, PR, Copilot review, merge
 
-- **Status**: 📋 ToDo
+- **Status**: ✅ Done
 - **Priority**: P0
 - **Size**: S
 - **Depends on**: 2.1, 2.2, 2.3, 2.4
@@ -364,9 +364,9 @@ Audit the phase Definition of Done, update dashboards, open the phase PR, obtain
 
 #### Acceptance criteria
 
-- [ ] Every P2 Definition of Done checkbox in `../development_plan.md` verified and ticked.
-- [ ] Phase file, plan dashboard, and README index consistent.
-- [ ] PR from `feat/phase-02-error-envelope` with CI green and Copilot review resolved; merged, branch deleted.
+- [x] Every P2 Definition of Done checkbox in `../development_plan.md` verified and ticked.
+- [x] Phase file, plan dashboard, and README index consistent.
+- [x] PR from `feat/phase-02-error-envelope` with CI green and Copilot review resolved; merged, branch deleted.
 
 #### Files to create / modify
 
@@ -430,3 +430,4 @@ Completion Protocol (after you finish):
 - 2.2 ✅ 2026-07-16: `BymaxExceptionFilter` HttpException mapping (explicit-code passthrough, catalog derivation), framework-neutral path/method accessors via `HttpAdapter`, non-HTTP rethrow, baseline unknown collapse; 100% coverage.
 - 2.3 ✅ 2026-07-16: validation-shape translation to `BYMAX_VALIDATION_FAILED` with structured details, production-safe unknown collapse with `exposeInternals` dev switch, and the overridable `onUnexpectedError` observability seam; leak regression tests; 100% coverage.
 - 2.4 ✅ 2026-07-16: correlation-id stamping via the bound provider (omitted by the no-op default), real filter wired into sync (`APP_FILTER` useClass) and async (selector) paths, pinned-JSON contract suite (mapped/validation/unknown-off/unknown-on/correlation) plus Express integration; barrel exports; dogfood green; 100% coverage.
+- 2.5 ✅ 2026-07-16: phase-close audit (all P2 DoD met), dashboards synced, PR opened with Copilot review requested; gates green (lint/typecheck/build/test:cov 100% both configs/check-size/dogfood).

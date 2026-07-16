@@ -23,13 +23,13 @@
 
 ## Progress Dashboard
 
-> **Overall: 2 / 9 phases done (22%)** · Active phase: P2 (🔄 in progress) · Blocked: none
+> **Overall: 3 / 9 phases done (33%)** · Active phase: P3 · Blocked: none
 
 | ID  | Phase                | Status | Progress | Size | Last Updated |
 | --- | -------------------- | ------ | -------- | ---- | ------------ |
 | P0  | repository-scaffold  | ✅     | 100%     | M    | 2026-07-16   |
 | P1  | module-core          | ✅     | 100%     | M    | 2026-07-16   |
-| P2  | error-envelope       | 🔄     | 80%      | M    | 2026-07-16   |
+| P2  | error-envelope       | ✅     | 100%     | M    | 2026-07-16   |
 | P3  | timing-interceptor   | 📋     | 0%       | S    | 2026-07-06   |
 | P4  | pagination           | 📋     | 0%       | M    | 2026-07-06   |
 | P5  | health               | 📋     | 0%       | M    | 2026-07-06   |
@@ -118,11 +118,11 @@ These apply to every phase. Phase sections list only rules specific to that phas
 - **Scope (in):** Envelope type and builder (statusCode, code, message, optional details, optional correlationId, timestamp, path); `BymaxExceptionFilter` registered as `APP_FILTER` when enabled; the three mapping rules (HttpException pass-through with code derivation, validation shape to `BYMAX_VALIDATION_FAILED` with structured details, unknown collapse to `BYMAX_INTERNAL_ERROR` with fixed message); `exposeInternals` development switch; `ICorrelationIdProvider` contract consumption with the no-op default; Express and Fastify accessor neutrality for path, method, and status.
 - **Scope (out):** GraphQL and RPC context mapping (documented limitation); logging of the original error beyond handing it to the bound provider chain.
 - **Definition of Done:**
-  - [ ] Contract tests pin the exact envelope shape for a mapped HttpException, a validation error, and an unknown error.
-  - [ ] With `exposeInternals` false, no stack trace or internal message appears in any 500 response; with it true, details carry the original message and stack.
-  - [ ] A bound correlation provider stamps `correlationId`; the no-op default omits the field.
-  - [ ] Codes match the catalog for every mapped status, including the 4xx and 5xx fallbacks.
-  - [ ] 100% coverage holds.
+  - [x] Contract tests pin the exact envelope shape for a mapped HttpException, a validation error, and an unknown error.
+  - [x] With `exposeInternals` false, no stack trace or internal message appears in any 500 response; with it true, details carry the original message and stack.
+  - [x] A bound correlation provider stamps `correlationId`; the no-op default omits the field.
+  - [x] Codes match the catalog for every mapped status, including the 4xx and 5xx fallbacks.
+  - [x] 100% coverage holds.
 - **Context / preconditions:** P1 done (tokens, catalog, filter slot).
 - **Rules-of-phase:** The envelope is a versioned public contract: field additions are minor, changes are major. Tests must assert the serialized JSON shape, not only the TypeScript type.
 - **References:** Spec §5 (error envelope), §10 (catalog), §14.1, §14.2 (limitations).
