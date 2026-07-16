@@ -204,4 +204,16 @@ describe('buildPageResult', () => {
     expect(result.meta.totalPages).toBe(3)
     expect(Number.isFinite(result.meta.totalPages)).toBe(true)
   })
+
+  /**
+   * Non-positive page defensive case.
+   *
+   * A misused page below 1 must not surface in the metadata; it is floored to 1
+   * so `meta.page` always satisfies the documented 1-based contract.
+   */
+  it('floors a non-positive page to one', () => {
+    const result = buildPageResult([{ id: 1 }], 45, { page: 0, limit: 20 })
+
+    expect(result.meta.page).toBe(1)
+  })
 })

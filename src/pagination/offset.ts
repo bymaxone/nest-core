@@ -70,7 +70,8 @@ export function normalizePageQuery(
  * `totalPages` is the ceiling of `totalItems` over the query limit; a total of
  * zero yields zero pages rather than one phantom page. Inputs are defensively
  * normalized so a misused non-positive limit or a negative/non-finite total
- * cannot produce an `Infinity`, `NaN`, or negative page count.
+ * cannot produce an `Infinity`, `NaN`, or negative page count, and `page` is
+ * floored to `1` so the metadata always satisfies the `>= 1` contract.
  *
  * @param items - The items on the current page.
  * @param totalItems - The total number of items across all pages.
@@ -82,11 +83,12 @@ export function buildPageResult<T>(
   totalItems: number,
   query: PageQuery
 ): PageResult<T> {
+  const safePage = coercePositiveInt(query.page, MINIMUM)
   const safeTotal = Number.isFinite(totalItems) && totalItems > 0 ? Math.floor(totalItems) : 0
   const safeLimit = coercePositiveInt(query.limit, DEFAULT_LIMIT)
   const totalPages = Math.ceil(safeTotal / safeLimit)
   return {
     items,
-    meta: { page: query.page, limit: safeLimit, totalItems: safeTotal, totalPages }
+    meta: { page: safePage, limit: safeLimit, totalItems: safeTotal, totalPages }
   }
 }
