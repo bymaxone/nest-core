@@ -11,31 +11,31 @@ Tasks live **one file per phase** in this folder (`phase-NN-<slug>.md`). Each ph
 
 ## Phase files (folder index)
 
-| Phase | File | Tasks | Status |
-|---|---|---|---|
-| 0 | [`phase-00-repository-scaffold.md`](./phase-00-repository-scaffold.md) | 2 / 6 | 🔄 In Progress |
-| 1 | [`phase-01-module-core.md`](./phase-01-module-core.md) | 0 / 6 | 📋 ToDo |
-| 2 | [`phase-02-error-envelope.md`](./phase-02-error-envelope.md) | 0 / 5 | 📋 ToDo |
-| 3 | [`phase-03-timing-interceptor.md`](./phase-03-timing-interceptor.md) | 0 / 4 | 📋 ToDo |
-| 4 | [`phase-04-pagination.md`](./phase-04-pagination.md) | 0 / 5 | 📋 ToDo |
-| 5 | [`phase-05-health.md`](./phase-05-health.md) | 0 / 5 | 📋 ToDo |
-| 6 | [`phase-06-metrics.md`](./phase-06-metrics.md) | 0 / 5 | 📋 ToDo |
-| 7 | [`phase-07-integration-and-docs.md`](./phase-07-integration-and-docs.md) | 0 / 5 | 📋 ToDo |
-| 8 | [`phase-08-release-hardening.md`](./phase-08-release-hardening.md) | 0 / 6 | 📋 ToDo |
-| | **Total** | **0 / 47** | 📋 ToDo |
+| Phase | File                                                                     | Tasks      | Status         |
+| ----- | ------------------------------------------------------------------------ | ---------- | -------------- |
+| 0     | [`phase-00-repository-scaffold.md`](./phase-00-repository-scaffold.md)   | 3 / 6      | 🔄 In Progress |
+| 1     | [`phase-01-module-core.md`](./phase-01-module-core.md)                   | 0 / 6      | 📋 ToDo        |
+| 2     | [`phase-02-error-envelope.md`](./phase-02-error-envelope.md)             | 0 / 5      | 📋 ToDo        |
+| 3     | [`phase-03-timing-interceptor.md`](./phase-03-timing-interceptor.md)     | 0 / 4      | 📋 ToDo        |
+| 4     | [`phase-04-pagination.md`](./phase-04-pagination.md)                     | 0 / 5      | 📋 ToDo        |
+| 5     | [`phase-05-health.md`](./phase-05-health.md)                             | 0 / 5      | 📋 ToDo        |
+| 6     | [`phase-06-metrics.md`](./phase-06-metrics.md)                           | 0 / 5      | 📋 ToDo        |
+| 7     | [`phase-07-integration-and-docs.md`](./phase-07-integration-and-docs.md) | 0 / 5      | 📋 ToDo        |
+| 8     | [`phase-08-release-hardening.md`](./phase-08-release-hardening.md)       | 0 / 6      | 📋 ToDo        |
+|       | **Total**                                                                | **0 / 47** | 📋 ToDo        |
 
 ---
 
 ## Status legend
 
-| Symbol | Meaning |
-|---|---|
-| 📋 | ToDo |
-| 🔄 | In Progress |
-| 👀 | Review |
-| ✅ | Done |
-| ⛔ | Blocked |
-| 🟡 | Partial |
+| Symbol | Meaning     |
+| ------ | ----------- |
+| 📋     | ToDo        |
+| 🔄     | In Progress |
+| 👀     | Review      |
+| ✅     | Done        |
+| ⛔     | Blocked     |
+| 🟡     | Partial     |
 
 Task sizes: **S** (< ~100 LoC), **M** (~100 to 250), **L** (~250+). Priorities: **P0** (blocking), **P1** (important), **P2** (nice-to-have).
 
