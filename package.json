@@ -54,7 +54,7 @@
     "mutation:dry-run": "stryker run --dryRunOnly",
     "size": "node scripts/check-size.mjs",
     "dogfood": "node scripts/dogfood-smoke-test.mjs",
-    "clean": "rm -rf dist coverage",
+    "clean": "node -e \"const fs=require('node:fs');for(const d of ['dist','coverage'])fs.rmSync(d,{recursive:true,force:true})\"",
     "prepublishOnly": "pnpm clean && pnpm typecheck && pnpm lint && pnpm test:cov:all && pnpm build",
     "prepare": "husky"
   },

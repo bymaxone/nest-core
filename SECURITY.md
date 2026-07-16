@@ -11,10 +11,10 @@ take vulnerability reports seriously and triage them ahead of feature work.
 Security patches are issued for the most recent minor on the active `0.x` line.
 Once v1.0 ships, the support table will be updated.
 
-| Version | Status                          |
-| ------- | ------------------------------- |
-| `0.1.x` | Active, receives security fixes |
-| `< 0.1` | End-of-life                     |
+| Version                                 | Status                          |
+| --------------------------------------- | ------------------------------- |
+| `0.1.x`, including `0.1.0` pre-releases | Active, receives security fixes |
+| Older `0.x` pre-releases                | End-of-life                     |
 
 If you are stuck on an older version and need a backport, open a private
 advisory (see below) and we will discuss feasibility on a case-by-case basis.
