@@ -174,6 +174,17 @@ describe('encodeCursor / decodeCursor', () => {
   it('rejects a payload with a nested object value', () => {
     expectRejection(toBase64url('{"range":{"from":1}}'))
   })
+
+  /**
+   * Non-finite ordering key from a crafted cursor.
+   *
+   * A JSON numeric literal that overflows (`1e309`) parses to `Infinity`, which
+   * is not a finite ordering key; a hand-crafted cursor carrying one must reject
+   * so decode stays symmetric with encode's finite-number guard.
+   */
+  it('rejects a hand-crafted cursor whose number overflows to Infinity', () => {
+    expectRejection(toBase64url('{"id":1e309}'))
+  })
 })
 
 describe('normalizeCursorQuery', () => {

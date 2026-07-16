@@ -39,8 +39,9 @@ function cursorRejection(): BadRequestException {
  * Narrow an unknown value to an ordering-key record: a plain object whose every
  * value is a string or a number.
  *
- * Rejects `null`, arrays, and any value type outside string/number, which keeps
- * arbitrary, nested, or sensitive shapes out of the codec.
+ * Rejects `null`, arrays, non-finite numbers, and any value type outside
+ * string/number, which keeps arbitrary, nested, or sensitive shapes out of the
+ * codec and matches encode's finite-number guard.
  *
  * @param value - The parsed candidate to validate.
  * @returns `true` when the value is a valid ordering-key record.
@@ -50,7 +51,7 @@ function isOrderingKeyRecord(value: unknown): value is Record<string, string | n
     return false
   }
   return Object.values(value).every(
-    (entry) => typeof entry === 'string' || typeof entry === 'number'
+    (entry) => typeof entry === 'string' || (typeof entry === 'number' && Number.isFinite(entry))
   )
 }
 
