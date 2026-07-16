@@ -41,6 +41,23 @@ function neverSettlingIndicator(name: string): IHealthIndicator {
   return { name, check: (): Promise<HealthIndicatorResult> => new Promise(() => {}) }
 }
 
+/**
+ * Build a misbehaving indicator whose `check()` throws synchronously instead
+ * of returning a rejected promise (for example, a non-`async` implementation
+ * that throws before it can return). The type system cannot express this
+ * shape directly, since `IHealthIndicator.check()` is declared to return a
+ * `Promise`; the cast documents that this stub deliberately violates the
+ * contract to exercise the aggregator's defense against it.
+ */
+function synchronouslyThrowingIndicator(name: string, reason: unknown): IHealthIndicator {
+  return {
+    name,
+    check: (): Promise<HealthIndicatorResult> => {
+      throw reason
+    }
+  }
+}
+
 /** Resolve options with a specific `indicatorTimeoutMs`, defaults otherwise. */
 function optionsWithTimeout(indicatorTimeoutMs: number): ResolvedCoreOptions {
   return normalizeCoreOptions({ health: { indicatorTimeoutMs } })
@@ -157,6 +174,28 @@ describe('HealthService', () => {
 
     expect(result.checks).toEqual([
       { name: 'queue', status: 'down', details: { error: 'unavailable' } }
+    ])
+  })
+
+  /**
+   * Synchronous throw from a misbehaving indicator.
+   *
+   * An indicator that throws synchronously instead of returning a rejected
+   * promise must still be converted to a down entry, and must never reject
+   * the overall `checkReadiness` call: doing so would hide every other
+   * indicator's result behind an unhandled rejection.
+   */
+  it('converts a synchronously-throwing indicator into a down entry without hiding other checks', async () => {
+    const broken = synchronouslyThrowingIndicator('broken', new Error('boom'))
+    const healthy = stubIndicator('redis', { status: 'up' })
+    const service = new HealthService([broken, healthy], normalizeCoreOptions())
+
+    const result = await service.checkReadiness()
+
+    expect(result.status).toBe('error')
+    expect(result.checks).toEqual([
+      { name: 'broken', status: 'down', details: { error: 'boom' } },
+      { name: 'redis', status: 'up' }
     ])
   })
 

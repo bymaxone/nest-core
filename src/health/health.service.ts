@@ -55,8 +55,14 @@ async function runIndicator(
       resolve({ name: indicator.name, status: 'down', details: { timedOutAfterMs: timeoutMs } })
     }, timeoutMs)
   })
-  const checked = indicator
-    .check()
+  // `Promise.resolve().then(...)` defers the actual `indicator.check()` call
+  // into a `.then()` callback, so a misbehaving indicator that throws
+  // synchronously (instead of returning a rejected promise) is caught by the
+  // `.catch()` below just like a normal rejection, instead of escaping this
+  // function and rejecting the outer `Promise.all` in `checkReadiness`, which
+  // would hide every other indicator's result.
+  const checked = Promise.resolve()
+    .then(() => indicator.check())
     .then((result) => ({ name: indicator.name, ...result }))
     .catch((reason: unknown): HealthCheckEntry => ({
       name: indicator.name,

@@ -4,7 +4,7 @@
  * `DynamicModule.global` via `setExtras`. The synchronous `forRoot` path knows
  * the options at definition time and omits disabled features from the providers
  * and controllers arrays; the asynchronous `forRootAsync` path registers
- * always-on pipeline slots and a health controller that self-guard against a
+ * always-on pipeline slots and a health controller that self-guards against a
  * disabled or path-mismatched resolved configuration at request time.
  * @layer Module
  */
