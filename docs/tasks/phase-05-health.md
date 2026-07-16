@@ -1,6 +1,6 @@
 # Phase 5: health
 
-> **Status**: 📋 ToDo · **Progress**: 0 / 5 tasks · **Last updated**: 2026-07-06
+> **Status**: 🔄 In Progress · **Progress**: 1 / 5 tasks · **Last updated**: 2026-07-16
 > **Source roadmap**: [`../development_plan.md`](../development_plan.md) (P5)
 > **Source spec**: [`../technical_specification.md`](../technical_specification.md) §8, §14.5
 
@@ -35,7 +35,7 @@ Expected starting state: phase 1 merged. Code-parallel with phases 2, 3, and 4; 
 
 | ID | Task | Status | Priority | Size | Depends on |
 |---|---|---|---|---|---|
-| 5.1 | Branch, health contracts, subpath barrel | 📋 ToDo | P0 | S | none |
+| 5.1 | Branch, health contracts, subpath barrel | ✅ Done | P0 | S | none |
 | 5.2 | Aggregation service (concurrency, timeout, down conversion) | 📋 ToDo | P0 | M | 5.1 |
 | 5.3 | Health controller (live, ready, prefix, 200/503) | 📋 ToDo | P0 | M | 5.2 |
 | 5.4 | Registration wiring, contract suite, dogfood | 📋 ToDo | P0 | S | 5.3 |
@@ -47,7 +47,7 @@ Expected starting state: phase 1 merged. Code-parallel with phases 2, 3, and 4; 
 
 ### Task 5.1: Branch, health contracts, subpath barrel
 
-- **Status**: 📋 ToDo
+- **Status**: ✅ Done
 - **Priority**: P0
 - **Size**: S
 - **Depends on**: none
@@ -58,10 +58,10 @@ The `IHealthIndicator` and `HealthIndicatorResult` contracts, the health respons
 
 #### Acceptance criteria
 
-- [ ] Branch `feat/phase-05-health` created with `git switch -c`.
-- [ ] Contracts match spec §8.2 exactly (`name`, `check(): Promise<HealthIndicatorResult>`, `status: 'up' | 'down'`, optional `details`).
-- [ ] Health response types (`status: 'ok' | 'error'`, `checks` array with per-check name, status, optional details) match §8.1.
-- [ ] `src/health/index.ts` exports contracts and response types only; 100% coverage holds (types via consuming tests in later tasks; any runtime constant here is tested now).
+- [x] Branch `feat/phase-05-health` created with `git switch -c`.
+- [x] Contracts match spec §8.2 exactly (`name`, `check(): Promise<HealthIndicatorResult>`, `status: 'up' | 'down'`, optional `details`).
+- [x] Health response types (`status: 'ok' | 'error'`, `checks` array with per-check name, status, optional details) match §8.1.
+- [x] `src/health/index.ts` exports contracts and response types only; 100% coverage holds (types via consuming tests in later tasks; any runtime constant here is tested now).
 
 #### Files to create / modify
 
@@ -419,3 +419,4 @@ Completion Protocol (after you finish):
 ## Completion log
 
 <!-- Append one line per completed task: - <id> ✅ <YYYY-MM-DD>: <summary> -->
+- 5.1 ✅ 2026-07-16: added IHealthIndicator/HealthIndicatorResult contracts and HealthResponse types, exported through the ./health subpath barrel.
