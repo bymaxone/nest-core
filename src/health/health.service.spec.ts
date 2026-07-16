@@ -108,6 +108,22 @@ describe('HealthService', () => {
   })
 
   /**
+   * No indicators argument at all.
+   *
+   * `BymaxCoreModule` binds no local default for `BYMAX_HEALTH_INDICATORS`
+   * (see `defaults.providers.ts`): when nothing is injected, the constructor's
+   * default parameter must supply an empty array, matching the
+   * previously-documented empty-array default.
+   */
+  it('defaults to an empty indicator list when constructed with no argument', async () => {
+    const service = new HealthService(undefined, normalizeCoreOptions())
+
+    const result = await service.checkReadiness()
+
+    expect(result).toEqual({ status: 'ok', checks: [] })
+  })
+
+  /**
    * One down among ups.
    *
    * A single down indicator must flip the aggregate status to error while

@@ -1,24 +1,27 @@
 /**
- * Unit tests for the no-op default bindings and consumer overrides.
+ * Unit tests for the no-op fallback classes and the module-owned default
+ * provider.
  *
  * Layer: unit.
- * Goal: prove every pluggable token resolves its no-op default in a bare module
- * and that a consumer provider for the same token (useValue, useExisting, or a
- * value array) replaces the default as the resolved instance.
- * Mocks: none; a compiled testing module resolves the tokens.
+ * Goal: prove the no-op correlation provider and timing sink behave as
+ * documented, and that `buildDefaultProviders` binds exactly the timing
+ * clock. The pluggable extension-point tokens (`BYMAX_CORRELATION_PROVIDER`,
+ * `BYMAX_TIMING_SINK`, `BYMAX_HEALTH_INDICATORS`) are deliberately NOT bound
+ * here; their `@Optional()` fallback behavior and their real override paths
+ * are covered where each token is consumed
+ * (`envelope/exception.filter.spec.ts`, `timing/timing.interceptor.spec.ts`,
+ * `health/health.service.spec.ts`) and proven end to end through a booted
+ * application (`envelope/exception.filter.integration.spec.ts`,
+ * `timing/timing.registration.spec.ts`, `health/health.contract.spec.ts`).
+ * Mocks: none.
  */
-import { Global, Injectable, Module } from '@nestjs/common'
-import { Test } from '@nestjs/testing'
-
-import type { ICorrelationIdProvider } from './envelope/correlation.interfaces'
+import { BYMAX_TIMING_CLOCK, DEFAULT_MONOTONIC_CLOCK } from './timing/timing.clock'
 import type { ITimingSink, RequestTimingSample } from './timing/timing.interfaces'
-import { BymaxCoreModule } from './core.module'
 import {
-  BYMAX_CORRELATION_PROVIDER,
-  BYMAX_HEALTH_INDICATORS,
-  BYMAX_TIMING_SINK
-} from './core.tokens'
-import { NoopCorrelationIdProvider, NoopTimingSink } from './defaults.providers'
+  buildDefaultProviders,
+  NoopCorrelationIdProvider,
+  NoopTimingSink
+} from './defaults.providers'
 
 const SAMPLE: RequestTimingSample = {
   method: 'GET',
@@ -28,118 +31,47 @@ const SAMPLE: RequestTimingSample = {
   slow: false
 }
 
-describe('no-op default classes', () => {
+describe('no-op fallback classes', () => {
   /**
-   * Correlation default resolves nothing.
+   * Correlation fallback resolves nothing.
    *
-   * The default provider must return `undefined` so the envelope omits the
-   * correlation id until a real provider is supplied.
+   * The fallback must return `undefined` so the envelope omits the
+   * correlation id until a real provider is bound.
    */
   it('returns undefined from the no-op correlation provider', () => {
     expect(new NoopCorrelationIdProvider().getCorrelationId()).toBeUndefined()
   })
 
   /**
-   * Timing default discards silently.
+   * Timing fallback discards silently.
    *
-   * The default sink must accept a sample without throwing so timing never
-   * breaks a request when no sink is configured.
+   * The fallback sink must accept a sample without throwing so timing never
+   * breaks a request when no sink is configured or bound.
    */
   it('discards a sample without throwing in the no-op timing sink', () => {
     expect(() => new NoopTimingSink().record(SAMPLE)).not.toThrow()
   })
-})
 
-describe('default bindings resolve in a bare module', () => {
-  /**
-   * Every pluggable token resolves its documented default.
-   *
-   * A consumer that configures nothing must still be able to inject each token;
-   * the module binds a no-op for each so injection never fails.
-   */
-  it('binds the no-op correlation provider, no-op sink, and empty indicators', async () => {
-    const moduleRef = await Test.createTestingModule({
-      imports: [BymaxCoreModule.forRoot()]
-    }).compile()
-
-    expect(moduleRef.get(BYMAX_CORRELATION_PROVIDER)).toBeInstanceOf(NoopCorrelationIdProvider)
-    expect(moduleRef.get(BYMAX_TIMING_SINK)).toBeInstanceOf(NoopTimingSink)
-    expect(moduleRef.get(BYMAX_HEALTH_INDICATORS)).toEqual([])
-    // The shared default must be frozen so a consumer cannot mutate it in place.
-    expect(Object.isFrozen(moduleRef.get(BYMAX_HEALTH_INDICATORS))).toBe(true)
+  /** Type check: both fallbacks satisfy their contracts. */
+  it('satisfies the ITimingSink contract with the no-op sink', () => {
+    const sink: ITimingSink = new NoopTimingSink()
+    expect(sink.record).toBeInstanceOf(Function)
   })
 })
 
-describe('consumer overrides replace the defaults', () => {
+describe('buildDefaultProviders', () => {
   /**
-   * useValue override for the timing sink.
+   * Only the timing clock is bound unconditionally.
    *
-   * Replacing the module's sink binding must make the module resolve the
-   * consumer instance, not the no-op default.
+   * The correlation provider, timing sink, and health indicators are consumer
+   * override points and must never be bound here (see the file's own
+   * documentation for why a competing local binding would defeat a
+   * consumer's override); the timing clock is an internal seam, not an
+   * override point, so it is the sole default this function contributes.
    */
-  it('resolves a useValue timing-sink override', async () => {
-    const customSink: ITimingSink = { record: (): void => undefined }
-    const moduleRef = await Test.createTestingModule({
-      imports: [BymaxCoreModule.forRoot()]
-    })
-      .overrideProvider(BYMAX_TIMING_SINK)
-      .useValue(customSink)
-      .compile()
+  it('binds exactly the timing-clock default', () => {
+    const providers = buildDefaultProviders()
 
-    expect(moduleRef.get(BYMAX_TIMING_SINK)).toBe(customSink)
-  })
-
-  /**
-   * useExisting override for the correlation provider.
-   *
-   * The spec's canonical pattern (section 4.3) aliases an existing service onto
-   * the token from a consumer module; the module must then resolve that service
-   * instance rather than the no-op default.
-   */
-  it('resolves a useExisting correlation-provider override from a consumer module', async () => {
-    @Injectable()
-    class FixedCorrelationProvider implements ICorrelationIdProvider {
-      getCorrelationId(): string | undefined {
-        return 'fixed'
-      }
-    }
-
-    @Global()
-    @Module({
-      providers: [
-        FixedCorrelationProvider,
-        { provide: BYMAX_CORRELATION_PROVIDER, useExisting: FixedCorrelationProvider }
-      ],
-      exports: [BYMAX_CORRELATION_PROVIDER]
-    })
-    class ObservabilityModule {}
-
-    const moduleRef = await Test.createTestingModule({
-      imports: [BymaxCoreModule.forRoot(), ObservabilityModule]
-    }).compile()
-
-    const resolved = moduleRef.get<ICorrelationIdProvider>(BYMAX_CORRELATION_PROVIDER, {
-      strict: false
-    })
-    expect(resolved).toBe(moduleRef.get(FixedCorrelationProvider, { strict: false }))
-    expect(resolved.getCorrelationId()).toBe('fixed')
-  })
-
-  /**
-   * Value-array override for the health indicators.
-   *
-   * A consumer supplies the concrete indicator list; the module must resolve the
-   * provided array rather than the empty default.
-   */
-  it('resolves a value-array health-indicators override', async () => {
-    const indicators = [{ name: 'db' }, { name: 'cache' }]
-    const moduleRef = await Test.createTestingModule({
-      imports: [BymaxCoreModule.forRoot()]
-    })
-      .overrideProvider(BYMAX_HEALTH_INDICATORS)
-      .useValue(indicators)
-      .compile()
-
-    expect(moduleRef.get(BYMAX_HEALTH_INDICATORS)).toBe(indicators)
+    expect(providers).toEqual([{ provide: BYMAX_TIMING_CLOCK, useValue: DEFAULT_MONOTONIC_CLOCK }])
   })
 })

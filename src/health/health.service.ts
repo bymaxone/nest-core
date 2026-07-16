@@ -9,7 +9,7 @@
  * dependency ordering between checks.
  * @layer Service
  */
-import { Inject, Injectable } from '@nestjs/common'
+import { Inject, Injectable, Optional } from '@nestjs/common'
 
 import type { ResolvedCoreOptions } from '../core.options'
 import { BYMAX_CORE_OPTIONS, BYMAX_HEALTH_INDICATORS } from '../core.tokens'
@@ -101,11 +101,17 @@ async function runIndicator(
 @Injectable()
 export class HealthService {
   /**
-   * @param indicators - Every registered indicator; empty by default.
+   * @param indicators - Every registered indicator; empty when none resolve.
+   *   Injected with `@Optional()`: `BymaxCoreModule` binds no local default for
+   *   this token, so a consumer's own `BYMAX_HEALTH_INDICATORS` binding (from
+   *   their own, globally-visible module) is not shadowed by one; when nothing
+   *   is bound, this defaults to an empty array.
    * @param options - Resolved core options; supplies `indicatorTimeoutMs`.
    */
   constructor(
-    @Inject(BYMAX_HEALTH_INDICATORS) private readonly indicators: readonly IHealthIndicator[],
+    @Optional()
+    @Inject(BYMAX_HEALTH_INDICATORS)
+    private readonly indicators: readonly IHealthIndicator[] = [],
     @Inject(BYMAX_CORE_OPTIONS) private readonly options: ResolvedCoreOptions
   ) {}
 

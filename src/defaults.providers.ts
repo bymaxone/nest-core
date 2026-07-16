@@ -1,28 +1,34 @@
 /**
- * @fileoverview No-op default bindings for the pluggable contracts. Both
- * registration paths wire these so the correlation-provider, timing-sink,
- * timing-clock, and health-indicator tokens always resolve, and consumers
- * replace any of them with a standard provider (`useValue` / `useExisting` /
- * `useClass`) for the same token. Defaults do nothing observable: the
- * correlation provider returns `undefined`, the timing sink discards its
- * samples, the indicator list is empty; the timing clock is the real
- * monotonic clock, since it has no meaningful "no-op" shape.
+ * @fileoverview No-op fallback classes for the pluggable contracts, plus the
+ * one token this module still binds unconditionally: the timing clock, which
+ * has no meaningful "no-op" shape and is not a consumer override point.
+ *
+ * The correlation-provider, timing-sink, and health-indicator tokens are
+ * deliberately NOT bound here. A consumer overrides one of these contracts by
+ * providing the same `Symbol` token from their own module (marked `@Global()`
+ * so the binding is visible outside that module), following the pattern
+ * documented in the technical specification. NestJS resolves a dependency
+ * against the provider's OWN hosting module first: if `BymaxCoreModule`
+ * bound a hard local default for these tokens, that local binding would
+ * always win over a sibling module's override, no matter how the consumer
+ * registers it, making the documented override pattern impossible to use.
+ * Each consuming class (`BymaxExceptionFilter`, `TimingInterceptor`,
+ * `HealthService`) therefore injects its token with `@Optional()` and falls
+ * back, in code, to one of the no-op classes below when nothing resolves, so
+ * a consumer's override is picked up deterministically while the
+ * unconfigured case still behaves exactly as before.
  * @layer Provider
  */
 import type { Provider } from '@nestjs/common'
 
-import {
-  BYMAX_CORRELATION_PROVIDER,
-  BYMAX_HEALTH_INDICATORS,
-  BYMAX_TIMING_SINK
-} from './core.tokens'
 import type { ICorrelationIdProvider } from './envelope/correlation.interfaces'
 import { BYMAX_TIMING_CLOCK, DEFAULT_MONOTONIC_CLOCK } from './timing/timing.clock'
 import type { ITimingSink, RequestTimingSample } from './timing/timing.interfaces'
 
 /**
- * Correlation provider that never resolves an id. Bound by default so the
- * envelope simply omits `correlationId` until a real provider is supplied.
+ * Correlation provider that never resolves an id. Used as the in-code
+ * fallback so the envelope simply omits `correlationId` until a real
+ * provider is supplied.
  */
 export class NoopCorrelationIdProvider implements ICorrelationIdProvider {
   /**
@@ -36,8 +42,8 @@ export class NoopCorrelationIdProvider implements ICorrelationIdProvider {
 }
 
 /**
- * Timing sink that discards every sample. Bound by default so timing can run
- * with no downstream sink configured.
+ * Timing sink that discards every sample. Used as the in-code fallback so
+ * timing can run with no downstream sink configured.
  */
 export class NoopTimingSink implements ITimingSink {
   /**
@@ -52,20 +58,13 @@ export class NoopTimingSink implements ITimingSink {
 }
 
 /**
- * Build the no-op default bindings for the pluggable contracts. Included in both
- * registration paths so the tokens always resolve; a consumer provider for the
- * same token overrides the default.
+ * Build the module-owned default providers. The timing clock is the only
+ * pluggable token bound unconditionally here: it is an internal seam (tests
+ * substitute it directly), not a consumer override point, so no `@Optional()`
+ * fallback applies to it.
  *
- * @returns The default correlation-provider, timing-sink, timing-clock, and
- *   indicators providers.
+ * @returns The default timing-clock provider.
  */
 export function buildDefaultProviders(): Provider[] {
-  return [
-    { provide: BYMAX_CORRELATION_PROVIDER, useClass: NoopCorrelationIdProvider },
-    { provide: BYMAX_TIMING_SINK, useClass: NoopTimingSink },
-    { provide: BYMAX_TIMING_CLOCK, useValue: DEFAULT_MONOTONIC_CLOCK },
-    // Frozen so the shared default cannot be mutated in place by a consumer;
-    // providing indicators means overriding the token with a fresh array.
-    { provide: BYMAX_HEALTH_INDICATORS, useValue: Object.freeze([]) }
-  ]
+  return [{ provide: BYMAX_TIMING_CLOCK, useValue: DEFAULT_MONOTONIC_CLOCK }]
 }
