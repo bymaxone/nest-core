@@ -164,4 +164,44 @@ describe('buildPageResult', () => {
 
     expect(result.meta.totalPages).toBe(2)
   })
+
+  /**
+   * Non-finite total defensive case.
+   *
+   * A NaN or Infinity total would otherwise poison totalPages; it is normalized
+   * to zero so the metadata stays within the non-negative contract.
+   */
+  it('normalizes a non-finite totalItems to zero', () => {
+    const result = buildPageResult<{ id: number }>([], Number.NaN, { page: 1, limit: 20 })
+
+    expect(result.meta.totalItems).toBe(0)
+    expect(result.meta.totalPages).toBe(0)
+  })
+
+  /**
+   * Negative total defensive case.
+   *
+   * A negative total (e.g. from a buggy count) must not yield a negative page
+   * count; it is floored to zero.
+   */
+  it('normalizes a negative totalItems to zero', () => {
+    const result = buildPageResult<{ id: number }>([], -5, { page: 1, limit: 20 })
+
+    expect(result.meta.totalItems).toBe(0)
+    expect(result.meta.totalPages).toBe(0)
+  })
+
+  /**
+   * Non-positive limit defensive case.
+   *
+   * A misused zero limit would divide to Infinity; the builder falls back to the
+   * default page size so totalPages stays finite.
+   */
+  it('falls back to the default page size when the limit is non-positive', () => {
+    const result = buildPageResult([{ id: 1 }], 45, { page: 1, limit: 0 })
+
+    expect(result.meta.limit).toBe(20)
+    expect(result.meta.totalPages).toBe(3)
+    expect(Number.isFinite(result.meta.totalPages)).toBe(true)
+  })
 })

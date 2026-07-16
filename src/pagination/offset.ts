@@ -6,7 +6,13 @@
  * own persistence call and passes the rows and total back to the builder.
  * @layer Utility
  */
-import { MINIMUM, clampLimit, coercePositiveInt, type PaginationLimitOptions } from './internal'
+import {
+  DEFAULT_LIMIT,
+  MINIMUM,
+  clampLimit,
+  coercePositiveInt,
+  type PaginationLimitOptions
+} from './internal'
 
 /** A safe, clamped offset query. `page` is 1-based. */
 export interface PageQuery {
@@ -62,7 +68,9 @@ export function normalizePageQuery(
  * Assemble a {@link PageResult} from a page of items and the total count.
  *
  * `totalPages` is the ceiling of `totalItems` over the query limit; a total of
- * zero yields zero pages rather than one phantom page.
+ * zero yields zero pages rather than one phantom page. Inputs are defensively
+ * normalized so a misused non-positive limit or a negative/non-finite total
+ * cannot produce an `Infinity`, `NaN`, or negative page count.
  *
  * @param items - The items on the current page.
  * @param totalItems - The total number of items across all pages.
@@ -74,9 +82,11 @@ export function buildPageResult<T>(
   totalItems: number,
   query: PageQuery
 ): PageResult<T> {
-  const totalPages = Math.ceil(totalItems / query.limit)
+  const safeTotal = Number.isFinite(totalItems) && totalItems > 0 ? Math.floor(totalItems) : 0
+  const safeLimit = coercePositiveInt(query.limit, DEFAULT_LIMIT)
+  const totalPages = Math.ceil(safeTotal / safeLimit)
   return {
     items,
-    meta: { page: query.page, limit: query.limit, totalItems, totalPages }
+    meta: { page: query.page, limit: safeLimit, totalItems: safeTotal, totalPages }
   }
 }
