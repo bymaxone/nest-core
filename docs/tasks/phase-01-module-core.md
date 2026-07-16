@@ -1,6 +1,6 @@
 # Phase 1: module-core
 
-> **Status**: 🔄 In Progress · **Progress**: 2 / 6 tasks · **Last updated**: 2026-07-16
+> **Status**: 🔄 In Progress · **Progress**: 3 / 6 tasks · **Last updated**: 2026-07-16
 > **Source roadmap**: [`../development_plan.md`](../development_plan.md) (P1)
 > **Source spec**: [`../technical_specification.md`](../technical_specification.md) §2, §4, §10
 
@@ -41,7 +41,7 @@ Expected starting state: phase 0 merged; the repository builds, lints, and tests
 | --- | --------------------------------------------------------- | ------- | -------- | ---- | ----------------------- |
 | 1.1 | Branch, Symbol tokens, `BYMAX_*` error-code catalog       | ✅ Done | P0       | S    | none                    |
 | 1.2 | Options types, defaults, normalization (deep freeze)      | ✅ Done | P0       | M    | 1.1                     |
-| 1.3 | `BymaxCoreModule.forRoot` (sync conditional registration) | 📋 ToDo | P0       | M    | 1.2                     |
+| 1.3 | `BymaxCoreModule.forRoot` (sync conditional registration) | ✅ Done | P0       | M    | 1.2                     |
 | 1.4 | `forRootAsync` with gated pass-through slots              | 📋 ToDo | P0       | M    | 1.3                     |
 | 1.5 | Default bindings, barrel exports, override tests          | 📋 ToDo | P0       | M    | 1.4                     |
 | 1.6 | Phase close: verification, PR, Copilot review, merge      | 📋 ToDo | P0       | S    | 1.1, 1.2, 1.3, 1.4, 1.5 |
@@ -203,7 +203,7 @@ Completion Protocol (after you finish):
 
 ### Task 1.3: `BymaxCoreModule.forRoot` (sync conditional registration)
 
-- **Status**: 📋 ToDo
+- **Status**: ✅ Done
 - **Priority**: P0
 - **Size**: M
 - **Depends on**: 1.2
@@ -214,11 +214,11 @@ The dynamic module on `ConfigurableModuleBuilder` with the sync path: disabled f
 
 #### Acceptance criteria
 
-- [ ] `BymaxCoreModule.forRoot(options)` built on `ConfigurableModuleBuilder`, `isGlobal` extra mapped via `setExtras` (default `true`).
-- [ ] With every feature disabled, the returned `DynamicModule` registers zero feature providers and zero controllers (asserted structurally in tests).
-- [ ] `BYMAX_CORE_OPTIONS` resolves to the normalized frozen options in a testing module.
-- [ ] `isGlobal: false` yields a non-global module; default is global.
-- [ ] 100% coverage holds.
+- [x] `BymaxCoreModule.forRoot(options)` built on `ConfigurableModuleBuilder`, `isGlobal` extra mapped via `setExtras` (default `true`).
+- [x] With every feature disabled, the returned `DynamicModule` registers zero feature providers and zero controllers (asserted structurally in tests).
+- [x] `BYMAX_CORE_OPTIONS` resolves to the normalized frozen options in a testing module.
+- [x] `isGlobal: false` yields a non-global module; default is global.
+- [x] 100% coverage holds.
 
 #### Files to create / modify
 
@@ -520,3 +520,4 @@ Completion Protocol (after you finish):
 
 - 1.1 ✅ 2026-07-16: Symbol DI tokens and the `BYMAX_*` error-code catalog with `codeForStatus`; 100% covered.
 - 1.2 ✅ 2026-07-16: options surface, per-feature defaults, and `normalizeCoreOptions` with recursive deep-freeze; 100% covered.
+- 1.3 ✅ 2026-07-16: `BymaxCoreModule.forRoot` on `ConfigurableModuleBuilder` with `isGlobal` via `setExtras` and empty conditional-registration seams; 100% covered.
