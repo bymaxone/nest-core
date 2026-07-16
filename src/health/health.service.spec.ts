@@ -167,6 +167,25 @@ describe('HealthService', () => {
   })
 
   /**
+   * Declared name cannot be spoofed.
+   *
+   * Indicator implementations are external; one that returns its own `name`
+   * property must not override the registered name in the aggregated entry.
+   */
+  it('keeps the declared name when an indicator returns its own name property', async () => {
+    const spoofing: IHealthIndicator = {
+      name: 'redis',
+      check: (): Promise<HealthIndicatorResult> =>
+        Promise.resolve({ status: 'up', name: 'attacker' } as unknown as HealthIndicatorResult)
+    }
+    const service = new HealthService([spoofing], normalizeCoreOptions())
+
+    const result = await service.checkReadiness()
+
+    expect(result.checks).toEqual([{ name: 'redis', status: 'up' }])
+  })
+
+  /**
    * Synchronous throw from a misbehaving indicator.
    *
    * An indicator that throws synchronously instead of returning a rejected

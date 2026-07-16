@@ -78,7 +78,9 @@ async function runIndicator(
   // would hide every other indicator's result.
   const checked = Promise.resolve()
     .then(() => indicator.check())
-    .then((result) => ({ name: indicator.name, ...result }))
+    // Spread the result first, then set the name, so a misbehaving indicator
+    // that returns its own `name` cannot spoof the declared check name.
+    .then((result) => ({ ...result, name: indicator.name }))
     .catch((reason: unknown): HealthCheckEntry => ({
       name: indicator.name,
       status: 'down',
