@@ -61,7 +61,7 @@ export class StubCorrelationIdProvider implements ICorrelationIdProvider {
 export class StubHealthIndicator implements IHealthIndicator {
   readonly name = 'fixture-dependency'
 
-  private up = true
+  private isUp = true
 
   /**
    * Switch the indicator's reported status.
@@ -69,7 +69,7 @@ export class StubHealthIndicator implements IHealthIndicator {
    * @param up - `true` reports healthy; `false` reports the dependency down.
    */
   setUp(up: boolean): void {
-    this.up = up
+    this.isUp = up
   }
 
   /**
@@ -78,7 +78,7 @@ export class StubHealthIndicator implements IHealthIndicator {
    * @returns `up` with no detail, or `down` with a safe diagnostic reason.
    */
   async check(): Promise<HealthIndicatorResult> {
-    return this.up
+    return this.isUp
       ? { status: 'up' }
       : { status: 'down', details: { reason: 'fixture indicator forced down' } }
   }
