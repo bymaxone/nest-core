@@ -1,6 +1,6 @@
 # Phase 2: error-envelope
 
-> **Status**: 📋 ToDo · **Progress**: 0 / 5 tasks · **Last updated**: 2026-07-06
+> **Status**: 🔄 In Progress · **Progress**: 1 / 5 tasks · **Last updated**: 2026-07-16
 > **Source roadmap**: [`../development_plan.md`](../development_plan.md) (P2)
 > **Source spec**: [`../technical_specification.md`](../technical_specification.md) §5, §10, §14.1, §14.2
 
@@ -33,13 +33,13 @@ Expected starting state: phase 1 merged (tokens, catalog, options, both registra
 
 ## Task index
 
-| ID | Task | Status | Priority | Size | Depends on |
-|---|---|---|---|---|---|
-| 2.1 | Branch, envelope type and builder | 📋 ToDo | P0 | S | none |
-| 2.2 | Filter: HttpException mapping and code derivation | 📋 ToDo | P0 | M | 2.1 |
-| 2.3 | Filter: validation shape and unknown collapse (`exposeInternals`) | 📋 ToDo | P0 | M | 2.2 |
-| 2.4 | Correlation stamping, registration wiring, contract suite | 📋 ToDo | P0 | M | 2.3 |
-| 2.5 | Phase close: verification, PR, Copilot review, merge | 📋 ToDo | P0 | S | 2.1, 2.2, 2.3, 2.4 |
+| ID  | Task                                                              | Status  | Priority | Size | Depends on         |
+| --- | ----------------------------------------------------------------- | ------- | -------- | ---- | ------------------ |
+| 2.1 | Branch, envelope type and builder                                 | ✅ Done | P0       | S    | none               |
+| 2.2 | Filter: HttpException mapping and code derivation                 | 📋 ToDo | P0       | M    | 2.1                |
+| 2.3 | Filter: validation shape and unknown collapse (`exposeInternals`) | 📋 ToDo | P0       | M    | 2.2                |
+| 2.4 | Correlation stamping, registration wiring, contract suite         | 📋 ToDo | P0       | M    | 2.3                |
+| 2.5 | Phase close: verification, PR, Copilot review, merge              | 📋 ToDo | P0       | S    | 2.1, 2.2, 2.3, 2.4 |
 
 ---
 
@@ -47,7 +47,7 @@ Expected starting state: phase 1 merged (tokens, catalog, options, both registra
 
 ### Task 2.1: Branch, envelope type and builder
 
-- **Status**: 📋 ToDo
+- **Status**: ✅ Done
 - **Priority**: P0
 - **Size**: S
 - **Depends on**: none
@@ -58,10 +58,10 @@ The `ErrorEnvelope` type matching spec §5.1 and a pure builder function that as
 
 #### Acceptance criteria
 
-- [ ] Branch `feat/phase-02-error-envelope` created with `git switch -c`.
-- [ ] `ErrorEnvelope` carries `statusCode`, `code`, `message`, optional `details`, optional `correlationId`, `timestamp` (ISO 8601), `path`, exactly per §5.1.
-- [ ] `buildErrorEnvelope(input)` is pure, omits absent optional fields entirely (no `undefined` keys in JSON), and stamps `timestamp` from an injectable clock parameter (testability).
-- [ ] 100% coverage holds.
+- [x] Branch `feat/phase-02-error-envelope` created with `git switch -c`.
+- [x] `ErrorEnvelope` carries `statusCode`, `code`, `message`, optional `details`, optional `correlationId`, `timestamp` (ISO 8601), `path`, exactly per §5.1.
+- [x] `buildErrorEnvelope(input)` is pure, omits absent optional fields entirely (no `undefined` keys in JSON), and stamps `timestamp` from an injectable clock parameter (testability).
+- [x] 100% coverage holds.
 
 #### Files to create / modify
 
@@ -69,7 +69,7 @@ The `ErrorEnvelope` type matching spec §5.1 and a pure builder function that as
 
 #### Agent prompt
 
-````
+```
 You are a senior NestJS library engineer working on @bymax-one/nest-core.
 
 PROJECT: @bymax-one/nest-core, application foundation kit for NestJS 11. This phase builds the
@@ -113,7 +113,7 @@ Completion Protocol (after you finish):
 5. Update the P2 row in ../development_plan.md (canonical) and mirror docs/tasks/README.md.
 6. Recompute the overall counter line in ../development_plan.md.
 7. Commit: `feat(envelope): add error envelope type and builder (2.1)`.
-````
+```
 
 ---
 
@@ -141,7 +141,7 @@ Completion Protocol (after you finish):
 
 #### Agent prompt
 
-````
+```
 You are a senior NestJS library engineer working on @bymax-one/nest-core.
 
 PROJECT: @bymax-one/nest-core, application foundation kit for NestJS 11. The exception filter is
@@ -192,7 +192,7 @@ Completion Protocol (after you finish):
 5. Update the P2 row in ../development_plan.md (canonical) and mirror docs/tasks/README.md.
 6. Recompute the overall counter line in ../development_plan.md.
 7. Commit: `feat(envelope): add exception filter with HttpException mapping (2.2)`.
-````
+```
 
 ---
 
@@ -221,7 +221,7 @@ Mapping rules 2 and 3: validation-shaped BadRequestException translation into st
 
 #### Agent prompt
 
-````
+```
 You are a senior NestJS library engineer working on @bymax-one/nest-core.
 
 PROJECT: @bymax-one/nest-core, application foundation kit for NestJS 11. Production-safe by
@@ -270,7 +270,7 @@ Completion Protocol (after you finish):
 5. Update the P2 row in ../development_plan.md (canonical) and mirror docs/tasks/README.md.
 6. Recompute the overall counter line in ../development_plan.md.
 7. Commit: `feat(envelope): add validation mapping and production-safe collapse (2.3)`.
-````
+```
 
 ---
 
@@ -298,7 +298,7 @@ Correlation-id stamping through the pluggable provider, wiring the real filter i
 
 #### Agent prompt
 
-````
+```
 You are a senior NestJS library engineer working on @bymax-one/nest-core.
 
 PROJECT: @bymax-one/nest-core, application foundation kit for NestJS 11. The envelope is a
@@ -347,7 +347,7 @@ Completion Protocol (after you finish):
 5. Update the P2 row in ../development_plan.md (canonical) and mirror docs/tasks/README.md.
 6. Recompute the overall counter line in ../development_plan.md.
 7. Commit: `feat(envelope): stamp correlation ids and pin the envelope contract (2.4)`.
-````
+```
 
 ---
 
@@ -374,7 +374,7 @@ Audit the phase Definition of Done, update dashboards, open the phase PR, obtain
 
 #### Agent prompt
 
-````
+```
 You are a senior release engineer closing a development phase of @bymax-one/nest-core.
 
 PROJECT: @bymax-one/nest-core. One PR per phase; GitHub Copilot code review is a mandatory gate.
@@ -418,10 +418,12 @@ Completion Protocol (after you finish):
 3. Append: `- 2.5 ✅ <YYYY-MM-DD>: phase PR merged with Copilot review`.
 4. Update the P2 row (✅, 100%) and overall counter in ../development_plan.md; mirror README.md.
 5. Commit dashboard updates post-merge as `docs(core): close phase 2 dashboards (2.5)`.
-````
+```
 
 ---
 
 ## Completion log
 
 <!-- Append one line per completed task: - <id> ✅ <YYYY-MM-DD>: <summary> -->
+
+- 2.1 ✅ 2026-07-16: ErrorEnvelope contract type and pure `buildErrorEnvelope` with injectable clock; optionals omitted from serialized JSON; 100% coverage.

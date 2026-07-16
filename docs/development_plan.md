@@ -23,13 +23,13 @@
 
 ## Progress Dashboard
 
-> **Overall: 2 / 9 phases done (22%)** · Active phase: P2 · Blocked: none
+> **Overall: 2 / 9 phases done (22%)** · Active phase: P2 (🔄 in progress) · Blocked: none
 
 | ID  | Phase                | Status | Progress | Size | Last Updated |
 | --- | -------------------- | ------ | -------- | ---- | ------------ |
 | P0  | repository-scaffold  | ✅     | 100%     | M    | 2026-07-16   |
 | P1  | module-core          | ✅     | 100%     | M    | 2026-07-16   |
-| P2  | error-envelope       | 📋     | 0%       | M    | 2026-07-06   |
+| P2  | error-envelope       | 🔄     | 20%      | M    | 2026-07-16   |
 | P3  | timing-interceptor   | 📋     | 0%       | S    | 2026-07-06   |
 | P4  | pagination           | 📋     | 0%       | M    | 2026-07-06   |
 | P5  | health               | 📋     | 0%       | M    | 2026-07-06   |
