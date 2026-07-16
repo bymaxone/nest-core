@@ -39,6 +39,8 @@ export type {
   BuildErrorEnvelopeInput
 } from './envelope/error-envelope'
 
+export { TimingInterceptor } from './timing/timing.interceptor'
+
 export type { ITimingSink, RequestTimingSample } from './timing/timing.interfaces'
 
 export {

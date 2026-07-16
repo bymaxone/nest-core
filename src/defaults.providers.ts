@@ -1,10 +1,12 @@
 /**
  * @fileoverview No-op default bindings for the pluggable contracts. Both
- * registration paths wire these so the correlation-provider, timing-sink, and
- * health-indicator tokens always resolve, and consumers replace any of them with
- * a standard provider (`useValue` / `useExisting` / `useClass`) for the same
- * token. Defaults do nothing observable: the correlation provider returns
- * `undefined`, the timing sink discards its samples, the indicator list is empty.
+ * registration paths wire these so the correlation-provider, timing-sink,
+ * timing-clock, and health-indicator tokens always resolve, and consumers
+ * replace any of them with a standard provider (`useValue` / `useExisting` /
+ * `useClass`) for the same token. Defaults do nothing observable: the
+ * correlation provider returns `undefined`, the timing sink discards its
+ * samples, the indicator list is empty; the timing clock is the real
+ * monotonic clock, since it has no meaningful "no-op" shape.
  * @layer Provider
  */
 import type { Provider } from '@nestjs/common'
@@ -15,6 +17,7 @@ import {
   BYMAX_TIMING_SINK
 } from './core.tokens'
 import type { ICorrelationIdProvider } from './envelope/correlation.interfaces'
+import { BYMAX_TIMING_CLOCK, DEFAULT_MONOTONIC_CLOCK } from './timing/timing.clock'
 import type { ITimingSink, RequestTimingSample } from './timing/timing.interfaces'
 
 /**
@@ -53,12 +56,14 @@ export class NoopTimingSink implements ITimingSink {
  * registration paths so the tokens always resolve; a consumer provider for the
  * same token overrides the default.
  *
- * @returns The default correlation-provider, timing-sink, and indicators providers.
+ * @returns The default correlation-provider, timing-sink, timing-clock, and
+ *   indicators providers.
  */
 export function buildDefaultProviders(): Provider[] {
   return [
     { provide: BYMAX_CORRELATION_PROVIDER, useClass: NoopCorrelationIdProvider },
     { provide: BYMAX_TIMING_SINK, useClass: NoopTimingSink },
+    { provide: BYMAX_TIMING_CLOCK, useValue: DEFAULT_MONOTONIC_CLOCK },
     // Frozen so the shared default cannot be mutated in place by a consumer;
     // providing indicators means overriding the token with a fresh array.
     { provide: BYMAX_HEALTH_INDICATORS, useValue: Object.freeze([]) }

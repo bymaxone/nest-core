@@ -23,6 +23,9 @@ import type { Observable } from 'rxjs'
 import type { ResolvedCoreOptions } from './core.options'
 import type { ICorrelationIdProvider } from './envelope/correlation.interfaces'
 import { BymaxExceptionFilter } from './envelope/exception.filter'
+import type { MonotonicClock } from './timing/timing.clock'
+import { TimingInterceptor } from './timing/timing.interceptor'
+import type { ITimingSink } from './timing/timing.interfaces'
 
 /**
  * Exception filter that reproduces Nest's default error handling, used on the
@@ -115,13 +118,23 @@ export function selectAsyncExceptionFilter(
 }
 
 /**
- * Build the pass-through interceptor for a disabled timing feature. The
- * resolved options are the gating seam later phases read to return the real
- * timing interceptor when enabled.
+ * Select the timing interceptor for the async path from the resolved options:
+ * the real {@link TimingInterceptor} when the timing feature is enabled, the
+ * transparent {@link PassThroughInterceptor} otherwise. The slot is always
+ * registered on the async path because options resolve after the module is
+ * defined, so the choice is made here at runtime.
  *
- * @param _options - The resolved options snapshot (gating seam input).
- * @returns A transparent interceptor.
+ * @param options - The resolved options snapshot (gates the timing feature).
+ * @param sink - The bound timing sink; only used when timing is enabled.
+ * @param clock - The bound monotonic clock seam; only used when timing is enabled.
+ * @returns The real timing interceptor when enabled, else a transparent pass-through.
  */
-export function selectAsyncTimingInterceptor(_options: ResolvedCoreOptions): NestInterceptor {
-  return new PassThroughInterceptor()
+export function selectAsyncTimingInterceptor(
+  options: ResolvedCoreOptions,
+  sink: ITimingSink,
+  clock: MonotonicClock
+): NestInterceptor {
+  return options.timing.enabled
+    ? new TimingInterceptor(options, sink, clock)
+    : new PassThroughInterceptor()
 }
