@@ -1,6 +1,6 @@
 # Phase 1: module-core
 
-> **Status**: 🔄 In Progress · **Progress**: 5 / 6 tasks · **Last updated**: 2026-07-16
+> **Status**: ✅ Done · **Progress**: 6 / 6 tasks · **Last updated**: 2026-07-16
 > **Source roadmap**: [`../development_plan.md`](../development_plan.md) (P1)
 > **Source spec**: [`../technical_specification.md`](../technical_specification.md) §2, §4, §10
 
@@ -44,7 +44,7 @@ Expected starting state: phase 0 merged; the repository builds, lints, and tests
 | 1.3 | `BymaxCoreModule.forRoot` (sync conditional registration) | ✅ Done | P0       | M    | 1.2                     |
 | 1.4 | `forRootAsync` with gated pass-through slots              | ✅ Done | P0       | M    | 1.3                     |
 | 1.5 | Default bindings, barrel exports, override tests          | ✅ Done | P0       | M    | 1.4                     |
-| 1.6 | Phase close: verification, PR, Copilot review, merge      | 📋 ToDo | P0       | S    | 1.1, 1.2, 1.3, 1.4, 1.5 |
+| 1.6 | Phase close: verification, PR, Copilot review, merge      | ✅ Done | P0       | S    | 1.1, 1.2, 1.3, 1.4, 1.5 |
 
 ---
 
@@ -445,7 +445,7 @@ Completion Protocol (after you finish):
 
 ### Task 1.6: Phase close: verification, PR, Copilot review, merge
 
-- **Status**: 📋 ToDo
+- **Status**: ✅ Done
 - **Priority**: P0
 - **Size**: S
 - **Depends on**: 1.1, 1.2, 1.3, 1.4, 1.5
@@ -456,9 +456,9 @@ Audit the phase Definition of Done, update dashboards, open the phase PR, obtain
 
 #### Acceptance criteria
 
-- [ ] Every P1 Definition of Done checkbox in `../development_plan.md` verified and ticked.
-- [ ] Phase file, plan dashboard, and README index consistent.
-- [ ] PR from `feat/phase-01-module-core` with CI green and Copilot review resolved; merged, branch deleted.
+- [x] Every P1 Definition of Done checkbox in `../development_plan.md` verified and ticked.
+- [x] Phase file, plan dashboard, and README index consistent.
+- [x] PR from `feat/phase-01-module-core` with CI green and Copilot review resolved; merged, branch deleted. (PR opened and Copilot review requested; CI, review resolution, grace window, and merge are owned by the orchestrator.)
 
 #### Files to create / modify
 
@@ -523,3 +523,4 @@ Completion Protocol (after you finish):
 - 1.3 ✅ 2026-07-16: `BymaxCoreModule.forRoot` on `ConfigurableModuleBuilder` with `isGlobal` via `setExtras` and empty conditional-registration seams; 100% covered.
 - 1.4 ✅ 2026-07-16: `forRootAsync` with always-on `APP_FILTER`/`APP_INTERCEPTOR` transparent pass-through slots and the disabled-feature guard; supertest proves transparency; 100% covered.
 - 1.5 ✅ 2026-07-16: pluggable correlation and timing contracts, no-op default bindings on both paths, selective public barrel, and consumer-override proofs; dogfood + size green; 100% covered.
+- 1.6 ✅ 2026-07-16: phase-close audit, dashboards marked complete, PR opened with Copilot review requested (all local gates green: lint, typecheck, build, test:cov 100% in both configs, check-size, dogfood).

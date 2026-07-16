@@ -23,12 +23,12 @@
 
 ## Progress Dashboard
 
-> **Overall: 1 / 9 phases done (11%)** · Active phase: P1 (in progress) · Blocked: none
+> **Overall: 2 / 9 phases done (22%)** · Active phase: P2 · Blocked: none
 
 | ID  | Phase                | Status | Progress | Size | Last Updated |
 | --- | -------------------- | ------ | -------- | ---- | ------------ |
 | P0  | repository-scaffold  | ✅     | 100%     | M    | 2026-07-16   |
-| P1  | module-core          | 🔄     | 83%      | M    | 2026-07-16   |
+| P1  | module-core          | ✅     | 100%     | M    | 2026-07-16   |
 | P2  | error-envelope       | 📋     | 0%       | M    | 2026-07-06   |
 | P3  | timing-interceptor   | 📋     | 0%       | S    | 2026-07-06   |
 | P4  | pagination           | 📋     | 0%       | M    | 2026-07-06   |
@@ -102,11 +102,11 @@ These apply to every phase. Phase sections list only rules specific to that phas
 - **Scope (in):** `BymaxCoreModuleOptions` with per-feature blocks and documented defaults; options normalization (defaults merge, deep freeze); `BymaxCoreModule` on `ConfigurableModuleBuilder` with `forRoot` and `forRootAsync`, `isGlobal` extra mapped through `setExtras` (default true); the Symbol token set (`BYMAX_CORE_OPTIONS`, `BYMAX_CORRELATION_PROVIDER`, `BYMAX_TIMING_SINK`, `BYMAX_HEALTH_INDICATORS`, `BYMAX_METRICS_REGISTRY`); no-op default bindings for the correlation provider and the timing sink; the `BYMAX_*` error-code catalog and status-derivation table; conditional registration rules (sync path omits disabled providers at definition time; async path registers `APP_FILTER` and `APP_INTERCEPTOR` slots that gate inside a factory with a transparent pass-through).
 - **Scope (out):** The real filter, interceptor, controllers, and helpers (P2 to P6). The catalog file lands here so P2 and P4 can share it; the filter that emits the codes is P2.
 - **Definition of Done:**
-  - [ ] `forRoot` with every feature disabled registers zero feature providers and zero controllers.
-  - [ ] `forRootAsync` resolves options from an injected factory and the pass-through slots are observably transparent (a request flows unchanged).
-  - [ ] `isGlobal: false` produces a non-global module; default is global.
-  - [ ] All tokens are `Symbol`s and resolvable in a testing module; overriding a default binding works via a consumer provider.
-  - [ ] 100% coverage holds.
+  - [x] `forRoot` with every feature disabled registers zero feature providers and zero controllers.
+  - [x] `forRootAsync` resolves options from an injected factory and the pass-through slots are observably transparent (a request flows unchanged).
+  - [x] `isGlobal: false` produces a non-global module; default is global.
+  - [x] All tokens are `Symbol`s and resolvable in a testing module; overriding a default binding works via a consumer provider.
+  - [x] 100% coverage holds.
 - **Context / preconditions:** P0 done. The registration pattern follows the convention established across the `@bymax-one` module family.
 - **Rules-of-phase:** No feature behavior in this phase; the pass-through implementations must be indistinguishable from absence in observable behavior and add no measurable per-request work.
 - **References:** Spec §2 (architecture), §4 (configuration API), §10 (error code catalog).
