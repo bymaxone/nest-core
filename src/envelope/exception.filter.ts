@@ -61,7 +61,7 @@ export interface FilterErrorContext {
  * @returns The string `code` when the response object carries one, else `undefined`.
  */
 function extractExplicitCode(response: string | object): string | undefined {
-  if (typeof response !== 'object' || !('code' in response)) {
+  if (typeof response !== 'object' || response === null || !('code' in response)) {
     return undefined
   }
   const code: unknown = (response as { code: unknown }).code
@@ -80,6 +80,7 @@ function isValidationResponse(
 ): response is { message: readonly unknown[] } {
   return (
     typeof response === 'object' &&
+    response !== null &&
     'message' in response &&
     Array.isArray((response as { message: unknown }).message)
   )
@@ -109,7 +110,7 @@ function extractHttpMessage(response: string | object, exception: HttpException)
   if (typeof response === 'string') {
     return response
   }
-  if ('message' in response) {
+  if (response !== null && 'message' in response) {
     const message: unknown = (response as { message: unknown }).message
     if (typeof message === 'string') {
       return message
@@ -195,7 +196,12 @@ export class BymaxExceptionFilter implements ExceptionFilter {
     if (exception instanceof HttpException) {
       return this.mapHttpException(exception, context)
     }
-    this.onUnexpectedError(exception, context)
+    try {
+      this.onUnexpectedError(exception, context)
+    } catch {
+      // The observability hook must never break error formatting; a throwing
+      // override is swallowed so the envelope is still delivered.
+    }
     return this.mapUnknown(exception, context)
   }
 

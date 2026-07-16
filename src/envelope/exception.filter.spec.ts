@@ -45,6 +45,11 @@ function buildHarness(params?: {
   contextType?: string
   url?: string
   method?: string
+  filterCtor?: new (
+    options: ResolvedCoreOptions,
+    correlation: ICorrelationIdProvider,
+    adapterHost: HttpAdapterHost
+  ) => BymaxExceptionFilter
 }): {
   filter: BymaxExceptionFilter
   host: ArgumentsHost
@@ -69,7 +74,8 @@ function buildHarness(params?: {
       getResponse: (): unknown => ({})
     })
   } as unknown as ArgumentsHost
-  const filter = new BymaxExceptionFilter(
+  const FilterCtor = params?.filterCtor ?? BymaxExceptionFilter
+  const filter = new FilterCtor(
     params?.options ?? normalizeCoreOptions(),
     params?.correlation ?? stubCorrelation(),
     adapterHost
@@ -192,6 +198,25 @@ describe('BymaxExceptionFilter, HttpException mapping', () => {
     expect(captured.body?.code).toBe('BYMAX_BAD_REQUEST')
     expect(typeof captured.body?.message).toBe('string')
   })
+
+  /**
+   * A null exception response must not crash the filter.
+   *
+   * `HttpException.getResponse()` can return null; the `in` checks would throw a
+   * TypeError without a null guard. The filter must still derive the code from
+   * the status and fall back to the exception message.
+   */
+  it('formats an HttpException whose response is null without throwing', () => {
+    const { filter, host, captured } = buildHarness()
+
+    expect(() =>
+      filter.catch(new HttpException(null as unknown as string, 400), host)
+    ).not.toThrow()
+
+    expect(captured.status).toBe(400)
+    expect(captured.body?.code).toBe('BYMAX_BAD_REQUEST')
+    expect(typeof captured.body?.message).toBe('string')
+  })
 })
 
 describe('BymaxExceptionFilter, context handling', () => {
@@ -227,6 +252,27 @@ describe('BymaxExceptionFilter, context handling', () => {
       message: 'Internal server error'
     })
     expect(captured.body?.details).toBeUndefined()
+  })
+
+  /**
+   * A throwing observability hook must not break error formatting.
+   *
+   * The `onUnexpectedError` seam is documented as never throwing, but an
+   * integration override might; the filter must swallow that failure and still
+   * deliver the production-safe 500 envelope.
+   */
+  it('swallows a throwing onUnexpectedError hook and still formats the envelope', () => {
+    class ThrowingHookFilter extends BymaxExceptionFilter {
+      protected override onUnexpectedError(): void {
+        throw new Error('hook failure')
+      }
+    }
+    const { filter, host, captured } = buildHarness({ filterCtor: ThrowingHookFilter })
+
+    expect(() => filter.catch(new Error('database exploded'), host)).not.toThrow()
+
+    expect(captured.status).toBe(500)
+    expect(captured.body?.code).toBe('BYMAX_INTERNAL_ERROR')
   })
 })
 
