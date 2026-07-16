@@ -1,0 +1,145 @@
+/**
+ * Unit tests for the `createMetricsController` factory.
+ *
+ * Layer: unit.
+ * Goal: prove the controller scrapes the injected registry and replies with the
+ * registry's text and content type, mutating nothing; behaves identically at a
+ * custom route; and fails fast through the async consistency guard when the
+ * resolved options disagree with how the controller instance was registered.
+ * Mocks: a hand-built registry stub and a hand-built `HttpAdapterHost` capturing
+ * the header and reply (family convention, no supertest at this layer).
+ */
+import type { HttpAdapterHost } from '@nestjs/core'
+
+import { normalizeCoreOptions } from '../core.options'
+import type { ResolvedCoreOptions } from '../core.options'
+import { createMetricsController } from './metrics.controller'
+import type { MetricsRegistry } from './metrics.registry'
+
+/** The subset of controller methods the tests invoke directly. */
+interface MetricsControllerInstance {
+  scrape(response: unknown): Promise<void>
+}
+
+/** Build a stub registry returning a fixed exposition text and content type. */
+function stubRegistry(text: string, contentType: string): MetricsRegistry {
+  return {
+    metrics: jest.fn((): Promise<string> => Promise.resolve(text)),
+    contentType
+  } as unknown as MetricsRegistry
+}
+
+/** Captured arguments of the adapter's `setHeader` and `reply` calls. */
+interface Captured {
+  header: { name: string; value: string } | undefined
+  body: string | undefined
+  status: number | undefined
+}
+
+/** Build a stub `HttpAdapterHost` capturing the header set and the replied body. */
+function stubAdapterHost(): { adapterHost: HttpAdapterHost; captured: Captured } {
+  const captured: Captured = { header: undefined, body: undefined, status: undefined }
+  const httpAdapter = {
+    setHeader: (_response: unknown, name: string, value: string): void => {
+      captured.header = { name, value }
+    },
+    reply: (_response: unknown, body: string, status: number): void => {
+      captured.body = body
+      captured.status = status
+    }
+  }
+  return { adapterHost: { httpAdapter } as unknown as HttpAdapterHost, captured }
+}
+
+/** Build a controller instance registered at `path`, wired to the given registry and options. */
+function buildController(params: {
+  path: string
+  text?: string
+  contentType?: string
+  options?: ResolvedCoreOptions
+}): { controller: MetricsControllerInstance; registry: MetricsRegistry; captured: Captured } {
+  const registry = stubRegistry(
+    params.text ?? '# HELP up 1\nup 1\n',
+    params.contentType ?? 'text/plain; version=0.0.4; charset=utf-8'
+  )
+  const { adapterHost, captured } = stubAdapterHost()
+  const options =
+    params.options ?? normalizeCoreOptions({ metrics: { enabled: true, path: params.path } })
+  const ControllerClass = createMetricsController(params.path)
+  const controller = new ControllerClass(
+    registry,
+    options,
+    adapterHost
+  ) as unknown as MetricsControllerInstance
+  return { controller, registry, captured }
+}
+
+describe('createMetricsController', () => {
+  /**
+   * Serve the registry exposition with its content type.
+   *
+   * The handler must scrape the injected registry and reply with exactly that
+   * text, the registry's own content type, and a 200 status.
+   */
+  it('replies with the registry text, content type, and 200', async () => {
+    const { controller, registry, captured } = buildController({
+      path: 'metrics',
+      text: '# HELP http_requests_total\nhttp_requests_total 3\n',
+      contentType: 'text/plain; version=0.0.4; charset=utf-8'
+    })
+
+    await controller.scrape({})
+
+    expect(registry.metrics).toHaveBeenCalledTimes(1)
+    expect(captured.body).toBe('# HELP http_requests_total\nhttp_requests_total 3\n')
+    expect(captured.header).toEqual({
+      name: 'Content-Type',
+      value: 'text/plain; version=0.0.4; charset=utf-8'
+    })
+    expect(captured.status).toBe(200)
+  })
+
+  /**
+   * Configurable route does not affect behavior.
+   *
+   * The factory is exercised with a non-default route to prove the handler
+   * behaves identically regardless of the registered path.
+   */
+  it('behaves the same when registered at a custom route', async () => {
+    const { controller, captured } = buildController({ path: 'internal/metrics' })
+
+    await controller.scrape({})
+
+    expect(captured.status).toBe(200)
+  })
+
+  /**
+   * Async disabled guard.
+   *
+   * When the resolved options report metrics as disabled but the controller is
+   * still reached (only possible on the async path, since routes register
+   * unconditionally there), the handler fails fast with a descriptive error
+   * instead of serving a disabled feature.
+   */
+  it('throws a descriptive error when metrics resolves disabled', async () => {
+    const options = normalizeCoreOptions({ metrics: { enabled: false, path: 'metrics' } })
+    const { controller } = buildController({ path: 'metrics', options })
+
+    await expect(controller.scrape({})).rejects.toThrow(/metrics.*disabled/i)
+  })
+
+  /**
+   * Async custom-path guard.
+   *
+   * When the resolved options request a route different from the one this
+   * controller instance was registered with (only reachable on the async path,
+   * where a custom path cannot be honored), the handler fails fast instead of
+   * silently serving the wrong route.
+   */
+  it('throws a descriptive error when the resolved path does not match the registered route', async () => {
+    const options = normalizeCoreOptions({ metrics: { enabled: true, path: 'other' } })
+    const { controller } = buildController({ path: 'metrics', options })
+
+    await expect(controller.scrape({})).rejects.toThrow(/metrics\.path/)
+  })
+})
