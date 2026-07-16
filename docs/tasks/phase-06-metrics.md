@@ -297,7 +297,7 @@ Conditional registration of the metrics feature, the bridge auto-wiring when tim
 #### Acceptance criteria
 
 - [x] Metrics disabled: the sync path registers no controller and no registry provider resolution; the async path registers a request-guarded controller; `prom-client` is never imported (verified with a module-load spy on `loadPromClient`).
-- [x] Metrics + timing enabled: the bridge is bound as the effective timing sink (documented composition: it replaces the no-op default; a consumer-provided sink takes precedence per NestJS last-registered-wins, documented in `metrics.providers.ts` JSDoc).
+- [x] Metrics + timing enabled: the bridge is bound as the effective timing sink (documented composition: it replaces the no-op default. The binding is owned by the module, the interceptor injects `BYMAX_TIMING_SINK` from the module's own scope, so a same-token provider in a consuming module does not override it, documented in `metrics.providers.ts` JSDoc).
 - [x] A scrape after simulated samples shows both HTTP metrics in the endpoint output.
 - [x] 100% coverage holds; dogfood green.
 
