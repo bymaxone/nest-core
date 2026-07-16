@@ -82,8 +82,8 @@ export function assertAsyncFeatureEnabled(feature: string, enabled: boolean): vo
     throw new Error(
       `[BymaxCoreModule] The "${feature}" controller was reached while the feature is disabled. ` +
         `On the forRootAsync path this controller is always registered because options resolve ` +
-        `after the module is defined; enable "${feature}" in the resolved options or omit its ` +
-        `route.`
+        `after the module is defined; enable "${feature}" in the resolved options, or do not ` +
+        `expose this controller while the feature is disabled.`
     )
   }
 }
