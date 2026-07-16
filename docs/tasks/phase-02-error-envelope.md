@@ -1,6 +1,6 @@
 # Phase 2: error-envelope
 
-> **Status**: 🔄 In Progress · **Progress**: 2 / 5 tasks · **Last updated**: 2026-07-16
+> **Status**: 🔄 In Progress · **Progress**: 3 / 5 tasks · **Last updated**: 2026-07-16
 > **Source roadmap**: [`../development_plan.md`](../development_plan.md) (P2)
 > **Source spec**: [`../technical_specification.md`](../technical_specification.md) §5, §10, §14.1, §14.2
 
@@ -37,7 +37,7 @@ Expected starting state: phase 1 merged (tokens, catalog, options, both registra
 | --- | ----------------------------------------------------------------- | ------- | -------- | ---- | ------------------ |
 | 2.1 | Branch, envelope type and builder                                 | ✅ Done | P0       | S    | none               |
 | 2.2 | Filter: HttpException mapping and code derivation                 | ✅ Done | P0       | M    | 2.1                |
-| 2.3 | Filter: validation shape and unknown collapse (`exposeInternals`) | 📋 ToDo | P0       | M    | 2.2                |
+| 2.3 | Filter: validation shape and unknown collapse (`exposeInternals`) | ✅ Done | P0       | M    | 2.2                |
 | 2.4 | Correlation stamping, registration wiring, contract suite         | 📋 ToDo | P0       | M    | 2.3                |
 | 2.5 | Phase close: verification, PR, Copilot review, merge              | 📋 ToDo | P0       | S    | 2.1, 2.2, 2.3, 2.4 |
 
@@ -198,7 +198,7 @@ Completion Protocol (after you finish):
 
 ### Task 2.3: Filter: validation shape and unknown collapse
 
-- **Status**: 📋 ToDo
+- **Status**: ✅ Done
 - **Priority**: P0
 - **Size**: M
 - **Depends on**: 2.2
@@ -209,11 +209,11 @@ Mapping rules 2 and 3: validation-shaped BadRequestException translation into st
 
 #### Acceptance criteria
 
-- [ ] BadRequestException carrying a constraint-violation array translates to `code: BYMAX_VALIDATION_FAILED` with one structured `details` entry per violation.
-- [ ] Any non-HttpException collapses to 500, `BYMAX_INTERNAL_ERROR`, fixed message `"Internal server error"`; original error never serialized when `exposeInternals` is false.
-- [ ] With `exposeInternals` true, `details` carries the original message and stack (development only, documented).
-- [ ] No stack fragment or internal message appears in any response body when the switch is off (regression-tested with a thrown `Error` and a thrown non-Error value).
-- [ ] 100% coverage holds.
+- [x] BadRequestException carrying a constraint-violation array translates to `code: BYMAX_VALIDATION_FAILED` with one structured `details` entry per violation.
+- [x] Any non-HttpException collapses to 500, `BYMAX_INTERNAL_ERROR`, fixed message `"Internal server error"`; original error never serialized when `exposeInternals` is false.
+- [x] With `exposeInternals` true, `details` carries the original message and stack (development only, documented).
+- [x] No stack fragment or internal message appears in any response body when the switch is off (regression-tested with a thrown `Error` and a thrown non-Error value).
+- [x] 100% coverage holds.
 
 #### Files to create / modify
 
@@ -428,3 +428,4 @@ Completion Protocol (after you finish):
 
 - 2.1 ✅ 2026-07-16: ErrorEnvelope contract type and pure `buildErrorEnvelope` with injectable clock; optionals omitted from serialized JSON; 100% coverage.
 - 2.2 ✅ 2026-07-16: `BymaxExceptionFilter` HttpException mapping (explicit-code passthrough, catalog derivation), framework-neutral path/method accessors via `HttpAdapter`, non-HTTP rethrow, baseline unknown collapse; 100% coverage.
+- 2.3 ✅ 2026-07-16: validation-shape translation to `BYMAX_VALIDATION_FAILED` with structured details, production-safe unknown collapse with `exposeInternals` dev switch, and the overridable `onUnexpectedError` observability seam; leak regression tests; 100% coverage.

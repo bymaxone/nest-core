@@ -45,7 +45,12 @@ function buildHarness(params?: {
   contextType?: string
   url?: string
   method?: string
-}): { filter: BymaxExceptionFilter; host: ArgumentsHost; captured: Captured } {
+}): {
+  filter: BymaxExceptionFilter
+  host: ArgumentsHost
+  captured: Captured
+  adapterHost: HttpAdapterHost
+} {
   const captured: Captured = { body: undefined, status: undefined }
   const request = { url: params?.url ?? '/invoices/inv_123', method: params?.method ?? 'GET' }
   const httpAdapter = {
@@ -69,7 +74,7 @@ function buildHarness(params?: {
     params?.correlation ?? stubCorrelation(),
     adapterHost
   )
-  return { filter, host, captured }
+  return { filter, host, captured, adapterHost }
 }
 
 describe('BymaxExceptionFilter, HttpException mapping', () => {
@@ -173,15 +178,16 @@ describe('BymaxExceptionFilter, HttpException mapping', () => {
   })
 
   /**
-   * A non-string message value falls back to the exception message.
+   * A non-string, non-array message value falls back to the exception message.
    *
-   * When `message` is present but not a string (for example an array), extraction
-   * must fall back to `exception.message`, covering the non-string branch.
+   * When `message` is present but neither a string nor a validation array (for
+   * example a number), the response is not a validation shape, so the code is
+   * derived from the status and the message falls back to `exception.message`.
    */
   it('falls back to the exception message when the response message is not a string', () => {
     const { filter, host, captured } = buildHarness()
 
-    filter.catch(new HttpException({ message: ['a', 'b'] }, 400), host)
+    filter.catch(new HttpException({ message: 42 }, 400), host)
 
     expect(captured.body?.code).toBe('BYMAX_BAD_REQUEST')
     expect(typeof captured.body?.message).toBe('string')
@@ -221,5 +227,162 @@ describe('BymaxExceptionFilter, context handling', () => {
       message: 'Internal server error'
     })
     expect(captured.body?.details).toBeUndefined()
+  })
+})
+
+describe('BymaxExceptionFilter, validation mapping', () => {
+  /**
+   * Validation array translates to structured details.
+   *
+   * A BadRequestException carrying a message array (the validation-pipe shape)
+   * must become BYMAX_VALIDATION_FAILED with one structured entry per violation,
+   * so clients receive machine-readable issues rather than a flat string.
+   */
+  it('maps a validation message array to BYMAX_VALIDATION_FAILED with structured details', () => {
+    const { filter, host, captured } = buildHarness()
+
+    filter.catch(
+      new BadRequestException(['email must be an email', 'name should not be empty']),
+      host
+    )
+
+    expect(captured.status).toBe(400)
+    expect(captured.body).toMatchObject({
+      statusCode: 400,
+      code: 'BYMAX_VALIDATION_FAILED',
+      message: 'Validation failed',
+      details: [{ issue: 'email must be an email' }, { issue: 'name should not be empty' }]
+    })
+  })
+
+  /**
+   * Already-structured violations pass through verbatim.
+   *
+   * When a violation is an object rather than a string, it is already
+   * structured, so it must be kept as-is, exercising the object branch of the
+   * detail translation.
+   */
+  it('keeps already-structured violation objects verbatim', () => {
+    const { filter, host, captured } = buildHarness()
+
+    filter.catch(
+      new BadRequestException({ message: [{ field: 'id', issue: 'unknown identifier' }] }),
+      host
+    )
+
+    expect(captured.body?.code).toBe('BYMAX_VALIDATION_FAILED')
+    expect(captured.body?.details).toEqual([{ field: 'id', issue: 'unknown identifier' }])
+  })
+})
+
+describe('BymaxExceptionFilter, exposeInternals switch', () => {
+  /** Options with the development-only internals switch turned on. */
+  const exposedOptions = normalizeCoreOptions({ envelope: { exposeInternals: true } })
+
+  /**
+   * Internals hidden by default, no message or stack leak.
+   *
+   * The production default must never serialize the original message or any
+   * stack frame; the entire collapsed body may contain neither, protecting the
+   * error-disclosure surface.
+   */
+  it('never leaks the original message or stack when internals are hidden', () => {
+    const { filter, host, captured } = buildHarness()
+
+    filter.catch(new Error('secret db dsn leaked here'), host)
+
+    const serialized = JSON.stringify(captured.body)
+    expect(serialized).not.toContain('secret db dsn leaked here')
+    expect(serialized).not.toContain('stack')
+    expect(serialized.toLowerCase()).not.toContain('.spec.ts')
+  })
+
+  /**
+   * A thrown non-Error value also collapses without leaking.
+   *
+   * Throwing a string (or any non-Error) must still collapse to the generic 500
+   * with no details when internals are hidden, covering the non-Error path.
+   */
+  it('collapses a thrown non-Error value without leaking when internals are hidden', () => {
+    const { filter, host, captured } = buildHarness()
+
+    filter.catch('raw string failure', host)
+
+    expect(captured.body).toMatchObject({ statusCode: 500, code: 'BYMAX_INTERNAL_ERROR' })
+    expect(captured.body?.details).toBeUndefined()
+  })
+
+  /**
+   * Internals on, an Error carries its message and stack.
+   *
+   * In development the details must carry the original message and stack so a
+   * developer can debug, exercising the Error branch of the internals dump.
+   */
+  it('attaches the message and stack of an Error when internals are on', () => {
+    const { filter, host, captured } = buildHarness({ options: exposedOptions })
+    const error = new Error('boom in service')
+
+    filter.catch(error, host)
+
+    expect(captured.body?.details).toEqual({ message: 'boom in service', stack: error.stack })
+  })
+
+  /**
+   * Internals on, an Error without a stack still carries its message.
+   *
+   * A stack-less Error must degrade to a message-only detail rather than
+   * emitting a `stack: undefined` key, covering the stack-absent branch.
+   */
+  it('omits the stack when an Error has none and internals are on', () => {
+    const { filter, host, captured } = buildHarness({ options: exposedOptions })
+    const error = new Error('no stack here')
+    Object.defineProperty(error, 'stack', { value: undefined })
+
+    filter.catch(error, host)
+
+    expect(captured.body?.details).toEqual({ message: 'no stack here' })
+  })
+
+  /**
+   * Internals on, a non-Error carries a stringified message.
+   *
+   * A thrown non-Error value must surface its string form as the message so the
+   * developer still sees what was thrown, covering the non-Error internals branch.
+   */
+  it('stringifies a thrown non-Error value into the details message when internals are on', () => {
+    const { filter, host, captured } = buildHarness({ options: exposedOptions })
+
+    filter.catch({ toString: (): string => 'weird throwable' }, host)
+
+    expect(captured.body?.details).toEqual({ message: 'weird throwable' })
+  })
+})
+
+describe('BymaxExceptionFilter, observability seam', () => {
+  /** A subclass that records every error passed to the observability seam. */
+  class RecordingFilter extends BymaxExceptionFilter {
+    public readonly recorded: unknown[] = []
+
+    protected override onUnexpectedError(error: unknown): void {
+      this.recorded.push(error)
+    }
+  }
+
+  /**
+   * The seam receives the original error before collapse.
+   *
+   * An unexpected error must be handed to the overridable seam before it
+   * collapses to the generic 500, so an integration can log the original error;
+   * HttpExceptions must not reach the seam.
+   */
+  it('hands an unexpected error to the seam and skips it for HttpExceptions', () => {
+    const { host, adapterHost } = buildHarness()
+    const filter = new RecordingFilter(normalizeCoreOptions(), stubCorrelation(), adapterHost)
+    const original = new Error('unexpected')
+
+    filter.catch(original, host)
+    filter.catch(new NotFoundException('missing'), host)
+
+    expect(filter.recorded).toEqual([original])
   })
 })

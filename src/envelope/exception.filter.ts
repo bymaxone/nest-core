@@ -4,10 +4,20 @@
  * It reads the request path and method through the framework-agnostic
  * `HttpAdapter` accessors, so Express and Fastify behave identically, and it
  * targets HTTP execution contexts only: GraphQL and RPC contexts are rethrown
- * untouched (documented HTTP-first limitation). Codes come from the shared
- * `BYMAX_*` catalog; an `HttpException` whose response carries an explicit
- * `code` passes that domain code through verbatim, so the `BYMAX_` prefix stays
- * reserved for codes this package emits.
+ * untouched (documented HTTP-first limitation).
+ *
+ * Three mapping rules apply, in order:
+ *
+ * 1. `HttpException` with an explicit `code` on its response object passes that
+ *    domain code through verbatim, so the `BYMAX_` prefix stays reserved for
+ *    codes this package emits.
+ * 2. A validation-shaped `HttpException` (response carrying a `message` array,
+ *    the form produced by Nest validation pipes) becomes
+ *    `BYMAX_VALIDATION_FAILED` with one structured `details` entry per violation.
+ * 3. Any other `HttpException` derives its code from the status via the shared
+ *    catalog; anything that is not an `HttpException` collapses to a fixed,
+ *    production-safe 500 that never leaks internals unless `exposeInternals` is
+ *    on (development only).
  * @layer Filter
  */
 import { Catch, HttpException, Inject } from '@nestjs/common'
@@ -17,9 +27,9 @@ import { HttpAdapterHost } from '@nestjs/core'
 import type { ResolvedCoreOptions } from '../core.options'
 import { BYMAX_CORE_OPTIONS, BYMAX_CORRELATION_PROVIDER } from '../core.tokens'
 import type { ICorrelationIdProvider } from './correlation.interfaces'
-import { BYMAX_INTERNAL_ERROR, codeForStatus } from './error-codes'
+import { BYMAX_INTERNAL_ERROR, BYMAX_VALIDATION_FAILED, codeForStatus } from './error-codes'
 import { buildErrorEnvelope } from './error-envelope'
-import type { ErrorEnvelope } from './error-envelope'
+import type { ErrorDetails, ErrorEnvelope } from './error-envelope'
 
 /** HTTP status used for the production-safe collapse of any unknown error. */
 const INTERNAL_ERROR_STATUS = 500
@@ -27,8 +37,15 @@ const INTERNAL_ERROR_STATUS = 500
 /** Fixed, end-user-safe message for a collapsed unknown error. */
 const INTERNAL_ERROR_MESSAGE = 'Internal server error'
 
-/** Neutral view of the current request, read through the HTTP adapter. */
-interface RequestContext {
+/** Fixed, end-user-safe message for a validation failure; specifics live in details. */
+const VALIDATION_FAILED_MESSAGE = 'Validation failed'
+
+/**
+ * Neutral view of the current request handed to {@link BymaxExceptionFilter}
+ * mappers and to the {@link BymaxExceptionFilter.onUnexpectedError} seam. It
+ * exposes only the framework-agnostic surface (path, method, correlation id).
+ */
+export interface FilterErrorContext {
   /** HTTP method, read through the adapter (Express and Fastify neutral). */
   readonly method: string
   /** Request URL path, read through the adapter (Express and Fastify neutral). */
@@ -50,6 +67,36 @@ function extractExplicitCode(response: string | object): string | undefined {
 }
 
 /**
+ * Detect the validation shape: an `HttpException` response object whose
+ * `message` is an array, the form Nest validation pipes produce.
+ *
+ * @param response - The value returned by `HttpException.getResponse()`.
+ * @returns `true` when the response carries an array of violations.
+ */
+function isValidationResponse(
+  response: string | object
+): response is { message: readonly unknown[] } {
+  return (
+    typeof response === 'object' &&
+    'message' in response &&
+    Array.isArray((response as { message: unknown }).message)
+  )
+}
+
+/**
+ * Translate a violation array into structured detail entries: a plain string
+ * violation becomes `{ issue }`; an already-structured object is kept verbatim.
+ *
+ * @param violations - The array of constraint messages or objects.
+ * @returns One structured detail entry per violation.
+ */
+function toValidationDetails(violations: readonly unknown[]): ErrorDetails {
+  return violations.map((violation) =>
+    typeof violation === 'string' ? { issue: violation } : violation
+  )
+}
+
+/**
  * Extract the human-readable message from an `HttpException`.
  *
  * @param response - The value returned by `HttpException.getResponse()`.
@@ -67,6 +114,22 @@ function extractHttpMessage(response: string | object, exception: HttpException)
     }
   }
   return exception.message
+}
+
+/**
+ * Build the development-only internals dump for a collapsed unknown error. The
+ * original message is always captured; the stack is captured when present.
+ *
+ * @param exception - The original thrown value.
+ * @returns The `{ message, stack? }` object surfaced only when `exposeInternals` is on.
+ */
+function buildInternalDetails(exception: unknown): ErrorDetails {
+  if (exception instanceof Error) {
+    return exception.stack !== undefined
+      ? { message: exception.message, stack: exception.stack }
+      : { message: exception.message }
+  }
+  return { message: String(exception) }
 }
 
 /**
@@ -107,7 +170,7 @@ export class BymaxExceptionFilter implements ExceptionFilter {
     const ctx = host.switchToHttp()
     const request = ctx.getRequest<unknown>()
     const response = ctx.getResponse<unknown>()
-    const context: RequestContext = {
+    const context: FilterErrorContext = {
       method: String(httpAdapter.getRequestMethod(request)),
       path: String(httpAdapter.getRequestUrl(request))
     }
@@ -116,71 +179,118 @@ export class BymaxExceptionFilter implements ExceptionFilter {
   }
 
   /**
-   * Select the mapping rule for the exception and build its envelope.
+   * Select the mapping rule for the exception and build its envelope. An
+   * unknown error is handed to the observability seam before it collapses, so
+   * an integration can record the original error with the request context.
    *
    * @param exception - The error that escaped the handler.
    * @param context - The neutral request context.
    * @returns The formatted envelope.
    */
-  private buildEnvelope(exception: unknown, context: RequestContext): ErrorEnvelope {
+  private buildEnvelope(exception: unknown, context: FilterErrorContext): ErrorEnvelope {
     if (exception instanceof HttpException) {
       return this.mapHttpException(exception, context)
     }
-    return this.mapUnknown(context)
+    this.onUnexpectedError(exception, context)
+    return this.mapUnknown(exception, context)
   }
 
   /**
-   * Map an `HttpException` to the envelope: status and message from the
-   * exception, code from an explicit `code` on the response object when present,
-   * otherwise derived from the status via the shared catalog.
+   * Map an `HttpException` to the envelope. Explicit domain codes pass through;
+   * the validation shape becomes `BYMAX_VALIDATION_FAILED` with structured
+   * details; everything else derives its code from the status.
    *
    * @param exception - The HTTP exception to format.
    * @param context - The neutral request context.
    * @returns The formatted envelope.
    */
-  private mapHttpException(exception: HttpException, context: RequestContext): ErrorEnvelope {
+  private mapHttpException(exception: HttpException, context: FilterErrorContext): ErrorEnvelope {
     const status = exception.getStatus()
     const response = exception.getResponse()
-    const code = extractExplicitCode(response) ?? codeForStatus(status)
-    return this.toEnvelope(status, code, extractHttpMessage(response, exception), context)
-  }
-
-  /**
-   * Collapse an unknown (non-HTTP) error to the fixed, production-safe 500.
-   *
-   * @param context - The neutral request context.
-   * @returns The generic internal-error envelope.
-   */
-  private mapUnknown(context: RequestContext): ErrorEnvelope {
+    const explicitCode = extractExplicitCode(response)
+    if (explicitCode !== undefined) {
+      return this.toEnvelope(status, explicitCode, extractHttpMessage(response, exception), context)
+    }
+    if (isValidationResponse(response)) {
+      return this.toEnvelope(
+        status,
+        BYMAX_VALIDATION_FAILED,
+        VALIDATION_FAILED_MESSAGE,
+        context,
+        toValidationDetails(response.message)
+      )
+    }
     return this.toEnvelope(
-      INTERNAL_ERROR_STATUS,
-      BYMAX_INTERNAL_ERROR,
-      INTERNAL_ERROR_MESSAGE,
+      status,
+      codeForStatus(status),
+      extractHttpMessage(response, exception),
       context
     )
   }
 
   /**
-   * Assemble the envelope through the pure builder, threading the shared clock.
+   * Collapse an unknown error to the fixed, production-safe 500. The original
+   * error is never serialized unless `exposeInternals` is on, in which case its
+   * message and stack are attached to `details` (development only).
+   *
+   * @param exception - The original thrown value.
+   * @param context - The neutral request context.
+   * @returns The generic internal-error envelope.
+   */
+  private mapUnknown(exception: unknown, context: FilterErrorContext): ErrorEnvelope {
+    const details = this.options.envelope.exposeInternals
+      ? buildInternalDetails(exception)
+      : undefined
+    return this.toEnvelope(
+      INTERNAL_ERROR_STATUS,
+      BYMAX_INTERNAL_ERROR,
+      INTERNAL_ERROR_MESSAGE,
+      context,
+      details
+    )
+  }
+
+  /**
+   * Assemble the envelope through the pure builder, threading the shared clock
+   * and omitting absent optional details.
    *
    * @param statusCode - HTTP status for the envelope.
    * @param code - Stable machine-readable code.
    * @param message - Human-readable, end-user-safe message.
    * @param context - The neutral request context.
+   * @param details - Optional structured context; omitted when absent.
    * @returns The formatted envelope.
    */
   private toEnvelope(
     statusCode: number,
     code: string,
     message: string,
-    context: RequestContext
+    context: FilterErrorContext,
+    details?: ErrorDetails
   ): ErrorEnvelope {
     return buildErrorEnvelope({
       statusCode,
       code,
       message,
       path: context.path,
-      now: this.now
+      now: this.now,
+      ...(details !== undefined ? { details } : {})
     })
+  }
+
+  /**
+   * Observability seam invoked for every unexpected (non-`HttpException`) error
+   * before it collapses to the generic 500. The base implementation is a no-op:
+   * this library owns no logger. An integration (for example
+   * `@bymax-one/nest-logger`) subclasses the filter and overrides this to record
+   * the original error with the current request context and correlation id.
+   * Overrides must never throw and must never write to the response.
+   *
+   * @param _error - The original thrown value.
+   * @param _context - The neutral request context.
+   */
+  protected onUnexpectedError(_error: unknown, _context: FilterErrorContext): void {
+    // Intentionally empty: the base filter emits no logs. Subclasses override
+    // this to forward the original error to a correlation-aware logging pipeline.
   }
 }
