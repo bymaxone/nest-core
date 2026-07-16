@@ -164,9 +164,10 @@ export function buildCursorResult<T>(
   if (items.length <= limit) {
     return { items, nextCursor: null }
   }
-  const page = items.slice(0, limit)
+  const page = items.slice(0, Math.max(0, limit))
   const lastItem = page.at(-1)
-  // A zero or negative limit trims to an empty page, leaving no key to encode.
+  // A zero or negative limit trims to an empty page (Math.max floors the slice
+  // end at 0, avoiding negative-index semantics), leaving no key to encode.
   if (lastItem === undefined) {
     return { items: page, nextCursor: null }
   }

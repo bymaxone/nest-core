@@ -300,4 +300,18 @@ describe('buildCursorResult', () => {
     expect(result.items).toEqual([])
     expect(result.nextCursor).toBeNull()
   })
+
+  /**
+   * Negative-limit defensive case.
+   *
+   * A negative limit is a misuse: `slice` with a negative end would otherwise
+   * return all-but-last, a non-empty page with a bogus cursor. The builder must
+   * deterministically return an empty page and a null cursor instead.
+   */
+  it('yields an empty page and null cursor for a negative limit', () => {
+    const result = buildCursorResult([{ id: 1 }, { id: 2 }], -1, toCursor)
+
+    expect(result.items).toEqual([])
+    expect(result.nextCursor).toBeNull()
+  })
 })
