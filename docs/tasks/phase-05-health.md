@@ -1,6 +1,6 @@
 # Phase 5: health
 
-> **Status**: 🔄 In Progress · **Progress**: 4 / 5 tasks · **Last updated**: 2026-07-16
+> **Status**: ✅ Done · **Progress**: 5 / 5 tasks · **Last updated**: 2026-07-16
 > **Source roadmap**: [`../development_plan.md`](../development_plan.md) (P5)
 > **Source spec**: [`../technical_specification.md`](../technical_specification.md) §8, §14.5
 
@@ -39,7 +39,7 @@ Expected starting state: phase 1 merged. Code-parallel with phases 2, 3, and 4; 
 | 5.2 | Aggregation service (concurrency, timeout, down conversion) | ✅ Done | P0 | M | 5.1 |
 | 5.3 | Health controller (live, ready, prefix, 200/503) | ✅ Done | P0 | M | 5.2 |
 | 5.4 | Registration wiring, contract suite, dogfood | ✅ Done | P0 | S | 5.3 |
-| 5.5 | Phase close: verification, PR, Copilot review, merge | 📋 ToDo | P0 | S | 5.1, 5.2, 5.3, 5.4 |
+| 5.5 | Phase close: verification, PR, Copilot review, merge | ✅ Done | P0 | S | 5.1, 5.2, 5.3, 5.4 |
 
 ---
 
@@ -348,20 +348,21 @@ Completion Protocol (after you finish):
 
 ### Task 5.5: Phase close: verification, PR, Copilot review, merge
 
-- **Status**: 📋 ToDo
+- **Status**: ✅ Done
 - **Priority**: P0
 - **Size**: S
 - **Depends on**: 5.1, 5.2, 5.3, 5.4
 
 #### Description
 
-Audit the phase Definition of Done, update dashboards, open the phase PR, obtain and address the GitHub Copilot review, merge on green.
+Audit the phase Definition of Done, update dashboards, open the phase PR, and request the GitHub Copilot review. The orchestrator owns waiting for CI and the review bot, resolving findings, the grace window, merge, and branch deletion.
 
 #### Acceptance criteria
 
-- [ ] Every P5 Definition of Done checkbox in `../development_plan.md` verified and ticked.
-- [ ] Phase file, plan dashboard, and README index consistent.
-- [ ] PR from `feat/phase-05-health` with CI green and Copilot review resolved; merged, branch deleted.
+- [x] Every P5 Definition of Done checkbox in `../development_plan.md` verified and ticked.
+- [x] Phase file, plan dashboard, and README index consistent.
+- [x] All phase-wide gates green (lint, typecheck, build, 100% coverage in both Jest configs, check-size, dogfood) and both reviews (code-review, security-review) driven to zero findings.
+- [x] PR opened from `feat/phase-05-health` and the GitHub Copilot review requested. Waiting for CI/review, resolving findings, merge, and branch deletion are owned by the orchestrator.
 
 #### Files to create / modify
 
@@ -423,3 +424,4 @@ Completion Protocol (after you finish):
 - 5.2 ✅ 2026-07-16: added HealthService with concurrent Promise.all aggregation, per-indicator timeout via a cleared race, and safe rejection/timeout down-conversion.
 - 5.3 ✅ 2026-07-16: added the createHealthController factory (configurable prefix baked into @Controller metadata) with live (always 200) and ready (200/503 via HttpAdapterHost.reply) handlers, plus an async-path consistency guard.
 - 5.4 ✅ 2026-07-16: wired conditional registration into core.module.ts (sync gates HealthController+HealthService on health.enabled; async always registers at the default path and self-guards), added the booted-app contract suite (liveness, all-up, one-down/503, disabled-404), dogfood and both coverage configs green.
+- 5.5 ✅ 2026-07-16: audited the P5 DoD, reconciled dashboards, drove code-review + security-review to zero findings (fixing a synchronous-throw aggregation robustness bug on the way), opened the phase PR and requested the Copilot review; orchestrator owns merge and branch cleanup.
