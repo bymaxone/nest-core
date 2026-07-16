@@ -16,14 +16,17 @@ export default [
   // Base recommended config
   js.configs.recommended,
 
-  // TypeScript production files (Node-only library; no DOM, no JSX)
+  // TypeScript production files (Node-only library; no DOM, no JSX). Shared
+  // between src/ and the e2e fixture: the fixture is real application code
+  // (a Nest module the README mirrors), not test code, so it holds the same
+  // strict bar as the published package.
   {
-    files: ['src/**/*.ts'],
+    files: ['src/**/*.ts', 'test/e2e/fixture/**/*.ts'],
     ignores: ['**/*.spec.ts', '**/*.test.ts'],
     languageOptions: {
       parser: tsParser,
       parserOptions: {
-        project: './tsconfig.json',
+        project: ['./tsconfig.json', './tsconfig.e2e.json'],
         tsconfigRootDir: import.meta.dirname,
         ecmaVersion: 2022,
         sourceType: 'module'
@@ -42,7 +45,11 @@ export default [
       'import/resolver': {
         typescript: {
           alwaysTryTypes: true,
-          project: './tsconfig.json'
+          project: ['./tsconfig.json', './tsconfig.e2e.json'],
+          // Both projects are consulted per-file (src/ vs. test/e2e/fixture/);
+          // this is deliberate, not a perf mistake, so the informational
+          // "multiple projects" notice is silenced.
+          noWarnOnMultipleProjects: true
         },
         node: {
           extensions: ['.js', '.ts']
@@ -204,12 +211,16 @@ export default [
     }
   },
 
-  // Test files, Jest + Node globals, relaxed rules.
+  // Test files, Jest + Node globals, relaxed rules. Covers unit specs
+  // (`**/*.spec.ts`) and e2e specs (`**/*.e2e-spec.ts`, run under
+  // jest.e2e.config.ts from test/e2e/).
   {
-    files: ['**/*.spec.ts', '**/*.test.ts'],
+    files: ['**/*.spec.ts', '**/*.test.ts', '**/*.e2e-spec.ts'],
     languageOptions: {
       parser: tsParser,
       parserOptions: {
+        project: ['./tsconfig.json', './tsconfig.e2e.json'],
+        tsconfigRootDir: import.meta.dirname,
         ecmaVersion: 2022,
         sourceType: 'module'
       },
