@@ -110,7 +110,7 @@ function extractHttpMessage(response: string | object, exception: HttpException)
   if (typeof response === 'string') {
     return response
   }
-  if (response !== null && 'message' in response) {
+  if (typeof response === 'object' && response !== null && 'message' in response) {
     const message: unknown = (response as { message: unknown }).message
     if (typeof message === 'string') {
       return message

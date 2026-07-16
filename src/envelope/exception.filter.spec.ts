@@ -217,6 +217,23 @@ describe('BymaxExceptionFilter, HttpException mapping', () => {
     expect(captured.body?.code).toBe('BYMAX_BAD_REQUEST')
     expect(typeof captured.body?.message).toBe('string')
   })
+
+  /**
+   * A non-object primitive response must not crash the filter.
+   *
+   * The `in` operator throws when its right operand is a primitive, so a numeric
+   * response (reachable at runtime) requires a `typeof === 'object'` guard. The
+   * filter must derive the code from the status and use the exception message.
+   */
+  it('formats an HttpException whose response is a primitive without throwing', () => {
+    const { filter, host, captured } = buildHarness()
+
+    expect(() => filter.catch(new HttpException(42 as unknown as string, 400), host)).not.toThrow()
+
+    expect(captured.status).toBe(400)
+    expect(captured.body?.code).toBe('BYMAX_BAD_REQUEST')
+    expect(typeof captured.body?.message).toBe('string')
+  })
 })
 
 describe('BymaxExceptionFilter, context handling', () => {
