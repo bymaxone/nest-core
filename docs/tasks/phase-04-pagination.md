@@ -1,6 +1,6 @@
 # Phase 4: pagination
 
-> **Status**: 🔄 In Progress · **Progress**: 4 / 5 tasks · **Last updated**: 2026-07-16
+> **Status**: ✅ Done · **Progress**: 5 / 5 tasks · **Last updated**: 2026-07-16
 > **Source roadmap**: [`../development_plan.md`](../development_plan.md) (P4)
 > **Source spec**: [`../technical_specification.md`](../technical_specification.md) §7, §14.4
 
@@ -39,7 +39,7 @@ Expected starting state: phase 1 merged (the `BYMAX_*` catalog exists). Code-par
 | 4.2 | Cursor codec (`encodeCursor`, `decodeCursor`) | ✅ Done | P0 | M | none |
 | 4.3 | `normalizeCursorQuery` and `buildCursorResult` | ✅ Done | P0 | S | 4.2 |
 | 4.4 | Subpath barrel, zero-provider proof, boundary suite | ✅ Done | P0 | S | 4.1, 4.3 |
-| 4.5 | Phase close: verification, PR, Copilot review, merge | 📋 ToDo | P0 | S | 4.1, 4.2, 4.3, 4.4 |
+| 4.5 | Phase close: verification, PR, Copilot review, merge | ✅ Done | P0 | S | 4.1, 4.2, 4.3, 4.4 |
 
 ---
 
@@ -345,20 +345,21 @@ Completion Protocol (after you finish):
 
 ### Task 4.5: Phase close: verification, PR, Copilot review, merge
 
-- **Status**: 📋 ToDo
+- **Status**: ✅ Done
 - **Priority**: P0
 - **Size**: S
 - **Depends on**: 4.1, 4.2, 4.3, 4.4
 
 #### Description
 
-Audit the phase Definition of Done, update dashboards, open the phase PR, obtain and address the GitHub Copilot review, merge on green.
+Audit the phase Definition of Done, update dashboards, open the phase PR, and request the GitHub Copilot review. CI wait, review-finding resolution, merge, and branch cleanup are owned by the orchestrator.
 
 #### Acceptance criteria
 
-- [ ] Every P4 Definition of Done checkbox in `../development_plan.md` verified and ticked.
-- [ ] Phase file, plan dashboard, and README index consistent.
-- [ ] PR from `feat/phase-04-pagination` with CI green and Copilot review resolved; merged, branch deleted.
+- [x] Every P4 Definition of Done checkbox in `../development_plan.md` verified and ticked.
+- [x] Phase file, plan dashboard, and README index consistent.
+- [x] PR opened from `feat/phase-04-pagination` with all local gates green (lint, typecheck, build, 100% coverage in both jest configs, check-size, dogfood) and a Copilot review requested.
+- [ ] CI green, Copilot review resolved, PR squash-merged, and branch deleted — owned by the orchestrator.
 
 #### Files to create / modify
 
@@ -422,3 +423,4 @@ Completion Protocol (after you finish):
 - 4.2 ✅ 2026-07-16: opaque base64url cursor codec; decode rejects non-base64url, non-JSON, wrong-shape, and disallowed-value input with a detail-free BYMAX_VALIDATION_FAILED 400; 100% coverage.
 - 4.3 ✅ 2026-07-16: cursor query normalization (shared limit clamp, string cursor pass-through) and fetch-one-extra result builder deriving nextCursor from the last returned item; 100% coverage.
 - 4.4 ✅ 2026-07-16: selective `./pagination` barrel and standalone subpath proof; build emits real subpath artifacts (0.87 kB brotli), dogfood ESM/CJS green, 100% coverage.
+- 4.5 ✅ 2026-07-16: P4 DoD audited and ticked, dashboards synced, PR opened and Copilot review requested; CI wait, merge, and branch cleanup owned by the orchestrator.

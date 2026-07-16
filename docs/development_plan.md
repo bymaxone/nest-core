@@ -23,7 +23,7 @@
 
 ## Progress Dashboard
 
-> **Overall: 4 / 9 phases done (44%)** · Active phase: P4 · Blocked: none
+> **Overall: 5 / 9 phases done (56%)** · Active phase: P5 · Blocked: none
 
 | ID  | Phase                | Status | Progress | Size | Last Updated |
 | --- | -------------------- | ------ | -------- | ---- | ------------ |
@@ -31,7 +31,7 @@
 | P1  | module-core          | ✅     | 100%     | M    | 2026-07-16   |
 | P2  | error-envelope       | ✅     | 100%     | M    | 2026-07-16   |
 | P3  | timing-interceptor   | ✅     | 100%     | S    | 2026-07-16   |
-| P4  | pagination           | 🔄     | 80%      | M    | 2026-07-16   |
+| P4  | pagination           | ✅     | 100%     | M    | 2026-07-16   |
 | P5  | health               | 📋     | 0%       | M    | 2026-07-06   |
 | P6  | metrics              | 📋     | 0%       | M    | 2026-07-06   |
 | P7  | integration-and-docs | 📋     | 0%       | M    | 2026-07-06   |
@@ -150,11 +150,11 @@ These apply to every phase. Phase sections list only rules specific to that phas
 - **Scope (in):** `normalizePageQuery` with clamping and per-call `defaultLimit`/`maxLimit`; `PageResult` builder with computed meta; opaque `base64url` cursor codec (encode, decode with malformed-input rejection mapped to the validation code from the shared catalog); `normalizeCursorQuery`; `buildCursorResult` implementing the fetch-one-extra convention.
 - **Scope (out):** Validation-library decorators (consumers layer their own); SQL or ORM awareness of any kind.
 - **Definition of Done:**
-  - [ ] Property-style tests cover clamping boundaries (page floor, limit floor and cap, defaults).
-  - [ ] `decodeCursor(encodeCursor(x))` round-trips; tampered and malformed cursors reject with the documented error code.
-  - [ ] `buildCursorResult` trims the extra row and yields `nextCursor: null` on the last page.
-  - [ ] The subpath imports cleanly with zero NestJS providers involved.
-  - [ ] 100% coverage holds.
+  - [x] Property-style tests cover clamping boundaries (page floor, limit floor and cap, defaults).
+  - [x] `decodeCursor(encodeCursor(x))` round-trips; tampered and malformed cursors reject with the documented error code.
+  - [x] `buildCursorResult` trims the extra row and yields `nextCursor: null` on the last page.
+  - [x] The subpath imports cleanly with zero NestJS providers involved.
+  - [x] 100% coverage holds.
 - **Context / preconditions:** P1 done (shared error-code catalog).
 - **Rules-of-phase:** Pure functions only; no module state, no providers. Cursors encode ordering keys only, never sensitive data (documented invariant with a test guarding payload typing).
 - **References:** Spec §7 (pagination), §14.4 (cursor discipline).
