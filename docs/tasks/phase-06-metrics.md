@@ -1,6 +1,6 @@
 # Phase 6: metrics
 
-> **Status**: 📋 ToDo · **Progress**: 0 / 5 tasks · **Last updated**: 2026-07-06
+> **Status**: 🔄 In Progress · **Progress**: 1 / 5 tasks · **Last updated**: 2026-07-16
 > **Source roadmap**: [`../development_plan.md`](../development_plan.md) (P6)
 > **Source spec**: [`../technical_specification.md`](../technical_specification.md) §9, §12.1
 
@@ -37,7 +37,7 @@ Expected starting state: phases 1 and 3 merged (the bridge is an `ITimingSink`).
 
 | ID | Task | Status | Priority | Size | Depends on |
 |---|---|---|---|---|---|
-| 6.1 | Branch, lazy registry factory with fail-fast peer check | 📋 ToDo | P0 | M | none |
+| 6.1 | Branch, lazy registry factory with fail-fast peer check | ✅ Done | P0 | M | none |
 | 6.2 | Metrics controller (path, text format, defaultLabels, default metrics) | 📋 ToDo | P0 | M | 6.1 |
 | 6.3 | Timing-sink bridge (counter and histogram) | 📋 ToDo | P0 | M | 6.1 |
 | 6.4 | Registration wiring, never-loaded proof, scrape test | 📋 ToDo | P0 | S | 6.2, 6.3 |
@@ -49,7 +49,7 @@ Expected starting state: phases 1 and 3 merged (the bridge is an `ITimingSink`).
 
 ### Task 6.1: Branch, lazy registry factory with fail-fast peer check
 
-- **Status**: 📋 ToDo
+- **Status**: ✅ Done
 - **Priority**: P0
 - **Size**: M
 - **Depends on**: none
@@ -60,11 +60,11 @@ The lazy registry factory: dynamic import of `prom-client` inside the factory, f
 
 #### Acceptance criteria
 
-- [ ] Branch `feat/phase-06-metrics` created with `git switch -c`.
-- [ ] `prom-client` loads via dynamic import inside the factory only; a grep over `src/` finds no top-level import of it.
-- [ ] With the peer absent (simulated), enabling metrics throws a boot error naming `prom-client` and `pnpm add prom-client`.
-- [ ] `defaultLabels` applied to the registry; `collectDefaultMetrics` honored (default true when enabled).
-- [ ] 100% coverage holds.
+- [x] Branch `feat/phase-06-metrics` created with `git switch -c`.
+- [x] `prom-client` loads via dynamic import inside the factory only; a grep over `src/` finds no top-level import of it.
+- [x] With the peer absent (simulated), enabling metrics throws a boot error naming `prom-client` and `pnpm add prom-client`.
+- [x] `defaultLabels` applied to the registry; `collectDefaultMetrics` honored (default true when enabled).
+- [x] 100% coverage holds.
 
 #### Files to create / modify
 
@@ -435,3 +435,5 @@ Completion Protocol (after you finish):
 ## Completion log
 
 <!-- Append one line per completed task: - <id> ✅ <YYYY-MM-DD>: <summary> -->
+
+- 6.1 ✅ 2026-07-16: lazy `prom-client` registry factory with fail-fast peer check, `defaultLabels`, and `collectDefaultMetrics` toggle; 100% covered.
