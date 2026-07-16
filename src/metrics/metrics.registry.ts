@@ -47,16 +47,6 @@ const MISSING_PEER_MESSAGE =
   'metrics.enabled is true but the optional peer prom-client is not installed. Run: pnpm add prom-client'
 
 /**
- * Load `prom-client` lazily through a dynamic import. This is the only runtime
- * access to the optional peer in the whole package; a module-not-found failure
- * is rethrown as a descriptive boot error naming the package and the install
- * command, so enabling metrics without the peer fails fast and legibly instead
- * of surfacing a cryptic resolution error at the first scrape.
- *
- * @returns The loaded `prom-client` module.
- * @throws Error When `prom-client` is not installed.
- */
-/**
  * True when a dynamic-import failure means the module could not be resolved,
  * the only case that indicates the optional peer is absent. Any other failure
  * (a syntax or runtime error inside `prom-client`, a broken transitive
@@ -71,6 +61,16 @@ function isMissingModuleError(cause: unknown): boolean {
   return code === 'ERR_MODULE_NOT_FOUND' || code === 'MODULE_NOT_FOUND'
 }
 
+/**
+ * Load `prom-client` lazily through a dynamic import. This is the only runtime
+ * access to the optional peer in the whole package; a module-not-found failure
+ * is rethrown as a descriptive boot error naming the package and the install
+ * command, so enabling metrics without the peer fails fast and legibly instead
+ * of surfacing a cryptic resolution error at the first scrape.
+ *
+ * @returns The loaded `prom-client` module.
+ * @throws Error When `prom-client` is not installed.
+ */
 export async function loadPromClient(): Promise<PromClientModule> {
   try {
     return await import('prom-client')

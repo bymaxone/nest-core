@@ -182,7 +182,7 @@ These apply to every phase. Phase sections list only rules specific to that phas
 - **Scope (in):** Lazy `prom-client` loading inside the registry factory, only when `metrics.enabled` is true; fail-fast boot error naming the missing optional peer and the install command; the metrics controller on the configurable path; `defaultLabels` and `collectDefaultMetrics` options; the internal `ITimingSink` bridge feeding `http_requests_total` and `http_request_duration_seconds` with bounded labels when timing and metrics are both enabled.
 - **Scope (out):** Custom application metrics (consumers use the injected registry); cross-replica aggregation.
 - **Definition of Done:**
-  - [x] With metrics disabled, `prom-client` is never imported (verified by test) and no controller registers.
+  - [x] With metrics disabled, `prom-client` is never imported (verified by test); the sync path registers no controller, and the async path registers a controller that fails fast via a request-time guard.
   - [x] Enabling metrics without the peer installed fails at boot with the documented descriptive error.
   - [x] The endpoint serves Prometheus text format including the two HTTP metrics after requests flow, with `method`, `route`, and `status_code` labels only.
   - [x] `defaultLabels` appear on scraped output; `collectDefaultMetrics` toggles process metrics.
