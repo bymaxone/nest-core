@@ -67,8 +67,10 @@ export class TimingInterceptor implements NestInterceptor {
     const start = this.clock.now()
     const { method, route } = extractRequestInfo(context)
     return next.handle().pipe(
-      tap(() => {
-        this.recordSample(method, route, this.readSuccessStatus(context), start)
+      tap({
+        complete: () => {
+          this.recordSample(method, route, this.readSuccessStatus(context), start)
+        }
       }),
       catchError((error: unknown) => {
         this.recordSample(method, route, this.readErrorStatus(error), start)

@@ -107,6 +107,30 @@ describe('TimingInterceptor, success path', () => {
   })
 
   /**
+   * A multi-value stream still records exactly one sample.
+   *
+   * Recording on stream completion (not per emission) keeps the one-sample
+   * contract for handlers that return an observable emitting many values.
+   */
+  it('records a single sample for a handler that emits multiple values', (done) => {
+    const sink = recordingSink()
+    const interceptor = buildInterceptor({ sink })
+    const context = contextFor({
+      request: { method: 'GET', route: { path: '/stream' } },
+      response: { statusCode: 200 }
+    })
+    const handler = handlerReturning(() => of(1, 2, 3))
+
+    interceptor.intercept(context, handler).subscribe({
+      complete: () => {
+        expect(sink.samples).toHaveLength(1)
+        expect(sink.samples[0]?.route).toBe('/stream')
+        done()
+      }
+    })
+  })
+
+  /**
    * Missing status code defaults to 200.
    *
    * A response object that never received an explicit status still yields a

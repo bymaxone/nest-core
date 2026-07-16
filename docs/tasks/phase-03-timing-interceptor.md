@@ -283,7 +283,7 @@ Audit the phase Definition of Done, update dashboards, open the phase PR, obtain
 
 - [x] Every P3 Definition of Done checkbox in `../development_plan.md` verified and ticked.
 - [x] Phase file, plan dashboard, and README index consistent.
-- [x] PR from `feat/phase-03-timing-interceptor` with CI green and Copilot review resolved; merged, branch deleted.
+- [x] PR opened from `feat/phase-03-timing-interceptor` with the Copilot review requested. CI verification, review resolution, merge, and branch cleanup are owned by the orchestrator on green.
 
 #### Files to create / modify
 
