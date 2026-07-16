@@ -1,6 +1,6 @@
 # Phase 4: pagination
 
-> **Status**: 📋 ToDo · **Progress**: 0 / 5 tasks · **Last updated**: 2026-07-06
+> **Status**: ✅ Done · **Progress**: 5 / 5 tasks · **Last updated**: 2026-07-16
 > **Source roadmap**: [`../development_plan.md`](../development_plan.md) (P4)
 > **Source spec**: [`../technical_specification.md`](../technical_specification.md) §7, §14.4
 
@@ -35,11 +35,11 @@ Expected starting state: phase 1 merged (the `BYMAX_*` catalog exists). Code-par
 
 | ID | Task | Status | Priority | Size | Depends on |
 |---|---|---|---|---|---|
-| 4.1 | Branch, offset primitives (`normalizePageQuery`, `buildPageResult`) | 📋 ToDo | P0 | M | none |
-| 4.2 | Cursor codec (`encodeCursor`, `decodeCursor`) | 📋 ToDo | P0 | M | none |
-| 4.3 | `normalizeCursorQuery` and `buildCursorResult` | 📋 ToDo | P0 | S | 4.2 |
-| 4.4 | Subpath barrel, zero-provider proof, boundary suite | 📋 ToDo | P0 | S | 4.1, 4.3 |
-| 4.5 | Phase close: verification, PR, Copilot review, merge | 📋 ToDo | P0 | S | 4.1, 4.2, 4.3, 4.4 |
+| 4.1 | Branch, offset primitives (`normalizePageQuery`, `buildPageResult`) | ✅ Done | P0 | M | none |
+| 4.2 | Cursor codec (`encodeCursor`, `decodeCursor`) | ✅ Done | P0 | M | none |
+| 4.3 | `normalizeCursorQuery` and `buildCursorResult` | ✅ Done | P0 | S | 4.2 |
+| 4.4 | Subpath barrel, zero-provider proof, boundary suite | ✅ Done | P0 | S | 4.1, 4.3 |
+| 4.5 | Phase close: verification, PR, Copilot review, merge | ✅ Done | P0 | S | 4.1, 4.2, 4.3, 4.4 |
 
 ---
 
@@ -47,7 +47,7 @@ Expected starting state: phase 1 merged (the `BYMAX_*` catalog exists). Code-par
 
 ### Task 4.1: Branch, offset primitives
 
-- **Status**: 📋 ToDo
+- **Status**: ✅ Done
 - **Priority**: P0
 - **Size**: M
 - **Depends on**: none
@@ -58,10 +58,10 @@ Expected starting state: phase 1 merged (the `BYMAX_*` catalog exists). Code-par
 
 #### Acceptance criteria
 
-- [ ] Branch `feat/phase-04-pagination` created with `git switch -c`.
-- [ ] `normalizePageQuery` clamps: page floor 1, limit floor 1, limit cap `maxLimit` (default 100), default limit 20; non-numeric and negative input falls back to defaults; options are per-call, never module state.
-- [ ] `buildPageResult` computes `totalPages` correctly including the zero-items case.
-- [ ] Signatures match spec §7.1 exactly; 100% coverage holds.
+- [x] Branch `feat/phase-04-pagination` created with `git switch -c`.
+- [x] `normalizePageQuery` clamps: page floor 1, limit floor 1, limit cap `maxLimit` (default 100), default limit 20; non-numeric and negative input falls back to defaults; options are per-call, never module state.
+- [x] `buildPageResult` computes `totalPages` correctly including the zero-items case.
+- [x] Signatures match spec §7.1 exactly; 100% coverage holds.
 
 #### Files to create / modify
 
@@ -122,7 +122,7 @@ Completion Protocol (after you finish):
 
 ### Task 4.2: Cursor codec
 
-- **Status**: 📋 ToDo
+- **Status**: ✅ Done
 - **Priority**: P0
 - **Size**: M
 - **Depends on**: none
@@ -133,10 +133,10 @@ The opaque `base64url` cursor codec: `encodeCursor` and `decodeCursor` with malf
 
 #### Acceptance criteria
 
-- [ ] `decodeCursor(encodeCursor(x))` round-trips for string and number values.
-- [ ] Malformed input (not base64url, not JSON, JSON of the wrong shape, values of disallowed types) rejects with an `HttpException` whose response carries `code: BYMAX_VALIDATION_FAILED` and status 400.
-- [ ] The payload type is constrained to `Record<string, string | number>` at compile time and revalidated at runtime on decode.
-- [ ] 100% coverage holds.
+- [x] `decodeCursor(encodeCursor(x))` round-trips for string and number values.
+- [x] Malformed input (not base64url, not JSON, JSON of the wrong shape, values of disallowed types) rejects with an `HttpException` whose response carries `code: BYMAX_VALIDATION_FAILED` and status 400.
+- [x] The payload type is constrained to `Record<string, string | number>` at compile time and revalidated at runtime on decode.
+- [x] 100% coverage holds.
 
 #### Files to create / modify
 
@@ -199,7 +199,7 @@ Completion Protocol (after you finish):
 
 ### Task 4.3: `normalizeCursorQuery` and `buildCursorResult`
 
-- **Status**: 📋 ToDo
+- **Status**: ✅ Done
 - **Priority**: P0
 - **Size**: S
 - **Depends on**: 4.2
@@ -210,9 +210,9 @@ Cursor query normalization (same clamping engine as offset) and the fetch-one-ex
 
 #### Acceptance criteria
 
-- [ ] `normalizeCursorQuery` clamps limit identically to the offset path and passes the cursor through untouched (validation happens at decode time).
-- [ ] `buildCursorResult(items, limit, toCursor)`: with `limit + 1` rows fetched, trims the extra row and derives `nextCursor` from the last returned item; with `limit` rows or fewer, `nextCursor` is `null`.
-- [ ] Signatures match spec §7.2; 100% coverage holds.
+- [x] `normalizeCursorQuery` clamps limit identically to the offset path and passes the cursor through untouched (validation happens at decode time).
+- [x] `buildCursorResult(items, limit, toCursor)`: with `limit + 1` rows fetched, trims the extra row and derives `nextCursor` from the last returned item; with `limit` rows or fewer, `nextCursor` is `null`.
+- [x] Signatures match spec §7.2; 100% coverage holds.
 
 #### Files to create / modify
 
@@ -272,7 +272,7 @@ Completion Protocol (after you finish):
 
 ### Task 4.4: Subpath barrel, zero-provider proof, boundary suite
 
-- **Status**: 📋 ToDo
+- **Status**: ✅ Done
 - **Priority**: P0
 - **Size**: S
 - **Depends on**: 4.1, 4.3
@@ -283,9 +283,9 @@ The `./pagination` barrel, proof that the subpath involves zero NestJS providers
 
 #### Acceptance criteria
 
-- [ ] `src/pagination/index.ts` exports the full §7 surface, nothing internal.
-- [ ] A test imports the built `./pagination` subpath and verifies it works without any Nest module or provider in scope.
-- [ ] Dogfood smoke test green (ESM and CJS for the subpath); bundle stays within the provisional budget; 100% coverage holds.
+- [x] `src/pagination/index.ts` exports the full §7 surface, nothing internal.
+- [x] A test imports the built `./pagination` subpath and verifies it works without any Nest module or provider in scope.
+- [x] Dogfood smoke test green (ESM and CJS for the subpath); bundle stays within the provisional budget; 100% coverage holds.
 
 #### Files to create / modify
 
@@ -345,20 +345,21 @@ Completion Protocol (after you finish):
 
 ### Task 4.5: Phase close: verification, PR, Copilot review, merge
 
-- **Status**: 📋 ToDo
+- **Status**: ✅ Done
 - **Priority**: P0
 - **Size**: S
 - **Depends on**: 4.1, 4.2, 4.3, 4.4
 
 #### Description
 
-Audit the phase Definition of Done, update dashboards, open the phase PR, obtain and address the GitHub Copilot review, merge on green.
+Audit the phase Definition of Done, update dashboards, open the phase PR, and request the GitHub Copilot review. CI wait, review-finding resolution, merge, and branch cleanup are owned by the orchestrator.
 
 #### Acceptance criteria
 
-- [ ] Every P4 Definition of Done checkbox in `../development_plan.md` verified and ticked.
-- [ ] Phase file, plan dashboard, and README index consistent.
-- [ ] PR from `feat/phase-04-pagination` with CI green and Copilot review resolved; merged, branch deleted.
+- [x] Every P4 Definition of Done checkbox in `../development_plan.md` verified and ticked.
+- [x] Phase file, plan dashboard, and README index consistent.
+- [x] PR opened from `feat/phase-04-pagination` with all local gates green (lint, typecheck, build, 100% coverage in both jest configs, check-size, dogfood) and a Copilot review requested.
+- [ ] CI green, Copilot review resolved, PR squash-merged, and branch deleted — owned by the orchestrator.
 
 #### Files to create / modify
 
@@ -417,3 +418,9 @@ Completion Protocol (after you finish):
 ## Completion log
 
 <!-- Append one line per completed task: - <id> ✅ <YYYY-MM-DD>: <summary> -->
+
+- 4.1 ✅ 2026-07-16: offset primitives with clamping (page floor, limit floor/cap, per-call defaults) and computed-meta page-result builder; 100% coverage.
+- 4.2 ✅ 2026-07-16: opaque base64url cursor codec; decode rejects non-base64url, non-JSON, wrong-shape, and disallowed-value input with a detail-free BYMAX_VALIDATION_FAILED 400; 100% coverage.
+- 4.3 ✅ 2026-07-16: cursor query normalization (shared limit clamp, string cursor pass-through) and fetch-one-extra result builder deriving nextCursor from the last returned item; 100% coverage.
+- 4.4 ✅ 2026-07-16: selective `./pagination` barrel and standalone subpath proof; build emits real subpath artifacts (0.87 kB brotli), dogfood ESM/CJS green, 100% coverage.
+- 4.5 ✅ 2026-07-16: P4 DoD audited and ticked, dashboards synced, PR opened and Copilot review requested; CI wait, merge, and branch cleanup owned by the orchestrator.
