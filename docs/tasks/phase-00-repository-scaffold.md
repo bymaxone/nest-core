@@ -1,6 +1,6 @@
 # Phase 0: repository-scaffold
 
-> **Status**: 🔄 In Progress · **Progress**: 4 / 6 tasks · **Last updated**: 2026-07-16
+> **Status**: 🔄 In Progress · **Progress**: 5 / 6 tasks · **Last updated**: 2026-07-16
 > **Source roadmap**: [`../development_plan.md`](../development_plan.md) (P0)
 > **Source spec**: [`../technical_specification.md`](../technical_specification.md) §3, §12, §13
 
@@ -44,7 +44,7 @@ Expected starting state: the repository contains only `docs/` (specification, de
 | 0.2 | Build configs: tsconfig set, tsup, placeholder barrels          | ✅ Done | P0       | S    | 0.1                     |
 | 0.3 | Lint, format, local governance (husky, commitlint, lint-staged) | ✅ Done | P0       | S    | 0.1                     |
 | 0.4 | Jest configs (100% threshold) and Stryker config                | ✅ Done | P0       | S    | 0.2                     |
-| 0.5 | CI workflows, guard scripts, community files                    | 📋 ToDo | P0       | L    | 0.2, 0.3, 0.4           |
+| 0.5 | CI workflows, guard scripts, community files                    | ✅ Done | P0       | L    | 0.2, 0.3, 0.4           |
 | 0.6 | Phase close: verification, PR, Copilot review, merge            | 📋 ToDo | P0       | S    | 0.1, 0.2, 0.3, 0.4, 0.5 |
 
 ---
@@ -379,7 +379,7 @@ Completion Protocol (after you finish):
 
 ### Task 0.5: CI workflows, guard scripts, community files
 
-- **Status**: 📋 ToDo
+- **Status**: ✅ Done
 - **Priority**: P0
 - **Size**: L
 - **Depends on**: 0.2, 0.3, 0.4
@@ -390,10 +390,10 @@ The four GitHub workflows, dependabot, issue templates, the bundle-size and dogf
 
 #### Acceptance criteria
 
-- [ ] `.github/workflows/ci.yml` runs lint, typecheck, build, size check, and `test:cov:all` sequentially on pull_request and push to main.
-- [ ] `codeql.yml`, `scorecard.yml`, `release.yml` (tag-driven, npm publish with OIDC `--provenance`), `dependabot.yml`, and issue templates present, adapted from the sibling.
-- [ ] `scripts/check-size.mjs` (zero-dep, KiB brotli, provisional budgets: `.` 10 KiB, `./pagination` 3 KiB, `./health` 4 KiB) and `scripts/dogfood-smoke-test.mjs` (SUBPATHS: `.`, `./pagination`, `./health`) run green against the placeholder build.
-- [ ] `README.md` skeleton with badges, `LICENSE` (MIT), `SECURITY.md`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md` (Contributor Covenant 2.1 by reference, not transcribed), `CHANGELOG.md` (Unreleased section).
+- [x] `.github/workflows/ci.yml` runs lint, typecheck, build, size check, and `test:cov:all` sequentially on pull_request and push to main.
+- [x] `codeql.yml`, `scorecard.yml`, `release.yml` (tag-driven, npm publish with OIDC `--provenance`), `dependabot.yml`, and issue templates present, adapted from the sibling.
+- [x] `scripts/check-size.mjs` (zero-dep, KiB brotli, provisional budgets: `.` 10 KiB, `./pagination` 3 KiB, `./health` 4 KiB) and `scripts/dogfood-smoke-test.mjs` (SUBPATHS: `.`, `./pagination`, `./health`) run green against the placeholder build.
+- [x] `README.md` skeleton with badges, `LICENSE` (MIT), `SECURITY.md`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md` (Contributor Covenant 2.1 by reference, not transcribed), `CHANGELOG.md` (Unreleased section).
 
 #### Files to create / modify
 
@@ -557,3 +557,4 @@ Completion Protocol (after you finish):
 - 0.2 ✅ 2026-07-16: strict tsconfig set (base/build/jest/e2e), tsup config with three entries, and placeholder barrels landed; typecheck and build both pass, dist/ contains .mjs/.cjs/.d.ts for `.`, `./pagination`, `./health`.
 - 0.3 ✅ 2026-07-16: flat ESLint config, Prettier, husky pre-commit/commit-msg, commitlint, and the lint-staged block landed; a non-conventional commit message was rejected locally by the commit-msg hook, then reset.
 - 0.4 ✅ 2026-07-16: unit, coverage, and e2e Jest configs (100% threshold, maxWorkers 50%) and the Stryker config landed; `pnpm test:cov` and `pnpm test:cov:all` both pass with the threshold active against the placeholder sources.
+- 0.5 ✅ 2026-07-16: CI, CodeQL, Scorecard, and release workflows, Dependabot, issue templates, the check-size and dogfood-smoke-test guard scripts, and the community file set landed; all workflow YAML parses, and both guard scripts pass against the placeholder build. Fixed a coverage-directory leak in jest.config.ts (rootDir 'src' otherwise writes reports into the tracked src/ tree).

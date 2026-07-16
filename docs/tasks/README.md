@@ -13,7 +13,7 @@ Tasks live **one file per phase** in this folder (`phase-NN-<slug>.md`). Each ph
 
 | Phase | File                                                                     | Tasks      | Status         |
 | ----- | ------------------------------------------------------------------------ | ---------- | -------------- |
-| 0     | [`phase-00-repository-scaffold.md`](./phase-00-repository-scaffold.md)   | 4 / 6      | 🔄 In Progress |
+| 0     | [`phase-00-repository-scaffold.md`](./phase-00-repository-scaffold.md)   | 5 / 6      | 🔄 In Progress |
 | 1     | [`phase-01-module-core.md`](./phase-01-module-core.md)                   | 0 / 6      | 📋 ToDo        |
 | 2     | [`phase-02-error-envelope.md`](./phase-02-error-envelope.md)             | 0 / 5      | 📋 ToDo        |
 | 3     | [`phase-03-timing-interceptor.md`](./phase-03-timing-interceptor.md)     | 0 / 4      | 📋 ToDo        |
