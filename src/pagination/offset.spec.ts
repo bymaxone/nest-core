@@ -86,6 +86,18 @@ describe('normalizePageQuery', () => {
       raw: { page: 1, limit: 999 },
       options: { maxLimit: 50 },
       expected: { page: 1, limit: 50 }
+    },
+    {
+      name: 'falls back to the default cap when maxLimit is zero',
+      raw: { page: 1, limit: 999 },
+      options: { maxLimit: 0 },
+      expected: { page: 1, limit: 100 }
+    },
+    {
+      name: 'falls back to the default page size when defaultLimit is negative',
+      raw: { page: 1 },
+      options: { defaultLimit: -1 },
+      expected: { page: 1, limit: 20 }
     }
   ]
 

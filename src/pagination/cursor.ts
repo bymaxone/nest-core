@@ -62,8 +62,18 @@ function isOrderingKeyRecord(value: unknown): value is Record<string, string | n
  *
  * @param payload - The ordering keys to encode.
  * @returns A url-safe base64 cursor string.
+ * @throws Error when a payload value is a non-finite number, which would encode
+ *   as `null` and produce a cursor that could never decode.
  */
 export function encodeCursor(payload: Record<string, string | number>): string {
+  const encodable = Object.values(payload).every(
+    (value) => typeof value === 'string' || Number.isFinite(value)
+  )
+  if (!encodable) {
+    throw new Error(
+      'encodeCursor payload values must be strings or finite numbers; a non-finite number was provided.'
+    )
+  }
   return Buffer.from(JSON.stringify(payload), 'utf8').toString('base64url')
 }
 

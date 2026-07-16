@@ -82,6 +82,18 @@ describe('encodeCursor / decodeCursor', () => {
   })
 
   /**
+   * Non-finite numbers are rejected at encode time.
+   *
+   * `JSON.stringify` turns `NaN`/`Infinity` into `null`, which would produce a
+   * cursor that could never decode; encoding must fail loudly instead of
+   * emitting a self-invalidating cursor.
+   */
+  it('throws when a payload value is a non-finite number', () => {
+    expect(() => encodeCursor({ id: Number.NaN })).toThrow()
+    expect(() => encodeCursor({ id: Number.POSITIVE_INFINITY })).toThrow()
+  })
+
+  /**
    * Non-base64url input.
    *
    * Characters outside the base64url alphabet mark a hand-tampered cursor and

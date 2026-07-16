@@ -49,11 +49,12 @@ export function coercePositiveInt(value: unknown, fallback: number): number {
  *
  * @param rawLimit - The untrusted limit value from the request.
  * @param options - Per-call `defaultLimit` (default `20`) and `maxLimit`
- *   (default `100`) overrides.
+ *   (default `100`) overrides. Non-positive or non-finite overrides are
+ *   themselves coerced to those defaults so the result stays within `[1, maxLimit]`.
  * @returns A safe page size within the resolved bounds.
  */
 export function clampLimit(rawLimit: unknown, options?: PaginationLimitOptions): number {
-  const defaultLimit = options?.defaultLimit ?? DEFAULT_LIMIT
-  const maxLimit = options?.maxLimit ?? DEFAULT_MAX_LIMIT
+  const defaultLimit = coercePositiveInt(options?.defaultLimit, DEFAULT_LIMIT)
+  const maxLimit = coercePositiveInt(options?.maxLimit, DEFAULT_MAX_LIMIT)
   return Math.min(coercePositiveInt(rawLimit, defaultLimit), maxLimit)
 }
