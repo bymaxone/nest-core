@@ -20,9 +20,9 @@ Tasks live **one file per phase** in this folder (`phase-NN-<slug>.md`). Each ph
 | 4     | [`phase-04-pagination.md`](./phase-04-pagination.md)                     | 5 / 5       | ✅ Done        |
 | 5     | [`phase-05-health.md`](./phase-05-health.md)                             | 5 / 5       | ✅ Done        |
 | 6     | [`phase-06-metrics.md`](./phase-06-metrics.md)                           | 5 / 5       | ✅ Done        |
-| 7     | [`phase-07-integration-and-docs.md`](./phase-07-integration-and-docs.md) | 2 / 5       | 🔄 In Progress |
+| 7     | [`phase-07-integration-and-docs.md`](./phase-07-integration-and-docs.md) | 3 / 5       | 🔄 In Progress |
 | 8     | [`phase-08-release-hardening.md`](./phase-08-release-hardening.md)       | 0 / 6       | 📋 ToDo        |
-|       | **Total**                                                                | **38 / 47** | 🔄 In Progress |
+|       | **Total**                                                                | **39 / 47** | 🔄 In Progress |
 
 ---
 

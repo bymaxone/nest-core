@@ -1,6 +1,6 @@
 # Phase 7: integration-and-docs
 
-> **Status**: 🔄 In Progress · **Progress**: 2 / 5 tasks · **Last updated**: 2026-07-16
+> **Status**: 🔄 In Progress · **Progress**: 3 / 5 tasks · **Last updated**: 2026-07-16
 > **Source roadmap**: [`../development_plan.md`](../development_plan.md) (P7)
 > **Source spec**: [`../technical_specification.md`](../technical_specification.md) §15, §13.2
 
@@ -37,7 +37,7 @@ Expected starting state: phases 2 through 6 merged; every feature works in isola
 |---|---|---|---|---|---|
 | 7.1 | Branch, e2e fixture app, `forRoot` combinations | ✅ Done | P0 | M | none |
 | 7.2 | `forRootAsync` e2e and cross-feature assertions | ✅ Done | P0 | M | 7.1 |
-| 7.3 | Full README (feature tour, configuration reference, examples) | 📋 ToDo | P0 | M | 7.2 |
+| 7.3 | Full README (feature tour, configuration reference, examples) | ✅ Done | P0 | M | 7.2 |
 | 7.4 | CHANGELOG entry, dogfood, docs polish | 📋 ToDo | P1 | S | 7.3 |
 | 7.5 | Phase close: verification, PR, Copilot review, merge | 📋 ToDo | P0 | S | 7.1, 7.2, 7.3, 7.4 |
 
@@ -213,7 +213,7 @@ Completion Protocol (after you finish):
 
 ### Task 7.3: Full README
 
-- **Status**: 📋 ToDo
+- **Status**: ✅ Done
 - **Priority**: P0
 - **Size**: M
 - **Depends on**: 7.2
@@ -224,10 +224,24 @@ The complete public README: feature tour, full configuration reference, integrat
 
 #### Acceptance criteria
 
-- [ ] README documents every option in `BymaxCoreModuleOptions` (a reference table per feature block with defaults) and every subpath export.
-- [ ] Integration examples: quick start (`forRoot`), production wiring (`forRootAsync`), correlation provider binding (including the `useExisting` pattern with `@bymax-one/nest-logger`), custom health indicator, paginated controller (offset and cursor), enabling metrics.
-- [ ] Every code example mirrors fixture or spec-verified code; a consumer following only the README reaches a working setup.
-- [ ] Badges row present; sections follow the sibling libraries' README structure.
+- [x] README documents every option in `BymaxCoreModuleOptions` (a reference table per feature block with defaults) and every subpath export.
+- [x] Integration examples: quick start (`forRoot`), production wiring (`forRootAsync`), correlation provider binding (including the `useExisting` pattern with `@bymax-one/nest-logger`), custom health indicator, paginated controller (offset and cursor), enabling metrics.
+- [x] Every code example mirrors fixture or spec-verified code; a consumer following only the README reaches a working setup.
+- [x] Badges row present; sections follow the sibling libraries' README structure.
+
+#### Implementation note
+
+Every snippet importable from this package (quick start, `forRootAsync`,
+`isGlobal`, the custom error code, the timing-sink override, both pagination
+controllers, the custom health indicator, and the correlation-provider
+override mechanics) was verified by dropping it into a temporary file inside
+`src/` and running `pnpm typecheck` against it, then deleting the file; none
+of it is committed pseudocode. The one exception is the
+`@bymax-one/nest-logger` integration example: that package is not a
+dependency of this repository, so the import itself cannot be type-checked
+here, but the underlying mechanism (`@Global()` module, `useExisting`,
+`BYMAX_CORRELATION_PROVIDER`) is the exact pattern proven end to end by
+`src/envelope/exception.filter.integration.spec.ts`.
 
 #### Files to create / modify
 
@@ -443,3 +457,4 @@ Completion Protocol (after you finish):
 <!-- Append one line per completed task: - <id> ✅ <YYYY-MM-DD>: <summary> -->
 - 7.1 ✅ 2026-07-16: e2e fixture app (stub correlation provider, stub health indicator) and forRoot all-on/all-off suites; fixed a consumer-override DI bug found while wiring the fixture (see Task 7.1 implementation note).
 - 7.2 ✅ 2026-07-16: forRootAsync e2e suite (all-on parity, pass-through byte-for-byte proof) and cross-feature suite (live correlation id, exact http_requests_total accumulation, two-way readiness flip).
+- 7.3 ✅ 2026-07-16: complete public README (feature tour, full configuration reference, DI token table, error envelope/timing/pagination/health/metrics sections, nest-logger integration, compatibility); every compilable snippet verified via a temporary tsc pass.
