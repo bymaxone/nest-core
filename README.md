@@ -114,6 +114,13 @@ falls back to the documented default. Pass only what you want to change.
 | `path`               | `string`  | `'health'` | Route prefix: `GET /<path>/live`, `GET /<path>/ready`. |
 | `indicatorTimeoutMs` | `number`  | `5000`     | Per-indicator timeout before a check reports down.     |
 
+On `forRoot`, `enabled` and `path` are applied at module-definition time: a
+disabled feature registers no controller, and a custom `path` mounts the routes.
+On `forRootAsync`, options resolve after the module is defined, so the health
+controller is always registered at the default path and enforces `enabled` and
+the default path with a request-time guard; a disabled or custom-path async
+configuration fails fast at the route rather than at boot.
+
 ### `metrics`
 
 | Option                  | Type                     | Default     | Description                                                           |
@@ -123,20 +130,28 @@ falls back to the documented default. Pass only what you want to change.
 | `defaultLabels`         | `Record<string, string>` | `{}`        | Static labels attached to every metric.                               |
 | `collectDefaultMetrics` | `boolean`                | `true`      | Collects `prom-client`'s process CPU, memory, and event-loop metrics. |
 
+As with `health`, `enabled` and `path` register conditionally on `forRoot`. On
+`forRootAsync` the metrics controller is always registered at the default path
+and enforces `enabled` and the default path with a request-time guard, so a
+disabled or custom-path async configuration fails fast at the route.
+
 ## DI tokens
 
-Every token is a `Symbol`. Override a default by providing the same token from
-your own module, following the pattern in
+Every token is a `Symbol`. Provide any of the consumer-supplied tokens from your
+own module to plug in your own implementation, following the pattern in
 [Integration with `@bymax-one/nest-logger`](#integration-with-bymax-onenest-logger)
-below.
+below. The module consumes `BYMAX_CORRELATION_PROVIDER`, `BYMAX_TIMING_SINK`, and
+`BYMAX_HEALTH_INDICATORS` with `@Optional()` and applies the internal behavior in
+the last column when you do not provide one, so those tokens are not bound (and
+so not injectable) by default; providing them is how you supply your own.
 
-| Token                        | Provides                              | Default                             |
-| ---------------------------- | ------------------------------------- | ----------------------------------- |
-| `BYMAX_CORE_OPTIONS`         | The resolved `BymaxCoreModuleOptions` | set by the module                   |
-| `BYMAX_CORRELATION_PROVIDER` | `ICorrelationIdProvider`              | no-op (omits `correlationId`)       |
-| `BYMAX_TIMING_SINK`          | `ITimingSink`                         | no-op                               |
-| `BYMAX_HEALTH_INDICATORS`    | `IHealthIndicator[]`                  | empty array                         |
-| `BYMAX_METRICS_REGISTRY`     | the `prom-client` `Registry`          | lazy, only when metrics are enabled |
+| Token                        | Provides                              | When you do not provide one                      |
+| ---------------------------- | ------------------------------------- | ------------------------------------------------ |
+| `BYMAX_CORE_OPTIONS`         | The resolved `BymaxCoreModuleOptions` | always set by the module                         |
+| `BYMAX_CORRELATION_PROVIDER` | `ICorrelationIdProvider`              | internal no-op (omits `correlationId`)           |
+| `BYMAX_TIMING_SINK`          | `ITimingSink`                         | internal no-op (bridged to metrics when both on) |
+| `BYMAX_HEALTH_INDICATORS`    | `IHealthIndicator[]`                  | treated as an empty indicator set                |
+| `BYMAX_METRICS_REGISTRY`     | the `prom-client` `Registry`          | bound only when metrics are enabled              |
 
 ## Error envelope
 

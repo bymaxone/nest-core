@@ -59,8 +59,11 @@ describe('BymaxCoreModule.forRootAsync, all features enabled', () => {
     expect(response.body).toMatchObject({
       statusCode: 404,
       code: 'BYMAX_NOT_FOUND',
-      correlationId: 'fixture-correlation-id'
+      message: 'fixture resource not found',
+      correlationId: 'fixture-correlation-id',
+      path: '/missing'
     })
+    expect(typeof response.body.timestamp).toBe('string')
   })
 
   /** Liveness responds 200 on the async path, same as the sync path. */
