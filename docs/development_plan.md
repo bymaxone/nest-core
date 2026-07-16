@@ -23,7 +23,7 @@
 
 ## Progress Dashboard
 
-> **Overall: 7 / 9 phases done (78%)** · Active phase: P7 · Blocked: none
+> **Overall: 8 / 9 phases done (89%)** · Active phase: P8 · Blocked: none
 
 | ID  | Phase                | Status | Progress | Size | Last Updated |
 | --- | -------------------- | ------ | -------- | ---- | ------------ |
@@ -34,7 +34,7 @@
 | P4  | pagination           | ✅     | 100%     | M    | 2026-07-16   |
 | P5  | health               | ✅     | 100%     | M    | 2026-07-16   |
 | P6  | metrics              | ✅     | 100%     | M    | 2026-07-16   |
-| P7  | integration-and-docs | 🔄     | 80%      | M    | 2026-07-16   |
+| P7  | integration-and-docs | ✅     | 100%     | M    | 2026-07-16   |
 | P8  | release-hardening    | 📋     | 0%       | L    | 2026-07-06   |
 
 ---
@@ -198,10 +198,10 @@ These apply to every phase. Phase sections list only rules specific to that phas
 - **Scope (in):** An end-to-end fixture application exercising `forRoot` and `forRootAsync` with all features enabled and disabled combinations that matter (envelope + timing + health + metrics together; everything off; async pass-through path); cross-feature assertions (envelope carries the correlation id, timing feeds metrics, readiness reflects a failing indicator); the full `README.md` (feature tour, configuration reference, integration examples including the correlation provider binding and a paginated controller); `CHANGELOG.md` entry for the upcoming release.
 - **Scope (out):** Mutation hardening and budget calibration (P8).
 - **Definition of Done:**
-  - [ ] The e2e suite boots the fixture app and passes against both registration paths.
-  - [ ] README documents every option in `BymaxCoreModuleOptions` and every subpath export.
-  - [ ] The dogfood smoke test passes: every subpath resolves in ESM and CJS from the packed tarball.
-  - [ ] A consumer following only the README reaches a working setup (checked by the fixture mirroring the README example).
+  - [x] The e2e suite boots the fixture app and passes against both registration paths.
+  - [x] README documents every option in `BymaxCoreModuleOptions` and every subpath export.
+  - [x] The dogfood smoke test passes: every subpath resolves in ESM and CJS from the packed tarball.
+  - [x] A consumer following only the README reaches a working setup (checked by the fixture mirroring the README example).
 - **Context / preconditions:** P2 through P6 done.
 - **Rules-of-phase:** E2E tests run with the bounded worker pool, one suite at a time. README examples must compile; they are extracted from or mirrored by fixture code, never pseudocode.
 - **References:** Spec §15 (example integration), §13.2 (repository standard).

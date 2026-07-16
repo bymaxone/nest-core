@@ -379,6 +379,46 @@ same `@Global()`-module pattern is how every pluggable token in this package
 is overridden: `BYMAX_TIMING_SINK` and `BYMAX_HEALTH_INDICATORS` follow it
 identically.
 
+## API reference
+
+Every export of every subpath, for quick lookup; each is documented in detail
+in the sections above.
+
+### `.` (root)
+
+| Export                                                                                                                       | Kind      | Description                                                            |
+| ---------------------------------------------------------------------------------------------------------------------------- | --------- | ---------------------------------------------------------------------- |
+| `BymaxCoreModule`                                                                                                            | class     | The dynamic module: `forRoot` and `forRootAsync`.                      |
+| `BymaxCoreModuleOptions`, `EnvelopeOptions`, `TimingOptions`, `HealthOptions`, `MetricsOptions`, `ResolvedCoreOptions`       | types     | The options surface and its resolved shape.                            |
+| `BYMAX_CORE_OPTIONS`, `BYMAX_CORRELATION_PROVIDER`, `BYMAX_TIMING_SINK`, `BYMAX_HEALTH_INDICATORS`, `BYMAX_METRICS_REGISTRY` | tokens    | The DI tokens; see the [token table](#di-tokens).                      |
+| `ICorrelationIdProvider`                                                                                                     | type      | The correlation-provider contract.                                     |
+| `BymaxExceptionFilter`                                                                                                       | class     | The envelope exception filter.                                         |
+| `FilterErrorContext`                                                                                                         | type      | The neutral request context passed to the filter's observability seam. |
+| `buildErrorEnvelope`                                                                                                         | function  | Pure builder assembling an `ErrorEnvelope`.                            |
+| `ErrorEnvelope`, `ErrorDetails`, `BuildErrorEnvelopeInput`                                                                   | types     | The envelope contract and its builder input.                           |
+| `TimingInterceptor`                                                                                                          | class     | The request-timing interceptor.                                        |
+| `ITimingSink`, `RequestTimingSample`                                                                                         | types     | The timing-sink contract and its sample shape.                         |
+| `BYMAX_BAD_GATEWAY` … `BYMAX_VALIDATION_FAILED`                                                                              | constants | The full error-code catalog (see [Error envelope](#error-envelope)).   |
+| `codeForStatus`                                                                                                              | function  | Derives a catalog code from an HTTP status.                            |
+
+### `./pagination`
+
+| Export                                                                      | Kind     | Description                                          |
+| --------------------------------------------------------------------------- | -------- | ---------------------------------------------------- |
+| `normalizePageQuery`, `buildPageResult`                                     | function | Offset pagination: clamp input, shape a page.        |
+| `PageQuery`, `PageMeta`, `PageResult`                                       | types    | The offset query, its metadata, and the page shape.  |
+| `normalizeCursorQuery`, `encodeCursor`, `decodeCursor`, `buildCursorResult` | function | Cursor pagination: clamp input, codec, shape a page. |
+| `CursorQuery`, `CursorResult`                                               | types    | The cursor query and the page shape.                 |
+
+### `./health`
+
+| Export                  | Kind | Description                                         |
+| ----------------------- | ---- | --------------------------------------------------- |
+| `IHealthIndicator`      | type | The pluggable indicator contract.                   |
+| `HealthIndicatorResult` | type | The outcome of a single indicator check.            |
+| `HealthCheckEntry`      | type | One named entry in a `HealthResponse.checks` array. |
+| `HealthResponse`        | type | The stable liveness and readiness response shape.   |
+
 ## Compatibility
 
 - Node.js `>= 24`
