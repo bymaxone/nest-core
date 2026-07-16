@@ -61,6 +61,15 @@ describe('normalizePageQuery', () => {
       expected: { page: 1, limit: 100 }
     },
     {
+      name: 'passes a limit of exactly 1, the minimum, through unchanged',
+      // A raw limit that coerces to exactly MINIMUM must survive the clamp: the
+      // lower guard is `coerced < MINIMUM`, so `1` stays `1`. A `<=` boundary
+      // would instead reject 1 and fall back to the default of 20, so this row
+      // pins the inclusive lower bound.
+      raw: { page: 1, limit: 1 },
+      expected: { page: 1, limit: 1 }
+    },
+    {
       name: 'floors limit 0 up to the default limit',
       raw: { page: 1, limit: 0 },
       expected: { page: 1, limit: 20 }

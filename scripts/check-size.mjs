@@ -19,14 +19,20 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 // .mjs bundle, what a consumer's bundler/CDN ships. Brotli, not gzip, to
 // match real wire compression.
 //
-// These are the provisional scaffold-time budgets from the technical
-// specification (section 13.1): `.` 10 KiB, `./pagination` 3 KiB, `./health`
-// 4 KiB. They are recalibrated once the first real feature artifact exists;
-// until then the placeholder barrels sit far under budget.
+// Calibrated on 2026-07-16 against the real release artifacts (measured brotli
+// sizes below), with tight headroom (1.35x to 1.5x, always under 2x) so the gate
+// stays a bloat tripwire: it catches a peer or a heavy import leaking into the
+// bundle without tripping on ordinary growth.
+//   `.` (root)     measured 8.15 KiB -> budget 11 KiB   (1.35x)
+//   `./pagination` measured 1.01 KiB -> budget  1.5 KiB (1.48x)
+//   `./health`     measured 0.00 KiB -> budget  0.5 KiB (floor)
+// The health barrel re-exports types only, so its runtime bundle is empty; its
+// budget is a small absolute floor that trips the moment real runtime code
+// leaks into a types-only subpath, rather than a multiple of a near-zero size.
 const BUDGETS = [
-  { name: '. (root)', path: 'dist/index.mjs', brotli: 10 * 1024 },
-  { name: './pagination', path: 'dist/pagination/index.mjs', brotli: 3 * 1024 },
-  { name: './health', path: 'dist/health/index.mjs', brotli: 4 * 1024 }
+  { name: '. (root)', path: 'dist/index.mjs', brotli: 11 * 1024 },
+  { name: './pagination', path: 'dist/pagination/index.mjs', brotli: 1.5 * 1024 },
+  { name: './health', path: 'dist/health/index.mjs', brotli: 0.5 * 1024 }
 ]
 
 const fmt = (n) => `${(n / 1024).toFixed(2)} kB`

@@ -89,8 +89,11 @@ describe('encodeCursor / decodeCursor', () => {
    * emitting a self-invalidating cursor.
    */
   it('throws when a payload value is a non-finite number', () => {
-    expect(() => encodeCursor({ id: Number.NaN })).toThrow()
-    expect(() => encodeCursor({ id: Number.POSITIVE_INFINITY })).toThrow()
+    // Assert the exact guard message, not merely that it throws, so the
+    // human-readable reason cannot silently drift or empty out.
+    const expectedMessage = 'encodeCursor payload values must each be a string or a finite number.'
+    expect(() => encodeCursor({ id: Number.NaN })).toThrow(expectedMessage)
+    expect(() => encodeCursor({ id: Number.POSITIVE_INFINITY })).toThrow(expectedMessage)
   })
 
   /**
@@ -101,6 +104,36 @@ describe('encodeCursor / decodeCursor', () => {
    */
   it('rejects a cursor with non-base64url characters', () => {
     expectRejection('not a cursor!!')
+  })
+
+  /**
+   * Anchored-alphabet boundary: trailing junk.
+   *
+   * A cursor that is a valid base64url prefix followed by a single out-of-alphabet
+   * character must reject. The pattern is anchored at BOTH ends precisely so an
+   * un-anchored match cannot accept the valid prefix and let the lenient
+   * `Buffer.from(..., 'base64url')` decoder silently strip the junk and decode the
+   * rest to a real payload. Without the trailing `$` anchor (or the early pattern
+   * guard) this input would decode instead of rejecting.
+   */
+  it('rejects a valid base64url prefix followed by an out-of-alphabet character', () => {
+    const valid = encodeCursor({ id: 1 })
+
+    expectRejection(`${valid}!`)
+  })
+
+  /**
+   * Anchored-alphabet boundary: leading junk.
+   *
+   * The mirror case: a single out-of-alphabet character before an otherwise valid
+   * base64url body must reject. Without the leading `^` anchor an un-anchored match
+   * would accept the trailing valid run and the lenient decoder would strip the
+   * prefix, decoding a real payload from a tampered cursor.
+   */
+  it('rejects an out-of-alphabet character followed by a valid base64url body', () => {
+    const valid = encodeCursor({ id: 1 })
+
+    expectRejection(`!${valid}`)
   })
 
   /**
@@ -259,6 +292,24 @@ describe('buildCursorResult', () => {
     expect(result.items).toEqual([{ id: 1 }, { id: 2 }])
     expect(result.nextCursor).not.toBeNull()
     expect(decodeCursor(result.nextCursor as string)).toEqual({ id: 2 })
+  })
+
+  /**
+   * nextCursor derives from the LAST returned item, not the second.
+   *
+   * With a page of three or more items the last item and the second item differ,
+   * so this pins the cursor to the true tail (`items.at(-1)`). A page of exactly
+   * two cannot tell the tail from the second item, so a wider page is required to
+   * prove the boundary key is the last one.
+   */
+  it('derives nextCursor from the tail of a wider page', () => {
+    const rows = [{ id: 10 }, { id: 20 }, { id: 30 }, { id: 40 }]
+
+    const result = buildCursorResult(rows, 3, toCursor)
+
+    expect(result.items).toEqual([{ id: 10 }, { id: 20 }, { id: 30 }])
+    expect(result.nextCursor).not.toBeNull()
+    expect(decodeCursor(result.nextCursor as string)).toEqual({ id: 30 })
   })
 
   /**

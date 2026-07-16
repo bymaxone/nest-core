@@ -160,7 +160,22 @@ describe('createHealthController', () => {
       options
     })
 
-    expect(() => controller.live()).toThrow(/health.*disabled/i)
+    let thrown: unknown
+    try {
+      controller.live()
+    } catch (error) {
+      thrown = error
+    }
+
+    // Assert every segment of the disabled-feature guidance so no part can empty
+    // out: it must state the feature was reached while disabled, explain why the
+    // route is always registered on the async path, and give the two remedies.
+    expect(thrown).toBeInstanceOf(Error)
+    const message = (thrown as Error).message
+    expect(message).toContain('The "health" controller was reached while the feature is disabled.')
+    expect(message).toContain('On the forRootAsync path this controller is always registered')
+    expect(message).toContain('enable "health" in the resolved options, or do not')
+    expect(message).toContain('expose this controller while the feature is disabled.')
   })
 
   /**
@@ -179,6 +194,22 @@ describe('createHealthController', () => {
       options
     })
 
-    expect(() => controller.live()).toThrow(/health\.path/)
+    let thrown: unknown
+    try {
+      controller.live()
+    } catch (error) {
+      thrown = error
+    }
+
+    // Assert each segment of the guidance message so no part can silently empty
+    // out: it must name where the controller is registered, why the mismatch is
+    // unavoidable on the async path, and the two ways to resolve it.
+    expect(thrown).toBeInstanceOf(Error)
+    const message = (thrown as Error).message
+    expect(message).toContain('controller is registered at "health" but the resolved')
+    expect(message).toContain('request "healthz"')
+    expect(message).toContain("Route metadata is fixed before forRootAsync's options")
+    expect(message).toContain('a custom "health.path" is only honored through forRoot()')
+    expect(message).toContain('keep the default "health" prefix on the async path.')
   })
 })

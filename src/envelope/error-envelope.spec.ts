@@ -56,6 +56,21 @@ describe('buildErrorEnvelope', () => {
       now: fixedClock
     })
 
+    // Assert absence on the RAW object first: a builder that spread
+    // `{ details: undefined }` unconditionally would still round-trip clean
+    // through JSON (stringify drops undefined-valued keys), so the raw `in`
+    // check is what proves the optional was omitted rather than set to
+    // undefined.
+    expect('details' in envelope).toBe(false)
+    expect('correlationId' in envelope).toBe(false)
+    expect(Object.keys(envelope).sort()).toEqual([
+      'code',
+      'message',
+      'path',
+      'statusCode',
+      'timestamp'
+    ])
+
     // Serialize to prove the keys are absent, not merely undefined-valued.
     const serialized = JSON.parse(JSON.stringify(envelope)) as Record<string, unknown>
 

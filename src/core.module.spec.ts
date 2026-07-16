@@ -14,11 +14,17 @@ import { Test } from '@nestjs/testing'
 
 import { normalizeCoreOptions } from './core.options'
 import { augmentModule, BymaxCoreModule } from './core.module'
-import { BYMAX_CORE_OPTIONS } from './core.tokens'
+import { BYMAX_CORE_OPTIONS, BYMAX_METRICS_REGISTRY, BYMAX_TIMING_SINK } from './core.tokens'
+import { HealthService } from './health/health.service'
 
 /** Extract the injection token of a provider regardless of its shape. */
 function tokenOf(provider: Provider): unknown {
   return typeof provider === 'object' && 'provide' in provider ? provider.provide : provider
+}
+
+/** Count how many providers of a module definition are bound to `token`. */
+function countProvidersFor(def: DynamicModule, token: unknown): number {
+  return (def.providers ?? []).map(tokenOf).filter((candidate) => candidate === token).length
 }
 
 const ALL_DISABLED = {
@@ -41,7 +47,63 @@ describe('BymaxCoreModule.forRoot', () => {
 
     expect(tokens).not.toContain(APP_FILTER)
     expect(tokens).not.toContain(APP_INTERCEPTOR)
+    expect(tokens).not.toContain(HealthService)
     expect(def.controllers ?? []).toHaveLength(0)
+  })
+
+  /**
+   * Enabled health registers the aggregator service.
+   *
+   * `HealthService` must be appended to the providers exactly when the health
+   * feature is enabled; a gate stuck open would register it even when disabled,
+   * so both the enabled presence here and the disabled absence above pin it.
+   */
+  it('registers HealthService exactly when health is enabled', () => {
+    const enabled = BymaxCoreModule.forRoot({ health: { enabled: true } })
+    const disabled = BymaxCoreModule.forRoot({ health: { enabled: false } })
+
+    expect((enabled.providers ?? []).map(tokenOf)).toContain(HealthService)
+    expect((disabled.providers ?? []).map(tokenOf)).not.toContain(HealthService)
+  })
+
+  /**
+   * The metrics timing-sink bridge is bound only when timing is also enabled.
+   *
+   * With metrics on but timing off there must be a single `BYMAX_TIMING_SINK`
+   * provider (the no-op default): the bridge provider is added only when both
+   * features are enabled, and the token is then exported so consumers can inject
+   * the effective sink. This pins the inner timing gate inside the metrics block.
+   */
+  it('adds the metrics timing-sink bridge and exports it only when timing and metrics are both enabled', () => {
+    const metricsOnly = BymaxCoreModule.forRoot({
+      metrics: { enabled: true },
+      timing: { enabled: false }
+    })
+    const both = BymaxCoreModule.forRoot({
+      metrics: { enabled: true },
+      timing: { enabled: true }
+    })
+
+    // Metrics on, timing off: no BYMAX_TIMING_SINK provider is bound at all (the
+    // timing pipeline falls back to its in-code no-op), so the bridge is absent.
+    expect(countProvidersFor(metricsOnly, BYMAX_TIMING_SINK)).toBe(0)
+    expect(metricsOnly.exports).toContain(BYMAX_METRICS_REGISTRY)
+    expect(metricsOnly.exports).not.toContain(BYMAX_TIMING_SINK)
+
+    // Both on: the bridge binds BYMAX_TIMING_SINK once, and the token is exported.
+    expect(countProvidersFor(both, BYMAX_TIMING_SINK)).toBe(1)
+    expect(both.exports).toContain(BYMAX_TIMING_SINK)
+    expect(both.exports).toContain(BYMAX_METRICS_REGISTRY)
+  })
+
+  /**
+   * The resolved-options token is always exported.
+   *
+   * Every consumer injects `BYMAX_CORE_OPTIONS`, so `forRoot` must always list it
+   * among the module exports, even for the fully-default configuration.
+   */
+  it('always exports the BYMAX_CORE_OPTIONS token', () => {
+    expect(BymaxCoreModule.forRoot({}).exports).toContain(BYMAX_CORE_OPTIONS)
   })
 
   /**

@@ -216,7 +216,14 @@ describe('resolveMetricsRegistry', () => {
       normalizeCoreOptions({ metrics: { enabled: false } })
     )
 
-    expect(() => registry.metrics()).toThrow(/metrics.*disabled/i)
+    // Assert both sentences of the guard message so neither can silently empty
+    // out: the disabled-access statement and the actionable remedy.
+    expect(() => registry.metrics()).toThrow(
+      'The metrics registry was accessed while metrics are disabled.'
+    )
+    expect(() => registry.metrics()).toThrow(
+      'Enable "metrics" in the resolved options before injecting the registry.'
+    )
   })
 })
 

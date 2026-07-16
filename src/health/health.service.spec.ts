@@ -260,7 +260,30 @@ describe('HealthService', () => {
     expect(result.checks).toHaveLength(2)
     const failed = result.checks.find((check) => check.name === 'database')
     expect(failed?.status).toBe('down')
-    expect(typeof failed?.details?.error).toBe('string')
+    // Pin the exact placeholder, not just its type: an empty fallback would still
+    // be a string, so only the literal value proves the safe placeholder is used.
+    expect(failed?.details?.error).toBe('Unknown error')
+  })
+
+  /**
+   * Message exactly at the length bound is not truncated.
+   *
+   * The truncation guard keeps a message whose length equals the bound intact
+   * (`length <= MAX`): the boundary is inclusive. A message of exactly 300
+   * characters must be surfaced verbatim, with no ellipsis, proving the `<=`
+   * boundary rather than a `<` that would needlessly truncate the limit case.
+   */
+  it('surfaces a message exactly at the length bound without truncating it', async () => {
+    const exactMessage = 'y'.repeat(300)
+    const failing = rejectingIndicator('database', new Error(exactMessage))
+    const service = new HealthService([failing], normalizeCoreOptions())
+
+    const result = await service.checkReadiness()
+
+    const [entry] = result.checks
+    expect(entry?.details?.error).toBe(exactMessage)
+    expect(entry?.details?.error).toHaveLength(300)
+    expect(entry?.details?.error).not.toContain('...')
   })
 
   /**
