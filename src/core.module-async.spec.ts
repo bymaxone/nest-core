@@ -103,6 +103,30 @@ describe('BymaxCoreModule.forRootAsync', () => {
   })
 })
 
+describe('BymaxCoreModule.forRootAsync, health controller guard', () => {
+  let app: INestApplication | undefined
+
+  afterEach(async () => {
+    await app?.close()
+    app = undefined
+  })
+
+  /**
+   * Health is always registered, but fails fast when resolved disabled.
+   *
+   * The health controller cannot be conditionally omitted on the async path,
+   * since its route metadata is fixed before the async options resolve. A
+   * real request against a disabled resolved configuration must therefore
+   * fail with a server error instead of silently serving liveness or
+   * readiness for a feature the consumer asked to disable.
+   */
+  it('fails a real request instead of silently serving health when resolved disabled', async () => {
+    app = await createAsyncApp(() => ({ health: { enabled: false } }))
+
+    await request(app.getHttpServer()).get('/health/live').expect(500)
+  })
+})
+
 describe('assertAsyncFeatureEnabled', () => {
   /**
    * Enabled feature passes.

@@ -1,6 +1,6 @@
 # Phase 5: health
 
-> **Status**: 📋 ToDo · **Progress**: 0 / 5 tasks · **Last updated**: 2026-07-06
+> **Status**: ✅ Done · **Progress**: 5 / 5 tasks · **Last updated**: 2026-07-16
 > **Source roadmap**: [`../development_plan.md`](../development_plan.md) (P5)
 > **Source spec**: [`../technical_specification.md`](../technical_specification.md) §8, §14.5
 
@@ -35,11 +35,11 @@ Expected starting state: phase 1 merged. Code-parallel with phases 2, 3, and 4; 
 
 | ID | Task | Status | Priority | Size | Depends on |
 |---|---|---|---|---|---|
-| 5.1 | Branch, health contracts, subpath barrel | 📋 ToDo | P0 | S | none |
-| 5.2 | Aggregation service (concurrency, timeout, down conversion) | 📋 ToDo | P0 | M | 5.1 |
-| 5.3 | Health controller (live, ready, prefix, 200/503) | 📋 ToDo | P0 | M | 5.2 |
-| 5.4 | Registration wiring, contract suite, dogfood | 📋 ToDo | P0 | S | 5.3 |
-| 5.5 | Phase close: verification, PR, Copilot review, merge | 📋 ToDo | P0 | S | 5.1, 5.2, 5.3, 5.4 |
+| 5.1 | Branch, health contracts, subpath barrel | ✅ Done | P0 | S | none |
+| 5.2 | Aggregation service (concurrency, timeout, down conversion) | ✅ Done | P0 | M | 5.1 |
+| 5.3 | Health controller (live, ready, prefix, 200/503) | ✅ Done | P0 | M | 5.2 |
+| 5.4 | Registration wiring, contract suite, dogfood | ✅ Done | P0 | S | 5.3 |
+| 5.5 | Phase close: verification, PR, Copilot review, merge | ✅ Done | P0 | S | 5.1, 5.2, 5.3, 5.4 |
 
 ---
 
@@ -47,7 +47,7 @@ Expected starting state: phase 1 merged. Code-parallel with phases 2, 3, and 4; 
 
 ### Task 5.1: Branch, health contracts, subpath barrel
 
-- **Status**: 📋 ToDo
+- **Status**: ✅ Done
 - **Priority**: P0
 - **Size**: S
 - **Depends on**: none
@@ -58,10 +58,10 @@ The `IHealthIndicator` and `HealthIndicatorResult` contracts, the health respons
 
 #### Acceptance criteria
 
-- [ ] Branch `feat/phase-05-health` created with `git switch -c`.
-- [ ] Contracts match spec §8.2 exactly (`name`, `check(): Promise<HealthIndicatorResult>`, `status: 'up' | 'down'`, optional `details`).
-- [ ] Health response types (`status: 'ok' | 'error'`, `checks` array with per-check name, status, optional details) match §8.1.
-- [ ] `src/health/index.ts` exports contracts and response types only; 100% coverage holds (types via consuming tests in later tasks; any runtime constant here is tested now).
+- [x] Branch `feat/phase-05-health` created with `git switch -c`.
+- [x] Contracts match spec §8.2 exactly (`name`, `check(): Promise<HealthIndicatorResult>`, `status: 'up' | 'down'`, optional `details`).
+- [x] Health response types (`status: 'ok' | 'error'`, `checks` array with per-check name, status, optional details) match §8.1.
+- [x] `src/health/index.ts` exports contracts and response types only; 100% coverage holds (types via consuming tests in later tasks; any runtime constant here is tested now).
 
 #### Files to create / modify
 
@@ -119,7 +119,7 @@ Completion Protocol (after you finish):
 
 ### Task 5.2: Aggregation service
 
-- **Status**: 📋 ToDo
+- **Status**: ✅ Done
 - **Priority**: P0
 - **Size**: M
 - **Depends on**: 5.1
@@ -130,10 +130,10 @@ The readiness aggregator: runs all indicators concurrently, applies the per-indi
 
 #### Acceptance criteria
 
-- [ ] All indicators run concurrently (verified by a test with two delayed indicators completing in near-parallel time).
-- [ ] An indicator exceeding `indicatorTimeoutMs` reports `down` with a timeout detail; a rejecting indicator reports `down` with the rejection reason summarized; other checks still report their real results.
-- [ ] Aggregate `status` is `ok` only when every check is `up`.
-- [ ] No timer leaks (timeouts cleared when the check settles first); 100% coverage holds.
+- [x] All indicators run concurrently (verified by a test with two delayed indicators completing in near-parallel time).
+- [x] An indicator exceeding `indicatorTimeoutMs` reports `down` with a timeout detail; a rejecting indicator reports `down` with the rejection reason summarized; other checks still report their real results.
+- [x] Aggregate `status` is `ok` only when every check is `up`.
+- [x] No timer leaks (timeouts cleared when the check settles first); 100% coverage holds.
 
 #### Files to create / modify
 
@@ -199,7 +199,7 @@ Completion Protocol (after you finish):
 
 ### Task 5.3: Health controller
 
-- **Status**: 📋 ToDo
+- **Status**: ✅ Done
 - **Priority**: P0
 - **Size**: M
 - **Depends on**: 5.2
@@ -210,9 +210,9 @@ The controller serving liveness and readiness under the configurable prefix, wit
 
 #### Acceptance criteria
 
-- [ ] `GET <prefix>/live` always 200 with `{ status: 'ok', checks: [] }`; `GET <prefix>/ready` 200 when all up, 503 with the full checks array otherwise.
-- [ ] The prefix comes from `options.health.path` (default `health`); the failing check is named in the 503 body.
-- [ ] 100% coverage holds.
+- [x] `GET <prefix>/live` always 200 with `{ status: 'ok', checks: [] }`; `GET <prefix>/ready` 200 when all up, 503 with the full checks array otherwise.
+- [x] The prefix comes from `options.health.path` (default `health`); the failing check is named in the 503 body.
+- [x] 100% coverage holds.
 
 #### Files to create / modify
 
@@ -276,7 +276,7 @@ Completion Protocol (after you finish):
 
 ### Task 5.4: Registration wiring, contract suite, dogfood
 
-- **Status**: 📋 ToDo
+- **Status**: ✅ Done
 - **Priority**: P0
 - **Size**: S
 - **Depends on**: 5.3
@@ -287,9 +287,9 @@ Conditional registration of the health feature on both paths, the pinned respons
 
 #### Acceptance criteria
 
-- [ ] Sync path registers controller and service only when `health.enabled`; async path honors the documented fail-fast rule for controller-bearing features (spec §2.2), both asserted.
-- [ ] Contract tests pin the exact readiness JSON for the all-up and one-down cases.
-- [ ] Health exports present in the `.` barrel where applicable (service/controller stay internal; contracts live in `./health`); dogfood green; 100% coverage holds.
+- [x] Sync path registers controller and service only when `health.enabled`; async path honors the documented fail-fast rule for controller-bearing features (spec §2.2), both asserted.
+- [x] Contract tests pin the exact readiness JSON for the all-up and one-down cases.
+- [x] Health exports present in the `.` barrel where applicable (service/controller stay internal; contracts live in `./health`); dogfood green; 100% coverage holds.
 
 #### Files to create / modify
 
@@ -348,20 +348,21 @@ Completion Protocol (after you finish):
 
 ### Task 5.5: Phase close: verification, PR, Copilot review, merge
 
-- **Status**: 📋 ToDo
+- **Status**: ✅ Done
 - **Priority**: P0
 - **Size**: S
 - **Depends on**: 5.1, 5.2, 5.3, 5.4
 
 #### Description
 
-Audit the phase Definition of Done, update dashboards, open the phase PR, obtain and address the GitHub Copilot review, merge on green.
+Audit the phase Definition of Done, update dashboards, open the phase PR, and request the GitHub Copilot review. The orchestrator owns waiting for CI and the review bot, resolving findings, the grace window, merge, and branch deletion.
 
 #### Acceptance criteria
 
-- [ ] Every P5 Definition of Done checkbox in `../development_plan.md` verified and ticked.
-- [ ] Phase file, plan dashboard, and README index consistent.
-- [ ] PR from `feat/phase-05-health` with CI green and Copilot review resolved; merged, branch deleted.
+- [x] Every P5 Definition of Done checkbox in `../development_plan.md` verified and ticked.
+- [x] Phase file, plan dashboard, and README index consistent.
+- [x] All phase-wide gates green (lint, typecheck, build, 100% coverage in both Jest configs, check-size, dogfood) and both reviews (code-review, security-review) driven to zero findings.
+- [x] PR opened from `feat/phase-05-health` and the GitHub Copilot review requested. Waiting for CI/review, resolving findings, merge, and branch deletion are owned by the orchestrator.
 
 #### Files to create / modify
 
@@ -419,3 +420,8 @@ Completion Protocol (after you finish):
 ## Completion log
 
 <!-- Append one line per completed task: - <id> ✅ <YYYY-MM-DD>: <summary> -->
+- 5.1 ✅ 2026-07-16: added IHealthIndicator/HealthIndicatorResult contracts and HealthResponse types, exported through the ./health subpath barrel.
+- 5.2 ✅ 2026-07-16: added HealthService with concurrent Promise.all aggregation, per-indicator timeout via a cleared race, and safe rejection/timeout down-conversion.
+- 5.3 ✅ 2026-07-16: added the createHealthController factory (configurable prefix baked into @Controller metadata) with live (always 200) and ready (200/503 via HttpAdapterHost.reply) handlers, plus an async-path consistency guard.
+- 5.4 ✅ 2026-07-16: wired conditional registration into core.module.ts (sync gates HealthController+HealthService on health.enabled; async always registers at the default path and self-guards), added the booted-app contract suite (liveness, all-up, one-down/503, disabled-404), dogfood and both coverage configs green.
+- 5.5 ✅ 2026-07-16: audited the P5 DoD, reconciled dashboards, drove code-review + security-review to zero findings (fixing a synchronous-throw aggregation robustness bug on the way), opened the phase PR and requested the Copilot review; orchestrator owns merge and branch cleanup.

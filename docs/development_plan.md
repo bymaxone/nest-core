@@ -23,7 +23,7 @@
 
 ## Progress Dashboard
 
-> **Overall: 5 / 9 phases done (56%)** · Active phase: P5 · Blocked: none
+> **Overall: 6 / 9 phases done (67%)** · Active phase: P6 · Blocked: none
 
 | ID  | Phase                | Status | Progress | Size | Last Updated |
 | --- | -------------------- | ------ | -------- | ---- | ------------ |
@@ -32,7 +32,7 @@
 | P2  | error-envelope       | ✅     | 100%     | M    | 2026-07-16   |
 | P3  | timing-interceptor   | ✅     | 100%     | S    | 2026-07-16   |
 | P4  | pagination           | ✅     | 100%     | M    | 2026-07-16   |
-| P5  | health               | 📋     | 0%       | M    | 2026-07-06   |
+| P5  | health               | ✅     | 100%     | M    | 2026-07-16   |
 | P6  | metrics              | 📋     | 0%       | M    | 2026-07-06   |
 | P7  | integration-and-docs | 📋     | 0%       | M    | 2026-07-06   |
 | P8  | release-hardening    | 📋     | 0%       | L    | 2026-07-06   |
@@ -166,11 +166,11 @@ These apply to every phase. Phase sections list only rules specific to that phas
 - **Scope (in):** `IHealthIndicator` and `HealthIndicatorResult` contracts on the `./health` subpath; the aggregation service (concurrent execution, per-indicator `indicatorTimeoutMs`, rejection and timeout conversion to `down` entries with diagnostic detail); the controller (`live` always 200 with empty checks; `ready` 200 when all up, 503 otherwise); configurable route prefix; conditional registration.
 - **Scope (out):** Built-in indicators for specific technologies (consumers implement against their own clients); dependency ordering between checks (documented limitation).
 - **Definition of Done:**
-  - [ ] Readiness returns 503 with the failing check named when any indicator is down, times out, or rejects; other checks still report.
-  - [ ] Liveness runs zero indicators and always returns the documented shape.
-  - [ ] The response JSON matches the versioned contract exactly (contract test).
-  - [ ] Disabled health registers no controller and no route.
-  - [ ] 100% coverage holds.
+  - [x] Readiness returns 503 with the failing check named when any indicator is down, times out, or rejects; other checks still report.
+  - [x] Liveness runs zero indicators and always returns the documented shape.
+  - [x] The response JSON matches the versioned contract exactly (contract test).
+  - [x] Disabled health registers no controller and no route.
+  - [x] 100% coverage holds.
 - **Context / preconditions:** P1 done.
 - **Rules-of-phase:** No dependency on `@nestjs/terminus` (a documented spec decision). One failing indicator must never hide the results of the others.
 - **References:** Spec §8 (health), §14.5 (limitation).
