@@ -1,6 +1,6 @@
 # Phase 7: integration-and-docs
 
-> **Status**: 📋 ToDo · **Progress**: 0 / 5 tasks · **Last updated**: 2026-07-06
+> **Status**: 🔄 In Progress · **Progress**: 2 / 5 tasks · **Last updated**: 2026-07-16
 > **Source roadmap**: [`../development_plan.md`](../development_plan.md) (P7)
 > **Source spec**: [`../technical_specification.md`](../technical_specification.md) §15, §13.2
 
@@ -35,8 +35,8 @@ Expected starting state: phases 2 through 6 merged; every feature works in isola
 
 | ID | Task | Status | Priority | Size | Depends on |
 |---|---|---|---|---|---|
-| 7.1 | Branch, e2e fixture app, `forRoot` combinations | 📋 ToDo | P0 | M | none |
-| 7.2 | `forRootAsync` e2e and cross-feature assertions | 📋 ToDo | P0 | M | 7.1 |
+| 7.1 | Branch, e2e fixture app, `forRoot` combinations | ✅ Done | P0 | M | none |
+| 7.2 | `forRootAsync` e2e and cross-feature assertions | ✅ Done | P0 | M | 7.1 |
 | 7.3 | Full README (feature tour, configuration reference, examples) | 📋 ToDo | P0 | M | 7.2 |
 | 7.4 | CHANGELOG entry, dogfood, docs polish | 📋 ToDo | P1 | S | 7.3 |
 | 7.5 | Phase close: verification, PR, Copilot review, merge | 📋 ToDo | P0 | S | 7.1, 7.2, 7.3, 7.4 |
@@ -47,7 +47,7 @@ Expected starting state: phases 2 through 6 merged; every feature works in isola
 
 ### Task 7.1: Branch, e2e fixture app, `forRoot` combinations
 
-- **Status**: 📋 ToDo
+- **Status**: ✅ Done
 - **Priority**: P0
 - **Size**: M
 - **Depends on**: none
@@ -58,10 +58,24 @@ The e2e fixture application and the sync-path suites: all features enabled toget
 
 #### Acceptance criteria
 
-- [ ] Branch `feat/phase-07-integration-and-docs` created with `git switch -c`.
-- [ ] `test/e2e/` fixture boots a real Nest app (supertest) with envelope + timing + health + metrics enabled: error responses match the envelope contract, `/health/live` and `/health/ready` respond, `/metrics` scrapes.
-- [ ] Everything-off fixture: no health route (404), no metrics route, errors flow through Nest's default shape (filter absent).
-- [ ] Suites run under `jest.e2e.config.ts` with bounded workers; unit suite untouched.
+- [x] Branch `feat/phase-07-integration-and-docs` created with `git switch -c`.
+- [x] `test/e2e/` fixture boots a real Nest app (supertest) with envelope + timing + health + metrics enabled: error responses match the envelope contract, `/health/live` and `/health/ready` respond, `/metrics` scrapes.
+- [x] Everything-off fixture: no health route (404), no metrics route, errors flow through Nest's default shape (filter absent).
+- [x] Suites run under `jest.e2e.config.ts` with bounded workers; unit suite untouched.
+
+#### Implementation note
+
+While building the fixture, an integration gap surfaced: the documented
+consumer-override pattern (technical specification §4.3) for
+`BYMAX_CORRELATION_PROVIDER`, `BYMAX_TIMING_SINK`, and
+`BYMAX_HEALTH_INDICATORS` did not actually reach `BymaxExceptionFilter`,
+`TimingInterceptor`, or `HealthService`, because `BymaxCoreModule` bound a
+competing local default for each token, and NestJS always resolves a
+provider's own hosting module first. Fixed as a bug against the feature's
+contract (no new public surface): each consumer now injects its token with
+`@Optional()` and falls back in code to a no-op instance; see the `fix(core)`
+commit on this branch and the updated unit suites for the three affected
+features.
 
 #### Files to create / modify
 
@@ -127,7 +141,7 @@ Completion Protocol (after you finish):
 
 ### Task 7.2: `forRootAsync` e2e and cross-feature assertions
 
-- **Status**: 📋 ToDo
+- **Status**: ✅ Done
 - **Priority**: P0
 - **Size**: M
 - **Depends on**: 7.1
@@ -138,9 +152,9 @@ The async-path suite and the cross-feature seams: correlation id in the envelope
 
 #### Acceptance criteria
 
-- [ ] `forRootAsync` fixture (factory + inject) passes the same all-on assertions as the sync suite.
-- [ ] Envelope carries the stub provider's correlation id; timing samples appear in `/metrics` histogram counts; async everything-off leaves requests observably identical to a bare app (pass-through proof).
-- [ ] Readiness flips 200 to 503 when the stub indicator goes down mid-suite.
+- [x] `forRootAsync` fixture (factory + inject) passes the same all-on assertions as the sync suite.
+- [x] Envelope carries the stub provider's correlation id; timing samples appear in `/metrics` histogram counts; async everything-off leaves requests observably identical to a bare app (pass-through proof).
+- [x] Readiness flips 200 to 503 when the stub indicator goes down mid-suite.
 
 #### Files to create / modify
 
@@ -427,3 +441,5 @@ Completion Protocol (after you finish):
 ## Completion log
 
 <!-- Append one line per completed task: - <id> ✅ <YYYY-MM-DD>: <summary> -->
+- 7.1 ✅ 2026-07-16: e2e fixture app (stub correlation provider, stub health indicator) and forRoot all-on/all-off suites; fixed a consumer-override DI bug found while wiring the fixture (see Task 7.1 implementation note).
+- 7.2 ✅ 2026-07-16: forRootAsync e2e suite (all-on parity, pass-through byte-for-byte proof) and cross-feature suite (live correlation id, exact http_requests_total accumulation, two-way readiness flip).
