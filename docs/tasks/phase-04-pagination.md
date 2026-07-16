@@ -1,6 +1,6 @@
 # Phase 4: pagination
 
-> **Status**: 🔄 In Progress · **Progress**: 2 / 5 tasks · **Last updated**: 2026-07-16
+> **Status**: 🔄 In Progress · **Progress**: 3 / 5 tasks · **Last updated**: 2026-07-16
 > **Source roadmap**: [`../development_plan.md`](../development_plan.md) (P4)
 > **Source spec**: [`../technical_specification.md`](../technical_specification.md) §7, §14.4
 
@@ -37,7 +37,7 @@ Expected starting state: phase 1 merged (the `BYMAX_*` catalog exists). Code-par
 |---|---|---|---|---|---|
 | 4.1 | Branch, offset primitives (`normalizePageQuery`, `buildPageResult`) | ✅ Done | P0 | M | none |
 | 4.2 | Cursor codec (`encodeCursor`, `decodeCursor`) | ✅ Done | P0 | M | none |
-| 4.3 | `normalizeCursorQuery` and `buildCursorResult` | 📋 ToDo | P0 | S | 4.2 |
+| 4.3 | `normalizeCursorQuery` and `buildCursorResult` | ✅ Done | P0 | S | 4.2 |
 | 4.4 | Subpath barrel, zero-provider proof, boundary suite | 📋 ToDo | P0 | S | 4.1, 4.3 |
 | 4.5 | Phase close: verification, PR, Copilot review, merge | 📋 ToDo | P0 | S | 4.1, 4.2, 4.3, 4.4 |
 
@@ -199,7 +199,7 @@ Completion Protocol (after you finish):
 
 ### Task 4.3: `normalizeCursorQuery` and `buildCursorResult`
 
-- **Status**: 📋 ToDo
+- **Status**: ✅ Done
 - **Priority**: P0
 - **Size**: S
 - **Depends on**: 4.2
@@ -210,9 +210,9 @@ Cursor query normalization (same clamping engine as offset) and the fetch-one-ex
 
 #### Acceptance criteria
 
-- [ ] `normalizeCursorQuery` clamps limit identically to the offset path and passes the cursor through untouched (validation happens at decode time).
-- [ ] `buildCursorResult(items, limit, toCursor)`: with `limit + 1` rows fetched, trims the extra row and derives `nextCursor` from the last returned item; with `limit` rows or fewer, `nextCursor` is `null`.
-- [ ] Signatures match spec §7.2; 100% coverage holds.
+- [x] `normalizeCursorQuery` clamps limit identically to the offset path and passes the cursor through untouched (validation happens at decode time).
+- [x] `buildCursorResult(items, limit, toCursor)`: with `limit + 1` rows fetched, trims the extra row and derives `nextCursor` from the last returned item; with `limit` rows or fewer, `nextCursor` is `null`.
+- [x] Signatures match spec §7.2; 100% coverage holds.
 
 #### Files to create / modify
 
@@ -420,3 +420,4 @@ Completion Protocol (after you finish):
 
 - 4.1 ✅ 2026-07-16: offset primitives with clamping (page floor, limit floor/cap, per-call defaults) and computed-meta page-result builder; 100% coverage.
 - 4.2 ✅ 2026-07-16: opaque base64url cursor codec; decode rejects non-base64url, non-JSON, wrong-shape, and disallowed-value input with a detail-free BYMAX_VALIDATION_FAILED 400; 100% coverage.
+- 4.3 ✅ 2026-07-16: cursor query normalization (shared limit clamp, string cursor pass-through) and fetch-one-extra result builder deriving nextCursor from the last returned item; 100% coverage.

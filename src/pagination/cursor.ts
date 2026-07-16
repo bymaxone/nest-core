@@ -10,6 +10,7 @@
  */
 import { BadRequestException } from '@nestjs/common'
 
+import { clampLimit, type PaginationLimitOptions } from './internal'
 import { BYMAX_VALIDATION_FAILED } from '../envelope/error-codes'
 
 /** The base64url alphabet: url-safe base64 with no padding. */
@@ -92,4 +93,72 @@ export function decodeCursor<T extends Record<string, string | number>>(cursor: 
     throw cursorRejection()
   }
   return parsed as T
+}
+
+/** A safe, clamped cursor query. The cursor is validated only at decode time. */
+export interface CursorQuery {
+  /** Opaque cursor from a prior page, or absent for the first page. */
+  cursor?: string
+  /** Page size, always within `[1, maxLimit]`. */
+  limit: number
+}
+
+/** A page of items plus the cursor for the next page, if any. */
+export interface CursorResult<T> {
+  /** The items on this page, trimmed to the requested limit. */
+  items: T[]
+  /** The cursor for the next page, or `null` when this is the last page. */
+  nextCursor: string | null
+}
+
+/**
+ * Clamp raw request input into a safe {@link CursorQuery}.
+ *
+ * The limit is clamped exactly as the offset path clamps it. The cursor is
+ * passed through untouched when it is a string and omitted otherwise; its
+ * contents are validated later by {@link decodeCursor}, not here.
+ *
+ * @param raw - The untrusted cursor and limit values from the request.
+ * @param options - Per-call `defaultLimit` (default `20`) and `maxLimit`
+ *   (default `100`) overrides.
+ * @returns A clamped, safe cursor query.
+ */
+export function normalizeCursorQuery(
+  raw: { cursor?: unknown; limit?: unknown },
+  options?: PaginationLimitOptions
+): CursorQuery {
+  const limit = clampLimit(raw.limit, options)
+  if (typeof raw.cursor === 'string') {
+    return { cursor: raw.cursor, limit }
+  }
+  return { limit }
+}
+
+/**
+ * Assemble a {@link CursorResult} using the fetch-one-extra convention.
+ *
+ * The repository fetches `limit + 1` rows. A count beyond the limit signals a
+ * further page: the extra row is trimmed and `nextCursor` is derived from the
+ * last returned item. With `limit` rows or fewer, `nextCursor` is `null`.
+ *
+ * @param items - The fetched rows, expected to be up to `limit + 1` long.
+ * @param limit - The requested page size that bounds the returned items.
+ * @param toCursor - Maps the last returned item to its ordering keys.
+ * @returns The trimmed page and the next cursor, or `null` on the last page.
+ */
+export function buildCursorResult<T>(
+  items: T[],
+  limit: number,
+  toCursor: (lastItem: T) => Record<string, string | number>
+): CursorResult<T> {
+  if (items.length <= limit) {
+    return { items, nextCursor: null }
+  }
+  const page = items.slice(0, limit)
+  const lastItem = page.at(-1)
+  // A zero or negative limit trims to an empty page, leaving no key to encode.
+  if (lastItem === undefined) {
+    return { items: page, nextCursor: null }
+  }
+  return { items: page, nextCursor: encodeCursor(toCursor(lastItem)) }
 }

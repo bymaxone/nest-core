@@ -13,7 +13,7 @@ import { BadRequestException } from '@nestjs/common'
 
 import { BYMAX_VALIDATION_FAILED } from '../envelope/error-codes'
 
-import { decodeCursor, encodeCursor } from './cursor'
+import { buildCursorResult, decodeCursor, encodeCursor, normalizeCursorQuery } from './cursor'
 
 /** The fixed, detail-free message every rejection must carry. */
 const REJECTION_MESSAGE = 'Malformed pagination cursor.'
@@ -161,5 +161,131 @@ describe('encodeCursor / decodeCursor', () => {
    */
   it('rejects a payload with a nested object value', () => {
     expectRejection(toBase64url('{"range":{"from":1}}'))
+  })
+})
+
+describe('normalizeCursorQuery', () => {
+  // Rows exercise the shared limit clamp plus the cursor pass-through rule.
+  const cases: ReadonlyArray<{
+    readonly name: string
+    readonly raw: { cursor?: unknown; limit?: unknown }
+    readonly options?: { defaultLimit?: number; maxLimit?: number }
+    readonly expected: { cursor?: string; limit: number }
+  }> = [
+    {
+      name: 'applies the default limit and omits an absent cursor',
+      raw: {},
+      expected: { limit: 20 }
+    },
+    {
+      name: 'passes a string cursor through untouched',
+      raw: { cursor: 'abc', limit: 10 },
+      expected: { cursor: 'abc', limit: 10 }
+    },
+    {
+      name: 'caps the limit at the default maximum',
+      raw: { cursor: 'abc', limit: 500 },
+      expected: { cursor: 'abc', limit: 100 }
+    },
+    {
+      name: 'floors a zero limit up to the default',
+      raw: { limit: 0 },
+      expected: { limit: 20 }
+    },
+    {
+      name: 'honors per-call default and max overrides',
+      raw: { limit: 999 },
+      options: { defaultLimit: 5, maxLimit: 25 },
+      expected: { limit: 25 }
+    },
+    {
+      name: 'omits a non-string cursor',
+      raw: { cursor: 12345, limit: 10 },
+      expected: { limit: 10 }
+    }
+  ]
+
+  it.each(cases)('$name', ({ raw, options, expected }) => {
+    /**
+     * Cursor-query clamping matrix.
+     *
+     * Confirms the limit clamps identically to the offset path and that only a
+     * string cursor survives normalization; content validation is deferred to
+     * decode time.
+     */
+    expect(normalizeCursorQuery(raw, options)).toEqual(expected)
+  })
+})
+
+describe('buildCursorResult', () => {
+  /** Maps a row to its ordering keys for cursor derivation. */
+  const toCursor = (row: { id: number }): { id: number } => ({ id: row.id })
+
+  /**
+   * Fetch-one-extra with a further page.
+   *
+   * Given `limit + 1` rows, the builder must trim to `limit` items and derive
+   * `nextCursor` from the last RETURNED item (not the discarded extra row), so
+   * the next page resumes exactly after the boundary.
+   */
+  it('trims the extra row and derives nextCursor from the last returned item', () => {
+    const rows = [{ id: 1 }, { id: 2 }, { id: 3 }]
+
+    const result = buildCursorResult(rows, 2, toCursor)
+
+    expect(result.items).toEqual([{ id: 1 }, { id: 2 }])
+    expect(result.nextCursor).not.toBeNull()
+    expect(decodeCursor(result.nextCursor as string)).toEqual({ id: 2 })
+  })
+
+  /**
+   * Exact-limit boundary.
+   *
+   * With exactly `limit` rows there is no extra row, so this is the last page
+   * and `nextCursor` is null.
+   */
+  it('yields a null nextCursor when exactly limit rows are returned', () => {
+    const result = buildCursorResult([{ id: 1 }, { id: 2 }], 2, toCursor)
+
+    expect(result.items).toEqual([{ id: 1 }, { id: 2 }])
+    expect(result.nextCursor).toBeNull()
+  })
+
+  /**
+   * Under-limit case.
+   *
+   * Fewer rows than the limit is unambiguously the last page.
+   */
+  it('yields a null nextCursor when fewer than limit rows are returned', () => {
+    const result = buildCursorResult([{ id: 1 }], 5, toCursor)
+
+    expect(result.items).toEqual([{ id: 1 }])
+    expect(result.nextCursor).toBeNull()
+  })
+
+  /**
+   * Empty-result boundary.
+   *
+   * No rows means an empty page and no next cursor.
+   */
+  it('yields an empty page and null cursor for no items', () => {
+    const result = buildCursorResult<{ id: number }>([], 10, toCursor)
+
+    expect(result.items).toEqual([])
+    expect(result.nextCursor).toBeNull()
+  })
+
+  /**
+   * Zero-limit defensive case.
+   *
+   * A misused zero limit trims to an empty page; with no last item there is no
+   * ordering key to encode, so the builder returns a null cursor instead of
+   * crashing on the empty slice.
+   */
+  it('yields a null cursor when the limit is zero despite extra rows', () => {
+    const result = buildCursorResult([{ id: 1 }, { id: 2 }], 0, toCursor)
+
+    expect(result.items).toEqual([])
+    expect(result.nextCursor).toBeNull()
   })
 })

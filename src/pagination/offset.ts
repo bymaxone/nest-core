@@ -6,15 +6,7 @@
  * own persistence call and passes the rows and total back to the builder.
  * @layer Utility
  */
-
-/** Fallback page size applied when the raw limit is absent or invalid. */
-const DEFAULT_LIMIT = 20
-
-/** Upper bound applied to the page size when no per-call `maxLimit` is given. */
-const DEFAULT_MAX_LIMIT = 100
-
-/** The smallest legal page number and page size. */
-const MINIMUM = 1
+import { MINIMUM, clampLimit, coercePositiveInt, type PaginationLimitOptions } from './internal'
 
 /** A safe, clamped offset query. `page` is 1-based. */
 export interface PageQuery {
@@ -22,14 +14,6 @@ export interface PageQuery {
   page: number
   /** Page size, always within `[1, maxLimit]`. */
   limit: number
-}
-
-/** Per-call overrides for the clamping bounds. Never module state. */
-export interface PageQueryOptions {
-  /** Page size used when the raw limit is absent or invalid. Default `20`. */
-  defaultLimit?: number
-  /** Hard cap applied to the page size. Default `100`. */
-  maxLimit?: number
 }
 
 /** Pagination metadata describing the position within the full result set. */
@@ -53,26 +37,6 @@ export interface PageResult<T> {
 }
 
 /**
- * Coerce an unknown value into a positive integer, falling back when the value
- * is not a finite number of at least one.
- *
- * `Number('')` and `Number(null)` collapse to `0`, so a bare finiteness check
- * is not enough: values below the minimum also fall back to keep non-numeric,
- * negative, and zero input from producing an out-of-range result.
- *
- * @param value - The raw, untrusted value to coerce.
- * @param fallback - The value returned when coercion yields nothing usable.
- * @returns A positive integer: the truncated coercion, or the fallback.
- */
-function coercePositiveInt(value: unknown, fallback: number): number {
-  const coerced = Number(value)
-  if (!Number.isFinite(coerced) || coerced < MINIMUM) {
-    return fallback
-  }
-  return Math.floor(coerced)
-}
-
-/**
  * Clamp raw request input into a safe {@link PageQuery}.
  *
  * `page` floors to `1`; `limit` floors to `1` and caps at `maxLimit`. Absent,
@@ -86,13 +50,12 @@ function coercePositiveInt(value: unknown, fallback: number): number {
  */
 export function normalizePageQuery(
   raw: { page?: unknown; limit?: unknown },
-  options?: PageQueryOptions
+  options?: PaginationLimitOptions
 ): PageQuery {
-  const defaultLimit = options?.defaultLimit ?? DEFAULT_LIMIT
-  const maxLimit = options?.maxLimit ?? DEFAULT_MAX_LIMIT
-  const page = coercePositiveInt(raw.page, MINIMUM)
-  const limit = Math.min(coercePositiveInt(raw.limit, defaultLimit), maxLimit)
-  return { page, limit }
+  return {
+    page: coercePositiveInt(raw.page, MINIMUM),
+    limit: clampLimit(raw.limit, options)
+  }
 }
 
 /**
