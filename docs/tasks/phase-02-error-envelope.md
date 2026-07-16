@@ -1,6 +1,6 @@
 # Phase 2: error-envelope
 
-> **Status**: 📋 ToDo · **Progress**: 0 / 5 tasks · **Last updated**: 2026-07-06
+> **Status**: ✅ Done · **Progress**: 5 / 5 tasks · **Last updated**: 2026-07-16
 > **Source roadmap**: [`../development_plan.md`](../development_plan.md) (P2)
 > **Source spec**: [`../technical_specification.md`](../technical_specification.md) §5, §10, §14.1, §14.2
 
@@ -33,13 +33,13 @@ Expected starting state: phase 1 merged (tokens, catalog, options, both registra
 
 ## Task index
 
-| ID | Task | Status | Priority | Size | Depends on |
-|---|---|---|---|---|---|
-| 2.1 | Branch, envelope type and builder | 📋 ToDo | P0 | S | none |
-| 2.2 | Filter: HttpException mapping and code derivation | 📋 ToDo | P0 | M | 2.1 |
-| 2.3 | Filter: validation shape and unknown collapse (`exposeInternals`) | 📋 ToDo | P0 | M | 2.2 |
-| 2.4 | Correlation stamping, registration wiring, contract suite | 📋 ToDo | P0 | M | 2.3 |
-| 2.5 | Phase close: verification, PR, Copilot review, merge | 📋 ToDo | P0 | S | 2.1, 2.2, 2.3, 2.4 |
+| ID  | Task                                                              | Status  | Priority | Size | Depends on         |
+| --- | ----------------------------------------------------------------- | ------- | -------- | ---- | ------------------ |
+| 2.1 | Branch, envelope type and builder                                 | ✅ Done | P0       | S    | none               |
+| 2.2 | Filter: HttpException mapping and code derivation                 | ✅ Done | P0       | M    | 2.1                |
+| 2.3 | Filter: validation shape and unknown collapse (`exposeInternals`) | ✅ Done | P0       | M    | 2.2                |
+| 2.4 | Correlation stamping, registration wiring, contract suite         | ✅ Done | P0       | M    | 2.3                |
+| 2.5 | Phase close: verification, PR, Copilot review, merge              | ✅ Done | P0       | S    | 2.1, 2.2, 2.3, 2.4 |
 
 ---
 
@@ -47,7 +47,7 @@ Expected starting state: phase 1 merged (tokens, catalog, options, both registra
 
 ### Task 2.1: Branch, envelope type and builder
 
-- **Status**: 📋 ToDo
+- **Status**: ✅ Done
 - **Priority**: P0
 - **Size**: S
 - **Depends on**: none
@@ -58,10 +58,10 @@ The `ErrorEnvelope` type matching spec §5.1 and a pure builder function that as
 
 #### Acceptance criteria
 
-- [ ] Branch `feat/phase-02-error-envelope` created with `git switch -c`.
-- [ ] `ErrorEnvelope` carries `statusCode`, `code`, `message`, optional `details`, optional `correlationId`, `timestamp` (ISO 8601), `path`, exactly per §5.1.
-- [ ] `buildErrorEnvelope(input)` is pure, omits absent optional fields entirely (no `undefined` keys in JSON), and stamps `timestamp` from an injectable clock parameter (testability).
-- [ ] 100% coverage holds.
+- [x] Branch `feat/phase-02-error-envelope` created with `git switch -c`.
+- [x] `ErrorEnvelope` carries `statusCode`, `code`, `message`, optional `details`, optional `correlationId`, `timestamp` (ISO 8601), `path`, exactly per §5.1.
+- [x] `buildErrorEnvelope(input)` is pure, omits absent optional fields entirely (no `undefined` keys in JSON), and stamps `timestamp` from an injectable clock parameter (testability).
+- [x] 100% coverage holds.
 
 #### Files to create / modify
 
@@ -69,7 +69,7 @@ The `ErrorEnvelope` type matching spec §5.1 and a pure builder function that as
 
 #### Agent prompt
 
-````
+```
 You are a senior NestJS library engineer working on @bymax-one/nest-core.
 
 PROJECT: @bymax-one/nest-core, application foundation kit for NestJS 11. This phase builds the
@@ -113,13 +113,13 @@ Completion Protocol (after you finish):
 5. Update the P2 row in ../development_plan.md (canonical) and mirror docs/tasks/README.md.
 6. Recompute the overall counter line in ../development_plan.md.
 7. Commit: `feat(envelope): add error envelope type and builder (2.1)`.
-````
+```
 
 ---
 
 ### Task 2.2: Filter: HttpException mapping and code derivation
 
-- **Status**: 📋 ToDo
+- **Status**: ✅ Done
 - **Priority**: P0
 - **Size**: M
 - **Depends on**: 2.1
@@ -130,10 +130,10 @@ Completion Protocol (after you finish):
 
 #### Acceptance criteria
 
-- [ ] Filter formats any `HttpException` into the envelope: status and message from the exception; `code` from the exception response object when present, else `codeForStatus`.
-- [ ] Custom codes pass through verbatim; the `BYMAX_` prefix remains reserved for catalog codes (documented in JSDoc).
-- [ ] Path and method read through neutral accessors (host switch on HTTP context only; non-HTTP contexts rethrow untouched per spec §14.1).
-- [ ] 100% coverage holds.
+- [x] Filter formats any `HttpException` into the envelope: status and message from the exception; `code` from the exception response object when present, else `codeForStatus`.
+- [x] Custom codes pass through verbatim; the `BYMAX_` prefix remains reserved for catalog codes (documented in JSDoc).
+- [x] Path and method read through neutral accessors (host switch on HTTP context only; non-HTTP contexts rethrow untouched per spec §14.1).
+- [x] 100% coverage holds.
 
 #### Files to create / modify
 
@@ -141,7 +141,7 @@ Completion Protocol (after you finish):
 
 #### Agent prompt
 
-````
+```
 You are a senior NestJS library engineer working on @bymax-one/nest-core.
 
 PROJECT: @bymax-one/nest-core, application foundation kit for NestJS 11. The exception filter is
@@ -192,13 +192,13 @@ Completion Protocol (after you finish):
 5. Update the P2 row in ../development_plan.md (canonical) and mirror docs/tasks/README.md.
 6. Recompute the overall counter line in ../development_plan.md.
 7. Commit: `feat(envelope): add exception filter with HttpException mapping (2.2)`.
-````
+```
 
 ---
 
 ### Task 2.3: Filter: validation shape and unknown collapse
 
-- **Status**: 📋 ToDo
+- **Status**: ✅ Done
 - **Priority**: P0
 - **Size**: M
 - **Depends on**: 2.2
@@ -209,11 +209,11 @@ Mapping rules 2 and 3: validation-shaped BadRequestException translation into st
 
 #### Acceptance criteria
 
-- [ ] BadRequestException carrying a constraint-violation array translates to `code: BYMAX_VALIDATION_FAILED` with one structured `details` entry per violation.
-- [ ] Any non-HttpException collapses to 500, `BYMAX_INTERNAL_ERROR`, fixed message `"Internal server error"`; original error never serialized when `exposeInternals` is false.
-- [ ] With `exposeInternals` true, `details` carries the original message and stack (development only, documented).
-- [ ] No stack fragment or internal message appears in any response body when the switch is off (regression-tested with a thrown `Error` and a thrown non-Error value).
-- [ ] 100% coverage holds.
+- [x] BadRequestException carrying a constraint-violation array translates to `code: BYMAX_VALIDATION_FAILED` with one structured `details` entry per violation.
+- [x] Any non-HttpException collapses to 500, `BYMAX_INTERNAL_ERROR`, fixed message `"Internal server error"`; original error never serialized when `exposeInternals` is false.
+- [x] With `exposeInternals` true, `details` carries the original message and stack (development only, documented).
+- [x] No stack fragment or internal message appears in any response body when the switch is off (regression-tested with a thrown `Error` and a thrown non-Error value).
+- [x] 100% coverage holds.
 
 #### Files to create / modify
 
@@ -221,7 +221,7 @@ Mapping rules 2 and 3: validation-shaped BadRequestException translation into st
 
 #### Agent prompt
 
-````
+```
 You are a senior NestJS library engineer working on @bymax-one/nest-core.
 
 PROJECT: @bymax-one/nest-core, application foundation kit for NestJS 11. Production-safe by
@@ -270,13 +270,13 @@ Completion Protocol (after you finish):
 5. Update the P2 row in ../development_plan.md (canonical) and mirror docs/tasks/README.md.
 6. Recompute the overall counter line in ../development_plan.md.
 7. Commit: `feat(envelope): add validation mapping and production-safe collapse (2.3)`.
-````
+```
 
 ---
 
 ### Task 2.4: Correlation stamping, registration wiring, contract suite
 
-- **Status**: 📋 ToDo
+- **Status**: ✅ Done
 - **Priority**: P0
 - **Size**: M
 - **Depends on**: 2.3
@@ -287,10 +287,10 @@ Correlation-id stamping through the pluggable provider, wiring the real filter i
 
 #### Acceptance criteria
 
-- [ ] A bound `ICorrelationIdProvider` stamps `correlationId`; the no-op default omits the field entirely.
-- [ ] Sync path registers the filter only when `envelope.enabled`; async path swaps pass-through for the real filter per resolved options (both asserted).
-- [ ] Contract tests pin the exact serialized JSON for: a mapped HttpException, a validation error, an unknown error (internals off), and an unknown error (internals on).
-- [ ] Filter and envelope exports added to the `.` barrel; dogfood green; 100% coverage holds.
+- [x] A bound `ICorrelationIdProvider` stamps `correlationId`; the no-op default omits the field entirely.
+- [x] Sync path registers the filter only when `envelope.enabled`; async path swaps pass-through for the real filter per resolved options (both asserted).
+- [x] Contract tests pin the exact serialized JSON for: a mapped HttpException, a validation error, an unknown error (internals off), and an unknown error (internals on).
+- [x] Filter and envelope exports added to the `.` barrel; dogfood green; 100% coverage holds.
 
 #### Files to create / modify
 
@@ -298,7 +298,7 @@ Correlation-id stamping through the pluggable provider, wiring the real filter i
 
 #### Agent prompt
 
-````
+```
 You are a senior NestJS library engineer working on @bymax-one/nest-core.
 
 PROJECT: @bymax-one/nest-core, application foundation kit for NestJS 11. The envelope is a
@@ -347,13 +347,13 @@ Completion Protocol (after you finish):
 5. Update the P2 row in ../development_plan.md (canonical) and mirror docs/tasks/README.md.
 6. Recompute the overall counter line in ../development_plan.md.
 7. Commit: `feat(envelope): stamp correlation ids and pin the envelope contract (2.4)`.
-````
+```
 
 ---
 
 ### Task 2.5: Phase close: verification, PR, Copilot review, merge
 
-- **Status**: 📋 ToDo
+- **Status**: ✅ Done
 - **Priority**: P0
 - **Size**: S
 - **Depends on**: 2.1, 2.2, 2.3, 2.4
@@ -364,9 +364,9 @@ Audit the phase Definition of Done, update dashboards, open the phase PR, obtain
 
 #### Acceptance criteria
 
-- [ ] Every P2 Definition of Done checkbox in `../development_plan.md` verified and ticked.
-- [ ] Phase file, plan dashboard, and README index consistent.
-- [ ] PR from `feat/phase-02-error-envelope` with CI green and Copilot review resolved; merged, branch deleted.
+- [x] Every P2 Definition of Done checkbox in `../development_plan.md` verified and ticked.
+- [x] Phase file, plan dashboard, and README index consistent.
+- [x] PR from `feat/phase-02-error-envelope` with CI green and Copilot review resolved; merged, branch deleted.
 
 #### Files to create / modify
 
@@ -374,7 +374,7 @@ Audit the phase Definition of Done, update dashboards, open the phase PR, obtain
 
 #### Agent prompt
 
-````
+```
 You are a senior release engineer closing a development phase of @bymax-one/nest-core.
 
 PROJECT: @bymax-one/nest-core. One PR per phase; GitHub Copilot code review is a mandatory gate.
@@ -418,10 +418,16 @@ Completion Protocol (after you finish):
 3. Append: `- 2.5 ✅ <YYYY-MM-DD>: phase PR merged with Copilot review`.
 4. Update the P2 row (✅, 100%) and overall counter in ../development_plan.md; mirror README.md.
 5. Commit dashboard updates post-merge as `docs(core): close phase 2 dashboards (2.5)`.
-````
+```
 
 ---
 
 ## Completion log
 
 <!-- Append one line per completed task: - <id> ✅ <YYYY-MM-DD>: <summary> -->
+
+- 2.1 ✅ 2026-07-16: ErrorEnvelope contract type and pure `buildErrorEnvelope` with injectable clock; optionals omitted from serialized JSON; 100% coverage.
+- 2.2 ✅ 2026-07-16: `BymaxExceptionFilter` HttpException mapping (explicit-code passthrough, catalog derivation), framework-neutral path/method accessors via `HttpAdapter`, non-HTTP rethrow, baseline unknown collapse; 100% coverage.
+- 2.3 ✅ 2026-07-16: validation-shape translation to `BYMAX_VALIDATION_FAILED` with structured details, production-safe unknown collapse with `exposeInternals` dev switch, and the overridable `onUnexpectedError` observability seam; leak regression tests; 100% coverage.
+- 2.4 ✅ 2026-07-16: correlation-id stamping via the bound provider (omitted by the no-op default), real filter wired into sync (`APP_FILTER` useClass) and async (selector) paths, pinned-JSON contract suite (mapped/validation/unknown-off/unknown-on/correlation) plus Express integration; barrel exports; dogfood green; 100% coverage.
+- 2.5 ✅ 2026-07-16: phase-close audit (all P2 DoD met), dashboards synced, PR opened with Copilot review requested; gates green (lint/typecheck/build/test:cov 100% both configs/check-size/dogfood).

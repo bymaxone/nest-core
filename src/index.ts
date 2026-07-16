@@ -27,6 +27,18 @@ export {
 
 export type { ICorrelationIdProvider } from './envelope/correlation.interfaces'
 
+export { BymaxExceptionFilter } from './envelope/exception.filter'
+
+export type { FilterErrorContext } from './envelope/exception.filter'
+
+export { buildErrorEnvelope } from './envelope/error-envelope'
+
+export type {
+  ErrorEnvelope,
+  ErrorDetails,
+  BuildErrorEnvelopeInput
+} from './envelope/error-envelope'
+
 export type { ITimingSink, RequestTimingSample } from './timing/timing.interfaces'
 
 export {

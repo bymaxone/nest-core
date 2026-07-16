@@ -24,6 +24,17 @@ describe('package root barrel', () => {
   })
 
   /**
+   * Envelope surface presence.
+   *
+   * The exception filter and envelope builder are part of the public contract:
+   * consumers subclass the filter and reuse the builder, so both must export.
+   */
+  it('exports the exception filter and envelope builder', () => {
+    expect(publicApi.BymaxExceptionFilter).toBeDefined()
+    expect(typeof publicApi.buildErrorEnvelope).toBe('function')
+  })
+
+  /**
    * Internal surface stays hidden.
    *
    * The barrel is selective: registration helpers and no-op default classes are

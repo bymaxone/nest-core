@@ -45,6 +45,19 @@ describe('BymaxCoreModule.forRoot', () => {
   })
 
   /**
+   * Enabled envelope registers the exception filter.
+   *
+   * The sync path must append the APP_FILTER provider exactly when the envelope
+   * feature is enabled, wiring the stable error envelope into the pipeline.
+   */
+  it('registers the APP_FILTER provider when the envelope is enabled', () => {
+    const def: DynamicModule = BymaxCoreModule.forRoot({ envelope: { enabled: true } })
+    const tokens = (def.providers ?? []).map(tokenOf)
+
+    expect(tokens).toContain(APP_FILTER)
+  })
+
+  /**
    * The resolved options are exposed and immutable.
    *
    * Consumers inject BYMAX_CORE_OPTIONS expecting the defaults-applied, frozen

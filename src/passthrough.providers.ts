@@ -21,17 +21,17 @@ import { BaseExceptionFilter } from '@nestjs/core'
 import type { Observable } from 'rxjs'
 
 import type { ResolvedCoreOptions } from './core.options'
+import type { ICorrelationIdProvider } from './envelope/correlation.interfaces'
+import { BymaxExceptionFilter } from './envelope/exception.filter'
 
 /**
  * Exception filter that reproduces Nest's default error handling, used on the
- * async path as the transparent stand-in for the envelope feature. The async
- * selector returns it unconditionally today; it becomes the disabled-feature
- * branch once the real envelope filter exists. It delegates to a
- * {@link BaseExceptionFilter} built from the live HTTP adapter, which on the
- * async path is not yet available when the module's providers are constructed,
- * so the delegate is built lazily on the first catch and reused thereafter to
- * avoid per-exception allocation. The formatted response is byte-for-byte
- * identical to having no filter at all.
+ * async path as the transparent stand-in when the envelope feature is disabled.
+ * It delegates to a {@link BaseExceptionFilter} built from the live HTTP adapter,
+ * which on the async path is not yet available when the module's providers are
+ * constructed, so the delegate is built lazily on the first catch and reused
+ * thereafter to avoid per-exception allocation. The formatted response is
+ * byte-for-byte identical to having no filter at all.
  */
 @Catch()
 export class PassThroughExceptionFilter implements ExceptionFilter {
@@ -93,19 +93,25 @@ export function assertAsyncFeatureEnabled(feature: string, enabled: boolean): vo
 }
 
 /**
- * Build the pass-through exception filter for a disabled envelope feature. The
- * resolved options are the gating seam later phases read to return the real
- * envelope filter when enabled.
+ * Select the exception filter for the async path from the resolved options: the
+ * real {@link BymaxExceptionFilter} when the envelope feature is enabled, the
+ * transparent {@link PassThroughExceptionFilter} otherwise. The slot is always
+ * registered on the async path because options resolve after the module is
+ * defined, so the choice is made here at runtime.
  *
- * @param _options - The resolved options snapshot (gating seam input).
- * @param adapterHost - The HTTP adapter host used to format the default response.
- * @returns A transparent exception filter.
+ * @param options - The resolved options snapshot (gates the envelope feature).
+ * @param correlation - Provider resolving the current request's correlation id.
+ * @param adapterHost - The HTTP adapter host used to read and write the response.
+ * @returns The real envelope filter when enabled, else a transparent pass-through.
  */
 export function selectAsyncExceptionFilter(
-  _options: ResolvedCoreOptions,
+  options: ResolvedCoreOptions,
+  correlation: ICorrelationIdProvider,
   adapterHost: HttpAdapterHost
 ): ExceptionFilter {
-  return new PassThroughExceptionFilter(adapterHost)
+  return options.envelope.enabled
+    ? new BymaxExceptionFilter(options, correlation, adapterHost)
+    : new PassThroughExceptionFilter(adapterHost)
 }
 
 /**

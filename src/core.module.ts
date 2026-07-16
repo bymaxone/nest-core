@@ -27,6 +27,8 @@ import {
   BYMAX_TIMING_SINK
 } from './core.tokens'
 import { buildDefaultProviders } from './defaults.providers'
+import type { ICorrelationIdProvider } from './envelope/correlation.interfaces'
+import { BymaxExceptionFilter } from './envelope/exception.filter'
 import { selectAsyncExceptionFilter, selectAsyncTimingInterceptor } from './passthrough.providers'
 
 /** Non-option extras accepted by `forRoot` / `forRootAsync`. */
@@ -59,13 +61,18 @@ export const {
 /**
  * Build the feature providers registered on the synchronous path. Disabled
  * features contribute nothing, so a fully-disabled configuration yields an
- * empty array. Feature phases append their gated providers through this seam.
+ * empty array. The envelope filter registers as the outermost `APP_FILTER`
+ * only when the envelope feature is enabled.
  *
- * @param _resolved - The resolved options snapshot the gate reads.
+ * @param resolved - The resolved options snapshot the gate reads.
  * @returns The conditionally-registered feature providers.
  */
-function buildSyncProviders(_resolved: ResolvedCoreOptions): Provider[] {
-  return []
+function buildSyncProviders(resolved: ResolvedCoreOptions): Provider[] {
+  const providers: Provider[] = []
+  if (resolved.envelope.enabled) {
+    providers.push({ provide: APP_FILTER, useClass: BymaxExceptionFilter })
+  }
+  return providers
 }
 
 /**
@@ -84,7 +91,7 @@ function buildControllers(_resolved: ResolvedCoreOptions): Type[] {
  * Build the always-on pipeline slots for the asynchronous path. Async options
  * are unknown at definition time, so both slots are registered unconditionally
  * and each factory injects the resolved options to pick the real implementation
- * (wired in later phases) or the transparent pass-through otherwise.
+ * when its feature is enabled or the transparent pass-through otherwise.
  *
  * @returns The `APP_FILTER` and `APP_INTERCEPTOR` slot providers.
  */
@@ -92,9 +99,12 @@ function buildAsyncSlots(): Provider[] {
   return [
     {
       provide: APP_FILTER,
-      useFactory: (options: ResolvedCoreOptions, adapterHost: HttpAdapterHost): ExceptionFilter =>
-        selectAsyncExceptionFilter(options, adapterHost),
-      inject: [BYMAX_CORE_OPTIONS, HttpAdapterHost]
+      useFactory: (
+        options: ResolvedCoreOptions,
+        correlation: ICorrelationIdProvider,
+        adapterHost: HttpAdapterHost
+      ): ExceptionFilter => selectAsyncExceptionFilter(options, correlation, adapterHost),
+      inject: [BYMAX_CORE_OPTIONS, BYMAX_CORRELATION_PROVIDER, HttpAdapterHost]
     },
     {
       provide: APP_INTERCEPTOR,
