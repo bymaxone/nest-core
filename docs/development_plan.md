@@ -105,7 +105,7 @@ These apply to every phase. Phase sections list only rules specific to that phas
   - [x] `forRoot` with every feature disabled registers zero feature providers and zero controllers.
   - [x] `forRootAsync` resolves options from an injected factory and the pass-through slots are observably transparent (a request flows unchanged).
   - [x] `isGlobal: false` produces a non-global module; default is global.
-  - [x] All tokens are `Symbol`s and resolvable in a testing module; overriding a default binding works via a consumer provider.
+  - [x] All tokens are `Symbol`s; every token bound in this phase (options, correlation provider, timing sink, health indicators) resolves in a testing module and overriding a default binding works via a consumer provider. The metrics registry token is defined here but bound only when the metrics feature is enabled.
   - [x] 100% coverage holds.
 - **Context / preconditions:** P0 done. The registration pattern follows the convention established across the `@bymax-one` module family.
 - **Rules-of-phase:** No feature behavior in this phase; the pass-through implementations must be indistinguishable from absence in observable behavior and add no measurable per-request work.

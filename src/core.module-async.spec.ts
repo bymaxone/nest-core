@@ -14,6 +14,7 @@ import { Test } from '@nestjs/testing'
 import request from 'supertest'
 
 import { normalizeCoreOptions } from './core.options'
+import type { BymaxCoreModuleOptions } from './core.options'
 import { BymaxCoreModule } from './core.module'
 import { BYMAX_CORE_OPTIONS } from './core.tokens'
 import { assertAsyncFeatureEnabled } from './passthrough.providers'
@@ -33,7 +34,7 @@ class ProbeController {
 }
 
 /** Build and initialize an app whose core module registers via the async path. */
-async function createAsyncApp(factory: () => Record<string, unknown>): Promise<INestApplication> {
+async function createAsyncApp(factory: () => BymaxCoreModuleOptions): Promise<INestApplication> {
   const moduleRef = await Test.createTestingModule({
     imports: [BymaxCoreModule.forRootAsync({ inject: [], useFactory: factory })],
     controllers: [ProbeController]
