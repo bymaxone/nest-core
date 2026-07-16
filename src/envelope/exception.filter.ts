@@ -20,12 +20,13 @@
  *    on (development only).
  * @layer Filter
  */
-import { Catch, HttpException, Inject } from '@nestjs/common'
+import { Catch, HttpException, Inject, Optional } from '@nestjs/common'
 import type { ArgumentsHost, ExceptionFilter } from '@nestjs/common'
 import { HttpAdapterHost } from '@nestjs/core'
 
 import type { ResolvedCoreOptions } from '../core.options'
 import { BYMAX_CORE_OPTIONS, BYMAX_CORRELATION_PROVIDER } from '../core.tokens'
+import { NoopCorrelationIdProvider } from '../defaults.providers'
 import type { ICorrelationIdProvider } from './correlation.interfaces'
 import { BYMAX_INTERNAL_ERROR, BYMAX_VALIDATION_FAILED, codeForStatus } from './error-codes'
 import { buildErrorEnvelope } from './error-envelope'
@@ -145,16 +146,25 @@ export class BymaxExceptionFilter implements ExceptionFilter {
   /** Clock used to stamp the envelope timestamp; overridable in tests via fake timers. */
   private readonly now: () => Date = (): Date => new Date()
 
+  /** The resolved correlation provider, or the no-op fallback when none is bound. */
+  private readonly correlation: ICorrelationIdProvider
+
   /**
    * @param options - Resolved core options; drives the `exposeInternals` switch.
    * @param correlation - Provider resolving the current request's correlation id.
+   *   Injected with `@Optional()`: `BymaxCoreModule` binds no local default for
+   *   this token, so a consumer's own `BYMAX_CORRELATION_PROVIDER` binding
+   *   (from their own, globally-visible module) is not shadowed by one; when
+   *   nothing is bound, this falls back to a no-op that omits `correlationId`.
    * @param adapterHost - Host of the live HTTP adapter, resolved lazily per catch.
    */
   constructor(
     @Inject(BYMAX_CORE_OPTIONS) private readonly options: ResolvedCoreOptions,
-    @Inject(BYMAX_CORRELATION_PROVIDER) private readonly correlation: ICorrelationIdProvider,
+    @Optional() @Inject(BYMAX_CORRELATION_PROVIDER) correlation: ICorrelationIdProvider | undefined,
     @Inject(HttpAdapterHost) private readonly adapterHost: HttpAdapterHost
-  ) {}
+  ) {
+    this.correlation = correlation ?? new NoopCorrelationIdProvider()
+  }
 
   /**
    * Format the exception into the stable envelope and reply with it.

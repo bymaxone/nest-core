@@ -27,21 +27,25 @@ This is a published npm library, not an application. Keep `dependencies` empty,
 everything ships as a `peerDependency` or a `node:` builtin.
 
 1. Create a branch from `main`.
-2. Make your change; add or update co-located `*.spec.ts` tests (TDD, 100%
-   coverage is a hard gate, not a target).
+2. Make your change; add or update co-located `*.spec.ts` unit tests (TDD,
+   100% coverage is a hard gate, not a target). A cross-feature change (one
+   that touches how features interact through `BymaxCoreModule`) also needs
+   an end-to-end suite under `test/e2e/*.e2e-spec.ts`, driven against the
+   fixture in `test/e2e/fixture/app.fixture.ts`.
 3. Run the full verification suite before opening a PR.
 
 ## Verification, run before every PR
 
 ```bash
-pnpm typecheck && pnpm lint && pnpm test:cov:all && pnpm build && pnpm size && pnpm dogfood
+pnpm typecheck && pnpm lint && pnpm test:cov:all && pnpm test:e2e && pnpm build && pnpm size && pnpm dogfood
 ```
 
 All of the following must pass:
 
 - **Typecheck**, `tsc --noEmit` (strict, zero errors)
-- **Lint**, ESLint (zero `any`, import order, security rules)
-- **Coverage**, 100% statements / branches / functions / lines
+- **Lint**, ESLint (zero `any`, import order, security rules), covering `src/`, `scripts/`, and `test/`
+- **Coverage**, 100% statements / branches / functions / lines on the unit suites
+- **End-to-end**, `pnpm test:e2e`: the fixture application against both registration paths, run with the bounded worker pool in `jest.e2e.config.ts`, never in parallel with the unit suite
 - **Build**, tsup produces ESM + CJS + `.d.ts` for every subpath
 - **Size**, every subpath stays within the budget in `scripts/check-size.mjs`
 - **Dogfood**, every subpath resolves in ESM and CJS from the packed tarball

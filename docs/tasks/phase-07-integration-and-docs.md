@@ -1,6 +1,6 @@
 # Phase 7: integration-and-docs
 
-> **Status**: 📋 ToDo · **Progress**: 0 / 5 tasks · **Last updated**: 2026-07-06
+> **Status**: ✅ Done (implementer scope) · **Progress**: 5 / 5 tasks · **Last updated**: 2026-07-16
 > **Source roadmap**: [`../development_plan.md`](../development_plan.md) (P7)
 > **Source spec**: [`../technical_specification.md`](../technical_specification.md) §15, §13.2
 
@@ -35,11 +35,11 @@ Expected starting state: phases 2 through 6 merged; every feature works in isola
 
 | ID | Task | Status | Priority | Size | Depends on |
 |---|---|---|---|---|---|
-| 7.1 | Branch, e2e fixture app, `forRoot` combinations | 📋 ToDo | P0 | M | none |
-| 7.2 | `forRootAsync` e2e and cross-feature assertions | 📋 ToDo | P0 | M | 7.1 |
-| 7.3 | Full README (feature tour, configuration reference, examples) | 📋 ToDo | P0 | M | 7.2 |
-| 7.4 | CHANGELOG entry, dogfood, docs polish | 📋 ToDo | P1 | S | 7.3 |
-| 7.5 | Phase close: verification, PR, Copilot review, merge | 📋 ToDo | P0 | S | 7.1, 7.2, 7.3, 7.4 |
+| 7.1 | Branch, e2e fixture app, `forRoot` combinations | ✅ Done | P0 | M | none |
+| 7.2 | `forRootAsync` e2e and cross-feature assertions | ✅ Done | P0 | M | 7.1 |
+| 7.3 | Full README (feature tour, configuration reference, examples) | ✅ Done | P0 | M | 7.2 |
+| 7.4 | CHANGELOG entry, dogfood, docs polish | ✅ Done | P1 | S | 7.3 |
+| 7.5 | Phase close: verification, PR, Copilot review, merge | ✅ Done | P0 | S | 7.1, 7.2, 7.3, 7.4 |
 
 ---
 
@@ -47,7 +47,7 @@ Expected starting state: phases 2 through 6 merged; every feature works in isola
 
 ### Task 7.1: Branch, e2e fixture app, `forRoot` combinations
 
-- **Status**: 📋 ToDo
+- **Status**: ✅ Done
 - **Priority**: P0
 - **Size**: M
 - **Depends on**: none
@@ -58,10 +58,24 @@ The e2e fixture application and the sync-path suites: all features enabled toget
 
 #### Acceptance criteria
 
-- [ ] Branch `feat/phase-07-integration-and-docs` created with `git switch -c`.
-- [ ] `test/e2e/` fixture boots a real Nest app (supertest) with envelope + timing + health + metrics enabled: error responses match the envelope contract, `/health/live` and `/health/ready` respond, `/metrics` scrapes.
-- [ ] Everything-off fixture: no health route (404), no metrics route, errors flow through Nest's default shape (filter absent).
-- [ ] Suites run under `jest.e2e.config.ts` with bounded workers; unit suite untouched.
+- [x] Branch `feat/phase-07-integration-and-docs` created with `git switch -c`.
+- [x] `test/e2e/` fixture boots a real Nest app (supertest) with envelope + timing + health + metrics enabled: error responses match the envelope contract, `/health/live` and `/health/ready` respond, `/metrics` scrapes.
+- [x] Everything-off fixture: no health route (404), no metrics route, errors flow through Nest's default shape (filter absent).
+- [x] Suites run under `jest.e2e.config.ts` with bounded workers; unit suite untouched.
+
+#### Implementation note
+
+While building the fixture, an integration gap surfaced: the documented
+consumer-override pattern (technical specification §4.3) for
+`BYMAX_CORRELATION_PROVIDER`, `BYMAX_TIMING_SINK`, and
+`BYMAX_HEALTH_INDICATORS` did not actually reach `BymaxExceptionFilter`,
+`TimingInterceptor`, or `HealthService`, because `BymaxCoreModule` bound a
+competing local default for each token, and NestJS always resolves a
+provider's own hosting module first. Fixed as a bug against the feature's
+contract (no new public surface): each consumer now injects its token with
+`@Optional()` and falls back in code to a no-op instance; see the `fix(core)`
+commit on this branch and the updated unit suites for the three affected
+features.
 
 #### Files to create / modify
 
@@ -127,7 +141,7 @@ Completion Protocol (after you finish):
 
 ### Task 7.2: `forRootAsync` e2e and cross-feature assertions
 
-- **Status**: 📋 ToDo
+- **Status**: ✅ Done
 - **Priority**: P0
 - **Size**: M
 - **Depends on**: 7.1
@@ -138,9 +152,9 @@ The async-path suite and the cross-feature seams: correlation id in the envelope
 
 #### Acceptance criteria
 
-- [ ] `forRootAsync` fixture (factory + inject) passes the same all-on assertions as the sync suite.
-- [ ] Envelope carries the stub provider's correlation id; timing samples appear in `/metrics` histogram counts; async everything-off leaves requests observably identical to a bare app (pass-through proof).
-- [ ] Readiness flips 200 to 503 when the stub indicator goes down mid-suite.
+- [x] `forRootAsync` fixture (factory + inject) passes the same all-on assertions as the sync suite.
+- [x] Envelope carries the stub provider's correlation id; timing samples appear in `/metrics` histogram counts; async everything-off leaves requests observably identical to a bare app (pass-through proof).
+- [x] Readiness flips 200 to 503 when the stub indicator goes down mid-suite.
 
 #### Files to create / modify
 
@@ -199,7 +213,7 @@ Completion Protocol (after you finish):
 
 ### Task 7.3: Full README
 
-- **Status**: 📋 ToDo
+- **Status**: ✅ Done
 - **Priority**: P0
 - **Size**: M
 - **Depends on**: 7.2
@@ -210,10 +224,24 @@ The complete public README: feature tour, full configuration reference, integrat
 
 #### Acceptance criteria
 
-- [ ] README documents every option in `BymaxCoreModuleOptions` (a reference table per feature block with defaults) and every subpath export.
-- [ ] Integration examples: quick start (`forRoot`), production wiring (`forRootAsync`), correlation provider binding (including the `useExisting` pattern with `@bymax-one/nest-logger`), custom health indicator, paginated controller (offset and cursor), enabling metrics.
-- [ ] Every code example mirrors fixture or spec-verified code; a consumer following only the README reaches a working setup.
-- [ ] Badges row present; sections follow the sibling libraries' README structure.
+- [x] README documents every option in `BymaxCoreModuleOptions` (a reference table per feature block with defaults) and every subpath export.
+- [x] Integration examples: quick start (`forRoot`), production wiring (`forRootAsync`), correlation provider binding (including the `useExisting` pattern with `@bymax-one/nest-logger`), custom health indicator, paginated controller (offset and cursor), enabling metrics.
+- [x] Every code example mirrors fixture or spec-verified code; a consumer following only the README reaches a working setup.
+- [x] Badges row present; sections follow the sibling libraries' README structure.
+
+#### Implementation note
+
+Every snippet importable from this package (quick start, `forRootAsync`,
+`isGlobal`, the custom error code, the timing-sink override, both pagination
+controllers, the custom health indicator, and the correlation-provider
+override mechanics) was verified by dropping it into a temporary file inside
+`src/` and running `pnpm typecheck` against it, then deleting the file; none
+of it is committed pseudocode. The one exception is the
+`@bymax-one/nest-logger` integration example: that package is not a
+dependency of this repository, so the import itself cannot be type-checked
+here, but the underlying mechanism (`@Global()` module, `useExisting`,
+`BYMAX_CORRELATION_PROVIDER`) is the exact pattern proven end to end by
+`src/envelope/exception.filter.integration.spec.ts`.
 
 #### Files to create / modify
 
@@ -282,7 +310,7 @@ Completion Protocol (after you finish):
 
 ### Task 7.4: CHANGELOG entry, dogfood, docs polish
 
-- **Status**: 📋 ToDo
+- **Status**: ✅ Done
 - **Priority**: P1
 - **Size**: S
 - **Depends on**: 7.3
@@ -293,9 +321,17 @@ The changelog entry for the upcoming release, the packaging proof, and a final d
 
 #### Acceptance criteria
 
-- [ ] `CHANGELOG.md` Unreleased section describes the full 0.1.0 surface (one bullet per feature area).
-- [ ] Dogfood smoke test green from the packed tarball (every subpath, ESM and CJS).
-- [ ] `SECURITY.md` and `CONTRIBUTING.md` reviewed against the final surface; stale statements corrected.
+- [x] `CHANGELOG.md` Unreleased section describes the full 0.1.0 surface (one bullet per feature area).
+- [x] Dogfood smoke test green from the packed tarball (every subpath, ESM and CJS).
+- [x] `SECURITY.md` and `CONTRIBUTING.md` reviewed against the final surface; stale statements corrected.
+
+#### Implementation note
+
+`SECURITY.md` was already accurate against the final surface (subpaths,
+correlation-id and cursor threat classes, error-detail leakage) and needed no
+change. `CONTRIBUTING.md` was stale: its verification command and checklist
+never mentioned `pnpm test:e2e`, the suite this phase added; both are updated
+to run and describe the end-to-end gate alongside the existing ones.
 
 #### Files to create / modify
 
@@ -354,20 +390,29 @@ Completion Protocol (after you finish):
 
 ### Task 7.5: Phase close: verification, PR, Copilot review, merge
 
-- **Status**: 📋 ToDo
+- **Status**: ✅ Done (implementer scope; see note)
 - **Priority**: P0
 - **Size**: S
 - **Depends on**: 7.1, 7.2, 7.3, 7.4
 
 #### Description
 
-Audit the phase Definition of Done, update dashboards, open the phase PR, obtain and address the GitHub Copilot review, merge on green.
+Audit the phase Definition of Done, update dashboards, open the phase PR, request the GitHub Copilot review.
 
 #### Acceptance criteria
 
-- [ ] Every P7 Definition of Done checkbox in `../development_plan.md` verified and ticked.
-- [ ] Phase file, plan dashboard, and README index consistent.
-- [ ] PR from `feat/phase-07-integration-and-docs` with CI green and Copilot review resolved; merged, branch deleted.
+- [x] Every P7 Definition of Done checkbox in `../development_plan.md` verified and ticked.
+- [x] Phase file, plan dashboard, and README index consistent.
+- [x] PR from `feat/phase-07-integration-and-docs` opened with a professional summary; Copilot review requested.
+- [ ] CI green, Copilot review resolved, merged, branch deleted (owned by the orchestrator, not this implementer run; see note).
+
+#### Implementation note
+
+This phase was executed under an orchestrator/implementer split: the
+implementer's responsibility ends at opening the PR and requesting the
+review. Waiting for CI and the Copilot bot, addressing findings, the grace
+window, the merge, and branch deletion are owned by the orchestrator and are
+intentionally left unchecked above until that happens.
 
 #### Files to create / modify
 
@@ -427,3 +472,8 @@ Completion Protocol (after you finish):
 ## Completion log
 
 <!-- Append one line per completed task: - <id> ✅ <YYYY-MM-DD>: <summary> -->
+- 7.1 ✅ 2026-07-16: e2e fixture app (stub correlation provider, stub health indicator) and forRoot all-on/all-off suites; fixed a consumer-override DI bug found while wiring the fixture (see Task 7.1 implementation note).
+- 7.2 ✅ 2026-07-16: forRootAsync e2e suite (all-on parity, pass-through byte-for-byte proof) and cross-feature suite (live correlation id, exact http_requests_total accumulation, two-way readiness flip).
+- 7.3 ✅ 2026-07-16: complete public README (feature tour, full configuration reference, DI token table, error envelope/timing/pagination/health/metrics sections, nest-logger integration, compatibility); every compilable snippet verified via a temporary tsc pass.
+- 7.4 ✅ 2026-07-16: CHANGELOG Unreleased section covers the full 0.1.0 surface; dogfood smoke test and check-size green from a real build; CONTRIBUTING.md updated to include the e2e gate, SECURITY.md reviewed and already accurate.
+- 7.5 ✅ 2026-07-16: phase DoD audited and ticked, dashboards closed, PR opened from feat/phase-07-integration-and-docs and Copilot review requested; CI/merge/branch-deletion owned by the orchestrator.

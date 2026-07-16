@@ -10,13 +10,14 @@
  * request or alter the response an error path propagates.
  * @layer Interceptor
  */
-import { HttpException, Inject, Injectable } from '@nestjs/common'
+import { HttpException, Inject, Injectable, Optional } from '@nestjs/common'
 import type { CallHandler, ExecutionContext, NestInterceptor } from '@nestjs/common'
 import type { Observable } from 'rxjs'
 import { catchError, tap, throwError } from 'rxjs'
 
 import type { ResolvedCoreOptions } from '../core.options'
 import { BYMAX_CORE_OPTIONS, BYMAX_TIMING_SINK } from '../core.tokens'
+import { NoopTimingSink } from '../defaults.providers'
 import { extractRequestInfo } from './request-info.accessor'
 import { BYMAX_TIMING_CLOCK, DEFAULT_MONOTONIC_CLOCK } from './timing.clock'
 import type { MonotonicClock } from './timing.clock'
@@ -41,18 +42,27 @@ interface ResponseStatusShape {
  */
 @Injectable()
 export class TimingInterceptor implements NestInterceptor {
+  /** The bound timing sink, or the no-op fallback when none resolves. */
+  private readonly sink: ITimingSink
+
   /**
    * @param options - Resolved core options; supplies `slowRequestThresholdMs`.
    * @param sink - The bound timing sink; its `record` failures are swallowed.
+   *   Injected with `@Optional()`: `BymaxCoreModule` binds no local default for
+   *   this token on the sync path when the metrics bridge is not registered, so
+   *   a consumer's own `BYMAX_TIMING_SINK` binding is not shadowed by one; when
+   *   nothing resolves, this falls back to a no-op sink.
    * @param clock - Monotonic clock seam; defaults to `performance.now()`, and
    *   is bound explicitly through {@link BYMAX_TIMING_CLOCK} so tests inject a
    *   stub advancing by controlled amounts.
    */
   constructor(
     @Inject(BYMAX_CORE_OPTIONS) private readonly options: ResolvedCoreOptions,
-    @Inject(BYMAX_TIMING_SINK) private readonly sink: ITimingSink,
+    @Optional() @Inject(BYMAX_TIMING_SINK) sink: ITimingSink | undefined,
     @Inject(BYMAX_TIMING_CLOCK) private readonly clock: MonotonicClock = DEFAULT_MONOTONIC_CLOCK
-  ) {}
+  ) {
+    this.sink = sink ?? new NoopTimingSink()
+  }
 
   /**
    * Measure the handler chain and record exactly one sample per completed

@@ -19,5 +19,13 @@ heading here.
 - Jest unit and aggregated coverage configurations enforcing a 100% threshold on every axis, plus the Stryker mutation-testing configuration for the pre-release gate
 - CI, CodeQL, OpenSSF Scorecard, and tag-driven release workflows, Dependabot, and issue templates
 - Zero-dependency bundle-size and dogfood smoke-test guard scripts
+- `BymaxCoreModule` with `forRoot` and `forRootAsync`, conditional registration per feature, and an `isGlobal` extra
+- Error envelope: a stable, versioned JSON contract with a `BYMAX_` error-code catalog and custom-code pass-through
+- Request timing interceptor: one sample per request to a pluggable `ITimingSink`, with a configurable slow-request flag
+- Pagination subpath (`./pagination`): offset and cursor helpers, with an opaque, validated cursor codec
+- Health subpath (`./health`): a pluggable indicator contract behind liveness and readiness endpoints
+- Optional Prometheus metrics endpoint: a lazily-loaded optional peer, with default HTTP request-count and duration metrics
+- An end-to-end test suite proving both registration paths, all features together, and every feature disabled
+- The complete public README: feature tour, configuration reference, and integration examples
 
 [Unreleased]: https://github.com/bymaxone/nest-core/compare/main...HEAD

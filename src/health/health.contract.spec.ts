@@ -6,10 +6,16 @@
  * one-down readiness (with its 503 status), against a real, booted Nest
  * application; prove that disabled health registers no controller and
  * exposes no route at all.
- * Mocks: hand-built `IHealthIndicator` stubs overriding
- * `BYMAX_HEALTH_INDICATORS`; a real Express Nest app is driven with supertest.
+ * Mocks: hand-built `IHealthIndicator` stubs, registered through a small
+ * `@Global()` sibling module providing `BYMAX_HEALTH_INDICATORS`: the real
+ * consumer-override mechanism documented in the technical specification
+ * (§4.3). `BymaxCoreModule` binds no local default for this token, so the
+ * sibling module's binding reaches `HealthService` directly, with no
+ * test-only override utility involved. A real Express Nest app is driven
+ * with supertest.
  */
-import type { INestApplication } from '@nestjs/common'
+import { Global, Module } from '@nestjs/common'
+import type { DynamicModule, INestApplication } from '@nestjs/common'
 import { Test } from '@nestjs/testing'
 import request from 'supertest'
 
@@ -22,14 +28,27 @@ function stubIndicator(name: string, result: HealthIndicatorResult): IHealthIndi
   return { name, check: (): Promise<HealthIndicatorResult> => Promise.resolve(result) }
 }
 
+/**
+ * Build a `@Global()` module binding `BYMAX_HEALTH_INDICATORS` to the given
+ * array, mirroring the consumer-override pattern from the technical
+ * specification (§4.3): a global module providing the shared token, imported
+ * alongside `BymaxCoreModule`.
+ */
+function indicatorsModule(indicators: IHealthIndicator[]): DynamicModule {
+  @Global()
+  @Module({
+    providers: [{ provide: BYMAX_HEALTH_INDICATORS, useValue: indicators }],
+    exports: [BYMAX_HEALTH_INDICATORS]
+  })
+  class IndicatorsModule {}
+  return { module: IndicatorsModule }
+}
+
 /** Boot a real Nest app registering the health feature, with the given indicators. */
 async function bootAppWithIndicators(indicators: IHealthIndicator[]): Promise<INestApplication> {
   const moduleRef = await Test.createTestingModule({
-    imports: [BymaxCoreModule.forRoot({})]
-  })
-    .overrideProvider(BYMAX_HEALTH_INDICATORS)
-    .useValue(indicators)
-    .compile()
+    imports: [BymaxCoreModule.forRoot({}), indicatorsModule(indicators)]
+  }).compile()
   const app = moduleRef.createNestApplication()
   await app.init()
   return app
@@ -119,5 +138,26 @@ describe('health contract', () => {
 
     await request(app.getHttpServer()).get('/health/live').expect(404)
     await request(app.getHttpServer()).get('/health/ready').expect(404)
+  })
+
+  /**
+   * No indicators bound at all.
+   *
+   * `BymaxCoreModule` binds no local default for `BYMAX_HEALTH_INDICATORS`;
+   * with no consumer override present either, `HealthService`'s `@Optional()`
+   * injection must resolve `undefined` and its constructor default parameter
+   * must supply an empty array, so readiness stays vacuously ok rather than
+   * failing to resolve the aggregator at all.
+   */
+  it('aggregates readiness as ok when no indicators are bound anywhere', async () => {
+    const moduleRef = await Test.createTestingModule({
+      imports: [BymaxCoreModule.forRoot({})]
+    }).compile()
+    app = moduleRef.createNestApplication()
+    await app.init()
+
+    const response = await request(app.getHttpServer()).get('/health/ready').expect(200)
+
+    expect(response.body).toEqual({ status: 'ok', checks: [] })
   })
 })

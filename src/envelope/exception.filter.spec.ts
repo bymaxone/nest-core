@@ -42,12 +42,14 @@ function stubCorrelation(id?: string): ICorrelationIdProvider {
 function buildHarness(params?: {
   options?: ResolvedCoreOptions
   correlation?: ICorrelationIdProvider
+  /** Pass `undefined` for the correlation provider instead of the default stub. */
+  noCorrelation?: boolean
   contextType?: string
   url?: string
   method?: string
   filterCtor?: new (
     options: ResolvedCoreOptions,
-    correlation: ICorrelationIdProvider,
+    correlation: ICorrelationIdProvider | undefined,
     adapterHost: HttpAdapterHost
   ) => BymaxExceptionFilter
 }): {
@@ -75,11 +77,8 @@ function buildHarness(params?: {
     })
   } as unknown as ArgumentsHost
   const FilterCtor = params?.filterCtor ?? BymaxExceptionFilter
-  const filter = new FilterCtor(
-    params?.options ?? normalizeCoreOptions(),
-    params?.correlation ?? stubCorrelation(),
-    adapterHost
-  )
+  const correlation = params?.noCorrelation ? undefined : (params?.correlation ?? stubCorrelation())
+  const filter = new FilterCtor(params?.options ?? normalizeCoreOptions(), correlation, adapterHost)
   return { filter, host, captured, adapterHost }
 }
 
@@ -447,5 +446,23 @@ describe('BymaxExceptionFilter, observability seam', () => {
     filter.catch(new NotFoundException('missing'), host)
 
     expect(filter.recorded).toEqual([original])
+  })
+})
+
+describe('BymaxExceptionFilter, correlation-provider fallback', () => {
+  /**
+   * No correlation provider resolves.
+   *
+   * `BymaxCoreModule` binds no local default for `BYMAX_CORRELATION_PROVIDER`
+   * (see `defaults.providers.ts`): when nothing is injected, the constructor
+   * must fall back to a no-op provider so the envelope simply omits
+   * `correlationId`, matching the previously-documented default behavior.
+   */
+  it('omits correlationId when constructed with no correlation provider', () => {
+    const { filter, host, captured } = buildHarness({ noCorrelation: true })
+
+    filter.catch(new NotFoundException('missing'), host)
+
+    expect(captured.body).not.toHaveProperty('correlationId')
   })
 })

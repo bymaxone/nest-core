@@ -23,7 +23,6 @@ import type { BymaxCoreModuleOptions, ResolvedCoreOptions } from './core.options
 import {
   BYMAX_CORE_OPTIONS,
   BYMAX_CORRELATION_PROVIDER,
-  BYMAX_HEALTH_INDICATORS,
   BYMAX_METRICS_REGISTRY,
   BYMAX_TIMING_SINK
 } from './core.tokens'
@@ -80,8 +79,9 @@ export const {
  * controller counterpart in {@link buildControllers}. The metrics registry
  * provider is added only when metrics are enabled, so a disabled configuration
  * never loads `prom-client`; the metrics timing-sink bridge is added only when
- * timing and metrics are both enabled, overriding the no-op default sink so
- * HTTP samples feed the default HTTP metrics.
+ * timing and metrics are both enabled, so HTTP samples feed the default HTTP
+ * metrics (otherwise `TimingInterceptor` falls back to its own in-code no-op,
+ * or to a consumer's own `BYMAX_TIMING_SINK` binding, when one is enabled).
  *
  * @param resolved - The resolved options snapshot the gate reads.
  * @returns The conditionally-registered feature providers.
@@ -131,7 +131,12 @@ function buildControllers(resolved: ResolvedCoreOptions): Type[] {
  * Build the always-on pipeline slots for the asynchronous path. Async options
  * are unknown at definition time, so both slots are registered unconditionally
  * and each factory injects the resolved options to pick the real implementation
- * when its feature is enabled or the transparent pass-through otherwise.
+ * when its feature is enabled or the transparent pass-through otherwise. The
+ * correlation provider is injected as an optional dependency: `BymaxCoreModule`
+ * binds no local default for that token, so a sibling consumer module's own
+ * binding is not shadowed by one (see `defaults.providers.ts`); the factory
+ * hands the possibly-`undefined` result to {@link selectAsyncExceptionFilter},
+ * which forwards it to `BymaxExceptionFilter`'s own no-op fallback.
  *
  * @returns The `APP_FILTER` and `APP_INTERCEPTOR` slot providers.
  */
@@ -141,10 +146,14 @@ function buildAsyncSlots(): Provider[] {
       provide: APP_FILTER,
       useFactory: (
         options: ResolvedCoreOptions,
-        correlation: ICorrelationIdProvider,
+        correlation: ICorrelationIdProvider | undefined,
         adapterHost: HttpAdapterHost
       ): ExceptionFilter => selectAsyncExceptionFilter(options, correlation, adapterHost),
-      inject: [BYMAX_CORE_OPTIONS, BYMAX_CORRELATION_PROVIDER, HttpAdapterHost]
+      inject: [
+        BYMAX_CORE_OPTIONS,
+        { token: BYMAX_CORRELATION_PROVIDER, optional: true },
+        HttpAdapterHost
+      ]
     },
     {
       provide: APP_INTERCEPTOR,
@@ -168,30 +177,25 @@ function buildAsyncSlots(): Provider[] {
  * @param base - The `DynamicModule` returned by the builder.
  * @param providers - Library providers to append.
  * @param controllers - Controllers to append.
- * @param extraExports - Feature tokens to export in addition to the always-on
- *   contracts, such as `BYMAX_METRICS_REGISTRY` when the metrics feature is
- *   registered so consumers can inject the registry to add custom metrics.
+ * @param exportTokens - The full set of tokens to export. Callers list only
+ *   the tokens actually provided on their path: `BYMAX_CORRELATION_PROVIDER`
+ *   and `BYMAX_HEALTH_INDICATORS` are never listed, since `BymaxCoreModule`
+ *   binds no local provider for them (see `defaults.providers.ts`), and
+ *   exporting an unprovided token is rejected by Nest at bootstrap.
  * @returns The augmented `DynamicModule`.
  */
 export function augmentModule(
   base: DynamicModule,
   providers: Provider[],
   controllers: Type[],
-  extraExports: (string | symbol)[] = []
+  exportTokens: (string | symbol)[] = [BYMAX_CORE_OPTIONS]
 ): DynamicModule {
   return {
     ...base,
     module: BymaxCoreModule,
     providers: [...(base.providers ?? []), ...providers],
     controllers: [...(base.controllers ?? []), ...controllers],
-    exports: [
-      ...(base.exports ?? []),
-      BYMAX_CORE_OPTIONS,
-      BYMAX_CORRELATION_PROVIDER,
-      BYMAX_TIMING_SINK,
-      BYMAX_HEALTH_INDICATORS,
-      ...extraExports
-    ]
+    exports: [...(base.exports ?? []), ...exportTokens]
   }
 }
 
@@ -218,12 +222,23 @@ export class BymaxCoreModule extends BymaxCoreModuleBase {
       ...buildDefaultProviders(),
       ...buildSyncProviders(resolved)
     ]
-    const extraExports = resolved.metrics.enabled ? [BYMAX_METRICS_REGISTRY] : []
+    // Export only the tokens `buildSyncProviders` actually bound above: the
+    // metrics registry when metrics are enabled, and the timing sink when the
+    // metrics bridge replaced the interceptor's own no-op fallback (metrics
+    // and timing both enabled). `BYMAX_CORRELATION_PROVIDER` and
+    // `BYMAX_HEALTH_INDICATORS` are never exported here; see `augmentModule`.
+    const exportTokens: (string | symbol)[] = [BYMAX_CORE_OPTIONS]
+    if (resolved.metrics.enabled) {
+      exportTokens.push(BYMAX_METRICS_REGISTRY)
+      if (resolved.timing.enabled) {
+        exportTokens.push(BYMAX_TIMING_SINK)
+      }
+    }
     return augmentModule(
       super.forRoot(options),
       providers,
       buildControllers(resolved),
-      extraExports
+      exportTokens
     )
   }
 
@@ -261,11 +276,15 @@ export class BymaxCoreModule extends BymaxCoreModuleBase {
       buildMetricsRegistryProvider(),
       buildMetricsTimingSinkProvider()
     ]
+    // The metrics registry and the timing-sink bridge are always registered on
+    // this path (see the `providers` array above), so both are always
+    // exported. `BYMAX_CORRELATION_PROVIDER` and `BYMAX_HEALTH_INDICATORS` are
+    // never exported here; see `augmentModule`.
     return augmentModule(
       super.forRootAsync(options),
       providers,
       [createHealthController(DEFAULT_HEALTH_PATH), createMetricsController(DEFAULT_METRICS_PATH)],
-      [BYMAX_METRICS_REGISTRY]
+      [BYMAX_CORE_OPTIONS, BYMAX_TIMING_SINK, BYMAX_METRICS_REGISTRY]
     )
   }
 }

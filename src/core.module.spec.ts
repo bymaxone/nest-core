@@ -108,7 +108,7 @@ describe('augmentModule', () => {
     expect(merged.providers).toHaveLength(1)
     expect(merged.controllers).toHaveLength(0)
     expect(merged.exports).toContain(BYMAX_CORE_OPTIONS)
-    expect(merged.exports).toHaveLength(4)
+    expect(merged.exports).toHaveLength(1)
   })
 
   /**
@@ -135,6 +135,24 @@ describe('augmentModule', () => {
     expect(merged.controllers).toHaveLength(2)
     expect(merged.exports?.[0]).toBe('BASE')
     expect(merged.exports).toContain(BYMAX_CORE_OPTIONS)
-    expect(merged.exports).toHaveLength(5)
+    expect(merged.exports).toHaveLength(2)
+  })
+
+  /**
+   * Explicit export list.
+   *
+   * A caller passing its own export-token array (as `forRoot` and
+   * `forRootAsync` do) must see exactly those tokens appended, not the
+   * single-token default.
+   */
+  it('appends an explicit export-token list instead of the default', () => {
+    const merged = augmentModule(
+      { module: BymaxCoreModule },
+      [],
+      [],
+      [BYMAX_CORE_OPTIONS, 'CUSTOM_TOKEN']
+    )
+
+    expect(merged.exports).toEqual([BYMAX_CORE_OPTIONS, 'CUSTOM_TOKEN'])
   })
 })

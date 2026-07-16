@@ -42,8 +42,8 @@
   "scripts": {
     "build": "pnpm clean && tsup",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint --no-error-on-unmatched-pattern src scripts",
-    "lint:fix": "eslint --no-error-on-unmatched-pattern src scripts --fix",
+    "lint": "eslint --no-error-on-unmatched-pattern src scripts test",
+    "lint:fix": "eslint --no-error-on-unmatched-pattern src scripts test --fix",
     "test": "jest",
     "test:cov": "jest --coverage",
     "test:watch": "jest --watch",

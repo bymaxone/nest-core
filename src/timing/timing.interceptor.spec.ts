@@ -351,3 +351,25 @@ describe('TimingInterceptor, non-HTTP context', () => {
     })
   })
 })
+
+describe('TimingInterceptor, sink fallback', () => {
+  /**
+   * No sink resolves.
+   *
+   * `BymaxCoreModule` binds no local default for `BYMAX_TIMING_SINK` when the
+   * metrics bridge is not registered (see `defaults.providers.ts`): when
+   * nothing is injected, the constructor must fall back to a no-op sink so a
+   * request still completes normally instead of failing to resolve the
+   * interceptor.
+   */
+  it('completes a request without throwing when constructed with no sink', (done) => {
+    const clock = stubClock([0, 5])
+    const interceptor = new TimingInterceptor(normalizeCoreOptions(), undefined, clock)
+    const handler = handlerReturning(() => of('ok'))
+
+    interceptor.intercept(contextFor({}), handler).subscribe({
+      next: (value) => expect(value).toBe('ok'),
+      complete: () => done()
+    })
+  })
+})

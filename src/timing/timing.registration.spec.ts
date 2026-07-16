@@ -9,10 +9,15 @@
  * prove the always-on async slot's factory selects the transparent
  * pass-through when timing is disabled and the real `TimingInterceptor` when
  * enabled.
- * Mocks: a spy `ITimingSink` overriding the default binding; a minimal probe
- * controller and a real Express Nest app for the end-to-end assertions.
+ * Mocks: a spy `ITimingSink`, registered through a small `@Global()` sibling
+ * module providing `BYMAX_TIMING_SINK`, the real consumer-override mechanism
+ * documented in the technical specification (§4.3): `BymaxCoreModule` binds
+ * no local default for this token when the metrics bridge is not registered,
+ * so the sibling module's binding reaches `TimingInterceptor` directly, with
+ * no test-only override utility involved. A minimal probe controller and a
+ * real Express Nest app drive the end-to-end assertions.
  */
-import { Controller, Get } from '@nestjs/common'
+import { Controller, Get, Global, Module } from '@nestjs/common'
 import type { DynamicModule, INestApplication, Provider } from '@nestjs/common'
 import { APP_INTERCEPTOR } from '@nestjs/core'
 import { Test } from '@nestjs/testing'
@@ -45,6 +50,22 @@ function recordingSink(): ITimingSink & { samples: RequestTimingSample[] } {
       samples.push(sample)
     }
   }
+}
+
+/**
+ * Build a `@Global()` module binding `BYMAX_TIMING_SINK` to the given sink,
+ * mirroring the consumer-override pattern from the technical specification
+ * (§4.3): a global module providing the shared token, imported alongside
+ * `BymaxCoreModule`.
+ */
+function sinkModule(sink: ITimingSink): DynamicModule {
+  @Global()
+  @Module({
+    providers: [{ provide: BYMAX_TIMING_SINK, useValue: sink }],
+    exports: [BYMAX_TIMING_SINK]
+  })
+  class SinkModule {}
+  return { module: SinkModule }
 }
 
 /** Minimal controller whose route proves whether a sample was recorded. */
@@ -101,12 +122,9 @@ describe('BymaxCoreModule.forRoot, timing registration', () => {
     it('delivers exactly one sample to the sink for a real request', async () => {
       const sink = recordingSink()
       const moduleRef = await Test.createTestingModule({
-        imports: [BymaxCoreModule.forRoot({ timing: { enabled: true } })],
+        imports: [BymaxCoreModule.forRoot({ timing: { enabled: true } }), sinkModule(sink)],
         controllers: [ProbeController]
-      })
-        .overrideProvider(BYMAX_TIMING_SINK)
-        .useValue(sink)
-        .compile()
+      }).compile()
       app = moduleRef.createNestApplication()
       await app.init()
 
@@ -125,18 +143,35 @@ describe('BymaxCoreModule.forRoot, timing registration', () => {
     it('never calls the sink for a real request when timing is disabled', async () => {
       const sink = recordingSink()
       const moduleRef = await Test.createTestingModule({
-        imports: [BymaxCoreModule.forRoot({ timing: { enabled: false } })],
+        imports: [BymaxCoreModule.forRoot({ timing: { enabled: false } }), sinkModule(sink)],
         controllers: [ProbeController]
-      })
-        .overrideProvider(BYMAX_TIMING_SINK)
-        .useValue(sink)
-        .compile()
+      }).compile()
       app = moduleRef.createNestApplication()
       await app.init()
 
       await request(app.getHttpServer()).get('/probe/ok').expect(200, { ok: true })
 
       expect(sink.samples).toHaveLength(0)
+    })
+
+    /**
+     * No sink bound anywhere.
+     *
+     * `BymaxCoreModule` binds no local default for `BYMAX_TIMING_SINK` when
+     * the metrics bridge is not registered; with no consumer override present
+     * either, `TimingInterceptor`'s `@Optional()` injection must resolve
+     * `undefined` and fall back to a no-op sink, so a real request still
+     * completes normally instead of failing to resolve the interceptor.
+     */
+    it('completes a real request when no sink is bound anywhere', async () => {
+      const moduleRef = await Test.createTestingModule({
+        imports: [BymaxCoreModule.forRoot({ timing: { enabled: true } })],
+        controllers: [ProbeController]
+      }).compile()
+      app = moduleRef.createNestApplication()
+      await app.init()
+
+      await request(app.getHttpServer()).get('/probe/ok').expect(200, { ok: true })
     })
   })
 })

@@ -101,13 +101,15 @@ export function assertAsyncFeatureEnabled(feature: string, enabled: boolean): vo
  * defined, so the choice is made here at runtime.
  *
  * @param options - The resolved options snapshot (gates the envelope feature).
- * @param correlation - Provider resolving the current request's correlation id.
+ * @param correlation - Provider resolving the current request's correlation id,
+ *   or `undefined` when no provider is bound anywhere in the application; the
+ *   real filter falls back to its own no-op default in that case.
  * @param adapterHost - The HTTP adapter host used to read and write the response.
  * @returns The real envelope filter when enabled, else a transparent pass-through.
  */
 export function selectAsyncExceptionFilter(
   options: ResolvedCoreOptions,
-  correlation: ICorrelationIdProvider,
+  correlation: ICorrelationIdProvider | undefined,
   adapterHost: HttpAdapterHost
 ): ExceptionFilter {
   return options.envelope.enabled
