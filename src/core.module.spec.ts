@@ -94,7 +94,8 @@ describe('augmentModule', () => {
 
     expect(merged.providers).toHaveLength(1)
     expect(merged.controllers).toHaveLength(0)
-    expect(merged.exports).toEqual([BYMAX_CORE_OPTIONS])
+    expect(merged.exports).toContain(BYMAX_CORE_OPTIONS)
+    expect(merged.exports).toHaveLength(4)
   })
 
   /**
@@ -119,6 +120,8 @@ describe('augmentModule', () => {
 
     expect(merged.providers).toHaveLength(2)
     expect(merged.controllers).toHaveLength(2)
-    expect(merged.exports).toEqual(['BASE', BYMAX_CORE_OPTIONS])
+    expect(merged.exports?.[0]).toBe('BASE')
+    expect(merged.exports).toContain(BYMAX_CORE_OPTIONS)
+    expect(merged.exports).toHaveLength(5)
   })
 })

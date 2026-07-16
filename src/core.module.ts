@@ -20,7 +20,13 @@ import { APP_FILTER, APP_INTERCEPTOR, HttpAdapterHost } from '@nestjs/core'
 
 import { normalizeCoreOptions } from './core.options'
 import type { BymaxCoreModuleOptions, ResolvedCoreOptions } from './core.options'
-import { BYMAX_CORE_OPTIONS } from './core.tokens'
+import {
+  BYMAX_CORE_OPTIONS,
+  BYMAX_CORRELATION_PROVIDER,
+  BYMAX_HEALTH_INDICATORS,
+  BYMAX_TIMING_SINK
+} from './core.tokens'
+import { buildDefaultProviders } from './defaults.providers'
 import { selectAsyncExceptionFilter, selectAsyncTimingInterceptor } from './passthrough.providers'
 
 /** Non-option extras accepted by `forRoot` / `forRootAsync`. */
@@ -121,7 +127,13 @@ export function augmentModule(
     module: BymaxCoreModule,
     providers: [...(base.providers ?? []), ...providers],
     controllers: [...(base.controllers ?? []), ...controllers],
-    exports: [...(base.exports ?? []), BYMAX_CORE_OPTIONS]
+    exports: [
+      ...(base.exports ?? []),
+      BYMAX_CORE_OPTIONS,
+      BYMAX_CORRELATION_PROVIDER,
+      BYMAX_TIMING_SINK,
+      BYMAX_HEALTH_INDICATORS
+    ]
   }
 }
 
@@ -135,15 +147,17 @@ export class BymaxCoreModule extends BymaxCoreModuleBase {
    * features are omitted from the providers and controllers arrays and the
    * resolved snapshot is provided under {@link BYMAX_CORE_OPTIONS}.
    *
-   * @param options - Core options plus the optional `isGlobal` extra.
+   * @param options - Core options plus the optional `isGlobal` extra. Omit for
+   *   all documented defaults.
    * @returns The configured `DynamicModule`.
    * @example
    *   BymaxCoreModule.forRoot({ metrics: { enabled: true } })
    */
-  static override forRoot(options: typeof OPTIONS_TYPE): DynamicModule {
+  static override forRoot(options: typeof OPTIONS_TYPE = {}): DynamicModule {
     const resolved = normalizeCoreOptions(options)
     const providers: Provider[] = [
       { provide: BYMAX_CORE_OPTIONS, useValue: resolved },
+      ...buildDefaultProviders(),
       ...buildSyncProviders(resolved)
     ]
     return augmentModule(super.forRoot(options), providers, buildControllers(resolved))
@@ -170,6 +184,7 @@ export class BymaxCoreModule extends BymaxCoreModuleBase {
           normalizeCoreOptions(raw),
         inject: [BUILDER_OPTIONS_TOKEN]
       },
+      ...buildDefaultProviders(),
       ...buildAsyncSlots()
     ]
     return augmentModule(super.forRootAsync(options), providers, [])

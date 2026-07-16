@@ -1,6 +1,6 @@
 # Phase 1: module-core
 
-> **Status**: 🔄 In Progress · **Progress**: 4 / 6 tasks · **Last updated**: 2026-07-16
+> **Status**: 🔄 In Progress · **Progress**: 5 / 6 tasks · **Last updated**: 2026-07-16
 > **Source roadmap**: [`../development_plan.md`](../development_plan.md) (P1)
 > **Source spec**: [`../technical_specification.md`](../technical_specification.md) §2, §4, §10
 
@@ -43,7 +43,7 @@ Expected starting state: phase 0 merged; the repository builds, lints, and tests
 | 1.2 | Options types, defaults, normalization (deep freeze)      | ✅ Done | P0       | M    | 1.1                     |
 | 1.3 | `BymaxCoreModule.forRoot` (sync conditional registration) | ✅ Done | P0       | M    | 1.2                     |
 | 1.4 | `forRootAsync` with gated pass-through slots              | ✅ Done | P0       | M    | 1.3                     |
-| 1.5 | Default bindings, barrel exports, override tests          | 📋 ToDo | P0       | M    | 1.4                     |
+| 1.5 | Default bindings, barrel exports, override tests          | ✅ Done | P0       | M    | 1.4                     |
 | 1.6 | Phase close: verification, PR, Copilot review, merge      | 📋 ToDo | P0       | S    | 1.1, 1.2, 1.3, 1.4, 1.5 |
 
 ---
@@ -365,7 +365,7 @@ Completion Protocol (after you finish):
 
 ### Task 1.5: Default bindings, barrel exports, override tests
 
-- **Status**: 📋 ToDo
+- **Status**: ✅ Done
 - **Priority**: P0
 - **Size**: M
 - **Depends on**: 1.4
@@ -376,10 +376,10 @@ No-op default bindings for the pluggable contracts, the public barrel for the `.
 
 #### Acceptance criteria
 
-- [ ] `ICorrelationIdProvider` and `ITimingSink` contracts defined (spec §5.3, §6.1) with no-op defaults bound to their tokens; `BYMAX_HEALTH_INDICATORS` defaults to an empty array.
-- [ ] Consumer override via a standard provider (`useValue`/`useExisting`/`useClass`) replaces each default, asserted in tests.
-- [ ] `src/index.ts` exports the module, options types, tokens, contracts, and error codes; no internal file leaks.
-- [ ] Dogfood smoke test passes; 100% coverage holds.
+- [x] `ICorrelationIdProvider` and `ITimingSink` contracts defined (spec §5.3, §6.1) with no-op defaults bound to their tokens; `BYMAX_HEALTH_INDICATORS` defaults to an empty array.
+- [x] Consumer override via a standard provider (`useValue`/`useExisting`/`useClass`) replaces each default, asserted in tests.
+- [x] `src/index.ts` exports the module, options types, tokens, contracts, and error codes; no internal file leaks.
+- [x] Dogfood smoke test passes; 100% coverage holds.
 
 #### Files to create / modify
 
@@ -522,3 +522,4 @@ Completion Protocol (after you finish):
 - 1.2 ✅ 2026-07-16: options surface, per-feature defaults, and `normalizeCoreOptions` with recursive deep-freeze; 100% covered.
 - 1.3 ✅ 2026-07-16: `BymaxCoreModule.forRoot` on `ConfigurableModuleBuilder` with `isGlobal` via `setExtras` and empty conditional-registration seams; 100% covered.
 - 1.4 ✅ 2026-07-16: `forRootAsync` with always-on `APP_FILTER`/`APP_INTERCEPTOR` transparent pass-through slots and the disabled-feature guard; supertest proves transparency; 100% covered.
+- 1.5 ✅ 2026-07-16: pluggable correlation and timing contracts, no-op default bindings on both paths, selective public barrel, and consumer-override proofs; dogfood + size green; 100% covered.
