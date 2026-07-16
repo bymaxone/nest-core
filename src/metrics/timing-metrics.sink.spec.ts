@@ -36,8 +36,8 @@ describe('TimingMetricsSink', () => {
    * bounded label set with a stringified status code.
    */
   it('feeds both HTTP metrics with bounded labels and the duration in seconds', async () => {
-    const promClient = (await import('prom-client')) as unknown as PromClientModule
-    const registry = new promClient.Registry() as unknown as MetricsRegistry
+    const promClient = await import('prom-client')
+    const registry = new promClient.Registry()
     const sink = new TimingMetricsSink(registry, promClient)
 
     sink.record(sample({ durationMs: 250, statusCode: 200 }))
@@ -61,8 +61,8 @@ describe('TimingMetricsSink', () => {
    * confirming the counter is incremented once per recorded sample.
    */
   it('increments the counter once per recorded sample', async () => {
-    const promClient = (await import('prom-client')) as unknown as PromClientModule
-    const registry = new promClient.Registry() as unknown as MetricsRegistry
+    const promClient = await import('prom-client')
+    const registry = new promClient.Registry()
     const sink = new TimingMetricsSink(registry, promClient)
 
     sink.record(sample())
@@ -82,8 +82,8 @@ describe('TimingMetricsSink', () => {
    * error, so both bridges write to the same series.
    */
   it('reuses existing metrics when a second bridge is built over the same registry', async () => {
-    const promClient = (await import('prom-client')) as unknown as PromClientModule
-    const registry = new promClient.Registry() as unknown as MetricsRegistry
+    const promClient = await import('prom-client')
+    const registry = new promClient.Registry()
     const first = new TimingMetricsSink(registry, promClient)
 
     const second = new TimingMetricsSink(registry, promClient)
