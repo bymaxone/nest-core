@@ -103,7 +103,7 @@ export class HealthService {
    * @param options - Resolved core options; supplies `indicatorTimeoutMs`.
    */
   constructor(
-    @Inject(BYMAX_HEALTH_INDICATORS) private readonly indicators: IHealthIndicator[],
+    @Inject(BYMAX_HEALTH_INDICATORS) private readonly indicators: readonly IHealthIndicator[],
     @Inject(BYMAX_CORE_OPTIONS) private readonly options: ResolvedCoreOptions
   ) {}
 
