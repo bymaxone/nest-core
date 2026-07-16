@@ -1,6 +1,6 @@
 # Phase 5: health
 
-> **Status**: 🔄 In Progress · **Progress**: 1 / 5 tasks · **Last updated**: 2026-07-16
+> **Status**: 🔄 In Progress · **Progress**: 2 / 5 tasks · **Last updated**: 2026-07-16
 > **Source roadmap**: [`../development_plan.md`](../development_plan.md) (P5)
 > **Source spec**: [`../technical_specification.md`](../technical_specification.md) §8, §14.5
 
@@ -36,7 +36,7 @@ Expected starting state: phase 1 merged. Code-parallel with phases 2, 3, and 4; 
 | ID | Task | Status | Priority | Size | Depends on |
 |---|---|---|---|---|---|
 | 5.1 | Branch, health contracts, subpath barrel | ✅ Done | P0 | S | none |
-| 5.2 | Aggregation service (concurrency, timeout, down conversion) | 📋 ToDo | P0 | M | 5.1 |
+| 5.2 | Aggregation service (concurrency, timeout, down conversion) | ✅ Done | P0 | M | 5.1 |
 | 5.3 | Health controller (live, ready, prefix, 200/503) | 📋 ToDo | P0 | M | 5.2 |
 | 5.4 | Registration wiring, contract suite, dogfood | 📋 ToDo | P0 | S | 5.3 |
 | 5.5 | Phase close: verification, PR, Copilot review, merge | 📋 ToDo | P0 | S | 5.1, 5.2, 5.3, 5.4 |
@@ -119,7 +119,7 @@ Completion Protocol (after you finish):
 
 ### Task 5.2: Aggregation service
 
-- **Status**: 📋 ToDo
+- **Status**: ✅ Done
 - **Priority**: P0
 - **Size**: M
 - **Depends on**: 5.1
@@ -130,10 +130,10 @@ The readiness aggregator: runs all indicators concurrently, applies the per-indi
 
 #### Acceptance criteria
 
-- [ ] All indicators run concurrently (verified by a test with two delayed indicators completing in near-parallel time).
-- [ ] An indicator exceeding `indicatorTimeoutMs` reports `down` with a timeout detail; a rejecting indicator reports `down` with the rejection reason summarized; other checks still report their real results.
-- [ ] Aggregate `status` is `ok` only when every check is `up`.
-- [ ] No timer leaks (timeouts cleared when the check settles first); 100% coverage holds.
+- [x] All indicators run concurrently (verified by a test with two delayed indicators completing in near-parallel time).
+- [x] An indicator exceeding `indicatorTimeoutMs` reports `down` with a timeout detail; a rejecting indicator reports `down` with the rejection reason summarized; other checks still report their real results.
+- [x] Aggregate `status` is `ok` only when every check is `up`.
+- [x] No timer leaks (timeouts cleared when the check settles first); 100% coverage holds.
 
 #### Files to create / modify
 
@@ -420,3 +420,4 @@ Completion Protocol (after you finish):
 
 <!-- Append one line per completed task: - <id> ✅ <YYYY-MM-DD>: <summary> -->
 - 5.1 ✅ 2026-07-16: added IHealthIndicator/HealthIndicatorResult contracts and HealthResponse types, exported through the ./health subpath barrel.
+- 5.2 ✅ 2026-07-16: added HealthService with concurrent Promise.all aggregation, per-indicator timeout via a cleared race, and safe rejection/timeout down-conversion.
