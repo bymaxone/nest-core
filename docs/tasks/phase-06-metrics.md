@@ -1,6 +1,6 @@
 # Phase 6: metrics
 
-> **Status**: 🔄 In Progress · **Progress**: 3 / 5 tasks · **Last updated**: 2026-07-16
+> **Status**: 🔄 In Progress · **Progress**: 4 / 5 tasks · **Last updated**: 2026-07-16
 > **Source roadmap**: [`../development_plan.md`](../development_plan.md) (P6)
 > **Source spec**: [`../technical_specification.md`](../technical_specification.md) §9, §12.1
 
@@ -40,7 +40,7 @@ Expected starting state: phases 1 and 3 merged (the bridge is an `ITimingSink`).
 | 6.1 | Branch, lazy registry factory with fail-fast peer check | ✅ Done | P0 | M | none |
 | 6.2 | Metrics controller (path, text format, defaultLabels, default metrics) | ✅ Done | P0 | M | 6.1 |
 | 6.3 | Timing-sink bridge (counter and histogram) | ✅ Done | P0 | M | 6.1 |
-| 6.4 | Registration wiring, never-loaded proof, scrape test | 📋 ToDo | P0 | S | 6.2, 6.3 |
+| 6.4 | Registration wiring, never-loaded proof, scrape test | ✅ Done | P0 | S | 6.2, 6.3 |
 | 6.5 | Phase close: verification, PR, Copilot review, merge | 📋 ToDo | P0 | S | 6.1, 6.2, 6.3, 6.4 |
 
 ---
@@ -285,7 +285,7 @@ Completion Protocol (after you finish):
 
 ### Task 6.4: Registration wiring, never-loaded proof, scrape test
 
-- **Status**: 📋 ToDo
+- **Status**: ✅ Done
 - **Priority**: P0
 - **Size**: S
 - **Depends on**: 6.2, 6.3
@@ -296,10 +296,10 @@ Conditional registration of the metrics feature, the bridge auto-wiring when tim
 
 #### Acceptance criteria
 
-- [ ] Metrics disabled: no controller, no registry provider resolution, `prom-client` never imported (verified with a module-load spy or `require.cache` inspection).
-- [ ] Metrics + timing enabled: the bridge is bound as the effective timing sink (composing with, not replacing, a consumer-provided sink per the documented behavior you define; document the chosen composition in JSDoc).
-- [ ] A scrape after simulated samples shows both HTTP metrics in the endpoint output.
-- [ ] 100% coverage holds; dogfood green.
+- [x] Metrics disabled: no controller, no registry provider resolution, `prom-client` never imported (verified with a module-load spy on `loadPromClient`).
+- [x] Metrics + timing enabled: the bridge is bound as the effective timing sink (documented composition: it replaces the no-op default; a consumer-provided sink takes precedence per NestJS last-registered-wins, documented in `metrics.providers.ts` JSDoc).
+- [x] A scrape after simulated samples shows both HTTP metrics in the endpoint output.
+- [x] 100% coverage holds; dogfood green.
 
 #### Files to create / modify
 
@@ -439,3 +439,4 @@ Completion Protocol (after you finish):
 - 6.1 ✅ 2026-07-16: lazy `prom-client` registry factory with fail-fast peer check, `defaultLabels`, and `collectDefaultMetrics` toggle; 100% covered.
 - 6.2 ✅ 2026-07-16: thin metrics controller factory serving the registry text and content type on the configurable route, with the async consistency guard; 100% covered.
 - 6.3 ✅ 2026-07-16: `TimingMetricsSink` bridge feeding `http_requests_total` and `http_request_duration_seconds` with bounded `method`/`route`/`status_code` labels, idempotent construction, and swallow-on-failure; 100% covered.
+- 6.4 ✅ 2026-07-16: conditional registration on both paths (registry provider, controller, timing-sink bridge), zero-cost proof via a `loadPromClient` spy, and an end-to-end scrape showing both HTTP metrics; 100% covered, dogfood green.

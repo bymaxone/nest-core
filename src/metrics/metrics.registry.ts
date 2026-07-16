@@ -8,39 +8,33 @@
  * time and never load the module at runtime.
  * @layer Provider
  */
-import type {
-  Counter,
-  CounterConfiguration,
-  DefaultMetricsCollectorConfiguration,
-  Histogram,
-  HistogramConfiguration,
-  PrometheusContentType,
-  Registry
-} from 'prom-client'
+import type * as PromClient from 'prom-client'
 
 import type { ResolvedCoreOptions } from '../core.options'
 
 /** The dedicated `prom-client` `Registry` backing the metrics endpoint. */
-export type MetricsRegistry = Registry
+export type MetricsRegistry = PromClient.Registry
 
 /**
  * The subset of the `prom-client` module surface this package constructs at
- * runtime. Declared structurally, and only over `import type` symbols, so the
- * lazily loaded module is fully typed without a top-level runtime import that
- * would defeat the optional-peer contract.
+ * runtime. Declared structurally, and only over a type-only namespace import, so
+ * the lazily loaded module is fully typed without a top-level runtime import
+ * that would defeat the optional-peer contract.
  */
 export interface PromClientModule {
   /** The registry constructor, instantiated once per enabled metrics feature. */
-  readonly Registry: new () => Registry
+  readonly Registry: new () => PromClient.Registry
   /** The counter constructor, used by the timing-sink bridge. */
-  readonly Counter: new <T extends string>(configuration: CounterConfiguration<T>) => Counter<T>
+  readonly Counter: new <T extends string>(
+    configuration: PromClient.CounterConfiguration<T>
+  ) => PromClient.Counter<T>
   /** The histogram constructor, used by the timing-sink bridge. */
   readonly Histogram: new <T extends string>(
-    configuration: HistogramConfiguration<T>
-  ) => Histogram<T>
+    configuration: PromClient.HistogramConfiguration<T>
+  ) => PromClient.Histogram<T>
   /** Wire process CPU, memory, and event-loop metrics against a registry. */
   readonly collectDefaultMetrics: (
-    config?: DefaultMetricsCollectorConfiguration<PrometheusContentType>
+    config?: PromClient.DefaultMetricsCollectorConfiguration<PromClient.PrometheusContentType>
   ) => void
 }
 
