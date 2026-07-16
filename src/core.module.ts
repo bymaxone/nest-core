@@ -3,9 +3,9 @@
  * Built on `ConfigurableModuleBuilder`; the `isGlobal` extra maps to
  * `DynamicModule.global` via `setExtras`. The synchronous `forRoot` path knows
  * the options at definition time and omits disabled features from the providers
- * and controllers arrays. Feature classes attach to the seams here in later
- * phases; this module ships only the options snapshot and the registration
- * machinery.
+ * and controllers arrays; the asynchronous `forRootAsync` path registers
+ * always-on pipeline slots and a health controller that self-guard against a
+ * disabled or path-mismatched resolved configuration at request time.
  * @layer Module
  */
 import { ConfigurableModuleBuilder, Module } from '@nestjs/common'
@@ -18,7 +18,7 @@ import type {
 } from '@nestjs/common'
 import { APP_FILTER, APP_INTERCEPTOR, HttpAdapterHost } from '@nestjs/core'
 
-import { normalizeCoreOptions } from './core.options'
+import { DEFAULT_HEALTH_PATH, normalizeCoreOptions } from './core.options'
 import type { BymaxCoreModuleOptions, ResolvedCoreOptions } from './core.options'
 import {
   BYMAX_CORE_OPTIONS,
@@ -29,6 +29,8 @@ import {
 import { buildDefaultProviders } from './defaults.providers'
 import type { ICorrelationIdProvider } from './envelope/correlation.interfaces'
 import { BymaxExceptionFilter } from './envelope/exception.filter'
+import { createHealthController } from './health/health.controller'
+import { HealthService } from './health/health.service'
 import { selectAsyncExceptionFilter, selectAsyncTimingInterceptor } from './passthrough.providers'
 import { BYMAX_TIMING_CLOCK } from './timing/timing.clock'
 import type { MonotonicClock } from './timing/timing.clock'
@@ -67,7 +69,9 @@ export const {
  * features contribute nothing, so a fully-disabled configuration yields an
  * empty array. The envelope filter registers as the outermost `APP_FILTER`
  * only when the envelope feature is enabled; the timing interceptor registers
- * as `APP_INTERCEPTOR` only when the timing feature is enabled.
+ * as `APP_INTERCEPTOR` only when the timing feature is enabled; `HealthService`
+ * is registered only when the health feature is enabled, matching its
+ * controller counterpart in {@link buildControllers}.
  *
  * @param resolved - The resolved options snapshot the gate reads.
  * @returns The conditionally-registered feature providers.
@@ -80,19 +84,24 @@ function buildSyncProviders(resolved: ResolvedCoreOptions): Provider[] {
   if (resolved.timing.enabled) {
     providers.push({ provide: APP_INTERCEPTOR, useClass: TimingInterceptor })
   }
+  if (resolved.health.enabled) {
+    providers.push(HealthService)
+  }
   return providers
 }
 
 /**
  * Build the controllers registered on the synchronous path. Disabled features
- * register no controller and therefore no route. Feature phases append their
- * gated controllers through this seam.
+ * register no controller and therefore no route: when the health feature is
+ * disabled, `createHealthController` is never called and no health route
+ * exists. When enabled, the controller is built for the resolved
+ * `health.path`, honoring a fully custom prefix.
  *
- * @param _resolved - The resolved options snapshot the gate reads.
+ * @param resolved - The resolved options snapshot the gate reads.
  * @returns The conditionally-registered controllers.
  */
-function buildControllers(_resolved: ResolvedCoreOptions): Type[] {
-  return []
+function buildControllers(resolved: ResolvedCoreOptions): Type[] {
+  return resolved.health.enabled ? [createHealthController(resolved.health.path)] : []
 }
 
 /**
@@ -189,8 +198,11 @@ export class BymaxCoreModule extends BymaxCoreModuleBase {
    * the consumer's factory and normalized under {@link BYMAX_CORE_OPTIONS}.
    * Because those options are unknown when the module is defined, the pipeline
    * slots register unconditionally and gate at runtime with transparent
-   * pass-throughs; controllers that cannot register conditionally guard their
-   * routes with the async feature guard in later phases.
+   * pass-throughs. The health controller cannot register conditionally either,
+   * since its route metadata is fixed before the async options resolve: it is
+   * always registered at the default health path, and its handlers guard
+   * every request against the resolved options being disabled or requesting a
+   * different path, throwing a descriptive configuration error in either case.
    *
    * @param options - Async options (factory + inject + imports, or class).
    * @returns The configured `DynamicModule`.
@@ -206,8 +218,11 @@ export class BymaxCoreModule extends BymaxCoreModuleBase {
         inject: [BUILDER_OPTIONS_TOKEN]
       },
       ...buildDefaultProviders(),
-      ...buildAsyncSlots()
+      ...buildAsyncSlots(),
+      HealthService
     ]
-    return augmentModule(super.forRootAsync(options), providers, [])
+    return augmentModule(super.forRootAsync(options), providers, [
+      createHealthController(DEFAULT_HEALTH_PATH)
+    ])
   }
 }

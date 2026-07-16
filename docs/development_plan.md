@@ -32,7 +32,7 @@
 | P2  | error-envelope       | ✅     | 100%     | M    | 2026-07-16   |
 | P3  | timing-interceptor   | ✅     | 100%     | S    | 2026-07-16   |
 | P4  | pagination           | ✅     | 100%     | M    | 2026-07-16   |
-| P5  | health               | 🔄     | 60%      | M    | 2026-07-16   |
+| P5  | health               | 🔄     | 80%      | M    | 2026-07-16   |
 | P6  | metrics              | 📋     | 0%       | M    | 2026-07-06   |
 | P7  | integration-and-docs | 📋     | 0%       | M    | 2026-07-06   |
 | P8  | release-hardening    | 📋     | 0%       | L    | 2026-07-06   |

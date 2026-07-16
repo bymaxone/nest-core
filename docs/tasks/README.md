@@ -18,11 +18,11 @@ Tasks live **one file per phase** in this folder (`phase-NN-<slug>.md`). Each ph
 | 2     | [`phase-02-error-envelope.md`](./phase-02-error-envelope.md)             | 5 / 5       | ✅ Done        |
 | 3     | [`phase-03-timing-interceptor.md`](./phase-03-timing-interceptor.md)     | 4 / 4       | ✅ Done        |
 | 4     | [`phase-04-pagination.md`](./phase-04-pagination.md)                     | 5 / 5       | ✅ Done        |
-| 5     | [`phase-05-health.md`](./phase-05-health.md)                             | 3 / 5       | 🔄 In Progress |
+| 5     | [`phase-05-health.md`](./phase-05-health.md)                             | 4 / 5       | 🔄 In Progress |
 | 6     | [`phase-06-metrics.md`](./phase-06-metrics.md)                           | 0 / 5       | 📋 ToDo        |
 | 7     | [`phase-07-integration-and-docs.md`](./phase-07-integration-and-docs.md) | 0 / 5       | 📋 ToDo        |
 | 8     | [`phase-08-release-hardening.md`](./phase-08-release-hardening.md)       | 0 / 6       | 📋 ToDo        |
-|       | **Total**                                                                | **29 / 47** | 🔄 In Progress |
+|       | **Total**                                                                | **30 / 47** | 🔄 In Progress |
 
 ---
 
