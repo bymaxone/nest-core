@@ -20,17 +20,6 @@ function stubIndicator(name: string, result: HealthIndicatorResult): IHealthIndi
   return { name, check: (): Promise<HealthIndicatorResult> => Promise.resolve(result) }
 }
 
-/** Build an indicator whose `check()` resolves as `up` after `delayMs`. */
-function delayedUpIndicator(name: string, delayMs: number): IHealthIndicator {
-  return {
-    name,
-    check: (): Promise<HealthIndicatorResult> =>
-      new Promise((resolve) => {
-        setTimeout(() => resolve({ status: 'up' }), delayMs)
-      })
-  }
-}
-
 /** Build an indicator whose `check()` rejects with the given reason. */
 function rejectingIndicator(name: string, reason: unknown): IHealthIndicator {
   return { name, check: (): Promise<HealthIndicatorResult> => Promise.reject(reason) }
@@ -213,7 +202,30 @@ describe('HealthService', () => {
     const result = await service.checkReadiness()
 
     const [entry] = result.checks
-    expect(entry?.details?.error).toBe(`${'x'.repeat(300)}...`)
+    // The surfaced message, ellipsis included, is bounded at 300 characters.
+    expect(entry?.details?.error).toBe(`${'x'.repeat(297)}...`)
+    expect(entry?.details?.error).toHaveLength(300)
+  })
+
+  /**
+   * Rejection with an uncoercible reason.
+   *
+   * A rejection reason that throws when coerced to a string (a null-prototype
+   * object) must not break the down-conversion: it becomes a safe placeholder
+   * and the aggregation still reports every indicator.
+   */
+  it('survives a rejection reason that cannot be coerced to a string', async () => {
+    const uncoercible = rejectingIndicator('database', Object.create(null) as unknown)
+    const healthy = stubIndicator('cache', { status: 'up' })
+    const service = new HealthService([uncoercible, healthy], normalizeCoreOptions())
+
+    const result = await service.checkReadiness()
+
+    expect(result.status).toBe('error')
+    expect(result.checks).toHaveLength(2)
+    const failed = result.checks.find((check) => check.name === 'database')
+    expect(failed?.status).toBe('down')
+    expect(typeof failed?.details?.error).toBe('string')
   })
 
   /**
@@ -238,21 +250,43 @@ describe('HealthService', () => {
   /**
    * Concurrency proof.
    *
-   * Two indicators that each take roughly the same delay must complete in
-   * close to that single delay, not the sum of both, proving they run
-   * concurrently rather than sequentially.
+   * Every indicator's `check()` must be invoked before any of them settles;
+   * sequential execution would interleave start and settle. This asserts the
+   * ordering deterministically instead of depending on wall-clock timing.
    */
-  it('runs indicators concurrently so two 50ms indicators finish well under 100ms', async () => {
-    const first = delayedUpIndicator('first', 50)
-    const second = delayedUpIndicator('second', 50)
-    const service = new HealthService([first, second], normalizeCoreOptions())
+  it('starts every indicator before any of them settles', async () => {
+    const events: string[] = []
+    const deferred = (name: string): { indicator: IHealthIndicator; settle: () => void } => {
+      let settle!: () => void
+      const indicator: IHealthIndicator = {
+        name,
+        check: (): Promise<HealthIndicatorResult> => {
+          events.push(`start:${name}`)
+          return new Promise<HealthIndicatorResult>((resolve) => {
+            settle = (): void => {
+              events.push(`settle:${name}`)
+              resolve({ status: 'up' })
+            }
+          })
+        }
+      }
+      return { indicator, settle: (): void => settle() }
+    }
+    const first = deferred('first')
+    const second = deferred('second')
+    const service = new HealthService([first.indicator, second.indicator], optionsWithTimeout(5000))
 
-    const start = Date.now()
-    const result = await service.checkReadiness()
-    const elapsedMs = Date.now() - start
+    const pending = service.checkReadiness()
+    await new Promise((resolve) => {
+      setImmediate(resolve)
+    })
 
+    expect(events).toEqual(['start:first', 'start:second'])
+
+    first.settle()
+    second.settle()
+    const result = await pending
     expect(result.status).toBe('ok')
-    expect(elapsedMs).toBeLessThan(95)
   })
 
   /**

@@ -15,8 +15,14 @@ import type { ResolvedCoreOptions } from '../core.options'
 import { BYMAX_CORE_OPTIONS, BYMAX_HEALTH_INDICATORS } from '../core.tokens'
 import type { HealthCheckEntry, HealthResponse, IHealthIndicator } from './health.interfaces'
 
-/** Diagnostic rejection messages are truncated to this length before being surfaced. */
+/**
+ * The surfaced diagnostic message is at most this many characters, including the
+ * trailing ellipsis added when a longer message is truncated.
+ */
 const MAX_ERROR_MESSAGE_LENGTH = 300
+
+/** Appended to a truncated message; counts toward {@link MAX_ERROR_MESSAGE_LENGTH}. */
+const TRUNCATION_ELLIPSIS = '...'
 
 /**
  * Summarize a rejection reason into a safe, bounded-length message. Never
@@ -28,10 +34,19 @@ const MAX_ERROR_MESSAGE_LENGTH = 300
  * @returns A truncated message string.
  */
 function summarizeRejection(reason: unknown): string {
-  const message = reason instanceof Error ? reason.message : String(reason)
-  return message.length > MAX_ERROR_MESSAGE_LENGTH
-    ? `${message.slice(0, MAX_ERROR_MESSAGE_LENGTH)}...`
-    : message
+  let message: string
+  try {
+    message = reason instanceof Error ? reason.message : String(reason)
+  } catch {
+    // Coercing an exotic reason (a null-prototype object, a throwing `toString`)
+    // must not throw here: this runs inside the rejection-to-`down` conversion,
+    // and a throw would reject the wrapper and hide every other indicator.
+    message = 'Unknown error'
+  }
+  if (message.length <= MAX_ERROR_MESSAGE_LENGTH) {
+    return message
+  }
+  return `${message.slice(0, MAX_ERROR_MESSAGE_LENGTH - TRUNCATION_ELLIPSIS.length)}${TRUNCATION_ELLIPSIS}`
 }
 
 /**
