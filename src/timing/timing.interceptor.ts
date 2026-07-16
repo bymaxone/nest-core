@@ -1,7 +1,9 @@
 /**
  * @fileoverview `TimingInterceptor`, the request-timing interceptor. Wraps the
- * full handler chain (guards, pipes, the handler, and serialization) with a
- * monotonic clock and delivers exactly one {@link RequestTimingSample} per
+ * downstream handler chain (pipes, the route handler, and response
+ * serialization) with a monotonic clock; guards run before interceptors in
+ * Nest, so guard time is not part of `durationMs`. It delivers exactly one
+ * {@link RequestTimingSample} per
  * completed request, on both the success path and the error path, to the
  * bound `ITimingSink`. The sink contract is fire-and-forget: any exception it
  * throws is caught and silenced here, so request timing can never break a
