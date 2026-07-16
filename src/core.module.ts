@@ -30,6 +30,10 @@ import { buildDefaultProviders } from './defaults.providers'
 import type { ICorrelationIdProvider } from './envelope/correlation.interfaces'
 import { BymaxExceptionFilter } from './envelope/exception.filter'
 import { selectAsyncExceptionFilter, selectAsyncTimingInterceptor } from './passthrough.providers'
+import { BYMAX_TIMING_CLOCK } from './timing/timing.clock'
+import type { MonotonicClock } from './timing/timing.clock'
+import { TimingInterceptor } from './timing/timing.interceptor'
+import type { ITimingSink } from './timing/timing.interfaces'
 
 /** Non-option extras accepted by `forRoot` / `forRootAsync`. */
 export interface BymaxCoreModuleExtras {
@@ -62,7 +66,8 @@ export const {
  * Build the feature providers registered on the synchronous path. Disabled
  * features contribute nothing, so a fully-disabled configuration yields an
  * empty array. The envelope filter registers as the outermost `APP_FILTER`
- * only when the envelope feature is enabled.
+ * only when the envelope feature is enabled; the timing interceptor registers
+ * as `APP_INTERCEPTOR` only when the timing feature is enabled.
  *
  * @param resolved - The resolved options snapshot the gate reads.
  * @returns The conditionally-registered feature providers.
@@ -71,6 +76,9 @@ function buildSyncProviders(resolved: ResolvedCoreOptions): Provider[] {
   const providers: Provider[] = []
   if (resolved.envelope.enabled) {
     providers.push({ provide: APP_FILTER, useClass: BymaxExceptionFilter })
+  }
+  if (resolved.timing.enabled) {
+    providers.push({ provide: APP_INTERCEPTOR, useClass: TimingInterceptor })
   }
   return providers
 }
@@ -108,9 +116,12 @@ function buildAsyncSlots(): Provider[] {
     },
     {
       provide: APP_INTERCEPTOR,
-      useFactory: (options: ResolvedCoreOptions): NestInterceptor =>
-        selectAsyncTimingInterceptor(options),
-      inject: [BYMAX_CORE_OPTIONS]
+      useFactory: (
+        options: ResolvedCoreOptions,
+        sink: ITimingSink,
+        clock: MonotonicClock
+      ): NestInterceptor => selectAsyncTimingInterceptor(options, sink, clock),
+      inject: [BYMAX_CORE_OPTIONS, BYMAX_TIMING_SINK, BYMAX_TIMING_CLOCK]
     }
   ]
 }

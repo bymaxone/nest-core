@@ -7,3 +7,9 @@ pnpm-lock.yaml
 dist/
 coverage/
 reports/
+
+# Phase task files use 4-backtick Agent-prompt fences (see docs/tasks/README.md)
+# so each prompt can itself contain triple-backtick code blocks. Prettier
+# normalizes these to 3 backticks, which breaks the convention and any nested
+# block; leave these authored files untouched.
+docs/tasks/phase-*.md
