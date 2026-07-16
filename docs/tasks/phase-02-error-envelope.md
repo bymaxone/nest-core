@@ -1,6 +1,6 @@
 # Phase 2: error-envelope
 
-> **Status**: 🔄 In Progress · **Progress**: 1 / 5 tasks · **Last updated**: 2026-07-16
+> **Status**: 🔄 In Progress · **Progress**: 2 / 5 tasks · **Last updated**: 2026-07-16
 > **Source roadmap**: [`../development_plan.md`](../development_plan.md) (P2)
 > **Source spec**: [`../technical_specification.md`](../technical_specification.md) §5, §10, §14.1, §14.2
 
@@ -36,7 +36,7 @@ Expected starting state: phase 1 merged (tokens, catalog, options, both registra
 | ID  | Task                                                              | Status  | Priority | Size | Depends on         |
 | --- | ----------------------------------------------------------------- | ------- | -------- | ---- | ------------------ |
 | 2.1 | Branch, envelope type and builder                                 | ✅ Done | P0       | S    | none               |
-| 2.2 | Filter: HttpException mapping and code derivation                 | 📋 ToDo | P0       | M    | 2.1                |
+| 2.2 | Filter: HttpException mapping and code derivation                 | ✅ Done | P0       | M    | 2.1                |
 | 2.3 | Filter: validation shape and unknown collapse (`exposeInternals`) | 📋 ToDo | P0       | M    | 2.2                |
 | 2.4 | Correlation stamping, registration wiring, contract suite         | 📋 ToDo | P0       | M    | 2.3                |
 | 2.5 | Phase close: verification, PR, Copilot review, merge              | 📋 ToDo | P0       | S    | 2.1, 2.2, 2.3, 2.4 |
@@ -119,7 +119,7 @@ Completion Protocol (after you finish):
 
 ### Task 2.2: Filter: HttpException mapping and code derivation
 
-- **Status**: 📋 ToDo
+- **Status**: ✅ Done
 - **Priority**: P0
 - **Size**: M
 - **Depends on**: 2.1
@@ -130,10 +130,10 @@ Completion Protocol (after you finish):
 
 #### Acceptance criteria
 
-- [ ] Filter formats any `HttpException` into the envelope: status and message from the exception; `code` from the exception response object when present, else `codeForStatus`.
-- [ ] Custom codes pass through verbatim; the `BYMAX_` prefix remains reserved for catalog codes (documented in JSDoc).
-- [ ] Path and method read through neutral accessors (host switch on HTTP context only; non-HTTP contexts rethrow untouched per spec §14.1).
-- [ ] 100% coverage holds.
+- [x] Filter formats any `HttpException` into the envelope: status and message from the exception; `code` from the exception response object when present, else `codeForStatus`.
+- [x] Custom codes pass through verbatim; the `BYMAX_` prefix remains reserved for catalog codes (documented in JSDoc).
+- [x] Path and method read through neutral accessors (host switch on HTTP context only; non-HTTP contexts rethrow untouched per spec §14.1).
+- [x] 100% coverage holds.
 
 #### Files to create / modify
 
@@ -427,3 +427,4 @@ Completion Protocol (after you finish):
 <!-- Append one line per completed task: - <id> ✅ <YYYY-MM-DD>: <summary> -->
 
 - 2.1 ✅ 2026-07-16: ErrorEnvelope contract type and pure `buildErrorEnvelope` with injectable clock; optionals omitted from serialized JSON; 100% coverage.
+- 2.2 ✅ 2026-07-16: `BymaxExceptionFilter` HttpException mapping (explicit-code passthrough, catalog derivation), framework-neutral path/method accessors via `HttpAdapter`, non-HTTP rethrow, baseline unknown collapse; 100% coverage.
