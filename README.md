@@ -137,21 +137,26 @@ disabled or custom-path async configuration fails fast at the route.
 
 ## DI tokens
 
-Every token is a `Symbol`. Provide any of the consumer-supplied tokens from your
-own module to plug in your own implementation, following the pattern in
+Every token is a `Symbol`. `BYMAX_CORRELATION_PROVIDER` and
+`BYMAX_HEALTH_INDICATORS` are consumed with `@Optional()` and are not bound by
+the module: provide either from your own module to supply your own
+implementation, otherwise the internal fallback in the last column applies.
+`BYMAX_TIMING_SINK` and `BYMAX_METRICS_REGISTRY` behave differently on
+`forRootAsync`, where options resolve after the module is defined: there the
+module always binds and exports both (the timing sink as the metrics bridge or a
+no-op, the registry as a guarded placeholder when metrics are off), so a
+consumer `BYMAX_TIMING_SINK` override is honored on `forRoot` but shadowed on
+`forRootAsync`. Follow the pattern in
 [Integration with `@bymax-one/nest-logger`](#integration-with-bymax-onenest-logger)
-below. The module consumes `BYMAX_CORRELATION_PROVIDER`, `BYMAX_TIMING_SINK`, and
-`BYMAX_HEALTH_INDICATORS` with `@Optional()` and applies the internal behavior in
-the last column when you do not provide one, so those tokens are not bound (and
-so not injectable) by default; providing them is how you supply your own.
+below.
 
-| Token                        | Provides                              | When you do not provide one                      |
-| ---------------------------- | ------------------------------------- | ------------------------------------------------ |
-| `BYMAX_CORE_OPTIONS`         | The resolved `BymaxCoreModuleOptions` | always set by the module                         |
-| `BYMAX_CORRELATION_PROVIDER` | `ICorrelationIdProvider`              | internal no-op (omits `correlationId`)           |
-| `BYMAX_TIMING_SINK`          | `ITimingSink`                         | internal no-op (bridged to metrics when both on) |
-| `BYMAX_HEALTH_INDICATORS`    | `IHealthIndicator[]`                  | treated as an empty indicator set                |
-| `BYMAX_METRICS_REGISTRY`     | the `prom-client` `Registry`          | bound only when metrics are enabled              |
+| Token                        | Provides                              | When you do not provide one                                                                       |
+| ---------------------------- | ------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `BYMAX_CORE_OPTIONS`         | The resolved `BymaxCoreModuleOptions` | always set by the module                                                                          |
+| `BYMAX_CORRELATION_PROVIDER` | `ICorrelationIdProvider`              | internal no-op (omits `correlationId`)                                                            |
+| `BYMAX_TIMING_SINK`          | `ITimingSink`                         | internal no-op, or the metrics bridge when timing and metrics are both enabled                    |
+| `BYMAX_HEALTH_INDICATORS`    | `IHealthIndicator[]`                  | treated as an empty indicator set                                                                 |
+| `BYMAX_METRICS_REGISTRY`     | the `prom-client` `Registry`          | bound when metrics are enabled; on `forRootAsync` always registered, guarded-placeholder when off |
 
 ## Error envelope
 
@@ -208,7 +213,9 @@ export interface RequestTimingSample {
 ```
 
 Bind your own sink by providing `BYMAX_TIMING_SINK` from your own module, the
-same override pattern shown below for the correlation provider:
+same override pattern shown below for the correlation provider. This applies on
+the `forRoot` path; on `forRootAsync` the module owns `BYMAX_TIMING_SINK` (the
+metrics bridge or a no-op) so a consumer binding is shadowed there:
 
 ```typescript
 import { Global, Module } from '@nestjs/common'
