@@ -1,6 +1,6 @@
 # Phase 4: pagination
 
-> **Status**: 📋 ToDo · **Progress**: 0 / 5 tasks · **Last updated**: 2026-07-06
+> **Status**: 🔄 In Progress · **Progress**: 1 / 5 tasks · **Last updated**: 2026-07-16
 > **Source roadmap**: [`../development_plan.md`](../development_plan.md) (P4)
 > **Source spec**: [`../technical_specification.md`](../technical_specification.md) §7, §14.4
 
@@ -35,7 +35,7 @@ Expected starting state: phase 1 merged (the `BYMAX_*` catalog exists). Code-par
 
 | ID | Task | Status | Priority | Size | Depends on |
 |---|---|---|---|---|---|
-| 4.1 | Branch, offset primitives (`normalizePageQuery`, `buildPageResult`) | 📋 ToDo | P0 | M | none |
+| 4.1 | Branch, offset primitives (`normalizePageQuery`, `buildPageResult`) | ✅ Done | P0 | M | none |
 | 4.2 | Cursor codec (`encodeCursor`, `decodeCursor`) | 📋 ToDo | P0 | M | none |
 | 4.3 | `normalizeCursorQuery` and `buildCursorResult` | 📋 ToDo | P0 | S | 4.2 |
 | 4.4 | Subpath barrel, zero-provider proof, boundary suite | 📋 ToDo | P0 | S | 4.1, 4.3 |
@@ -47,7 +47,7 @@ Expected starting state: phase 1 merged (the `BYMAX_*` catalog exists). Code-par
 
 ### Task 4.1: Branch, offset primitives
 
-- **Status**: 📋 ToDo
+- **Status**: ✅ Done
 - **Priority**: P0
 - **Size**: M
 - **Depends on**: none
@@ -58,10 +58,10 @@ Expected starting state: phase 1 merged (the `BYMAX_*` catalog exists). Code-par
 
 #### Acceptance criteria
 
-- [ ] Branch `feat/phase-04-pagination` created with `git switch -c`.
-- [ ] `normalizePageQuery` clamps: page floor 1, limit floor 1, limit cap `maxLimit` (default 100), default limit 20; non-numeric and negative input falls back to defaults; options are per-call, never module state.
-- [ ] `buildPageResult` computes `totalPages` correctly including the zero-items case.
-- [ ] Signatures match spec §7.1 exactly; 100% coverage holds.
+- [x] Branch `feat/phase-04-pagination` created with `git switch -c`.
+- [x] `normalizePageQuery` clamps: page floor 1, limit floor 1, limit cap `maxLimit` (default 100), default limit 20; non-numeric and negative input falls back to defaults; options are per-call, never module state.
+- [x] `buildPageResult` computes `totalPages` correctly including the zero-items case.
+- [x] Signatures match spec §7.1 exactly; 100% coverage holds.
 
 #### Files to create / modify
 
@@ -417,3 +417,5 @@ Completion Protocol (after you finish):
 ## Completion log
 
 <!-- Append one line per completed task: - <id> ✅ <YYYY-MM-DD>: <summary> -->
+
+- 4.1 ✅ 2026-07-16: offset primitives with clamping (page floor, limit floor/cap, per-call defaults) and computed-meta page-result builder; 100% coverage.
