@@ -23,19 +23,19 @@
 
 ## Progress Dashboard
 
-> **Overall: 0 / 9 phases done (0%)** · Active phase: none · Blocked: none
+> **Overall: 1 / 9 phases done (11%)** · Active phase: P1 · Blocked: none
 
-| ID | Phase                       | Status | Progress | Size | Last Updated |
-| -- | --------------------------- | ------ | -------- | ---- | ------------ |
-| P0 | repository-scaffold         | 📋     | 0%       | M    | 2026-07-06   |
-| P1 | module-core                 | 📋     | 0%       | M    | 2026-07-06   |
-| P2 | error-envelope              | 📋     | 0%       | M    | 2026-07-06   |
-| P3 | timing-interceptor          | 📋     | 0%       | S    | 2026-07-06   |
-| P4 | pagination                  | 📋     | 0%       | M    | 2026-07-06   |
-| P5 | health                      | 📋     | 0%       | M    | 2026-07-06   |
-| P6 | metrics                     | 📋     | 0%       | M    | 2026-07-06   |
-| P7 | integration-and-docs        | 📋     | 0%       | M    | 2026-07-06   |
-| P8 | release-hardening           | 📋     | 0%       | L    | 2026-07-06   |
+| ID  | Phase                | Status | Progress | Size | Last Updated |
+| --- | -------------------- | ------ | -------- | ---- | ------------ |
+| P0  | repository-scaffold  | ✅     | 100%     | M    | 2026-07-16   |
+| P1  | module-core          | 📋     | 0%       | M    | 2026-07-06   |
+| P2  | error-envelope       | 📋     | 0%       | M    | 2026-07-06   |
+| P3  | timing-interceptor   | 📋     | 0%       | S    | 2026-07-06   |
+| P4  | pagination           | 📋     | 0%       | M    | 2026-07-06   |
+| P5  | health               | 📋     | 0%       | M    | 2026-07-06   |
+| P6  | metrics              | 📋     | 0%       | M    | 2026-07-06   |
+| P7  | integration-and-docs | 📋     | 0%       | M    | 2026-07-06   |
+| P8  | release-hardening    | 📋     | 0%       | L    | 2026-07-06   |
 
 ---
 
@@ -86,11 +86,11 @@ These apply to every phase. Phase sections list only rules specific to that phas
 - **Scope (in):** `package.json` (name, version 0.1.0-alpha.0, exports map for the three subpaths, scripts, peers per convention 4, engines `node >= 24`, `publishConfig` public); tsup config with three entries; the tsconfig set (base, build, jest, e2e variants); ESLint flat config; both Jest configs with the 100% threshold; Stryker config; husky, commitlint, lint-staged; `README.md` skeleton with badges, `LICENSE` (MIT), `SECURITY.md`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md` (Contributor Covenant 2.1 by reference), `CHANGELOG.md`; `.github/workflows/` (`ci`, `codeql`, `scorecard`, `release`), `dependabot.yml`, issue templates; `scripts/check-size.mjs` with provisional budgets and `scripts/dogfood-smoke-test.mjs` with the three subpaths.
 - **Scope (out):** Any feature source; README feature documentation (P7); budget calibration (P8).
 - **Definition of Done:**
-  - [ ] `pnpm install`, `pnpm typecheck`, `pnpm lint`, `pnpm build` all pass from a clean clone.
-  - [ ] `dist/` contains `.mjs`, `.cjs`, and `.d.ts` for `.`, `./pagination`, and `./health` (placeholder barrels).
-  - [ ] `pnpm test:cov` passes with the 100% threshold active (trivial sources only).
-  - [ ] Husky blocks a non-conventional commit message locally.
-  - [ ] CI workflow runs lint, typecheck, build, and tests sequentially on push.
+  - [x] `pnpm install`, `pnpm typecheck`, `pnpm lint`, `pnpm build` all pass from a clean clone.
+  - [x] `dist/` contains `.mjs`, `.cjs`, and `.d.ts` for `.`, `./pagination`, and `./health` (placeholder barrels).
+  - [x] `pnpm test:cov` passes with the 100% threshold active (trivial sources only).
+  - [x] Husky blocks a non-conventional commit message locally.
+  - [x] CI workflow runs lint, typecheck, build, and tests sequentially on push.
 - **Context / preconditions:** Empty repository. The layout, configs, and scripts mirror the structure proven by the sibling `@bymax-one` libraries; adapt names, subpaths, and peers to this package.
 - **Rules-of-phase:** No `.gitkeep` files; directories exist only when a real file lands in them. CodeQL and OpenSSF Scorecard workflows ship enabled but only produce results once the repository is public; do not gut them.
 - **References:** Spec §3 (package structure), §12 (dependencies), §13 (quality gates and repository standard).
