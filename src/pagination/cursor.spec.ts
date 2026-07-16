@@ -325,4 +325,21 @@ describe('buildCursorResult', () => {
     expect(result.items).toEqual([])
     expect(result.nextCursor).toBeNull()
   })
+
+  /**
+   * Non-finite-limit defensive case.
+   *
+   * A non-finite limit must not take the early return and leak the untrimmed
+   * fetch-one-extra rows; it is sanitized to an empty page with a null cursor.
+   */
+  it('yields an empty page and null cursor for a non-finite limit', () => {
+    const result = buildCursorResult(
+      [{ id: 1 }, { id: 2 }, { id: 3 }],
+      Number.POSITIVE_INFINITY,
+      toCursor
+    )
+
+    expect(result.items).toEqual([])
+    expect(result.nextCursor).toBeNull()
+  })
 })

@@ -76,6 +76,11 @@ describe('normalizePageQuery', () => {
       expected: { page: 1, limit: 20 }
     },
     {
+      name: 'falls back to the default limit on a boolean limit rather than coercing to 1',
+      raw: { page: 1, limit: true },
+      expected: { page: 1, limit: 20 }
+    },
+    {
       name: 'honors a per-call defaultLimit override',
       raw: { page: 1 },
       options: { defaultLimit: 5 },

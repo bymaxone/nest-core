@@ -27,7 +27,10 @@ export interface PaginationLimitOptions {
  * Coerce an unknown value into a positive integer, falling back when the value
  * is not a finite number of at least one.
  *
- * `Number('')` and `Number(null)` collapse to `0`, so a bare finiteness check is
+ * Only numbers and strings are coerced: `Number` would otherwise map `true` to
+ * `1` and `[3]` to `3`, letting unexpected request shapes pass clamping, so
+ * booleans, arrays, objects, and `null` fall back without coercion. Among the
+ * coerced values, `Number('')` collapses to `0`, so a bare finiteness check is
  * not enough: values below the minimum also fall back, keeping non-numeric,
  * negative, and zero input from producing an out-of-range result.
  *
@@ -36,6 +39,9 @@ export interface PaginationLimitOptions {
  * @returns A positive integer: the truncated coercion, or the fallback.
  */
 export function coercePositiveInt(value: unknown, fallback: number): number {
+  if (typeof value !== 'number' && typeof value !== 'string') {
+    return fallback
+  }
   const coerced = Number(value)
   if (!Number.isFinite(coerced) || coerced < MINIMUM) {
     return fallback

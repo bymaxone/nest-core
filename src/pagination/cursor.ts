@@ -162,13 +162,15 @@ export function buildCursorResult<T>(
   limit: number,
   toCursor: (lastItem: T) => Record<string, string | number>
 ): CursorResult<T> {
-  if (items.length <= limit) {
+  const safeLimit = Number.isFinite(limit) && limit > 0 ? Math.floor(limit) : 0
+  if (items.length <= safeLimit) {
     return { items, nextCursor: null }
   }
-  const page = items.slice(0, Math.max(0, limit))
+  const page = items.slice(0, safeLimit)
   const lastItem = page.at(-1)
-  // A zero or negative limit trims to an empty page (Math.max floors the slice
-  // end at 0, avoiding negative-index semantics), leaving no key to encode.
+  // A zero, negative, or non-finite limit trims to an empty page. Sanitizing the
+  // limit first also stops a non-finite limit from taking the early return and
+  // leaking the untrimmed fetch-one-extra rows. No last item means no key to encode.
   if (lastItem === undefined) {
     return { items: page, nextCursor: null }
   }
