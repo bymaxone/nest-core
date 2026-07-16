@@ -92,6 +92,13 @@ describe('BymaxCoreModule.forRootAsync', () => {
 
     expect(response.body).toMatchObject({ statusCode: 404, message: 'missing' })
     expect(response.body).not.toHaveProperty('code')
+
+    // A second error reuses the delegate built on the first catch, proving the
+    // cached-delegate path is transparent and still formats Nest's default body.
+    const repeat = await request(app.getHttpServer()).get('/probe/boom').expect(404)
+
+    expect(repeat.body).toMatchObject({ statusCode: 404, message: 'missing' })
+    expect(repeat.body).not.toHaveProperty('code')
   })
 })
 

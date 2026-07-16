@@ -25,13 +25,17 @@ import type { ResolvedCoreOptions } from './core.options'
 /**
  * Exception filter that reproduces Nest's default error handling. Registered on
  * the async path when the envelope feature is disabled. It delegates to a
- * {@link BaseExceptionFilter} resolved with the live HTTP adapter at catch time,
- * because on the async path the adapter is not yet available when the module's
- * providers are constructed. The formatted response is byte-for-byte identical
- * to having no filter at all.
+ * {@link BaseExceptionFilter} built from the live HTTP adapter, which on the
+ * async path is not yet available when the module's providers are constructed,
+ * so the delegate is built lazily on the first catch and reused thereafter to
+ * avoid per-exception allocation. The formatted response is byte-for-byte
+ * identical to having no filter at all.
  */
 @Catch()
 export class PassThroughExceptionFilter implements ExceptionFilter {
+  /** Built on first use, once the bootstrapped HTTP adapter is available. */
+  private delegate: BaseExceptionFilter | undefined
+
   constructor(private readonly adapterHost: HttpAdapterHost) {}
 
   /**
@@ -41,7 +45,8 @@ export class PassThroughExceptionFilter implements ExceptionFilter {
    * @param host - The arguments host for the current request.
    */
   catch(exception: unknown, host: ArgumentsHost): void {
-    new BaseExceptionFilter(this.adapterHost.httpAdapter).catch(exception, host)
+    this.delegate ??= new BaseExceptionFilter(this.adapterHost.httpAdapter)
+    this.delegate.catch(exception, host)
   }
 }
 
