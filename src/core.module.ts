@@ -18,12 +18,13 @@ import type {
 } from '@nestjs/common'
 import { APP_FILTER, APP_INTERCEPTOR, HttpAdapterHost } from '@nestjs/core'
 
-import { DEFAULT_HEALTH_PATH, normalizeCoreOptions } from './core.options'
+import { DEFAULT_HEALTH_PATH, DEFAULT_METRICS_PATH, normalizeCoreOptions } from './core.options'
 import type { BymaxCoreModuleOptions, ResolvedCoreOptions } from './core.options'
 import {
   BYMAX_CORE_OPTIONS,
   BYMAX_CORRELATION_PROVIDER,
   BYMAX_HEALTH_INDICATORS,
+  BYMAX_METRICS_REGISTRY,
   BYMAX_TIMING_SINK
 } from './core.tokens'
 import { buildDefaultProviders } from './defaults.providers'
@@ -31,6 +32,11 @@ import type { ICorrelationIdProvider } from './envelope/correlation.interfaces'
 import { BymaxExceptionFilter } from './envelope/exception.filter'
 import { createHealthController } from './health/health.controller'
 import { HealthService } from './health/health.service'
+import { createMetricsController } from './metrics/metrics.controller'
+import {
+  buildMetricsRegistryProvider,
+  buildMetricsTimingSinkProvider
+} from './metrics/metrics.providers'
 import { selectAsyncExceptionFilter, selectAsyncTimingInterceptor } from './passthrough.providers'
 import { BYMAX_TIMING_CLOCK } from './timing/timing.clock'
 import type { MonotonicClock } from './timing/timing.clock'
@@ -71,7 +77,11 @@ export const {
  * only when the envelope feature is enabled; the timing interceptor registers
  * as `APP_INTERCEPTOR` only when the timing feature is enabled; `HealthService`
  * is registered only when the health feature is enabled, matching its
- * controller counterpart in {@link buildControllers}.
+ * controller counterpart in {@link buildControllers}. The metrics registry
+ * provider is added only when metrics are enabled, so a disabled configuration
+ * never loads `prom-client`; the metrics timing-sink bridge is added only when
+ * timing and metrics are both enabled, overriding the no-op default sink so
+ * HTTP samples feed the default HTTP metrics.
  *
  * @param resolved - The resolved options snapshot the gate reads.
  * @returns The conditionally-registered feature providers.
@@ -87,6 +97,12 @@ function buildSyncProviders(resolved: ResolvedCoreOptions): Provider[] {
   if (resolved.health.enabled) {
     providers.push(HealthService)
   }
+  if (resolved.metrics.enabled) {
+    providers.push(buildMetricsRegistryProvider())
+    if (resolved.timing.enabled) {
+      providers.push(buildMetricsTimingSinkProvider())
+    }
+  }
   return providers
 }
 
@@ -94,14 +110,21 @@ function buildSyncProviders(resolved: ResolvedCoreOptions): Provider[] {
  * Build the controllers registered on the synchronous path. Disabled features
  * register no controller and therefore no route: when the health feature is
  * disabled, `createHealthController` is never called and no health route
- * exists. When enabled, the controller is built for the resolved
- * `health.path`, honoring a fully custom prefix.
+ * exists, and likewise for metrics. When enabled, each controller is built for
+ * its resolved path, honoring a fully custom prefix.
  *
  * @param resolved - The resolved options snapshot the gate reads.
  * @returns The conditionally-registered controllers.
  */
 function buildControllers(resolved: ResolvedCoreOptions): Type[] {
-  return resolved.health.enabled ? [createHealthController(resolved.health.path)] : []
+  const controllers: Type[] = []
+  if (resolved.health.enabled) {
+    controllers.push(createHealthController(resolved.health.path))
+  }
+  if (resolved.metrics.enabled) {
+    controllers.push(createMetricsController(resolved.metrics.path))
+  }
+  return controllers
 }
 
 /**
@@ -145,12 +168,16 @@ function buildAsyncSlots(): Provider[] {
  * @param base - The `DynamicModule` returned by the builder.
  * @param providers - Library providers to append.
  * @param controllers - Controllers to append.
+ * @param extraExports - Feature tokens to export in addition to the always-on
+ *   contracts, such as `BYMAX_METRICS_REGISTRY` when the metrics feature is
+ *   registered so consumers can inject the registry to add custom metrics.
  * @returns The augmented `DynamicModule`.
  */
 export function augmentModule(
   base: DynamicModule,
   providers: Provider[],
-  controllers: Type[]
+  controllers: Type[],
+  extraExports: (string | symbol)[] = []
 ): DynamicModule {
   return {
     ...base,
@@ -162,7 +189,8 @@ export function augmentModule(
       BYMAX_CORE_OPTIONS,
       BYMAX_CORRELATION_PROVIDER,
       BYMAX_TIMING_SINK,
-      BYMAX_HEALTH_INDICATORS
+      BYMAX_HEALTH_INDICATORS,
+      ...extraExports
     ]
   }
 }
@@ -190,7 +218,13 @@ export class BymaxCoreModule extends BymaxCoreModuleBase {
       ...buildDefaultProviders(),
       ...buildSyncProviders(resolved)
     ]
-    return augmentModule(super.forRoot(options), providers, buildControllers(resolved))
+    const extraExports = resolved.metrics.enabled ? [BYMAX_METRICS_REGISTRY] : []
+    return augmentModule(
+      super.forRoot(options),
+      providers,
+      buildControllers(resolved),
+      extraExports
+    )
   }
 
   /**
@@ -203,6 +237,10 @@ export class BymaxCoreModule extends BymaxCoreModuleBase {
    * always registered at the default health path, and its handlers guard
    * every request against the resolved options being disabled or requesting a
    * different path, throwing a descriptive configuration error in either case.
+   * The metrics controller follows the same mechanism at the default metrics
+   * path; the `BYMAX_METRICS_REGISTRY` factory gates on the resolved options and
+   * resolves to a guarded placeholder when metrics are disabled, so the optional
+   * peer `prom-client` is never loaded unless metrics are actually enabled.
    *
    * @param options - Async options (factory + inject + imports, or class).
    * @returns The configured `DynamicModule`.
@@ -219,10 +257,15 @@ export class BymaxCoreModule extends BymaxCoreModuleBase {
       },
       ...buildDefaultProviders(),
       ...buildAsyncSlots(),
-      HealthService
+      HealthService,
+      buildMetricsRegistryProvider(),
+      buildMetricsTimingSinkProvider()
     ]
-    return augmentModule(super.forRootAsync(options), providers, [
-      createHealthController(DEFAULT_HEALTH_PATH)
-    ])
+    return augmentModule(
+      super.forRootAsync(options),
+      providers,
+      [createHealthController(DEFAULT_HEALTH_PATH), createMetricsController(DEFAULT_METRICS_PATH)],
+      [BYMAX_METRICS_REGISTRY]
+    )
   }
 }

@@ -112,8 +112,12 @@ export const DEFAULT_HEALTH_PATH = 'health'
 /** Default per-indicator timeout in milliseconds. */
 const DEFAULT_INDICATOR_TIMEOUT_MS = 5000
 
-/** Default metrics route. */
-const DEFAULT_METRICS_PATH = 'metrics'
+/**
+ * Default metrics route. Exported so the async registration path can register
+ * the metrics controller at the same default the options resolver applies,
+ * without duplicating the literal.
+ */
+export const DEFAULT_METRICS_PATH = 'metrics'
 
 /**
  * Recursively freeze an object graph so no consumer can mutate the resolved
