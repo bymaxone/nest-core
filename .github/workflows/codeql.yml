@@ -31,6 +31,9 @@ jobs:
       contents: read
       # Required for CodeQL to upload its findings to the Security tab.
       security-events: write
+      # Required on private repositories so the analyze step can read
+      # workflow-run metadata via the Actions API during SARIF upload.
+      actions: read
 
     strategy:
       fail-fast: false
