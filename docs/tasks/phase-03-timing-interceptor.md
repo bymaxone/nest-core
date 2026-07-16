@@ -1,6 +1,6 @@
 # Phase 3: timing-interceptor
 
-> **Status**: 📋 ToDo · **Progress**: 0 / 4 tasks · **Last updated**: 2026-07-06
+> **Status**: 🔄 In Progress · **Progress**: 1 / 4 tasks · **Last updated**: 2026-07-16
 > **Source roadmap**: [`../development_plan.md`](../development_plan.md) (P3)
 > **Source spec**: [`../technical_specification.md`](../technical_specification.md) §6
 
@@ -33,12 +33,12 @@ Expected starting state: phase 1 merged. Code-parallel with phases 2, 4, and 5; 
 
 ## Task index
 
-| ID | Task | Status | Priority | Size | Depends on |
-|---|---|---|---|---|---|
-| 3.1 | Branch, monotonic clock seam, route-template accessor | 📋 ToDo | P0 | S | none |
-| 3.2 | Interceptor: success and error paths, slow flag, sink safety | 📋 ToDo | P0 | M | 3.1 |
-| 3.3 | Registration wiring and disabled-path tests | 📋 ToDo | P0 | S | 3.2 |
-| 3.4 | Phase close: verification, PR, Copilot review, merge | 📋 ToDo | P0 | S | 3.1, 3.2, 3.3 |
+| ID  | Task                                                         | Status  | Priority | Size | Depends on    |
+| --- | ------------------------------------------------------------ | ------- | -------- | ---- | ------------- |
+| 3.1 | Branch, monotonic clock seam, route-template accessor        | ✅ Done | P0       | S    | none          |
+| 3.2 | Interceptor: success and error paths, slow flag, sink safety | 📋 ToDo | P0       | M    | 3.1           |
+| 3.3 | Registration wiring and disabled-path tests                  | 📋 ToDo | P0       | S    | 3.2           |
+| 3.4 | Phase close: verification, PR, Copilot review, merge         | 📋 ToDo | P0       | S    | 3.1, 3.2, 3.3 |
 
 ---
 
@@ -46,7 +46,7 @@ Expected starting state: phase 1 merged. Code-parallel with phases 2, 4, and 5; 
 
 ### Task 3.1: Branch, monotonic clock seam, route-template accessor
 
-- **Status**: 📋 ToDo
+- **Status**: ✅ Done
 - **Priority**: P0
 - **Size**: S
 - **Depends on**: none
@@ -57,10 +57,10 @@ The injectable monotonic clock seam and the neutral accessor that extracts metho
 
 #### Acceptance criteria
 
-- [ ] Branch `feat/phase-03-timing-interceptor` created with `git switch -c`.
-- [ ] A `MonotonicClock` seam (default `performance.now`) is injectable for tests; no `Date.now()` in duration math anywhere in `src/timing/`.
-- [ ] The accessor returns the route template (Express `req.route?.path` composition, Fastify `routeOptions.url`), falling back to the URL path only when no template exists, with the fallback documented.
-- [ ] 100% coverage holds.
+- [x] Branch `feat/phase-03-timing-interceptor` created with `git switch -c`.
+- [x] A `MonotonicClock` seam (default `performance.now`) is injectable for tests; no `Date.now()` in duration math anywhere in `src/timing/`.
+- [x] The accessor returns the route template (Express `req.route?.path` composition, Fastify `routeOptions.url`), falling back to the URL path only when no template exists, with the fallback documented.
+- [x] 100% coverage holds.
 
 #### Files to create / modify
 
@@ -68,7 +68,7 @@ The injectable monotonic clock seam and the neutral accessor that extracts metho
 
 #### Agent prompt
 
-````
+```
 You are a senior NestJS library engineer working on @bymax-one/nest-core.
 
 PROJECT: @bymax-one/nest-core, application foundation kit for NestJS 11. This phase implements
@@ -115,7 +115,7 @@ Completion Protocol (after you finish):
 5. Update the P3 row in ../development_plan.md (canonical) and mirror docs/tasks/README.md.
 6. Recompute the overall counter line in ../development_plan.md.
 7. Commit: `feat(timing): add monotonic clock seam and route accessor (3.1)`.
-````
+```
 
 ---
 
@@ -143,7 +143,7 @@ The `TimingInterceptor`: measures the full handler execution on success and on e
 
 #### Agent prompt
 
-````
+```
 You are a senior NestJS library engineer working on @bymax-one/nest-core.
 
 PROJECT: @bymax-one/nest-core, application foundation kit for NestJS 11. The timing interceptor
@@ -193,7 +193,7 @@ Completion Protocol (after you finish):
 5. Update the P3 row in ../development_plan.md (canonical) and mirror docs/tasks/README.md.
 6. Recompute the overall counter line in ../development_plan.md.
 7. Commit: `feat(timing): add timing interceptor with sink safety (3.2)`.
-````
+```
 
 ---
 
@@ -220,7 +220,7 @@ Wire the real interceptor into both registration paths, replacing the phase 1 se
 
 #### Agent prompt
 
-````
+```
 You are a senior NestJS library engineer working on @bymax-one/nest-core.
 
 PROJECT: @bymax-one/nest-core, application foundation kit for NestJS 11. Conditional
@@ -264,7 +264,7 @@ Completion Protocol (after you finish):
 5. Update the P3 row in ../development_plan.md (canonical) and mirror docs/tasks/README.md.
 6. Recompute the overall counter line in ../development_plan.md.
 7. Commit: `feat(timing): wire conditional registration for timing (3.3)`.
-````
+```
 
 ---
 
@@ -291,7 +291,7 @@ Audit the phase Definition of Done, update dashboards, open the phase PR, obtain
 
 #### Agent prompt
 
-````
+```
 You are a senior release engineer closing a development phase of @bymax-one/nest-core.
 
 PROJECT: @bymax-one/nest-core. One PR per phase; GitHub Copilot code review is a mandatory gate.
@@ -335,10 +335,12 @@ Completion Protocol (after you finish):
 3. Append: `- 3.4 ✅ <YYYY-MM-DD>: phase PR merged with Copilot review`.
 4. Update the P3 row (✅, 100%) and overall counter in ../development_plan.md; mirror README.md.
 5. Commit dashboard updates post-merge as `docs(core): close phase 3 dashboards (3.4)`.
-````
+```
 
 ---
 
 ## Completion log
 
 <!-- Append one line per completed task: - <id> ✅ <YYYY-MM-DD>: <summary> -->
+
+- 3.1 ✅ 2026-07-16: monotonic clock seam and neutral Express/Fastify route-template accessor, 100% coverage.
