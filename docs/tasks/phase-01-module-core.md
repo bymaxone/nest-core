@@ -1,6 +1,6 @@
 # Phase 1: module-core
 
-> **Status**: 🔄 In Progress · **Progress**: 1 / 6 tasks · **Last updated**: 2026-07-16
+> **Status**: 🔄 In Progress · **Progress**: 2 / 6 tasks · **Last updated**: 2026-07-16
 > **Source roadmap**: [`../development_plan.md`](../development_plan.md) (P1)
 > **Source spec**: [`../technical_specification.md`](../technical_specification.md) §2, §4, §10
 
@@ -40,7 +40,7 @@ Expected starting state: phase 0 merged; the repository builds, lints, and tests
 | ID  | Task                                                      | Status  | Priority | Size | Depends on              |
 | --- | --------------------------------------------------------- | ------- | -------- | ---- | ----------------------- |
 | 1.1 | Branch, Symbol tokens, `BYMAX_*` error-code catalog       | ✅ Done | P0       | S    | none                    |
-| 1.2 | Options types, defaults, normalization (deep freeze)      | 📋 ToDo | P0       | M    | 1.1                     |
+| 1.2 | Options types, defaults, normalization (deep freeze)      | ✅ Done | P0       | M    | 1.1                     |
 | 1.3 | `BymaxCoreModule.forRoot` (sync conditional registration) | 📋 ToDo | P0       | M    | 1.2                     |
 | 1.4 | `forRootAsync` with gated pass-through slots              | 📋 ToDo | P0       | M    | 1.3                     |
 | 1.5 | Default bindings, barrel exports, override tests          | 📋 ToDo | P0       | M    | 1.4                     |
@@ -129,7 +129,7 @@ Completion Protocol (after you finish):
 
 ### Task 1.2: Options types, defaults, normalization
 
-- **Status**: 📋 ToDo
+- **Status**: ✅ Done
 - **Priority**: P0
 - **Size**: M
 - **Depends on**: 1.1
@@ -140,10 +140,10 @@ The `BymaxCoreModuleOptions` surface, the documented defaults, and the normaliza
 
 #### Acceptance criteria
 
-- [ ] `src/core.options.ts` matches spec §4.1 exactly (envelope, timing, health, metrics blocks, all optional with documented defaults).
-- [ ] `normalizeCoreOptions(raw?)` returns a fully-populated, deep-frozen options object; defaults: envelope enabled, timing enabled, health enabled (`path: 'health'`, `indicatorTimeoutMs: 5000`), metrics disabled (`path: 'metrics'`, `collectDefaultMetrics: true`).
-- [ ] Mutating any nested field of the normalized object throws in strict mode (frozen), covered by test.
-- [ ] 100% coverage holds.
+- [x] `src/core.options.ts` matches spec §4.1 exactly (envelope, timing, health, metrics blocks, all optional with documented defaults).
+- [x] `normalizeCoreOptions(raw?)` returns a fully-populated, deep-frozen options object; defaults: envelope enabled, timing enabled, health enabled (`path: 'health'`, `indicatorTimeoutMs: 5000`), metrics disabled (`path: 'metrics'`, `collectDefaultMetrics: true`).
+- [x] Mutating any nested field of the normalized object throws in strict mode (frozen), covered by test.
+- [x] 100% coverage holds.
 
 #### Files to create / modify
 
@@ -519,3 +519,4 @@ Completion Protocol (after you finish):
 <!-- Append one line per completed task: - <id> ✅ <YYYY-MM-DD>: <summary> -->
 
 - 1.1 ✅ 2026-07-16: Symbol DI tokens and the `BYMAX_*` error-code catalog with `codeForStatus`; 100% covered.
+- 1.2 ✅ 2026-07-16: options surface, per-feature defaults, and `normalizeCoreOptions` with recursive deep-freeze; 100% covered.

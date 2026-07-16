@@ -28,7 +28,7 @@
 | ID  | Phase                | Status | Progress | Size | Last Updated |
 | --- | -------------------- | ------ | -------- | ---- | ------------ |
 | P0  | repository-scaffold  | ✅     | 100%     | M    | 2026-07-16   |
-| P1  | module-core          | 🔄     | 17%      | M    | 2026-07-16   |
+| P1  | module-core          | 🔄     | 33%      | M    | 2026-07-16   |
 | P2  | error-envelope       | 📋     | 0%       | M    | 2026-07-06   |
 | P3  | timing-interceptor   | 📋     | 0%       | S    | 2026-07-06   |
 | P4  | pagination           | 📋     | 0%       | M    | 2026-07-06   |
