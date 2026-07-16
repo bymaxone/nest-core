@@ -50,6 +50,8 @@ export interface FilterErrorContext {
   readonly method: string
   /** Request URL path, read through the adapter (Express and Fastify neutral). */
   readonly path: string
+  /** Correlation id for the current request; absent when no provider resolves one. */
+  readonly correlationId?: string
 }
 
 /**
@@ -170,9 +172,11 @@ export class BymaxExceptionFilter implements ExceptionFilter {
     const ctx = host.switchToHttp()
     const request = ctx.getRequest<unknown>()
     const response = ctx.getResponse<unknown>()
+    const correlationId = this.correlation.getCorrelationId()
     const context: FilterErrorContext = {
       method: String(httpAdapter.getRequestMethod(request)),
-      path: String(httpAdapter.getRequestUrl(request))
+      path: String(httpAdapter.getRequestUrl(request)),
+      ...(correlationId !== undefined ? { correlationId } : {})
     }
     const envelope = this.buildEnvelope(exception, context)
     httpAdapter.reply(response, envelope, envelope.statusCode)
@@ -274,7 +278,8 @@ export class BymaxExceptionFilter implements ExceptionFilter {
       message,
       path: context.path,
       now: this.now,
-      ...(details !== undefined ? { details } : {})
+      ...(details !== undefined ? { details } : {}),
+      ...(context.correlationId !== undefined ? { correlationId: context.correlationId } : {})
     })
   }
 

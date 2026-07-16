@@ -1,6 +1,6 @@
 # Phase 2: error-envelope
 
-> **Status**: 🔄 In Progress · **Progress**: 3 / 5 tasks · **Last updated**: 2026-07-16
+> **Status**: 🔄 In Progress · **Progress**: 4 / 5 tasks · **Last updated**: 2026-07-16
 > **Source roadmap**: [`../development_plan.md`](../development_plan.md) (P2)
 > **Source spec**: [`../technical_specification.md`](../technical_specification.md) §5, §10, §14.1, §14.2
 
@@ -38,7 +38,7 @@ Expected starting state: phase 1 merged (tokens, catalog, options, both registra
 | 2.1 | Branch, envelope type and builder                                 | ✅ Done | P0       | S    | none               |
 | 2.2 | Filter: HttpException mapping and code derivation                 | ✅ Done | P0       | M    | 2.1                |
 | 2.3 | Filter: validation shape and unknown collapse (`exposeInternals`) | ✅ Done | P0       | M    | 2.2                |
-| 2.4 | Correlation stamping, registration wiring, contract suite         | 📋 ToDo | P0       | M    | 2.3                |
+| 2.4 | Correlation stamping, registration wiring, contract suite         | ✅ Done | P0       | M    | 2.3                |
 | 2.5 | Phase close: verification, PR, Copilot review, merge              | 📋 ToDo | P0       | S    | 2.1, 2.2, 2.3, 2.4 |
 
 ---
@@ -276,7 +276,7 @@ Completion Protocol (after you finish):
 
 ### Task 2.4: Correlation stamping, registration wiring, contract suite
 
-- **Status**: 📋 ToDo
+- **Status**: ✅ Done
 - **Priority**: P0
 - **Size**: M
 - **Depends on**: 2.3
@@ -287,10 +287,10 @@ Correlation-id stamping through the pluggable provider, wiring the real filter i
 
 #### Acceptance criteria
 
-- [ ] A bound `ICorrelationIdProvider` stamps `correlationId`; the no-op default omits the field entirely.
-- [ ] Sync path registers the filter only when `envelope.enabled`; async path swaps pass-through for the real filter per resolved options (both asserted).
-- [ ] Contract tests pin the exact serialized JSON for: a mapped HttpException, a validation error, an unknown error (internals off), and an unknown error (internals on).
-- [ ] Filter and envelope exports added to the `.` barrel; dogfood green; 100% coverage holds.
+- [x] A bound `ICorrelationIdProvider` stamps `correlationId`; the no-op default omits the field entirely.
+- [x] Sync path registers the filter only when `envelope.enabled`; async path swaps pass-through for the real filter per resolved options (both asserted).
+- [x] Contract tests pin the exact serialized JSON for: a mapped HttpException, a validation error, an unknown error (internals off), and an unknown error (internals on).
+- [x] Filter and envelope exports added to the `.` barrel; dogfood green; 100% coverage holds.
 
 #### Files to create / modify
 
@@ -429,3 +429,4 @@ Completion Protocol (after you finish):
 - 2.1 ✅ 2026-07-16: ErrorEnvelope contract type and pure `buildErrorEnvelope` with injectable clock; optionals omitted from serialized JSON; 100% coverage.
 - 2.2 ✅ 2026-07-16: `BymaxExceptionFilter` HttpException mapping (explicit-code passthrough, catalog derivation), framework-neutral path/method accessors via `HttpAdapter`, non-HTTP rethrow, baseline unknown collapse; 100% coverage.
 - 2.3 ✅ 2026-07-16: validation-shape translation to `BYMAX_VALIDATION_FAILED` with structured details, production-safe unknown collapse with `exposeInternals` dev switch, and the overridable `onUnexpectedError` observability seam; leak regression tests; 100% coverage.
+- 2.4 ✅ 2026-07-16: correlation-id stamping via the bound provider (omitted by the no-op default), real filter wired into sync (`APP_FILTER` useClass) and async (selector) paths, pinned-JSON contract suite (mapped/validation/unknown-off/unknown-on/correlation) plus Express integration; barrel exports; dogfood green; 100% coverage.
