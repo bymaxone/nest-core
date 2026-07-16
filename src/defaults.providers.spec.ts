@@ -65,6 +65,8 @@ describe('default bindings resolve in a bare module', () => {
     expect(moduleRef.get(BYMAX_CORRELATION_PROVIDER)).toBeInstanceOf(NoopCorrelationIdProvider)
     expect(moduleRef.get(BYMAX_TIMING_SINK)).toBeInstanceOf(NoopTimingSink)
     expect(moduleRef.get(BYMAX_HEALTH_INDICATORS)).toEqual([])
+    // The shared default must be frozen so a consumer cannot mutate it in place.
+    expect(Object.isFrozen(moduleRef.get(BYMAX_HEALTH_INDICATORS))).toBe(true)
   })
 })
 

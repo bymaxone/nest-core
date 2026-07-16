@@ -59,6 +59,8 @@ export function buildDefaultProviders(): Provider[] {
   return [
     { provide: BYMAX_CORRELATION_PROVIDER, useClass: NoopCorrelationIdProvider },
     { provide: BYMAX_TIMING_SINK, useClass: NoopTimingSink },
-    { provide: BYMAX_HEALTH_INDICATORS, useValue: [] }
+    // Frozen so the shared default cannot be mutated in place by a consumer;
+    // providing indicators means overriding the token with a fresh array.
+    { provide: BYMAX_HEALTH_INDICATORS, useValue: Object.freeze([]) }
   ]
 }
