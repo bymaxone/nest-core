@@ -15,10 +15,11 @@
  *
  * Composition of the timing sink: when timing and metrics are both enabled this
  * binds the `TimingMetricsSink` as the effective `BYMAX_TIMING_SINK`, replacing
- * the no-op default so HTTP samples feed the two default HTTP metrics. A
- * consumer who binds their own `BYMAX_TIMING_SINK` overrides this default per
- * standard NestJS last-registered-wins semantics, opting out of the built-in
- * HTTP metrics in favor of their own sink.
+ * the no-op default so HTTP samples feed the two default HTTP metrics; otherwise
+ * the no-op default stands. This binding is owned by the module: the timing
+ * interceptor injects `BYMAX_TIMING_SINK` from the module's own scope, so it is
+ * this binding, not a same-token provider declared in a consuming module, that
+ * the timing pipeline uses.
  * @layer Provider
  */
 import type { Provider } from '@nestjs/common'
