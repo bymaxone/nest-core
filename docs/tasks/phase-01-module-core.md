@@ -1,6 +1,6 @@
 # Phase 1: module-core
 
-> **Status**: 📋 ToDo · **Progress**: 0 / 6 tasks · **Last updated**: 2026-07-06
+> **Status**: 🔄 In Progress · **Progress**: 1 / 6 tasks · **Last updated**: 2026-07-16
 > **Source roadmap**: [`../development_plan.md`](../development_plan.md) (P1)
 > **Source spec**: [`../technical_specification.md`](../technical_specification.md) §2, §4, §10
 
@@ -37,14 +37,14 @@ Expected starting state: phase 0 merged; the repository builds, lints, and tests
 
 ## Task index
 
-| ID | Task | Status | Priority | Size | Depends on |
-|---|---|---|---|---|---|
-| 1.1 | Branch, Symbol tokens, `BYMAX_*` error-code catalog | 📋 ToDo | P0 | S | none |
-| 1.2 | Options types, defaults, normalization (deep freeze) | 📋 ToDo | P0 | M | 1.1 |
-| 1.3 | `BymaxCoreModule.forRoot` (sync conditional registration) | 📋 ToDo | P0 | M | 1.2 |
-| 1.4 | `forRootAsync` with gated pass-through slots | 📋 ToDo | P0 | M | 1.3 |
-| 1.5 | Default bindings, barrel exports, override tests | 📋 ToDo | P0 | M | 1.4 |
-| 1.6 | Phase close: verification, PR, Copilot review, merge | 📋 ToDo | P0 | S | 1.1, 1.2, 1.3, 1.4, 1.5 |
+| ID  | Task                                                      | Status  | Priority | Size | Depends on              |
+| --- | --------------------------------------------------------- | ------- | -------- | ---- | ----------------------- |
+| 1.1 | Branch, Symbol tokens, `BYMAX_*` error-code catalog       | ✅ Done | P0       | S    | none                    |
+| 1.2 | Options types, defaults, normalization (deep freeze)      | 📋 ToDo | P0       | M    | 1.1                     |
+| 1.3 | `BymaxCoreModule.forRoot` (sync conditional registration) | 📋 ToDo | P0       | M    | 1.2                     |
+| 1.4 | `forRootAsync` with gated pass-through slots              | 📋 ToDo | P0       | M    | 1.3                     |
+| 1.5 | Default bindings, barrel exports, override tests          | 📋 ToDo | P0       | M    | 1.4                     |
+| 1.6 | Phase close: verification, PR, Copilot review, merge      | 📋 ToDo | P0       | S    | 1.1, 1.2, 1.3, 1.4, 1.5 |
 
 ---
 
@@ -52,7 +52,7 @@ Expected starting state: phase 0 merged; the repository builds, lints, and tests
 
 ### Task 1.1: Branch, Symbol tokens, `BYMAX_*` error-code catalog
 
-- **Status**: 📋 ToDo
+- **Status**: ✅ Done
 - **Priority**: P0
 - **Size**: S
 - **Depends on**: none
@@ -63,10 +63,10 @@ Create the phase branch, the token module, and the status-to-code catalog with i
 
 #### Acceptance criteria
 
-- [ ] Branch `feat/phase-01-module-core` created with `git switch -c`.
-- [ ] `src/core.tokens.ts` exports the five Symbol tokens from spec §4.3, each with imperative JSDoc.
-- [ ] `src/envelope/error-codes.ts` exports the `BYMAX_*` code constants and `codeForStatus(status: number): string` implementing the full table of spec §10 including the `BYMAX_CLIENT_ERROR` and `BYMAX_INTERNAL_ERROR` fallbacks.
-- [ ] Tests cover every mapped status plus the two fallbacks; 100% coverage holds.
+- [x] Branch `feat/phase-01-module-core` created with `git switch -c`.
+- [x] `src/core.tokens.ts` exports the five Symbol tokens from spec §4.3, each with imperative JSDoc.
+- [x] `src/envelope/error-codes.ts` exports the `BYMAX_*` code constants and `codeForStatus(status: number): string` implementing the full table of spec §10 including the `BYMAX_CLIENT_ERROR` and `BYMAX_INTERNAL_ERROR` fallbacks.
+- [x] Tests cover every mapped status plus the two fallbacks; 100% coverage holds.
 
 #### Files to create / modify
 
@@ -74,7 +74,7 @@ Create the phase branch, the token module, and the status-to-code catalog with i
 
 #### Agent prompt
 
-````
+```
 You are a senior NestJS library engineer working on @bymax-one/nest-core.
 
 PROJECT: @bymax-one/nest-core, application foundation kit for NestJS 11: error envelope, request
@@ -123,7 +123,7 @@ Completion Protocol (after you finish):
 5. Update the P1 row in ../development_plan.md (canonical) and mirror docs/tasks/README.md.
 6. Recompute the overall counter line in ../development_plan.md.
 7. Commit on the phase branch: `feat(core): add DI tokens and error-code catalog (1.1)`.
-````
+```
 
 ---
 
@@ -151,7 +151,7 @@ The `BymaxCoreModuleOptions` surface, the documented defaults, and the normaliza
 
 #### Agent prompt
 
-````
+```
 You are a senior NestJS library engineer working on @bymax-one/nest-core.
 
 PROJECT: @bymax-one/nest-core, application foundation kit for NestJS 11. Configuration over
@@ -197,7 +197,7 @@ Completion Protocol (after you finish):
 5. Update the P1 row in ../development_plan.md (canonical) and mirror docs/tasks/README.md.
 6. Recompute the overall counter line in ../development_plan.md.
 7. Commit: `feat(core): add module options and normalization (1.2)`.
-````
+```
 
 ---
 
@@ -226,7 +226,7 @@ The dynamic module on `ConfigurableModuleBuilder` with the sync path: disabled f
 
 #### Agent prompt
 
-````
+```
 You are a senior NestJS library engineer working on @bymax-one/nest-core.
 
 PROJECT: @bymax-one/nest-core, application foundation kit for NestJS 11. Dynamic module on
@@ -278,7 +278,7 @@ Completion Protocol (after you finish):
 5. Update the P1 row in ../development_plan.md (canonical) and mirror docs/tasks/README.md.
 6. Recompute the overall counter line in ../development_plan.md.
 7. Commit: `feat(core): add BymaxCoreModule.forRoot with conditional registration (1.3)`.
-````
+```
 
 ---
 
@@ -306,7 +306,7 @@ The async path: options resolve from an injected factory; `APP_FILTER` and `APP_
 
 #### Agent prompt
 
-````
+```
 You are a senior NestJS library engineer working on @bymax-one/nest-core.
 
 PROJECT: @bymax-one/nest-core, application foundation kit for NestJS 11. Async registration
@@ -359,7 +359,7 @@ Completion Protocol (after you finish):
 5. Update the P1 row in ../development_plan.md (canonical) and mirror docs/tasks/README.md.
 6. Recompute the overall counter line in ../development_plan.md.
 7. Commit: `feat(core): add forRootAsync with gated pass-through slots (1.4)`.
-````
+```
 
 ---
 
@@ -387,7 +387,7 @@ No-op default bindings for the pluggable contracts, the public barrel for the `.
 
 #### Agent prompt
 
-````
+```
 You are a senior NestJS library engineer working on @bymax-one/nest-core.
 
 PROJECT: @bymax-one/nest-core, application foundation kit for NestJS 11. Integration by contract:
@@ -439,7 +439,7 @@ Completion Protocol (after you finish):
 5. Update the P1 row in ../development_plan.md (canonical) and mirror docs/tasks/README.md.
 6. Recompute the overall counter line in ../development_plan.md.
 7. Commit: `feat(core): add pluggable contracts, no-op defaults, and public barrel (1.5)`.
-````
+```
 
 ---
 
@@ -466,7 +466,7 @@ Audit the phase Definition of Done, update dashboards, open the phase PR, obtain
 
 #### Agent prompt
 
-````
+```
 You are a senior release engineer closing a development phase of @bymax-one/nest-core.
 
 PROJECT: @bymax-one/nest-core. One PR per phase; GitHub Copilot code review is a mandatory gate.
@@ -510,10 +510,12 @@ Completion Protocol (after you finish):
 3. Append: `- 1.6 ✅ <YYYY-MM-DD>: phase PR merged with Copilot review`.
 4. Update the P1 row (✅, 100%) and overall counter in ../development_plan.md; mirror README.md.
 5. Commit dashboard updates post-merge as `docs(core): close phase 1 dashboards (1.6)`.
-````
+```
 
 ---
 
 ## Completion log
 
 <!-- Append one line per completed task: - <id> ✅ <YYYY-MM-DD>: <summary> -->
+
+- 1.1 ✅ 2026-07-16: Symbol DI tokens and the `BYMAX_*` error-code catalog with `codeForStatus`; 100% covered.
