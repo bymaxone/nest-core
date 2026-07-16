@@ -26,6 +26,11 @@ jobs:
     name: Analyze (javascript-typescript)
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    # Code scanning (SARIF upload) requires the repository to be public or to
+    # have GitHub Advanced Security enabled. Gate the analysis on public
+    # visibility so it activates automatically once the repository is published
+    # and never produces a false CI failure while the repository is private.
+    if: ${{ github.event.repository.private == false }}
 
     permissions:
       contents: read

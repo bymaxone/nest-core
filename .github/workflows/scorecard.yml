@@ -29,6 +29,11 @@ jobs:
     name: Scorecard analysis
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    # Scorecard publishes to the public scorecard.dev viewer and uploads SARIF
+    # to code scanning, both of which require a public repository. Gate on
+    # public visibility so the analysis activates once the repository is
+    # published and never fails on the default branch while it is private.
+    if: ${{ github.event.repository.private == false }}
 
     permissions:
       # Required to upload SARIF results to the Security tab.
