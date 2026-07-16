@@ -48,15 +48,15 @@ for (const { name, path, brotli: limit } of BUDGETS) {
   }
   const raw = readFileSync(abs)
   const compressed = brotliCompressSync(raw, BROTLI_OPTS).length
-  const ok = compressed <= limit
-  if (!ok) failed += 1
+  const isWithinBudget = compressed <= limit
+  if (!isWithinBudget) failed += 1
   rows.push({
     name,
     raw: raw.length,
     brotli: compressed,
     limit,
     delta: compressed - limit,
-    ok
+    ok: isWithinBudget
   })
 }
 
