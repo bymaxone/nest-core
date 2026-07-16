@@ -97,6 +97,47 @@ describe('TimingMetricsSink', () => {
   })
 
   /**
+   * Name collision on the counter is rejected.
+   *
+   * The metrics registry is exported for custom metrics; if a consumer already
+   * registered a non-counter under the reserved counter name, the bridge must
+   * fail fast with a descriptive error instead of a later runtime type failure.
+   */
+  it('throws when a non-counter metric already holds the counter name', async () => {
+    const promClient = await import('prom-client')
+    const registry = new promClient.Registry()
+    new promClient.Histogram({
+      name: 'http_requests_total',
+      help: 'conflicting',
+      registers: [registry]
+    })
+
+    expect(() => new TimingMetricsSink(registry, promClient)).toThrow(
+      /"http_requests_total" is already registered.*different type.*Counter/i
+    )
+  })
+
+  /**
+   * Name collision on the histogram is rejected.
+   *
+   * A consumer metric registered under the reserved histogram name with the
+   * wrong type must be rejected at construction with a descriptive error.
+   */
+  it('throws when a non-histogram metric already holds the histogram name', async () => {
+    const promClient = await import('prom-client')
+    const registry = new promClient.Registry()
+    new promClient.Counter({
+      name: 'http_request_duration_seconds',
+      help: 'conflicting',
+      registers: [registry]
+    })
+
+    expect(() => new TimingMetricsSink(registry, promClient)).toThrow(
+      /"http_request_duration_seconds" is already registered.*different type.*Histogram/i
+    )
+  })
+
+  /**
    * Never throws outward.
    *
    * When the underlying metric throws, the sink must swallow the failure so a

@@ -49,6 +49,12 @@ function getOrCreateCounter(
 ): Counter<HttpMetricLabel> {
   const existing = registry.getSingleMetric(REQUESTS_TOTAL)
   if (existing !== undefined) {
+    if (!(existing instanceof promClient.Counter)) {
+      throw new Error(
+        `A metric named "${REQUESTS_TOTAL}" is already registered on the metrics registry with a ` +
+          `different type; the HTTP metrics bridge requires it to be a Counter.`
+      )
+    }
     return existing as unknown as Counter<HttpMetricLabel>
   }
   return new promClient.Counter({
@@ -74,6 +80,12 @@ function getOrCreateHistogram(
 ): Histogram<HttpMetricLabel> {
   const existing = registry.getSingleMetric(REQUEST_DURATION_SECONDS)
   if (existing !== undefined) {
+    if (!(existing instanceof promClient.Histogram)) {
+      throw new Error(
+        `A metric named "${REQUEST_DURATION_SECONDS}" is already registered on the metrics registry ` +
+          `with a different type; the HTTP metrics bridge requires it to be a Histogram.`
+      )
+    }
     return existing as unknown as Histogram<HttpMetricLabel>
   }
   return new promClient.Histogram({
