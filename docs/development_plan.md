@@ -23,14 +23,14 @@
 
 ## Progress Dashboard
 
-> **Overall: 3 / 9 phases done (33%)** · Active phase: P3 · Blocked: none
+> **Overall: 4 / 9 phases done (44%)** · Active phase: P4 · Blocked: none
 
 | ID  | Phase                | Status | Progress | Size | Last Updated |
 | --- | -------------------- | ------ | -------- | ---- | ------------ |
 | P0  | repository-scaffold  | ✅     | 100%     | M    | 2026-07-16   |
 | P1  | module-core          | ✅     | 100%     | M    | 2026-07-16   |
 | P2  | error-envelope       | ✅     | 100%     | M    | 2026-07-16   |
-| P3  | timing-interceptor   | 🔄     | 75%      | S    | 2026-07-16   |
+| P3  | timing-interceptor   | ✅     | 100%     | S    | 2026-07-16   |
 | P4  | pagination           | 📋     | 0%       | M    | 2026-07-06   |
 | P5  | health               | 📋     | 0%       | M    | 2026-07-06   |
 | P6  | metrics              | 📋     | 0%       | M    | 2026-07-06   |
@@ -134,11 +134,11 @@ These apply to every phase. Phase sections list only rules specific to that phas
 - **Scope (in):** `RequestTimingSample` (method, route template, statusCode, durationMs from a monotonic clock, slow flag from `slowRequestThresholdMs`); `ITimingSink` contract; the interceptor covering success and error outcomes; sink exception swallowing.
 - **Scope (out):** Any concrete sink beyond the no-op default (the metrics bridge is P6; logger forwarding is documentation).
 - **Definition of Done:**
-  - [ ] Samples carry the route template, not the raw URL, on both success and error responses.
-  - [ ] `slow` is true exactly when duration exceeds the configured threshold; absent threshold means always false.
-  - [ ] A sink that throws is silenced and the response is unaffected.
-  - [ ] Disabled timing registers nothing on the sync path and is pass-through on the async path.
-  - [ ] 100% coverage holds.
+  - [x] Samples carry the route template, not the raw URL, on both success and error responses.
+  - [x] `slow` is true exactly when duration exceeds the configured threshold; absent threshold means always false.
+  - [x] A sink that throws is silenced and the response is unaffected.
+  - [x] Disabled timing registers nothing on the sync path and is pass-through on the async path.
+  - [x] 100% coverage holds.
 - **Context / preconditions:** P1 done.
 - **Rules-of-phase:** Monotonic clock only; wall-clock date functions are banned for duration math. Label cardinality discipline (route template) is a contract, not an optimization.
 - **References:** Spec §6 (request timing).

@@ -57,10 +57,8 @@ export class PassThroughExceptionFilter implements ExceptionFilter {
 
 /**
  * Interceptor that forwards the handler stream without touching it, used on the
- * async path as the transparent stand-in for the timing feature. The async
- * selector returns it unconditionally today; it becomes the disabled-feature
- * branch once the real timing interceptor exists. It adds no observable
- * behavior and no measurable per-request work.
+ * async path as the transparent stand-in when the timing feature is disabled.
+ * It adds no observable behavior and no measurable per-request work.
  */
 export class PassThroughInterceptor implements NestInterceptor {
   /**
