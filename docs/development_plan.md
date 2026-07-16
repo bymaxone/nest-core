@@ -23,12 +23,14 @@
 
 ## Progress Dashboard
 
-> **Overall: 9 / 9 phases done (100%)** · Active phase: none · Blocked: none
+> **Overall: 8 / 9 phases done (89%), 1 partial (P8)** · Active phase: none · Blocked: none
 >
-> Scope note: all nine phases of the implemented library are complete. The live
-> provenance release of v0.1.0 (make the repository public, push the `v0.1.0`
-> tag, publish to npm with OIDC provenance, badges resolve) is an operator-owned
-> follow-up, deliberately out of this counter's automated scope.
+> Scope note: all library implementation work across the nine phases is complete
+> and merged. P8 is **Partial**: its local release hardening is done, but the
+> live provenance release of v0.1.0 (make the repository public, push the
+> `v0.1.0` tag, publish to npm with OIDC provenance, badges resolve) is an
+> operator-owned follow-up that is not yet performed, so the phase is not fully
+> Done.
 
 | ID  | Phase                | Status | Progress | Size | Last Updated |
 | --- | -------------------- | ------ | -------- | ---- | ------------ |
@@ -40,7 +42,7 @@
 | P5  | health               | ✅     | 100%     | M    | 2026-07-16   |
 | P6  | metrics              | ✅     | 100%     | M    | 2026-07-16   |
 | P7  | integration-and-docs | ✅     | 100%     | M    | 2026-07-16   |
-| P8  | release-hardening    | ✅     | 100%     | L    | 2026-07-16   |
+| P8  | release-hardening    | 🟡     | Partial  | L    | 2026-07-16   |
 
 ---
 
