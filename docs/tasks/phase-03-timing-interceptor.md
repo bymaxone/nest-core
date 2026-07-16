@@ -1,6 +1,6 @@
 # Phase 3: timing-interceptor
 
-> **Status**: 🔄 In Progress · **Progress**: 1 / 4 tasks · **Last updated**: 2026-07-16
+> **Status**: 🔄 In Progress · **Progress**: 2 / 4 tasks · **Last updated**: 2026-07-16
 > **Source roadmap**: [`../development_plan.md`](../development_plan.md) (P3)
 > **Source spec**: [`../technical_specification.md`](../technical_specification.md) §6
 
@@ -36,7 +36,7 @@ Expected starting state: phase 1 merged. Code-parallel with phases 2, 4, and 5; 
 | ID  | Task                                                         | Status  | Priority | Size | Depends on    |
 | --- | ------------------------------------------------------------ | ------- | -------- | ---- | ------------- |
 | 3.1 | Branch, monotonic clock seam, route-template accessor        | ✅ Done | P0       | S    | none          |
-| 3.2 | Interceptor: success and error paths, slow flag, sink safety | 📋 ToDo | P0       | M    | 3.1           |
+| 3.2 | Interceptor: success and error paths, slow flag, sink safety | ✅ Done | P0       | M    | 3.1           |
 | 3.3 | Registration wiring and disabled-path tests                  | 📋 ToDo | P0       | S    | 3.2           |
 | 3.4 | Phase close: verification, PR, Copilot review, merge         | 📋 ToDo | P0       | S    | 3.1, 3.2, 3.3 |
 
@@ -121,7 +121,7 @@ Completion Protocol (after you finish):
 
 ### Task 3.2: Interceptor: success and error paths, slow flag, sink safety
 
-- **Status**: 📋 ToDo
+- **Status**: ✅ Done
 - **Priority**: P0
 - **Size**: M
 - **Depends on**: 3.1
@@ -132,10 +132,10 @@ The `TimingInterceptor`: measures the full handler execution on success and on e
 
 #### Acceptance criteria
 
-- [ ] Exactly one sample per request on the success path and on the error path (error samples carry the final error status).
-- [ ] `slow` is true exactly when duration exceeds `slowRequestThresholdMs`; with no threshold configured it is always false.
-- [ ] A sink that throws is caught and silenced; the response (or the propagated error) is unaffected, asserted by test.
-- [ ] `durationMs` comes from the monotonic clock seam; 100% coverage holds.
+- [x] Exactly one sample per request on the success path and on the error path (error samples carry the final error status).
+- [x] `slow` is true exactly when duration exceeds `slowRequestThresholdMs`; with no threshold configured it is always false.
+- [x] A sink that throws is caught and silenced; the response (or the propagated error) is unaffected, asserted by test.
+- [x] `durationMs` comes from the monotonic clock seam; 100% coverage holds.
 
 #### Files to create / modify
 
@@ -344,3 +344,4 @@ Completion Protocol (after you finish):
 <!-- Append one line per completed task: - <id> ✅ <YYYY-MM-DD>: <summary> -->
 
 - 3.1 ✅ 2026-07-16: monotonic clock seam and neutral Express/Fastify route-template accessor, 100% coverage.
+- 3.2 ✅ 2026-07-16: TimingInterceptor with success/error sampling, slow-flag threshold logic, and sink-exception swallowing, 100% coverage.
