@@ -88,7 +88,9 @@ describe('loadPromClient, absent optional peer', () => {
   it('rejects with a descriptive error naming the package and install command', async () => {
     jest.resetModules()
     jest.doMock('prom-client', () => {
-      throw new Error('Cannot find module prom-client')
+      const error = new Error('Cannot find module prom-client')
+      ;(error as NodeJS.ErrnoException).code = 'MODULE_NOT_FOUND'
+      throw error
     })
     const { loadPromClient: load } =
       require('./metrics.registry') as typeof import('./metrics.registry')
@@ -106,7 +108,9 @@ describe('loadPromClient, absent optional peer', () => {
   it('chains the original failure as the error cause', async () => {
     jest.resetModules()
     jest.doMock('prom-client', () => {
-      throw new Error('Cannot find module prom-client')
+      const error = new Error('Cannot find module prom-client')
+      ;(error as NodeJS.ErrnoException).code = 'ERR_MODULE_NOT_FOUND'
+      throw error
     })
     const { loadPromClient: load } =
       require('./metrics.registry') as typeof import('./metrics.registry')
@@ -114,6 +118,25 @@ describe('loadPromClient, absent optional peer', () => {
     await expect(load()).rejects.toMatchObject({
       cause: expect.objectContaining({ message: 'Cannot find module prom-client' })
     })
+  })
+
+  /**
+   * Non-resolution failures are not masked.
+   *
+   * A failure that is not a module-not-found error (a syntax or runtime error
+   * inside the peer, a broken transitive dependency) must propagate unchanged,
+   * so it is not misreported as the peer being uninstalled.
+   */
+  it('rethrows a non-module-not-found failure unchanged', async () => {
+    jest.resetModules()
+    jest.doMock('prom-client', () => {
+      throw new Error('boom: internal prom-client failure')
+    })
+    const { loadPromClient: load } =
+      require('./metrics.registry') as typeof import('./metrics.registry')
+
+    await expect(load()).rejects.toThrow(/boom: internal prom-client failure/)
+    await expect(load()).rejects.not.toThrow(/prom-client is not installed/)
   })
 })
 

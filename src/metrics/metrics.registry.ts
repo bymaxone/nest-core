@@ -56,11 +56,29 @@ const MISSING_PEER_MESSAGE =
  * @returns The loaded `prom-client` module.
  * @throws Error When `prom-client` is not installed.
  */
+/**
+ * True when a dynamic-import failure means the module could not be resolved,
+ * the only case that indicates the optional peer is absent. Any other failure
+ * (a syntax or runtime error inside `prom-client`, a broken transitive
+ * dependency) is left unwrapped so operators see the real cause instead of a
+ * misleading "not installed".
+ *
+ * @param cause - The error thrown by the dynamic import.
+ * @returns `true` for a module-not-found error, `false` otherwise.
+ */
+function isMissingModuleError(cause: unknown): boolean {
+  const code = (cause as { code?: string }).code
+  return code === 'ERR_MODULE_NOT_FOUND' || code === 'MODULE_NOT_FOUND'
+}
+
 export async function loadPromClient(): Promise<PromClientModule> {
   try {
     return await import('prom-client')
   } catch (cause) {
-    throw new Error(MISSING_PEER_MESSAGE, { cause })
+    if (isMissingModuleError(cause)) {
+      throw new Error(MISSING_PEER_MESSAGE, { cause })
+    }
+    throw cause
   }
 }
 

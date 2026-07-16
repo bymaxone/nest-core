@@ -52,7 +52,9 @@ function createDisabledRegistryPlaceholder(): MetricsRegistry {
   // controller's guard throws before any scrape when metrics are disabled, so
   // this is never dereferenced in practice. It exists only so
   // BYMAX_METRICS_REGISTRY resolves on the async path without loading the
-  // optional peer; an accidental scrape throws descriptively instead.
+  // optional peer; an accidental scrape throws descriptively instead. It cannot
+  // throw on arbitrary property reads: Nest's DI resolution reads properties on
+  // the resolved value, so a throwing accessor would break module boot.
   return { metrics: throwDisabled } as unknown as MetricsRegistry
 }
 
