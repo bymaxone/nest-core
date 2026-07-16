@@ -23,8 +23,10 @@ import type { Observable } from 'rxjs'
 import type { ResolvedCoreOptions } from './core.options'
 
 /**
- * Exception filter that reproduces Nest's default error handling. Registered on
- * the async path when the envelope feature is disabled. It delegates to a
+ * Exception filter that reproduces Nest's default error handling, used on the
+ * async path as the transparent stand-in for the envelope feature. The async
+ * selector returns it unconditionally today; it becomes the disabled-feature
+ * branch once the real envelope filter exists. It delegates to a
  * {@link BaseExceptionFilter} built from the live HTTP adapter, which on the
  * async path is not yet available when the module's providers are constructed,
  * so the delegate is built lazily on the first catch and reused thereafter to
@@ -51,8 +53,10 @@ export class PassThroughExceptionFilter implements ExceptionFilter {
 }
 
 /**
- * Interceptor that forwards the handler stream without touching it. Registered
- * on the async path when the timing feature is disabled; it adds no observable
+ * Interceptor that forwards the handler stream without touching it, used on the
+ * async path as the transparent stand-in for the timing feature. The async
+ * selector returns it unconditionally today; it becomes the disabled-feature
+ * branch once the real timing interceptor exists. It adds no observable
  * behavior and no measurable per-request work.
  */
 export class PassThroughInterceptor implements NestInterceptor {
