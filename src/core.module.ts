@@ -169,7 +169,7 @@ export class BymaxCoreModule extends BymaxCoreModuleBase {
    * Because those options are unknown when the module is defined, the pipeline
    * slots register unconditionally and gate at runtime with transparent
    * pass-throughs; controllers that cannot register conditionally guard their
-   * routes with {@link assertAsyncFeatureEnabled} in later phases.
+   * routes with the async feature guard in later phases.
    *
    * @param options - Async options (factory + inject + imports, or class).
    * @returns The configured `DynamicModule`.

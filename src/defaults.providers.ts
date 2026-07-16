@@ -15,7 +15,7 @@ import {
   BYMAX_TIMING_SINK
 } from './core.tokens'
 import type { ICorrelationIdProvider } from './envelope/correlation.interfaces'
-import type { ITimingSink } from './timing/timing.interfaces'
+import type { ITimingSink, RequestTimingSample } from './timing/timing.interfaces'
 
 /**
  * Correlation provider that never resolves an id. Bound by default so the
@@ -42,7 +42,7 @@ export class NoopTimingSink implements ITimingSink {
    *
    * @param _sample - The sample to discard.
    */
-  record(_sample: Parameters<ITimingSink['record']>[0]): void {
+  record(_sample: RequestTimingSample): void {
     // Intentionally empty: the default sink is fire-and-forget and observable
     // behavior must be indistinguishable from having no sink at all.
   }
