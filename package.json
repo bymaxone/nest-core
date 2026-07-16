@@ -1,6 +1,6 @@
 {
   "name": "@bymax-one/nest-core",
-  "version": "0.1.0-alpha.0",
+  "version": "0.1.0",
   "description": "Zero-dependency NestJS 11 application foundation kit: error-envelope exception filter, request-timing interceptor, pagination helpers, health endpoints, and an optional Prometheus metrics endpoint.",
   "author": "Bymax One <support@bymax.one>",
   "license": "MIT",
@@ -55,7 +55,7 @@
     "size": "node scripts/check-size.mjs",
     "dogfood": "node scripts/dogfood-smoke-test.mjs",
     "clean": "node -e \"const fs=require('node:fs');for(const d of ['dist','coverage'])fs.rmSync(d,{recursive:true,force:true})\"",
-    "prepublishOnly": "pnpm clean && pnpm typecheck && pnpm lint && pnpm test:cov:all && pnpm build",
+    "prepublishOnly": "pnpm clean && pnpm typecheck && pnpm lint && pnpm test:cov:all && pnpm build && pnpm size && pnpm dogfood",
     "prepare": "husky"
   },
   "lint-staged": {

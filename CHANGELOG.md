@@ -9,7 +9,7 @@ The `release.yml` workflow extracts the section matching the pushed `vX.Y.Z` tag
 as the GitHub Release body, so each released version needs a matching `## [X.Y.Z]`
 heading here.
 
-## [Unreleased]
+## [0.1.0] - 2026-07-16
 
 ### Added
 
@@ -27,5 +27,7 @@ heading here.
 - Optional Prometheus metrics endpoint: a lazily-loaded optional peer, with default HTTP request-count and duration metrics
 - An end-to-end test suite proving both registration paths, all features together, and every feature disabled
 - The complete public README: feature tour, configuration reference, and integration examples
+- Mutation-testing gate at the family threshold (score at least 95, `break: 95`), with the surviving mutants documented as genuine equivalents
+- Bundle-size budgets calibrated to the real release artifacts (KiB brotli per subpath, headroom below 2x)
 
-[Unreleased]: https://github.com/bymaxone/nest-core/compare/main...HEAD
+[0.1.0]: https://github.com/bymaxone/nest-core/releases/tag/v0.1.0
