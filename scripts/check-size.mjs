@@ -8,7 +8,7 @@
 // devDep cannot tamper with the bundle before `pnpm publish`. `node:zlib`'s
 // brotli matches what npm/CDN compression produces on the wire.
 
-import { readFileSync, statSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { brotliCompressSync, constants } from 'node:zlib'
@@ -46,13 +46,20 @@ const rows = []
 
 for (const { name, path, brotli: limit } of BUDGETS) {
   const abs = resolve(ROOT, path)
+  // Read straight away rather than stat-then-read: two syscalls where one will
+  // do, and the pair is a check-then-use race — the artifact can be replaced
+  // between them, so the size reported would not be the size that was checked.
+  let raw
   try {
-    statSync(abs)
-  } catch {
+    raw = readFileSync(abs)
+  } catch (error) {
+    // Only a genuinely absent artifact gets the friendly message. Anything
+    // else — EACCES, EISDIR, a transient IO fault — keeps its own error, or
+    // the real cause would be reported as "run pnpm build" and hide itself.
+    if (error.code !== 'ENOENT' && error.code !== 'ENOTDIR') throw error
     console.error(`Missing build artifact: ${path}, run \`pnpm build\` first.`)
     process.exit(2)
   }
-  const raw = readFileSync(abs)
   const compressed = brotliCompressSync(raw, BROTLI_OPTS).length
   const isWithinBudget = compressed <= limit
   if (!isWithinBudget) failed += 1
