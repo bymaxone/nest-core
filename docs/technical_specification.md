@@ -50,14 +50,14 @@ Without a shared foundation, every service reimplements the same bootstrap layer
 
 ### 1.4 Distribution Model
 
-| Aspect    | Detail                                              |
-| --------- | --------------------------------------------------- |
-| Registry  | Public npm (`@bymax-one/nest-core`)                 |
-| License   | MIT                                                 |
-| Runtime   | Node.js 24+                                         |
-| Framework | NestJS 11+                                          |
-| Subpaths  | `.` (module + envelope + timing) + `./pagination` + `./health` |
-| Optional peer | `prom-client` (only when metrics are enabled)   |
+| Aspect        | Detail                                                         |
+| ------------- | -------------------------------------------------------------- |
+| Registry      | Public npm (`@bymax-one/nest-core`)                            |
+| License       | MIT                                                            |
+| Runtime       | Node.js 24+                                                    |
+| Framework     | NestJS 11+                                                     |
+| Subpaths      | `.` (module + envelope + timing) + `./pagination` + `./health` |
+| Optional peer | `prom-client` (only when metrics are enabled)                  |
 
 ### 1.5 Design Principles
 
@@ -103,11 +103,11 @@ Without a shared foundation, every service reimplements the same bootstrap layer
 
 ### 2.2 Conditional Registration
 
-| Feature  | Default  | When enabled registers                          | When disabled          |
-| -------- | -------- | ----------------------------------------------- | ---------------------- |
-| Envelope | enabled  | `APP_FILTER` bound to `BymaxExceptionFilter`    | nothing                |
-| Timing   | enabled  | `APP_INTERCEPTOR` bound to `TimingInterceptor`  | nothing                |
-| Health   | enabled  | `HealthController` + aggregation service        | no controller, no route |
+| Feature  | Default  | When enabled registers                            | When disabled                 |
+| -------- | -------- | ------------------------------------------------- | ----------------------------- |
+| Envelope | enabled  | `APP_FILTER` bound to `BymaxExceptionFilter`      | nothing                       |
+| Timing   | enabled  | `APP_INTERCEPTOR` bound to `TimingInterceptor`    | nothing                       |
+| Health   | enabled  | `HealthController` + aggregation service          | no controller, no route       |
 | Metrics  | disabled | `MetricsController` + lazy `prom-client` registry | no controller, no peer needed |
 
 Registration rules follow the established `@bymax-one` module pattern:
@@ -172,11 +172,11 @@ The timing interceptor wraps the full handler execution, so the recorded duratio
 
 ### 3.2 Subpath Exports
 
-| Subpath        | Content                                                          |
-| -------------- | ---------------------------------------------------------------- |
+| Subpath        | Content                                                                                  |
+| -------------- | ---------------------------------------------------------------------------------------- |
 | `.`            | `BymaxCoreModule`, exception filter, timing interceptor, tokens, interfaces, error codes |
-| `./pagination` | Offset and cursor DTOs, result builders, cursor codec             |
-| `./health`     | `IHealthIndicator`, `HealthIndicatorResult`, health response types |
+| `./pagination` | Offset and cursor DTOs, result builders, cursor codec                                    |
+| `./health`     | `IHealthIndicator`, `HealthIndicatorResult`, health response types                       |
 
 All subpaths ship ESM + CJS + `.d.ts` via tsup. Deep imports into `dist` internals are not part of the public API and are blocked by the `exports` map.
 
@@ -190,40 +190,40 @@ All subpaths ship ESM + CJS + `.d.ts` via tsup. Deep imports into `dist` interna
 export interface BymaxCoreModuleOptions {
   /** Global exception filter with the stable error envelope. Default: enabled. */
   envelope?: {
-    enabled?: boolean;
+    enabled?: boolean
     /**
      * When true, unknown errors include the original message and stack in the
      * envelope details. Never enable in production.
      */
-    exposeInternals?: boolean;
-  };
+    exposeInternals?: boolean
+  }
 
   /** Request timing interceptor. Default: enabled. */
   timing?: {
-    enabled?: boolean;
+    enabled?: boolean
     /** Samples above this threshold are flagged as slow. Optional. */
-    slowRequestThresholdMs?: number;
-  };
+    slowRequestThresholdMs?: number
+  }
 
   /** Liveness and readiness endpoints. Default: enabled. */
   health?: {
-    enabled?: boolean;
+    enabled?: boolean
     /** Route prefix. Default: "health" (GET /health/live, GET /health/ready). */
-    path?: string;
+    path?: string
     /** Per-indicator timeout before a check is reported as down. Default: 5000. */
-    indicatorTimeoutMs?: number;
-  };
+    indicatorTimeoutMs?: number
+  }
 
   /** Prometheus metrics endpoint. Default: disabled. */
   metrics?: {
-    enabled?: boolean;
+    enabled?: boolean
     /** Route. Default: "metrics". */
-    path?: string;
+    path?: string
     /** Static labels added to every metric. */
-    defaultLabels?: Record<string, string>;
+    defaultLabels?: Record<string, string>
     /** Collect prom-client default process metrics. Default: true when enabled. */
-    collectDefaultMetrics?: boolean;
-  };
+    collectDefaultMetrics?: boolean
+  }
 }
 ```
 
@@ -235,17 +235,17 @@ BymaxCoreModule.forRoot({
   envelope: { enabled: true },
   timing: { enabled: true, slowRequestThresholdMs: 1000 },
   health: { enabled: true },
-  metrics: { enabled: false },
-});
+  metrics: { enabled: false }
+})
 
 // Async (the standard pattern in real applications)
 BymaxCoreModule.forRootAsync({
   inject: [APP_CONFIG],
   useFactory: (config: AppConfig): BymaxCoreModuleOptions => ({
     envelope: { exposeInternals: config.env === 'development' },
-    metrics: { enabled: config.env === 'production' },
-  }),
-});
+    metrics: { enabled: config.env === 'production' }
+  })
+})
 ```
 
 `isGlobal` is a module extra (default `true`) mapped to `DynamicModule.global` through the builder's `setExtras`, following the NestJS 11 convention.
@@ -254,13 +254,13 @@ BymaxCoreModule.forRootAsync({
 
 All tokens are `Symbol`s. String tokens are not used anywhere in the package.
 
-| Token                        | Provides                                   | Default binding            |
-| ---------------------------- | ------------------------------------------ | -------------------------- |
-| `BYMAX_CORE_OPTIONS`         | Resolved `BymaxCoreModuleOptions`          | consumer configuration     |
-| `BYMAX_CORRELATION_PROVIDER` | `ICorrelationIdProvider`                   | no-op (returns `undefined`) |
-| `BYMAX_TIMING_SINK`          | `ITimingSink`                              | no-op                      |
-| `BYMAX_HEALTH_INDICATORS`    | `IHealthIndicator[]`                       | empty array                |
-| `BYMAX_METRICS_REGISTRY`     | `prom-client` `Registry`                   | lazy, only when enabled    |
+| Token                        | Provides                          | Default binding             |
+| ---------------------------- | --------------------------------- | --------------------------- |
+| `BYMAX_CORE_OPTIONS`         | Resolved `BymaxCoreModuleOptions` | consumer configuration      |
+| `BYMAX_CORRELATION_PROVIDER` | `ICorrelationIdProvider`          | no-op (returns `undefined`) |
+| `BYMAX_TIMING_SINK`          | `ITimingSink`                     | no-op                       |
+| `BYMAX_HEALTH_INDICATORS`    | `IHealthIndicator[]`              | empty array                 |
+| `BYMAX_METRICS_REGISTRY`     | `prom-client` `Registry`          | lazy, only when enabled     |
 
 Consumers override a default by providing the token in their own module:
 
@@ -269,9 +269,9 @@ Consumers override a default by providing the token in their own module:
   providers: [
     {
       provide: BYMAX_CORRELATION_PROVIDER,
-      useExisting: LogContextService, // from @bymax-one/nest-logger
-    },
-  ],
+      useExisting: LogContextService // from @bymax-one/nest-logger
+    }
+  ]
 })
 export class ObservabilityModule {}
 ```
@@ -317,7 +317,7 @@ Every error that leaves the application has this exact shape. The contract is ve
 ```typescript
 export interface ICorrelationIdProvider {
   /** Returns the correlation id for the current execution context, if any. */
-  getCorrelationId(): string | undefined;
+  getCorrelationId(): string | undefined
 }
 ```
 
@@ -333,16 +333,16 @@ The interceptor captures a monotonic start time before the handler chain runs an
 
 ```typescript
 export interface RequestTimingSample {
-  method: string;       // "GET"
-  route: string;        // "/invoices/:id" (route template, not the raw URL)
-  statusCode: number;   // final status, including error statuses
-  durationMs: number;   // wall-clock duration, monotonic clock
-  slow: boolean;        // true when above slowRequestThresholdMs
+  method: string // "GET"
+  route: string // "/invoices/:id" (route template, not the raw URL)
+  statusCode: number // final status, including error statuses
+  durationMs: number // wall-clock duration, monotonic clock
+  slow: boolean // true when above slowRequestThresholdMs
 }
 
 export interface ITimingSink {
   /** Receives one sample per completed request. Must never throw. */
-  record(sample: RequestTimingSample): void;
+  record(sample: RequestTimingSample): void
 }
 ```
 
@@ -362,33 +362,29 @@ Pure, provider-free primitives exported from the `./pagination` subpath. No deco
 
 ```typescript
 export interface PageQuery {
-  page: number;   // 1-based
-  limit: number;
+  page: number // 1-based
+  limit: number
 }
 
 /** Clamps raw input into a safe PageQuery: page >= 1, 1 <= limit <= maxLimit. */
 export function normalizePageQuery(
   raw: { page?: unknown; limit?: unknown },
-  options?: { defaultLimit?: number; maxLimit?: number },
-): PageQuery;
+  options?: { defaultLimit?: number; maxLimit?: number }
+): PageQuery
 
 export interface PageMeta {
-  page: number;
-  limit: number;
-  totalItems: number;
-  totalPages: number;
+  page: number
+  limit: number
+  totalItems: number
+  totalPages: number
 }
 
 export interface PageResult<T> {
-  items: T[];
-  meta: PageMeta;
+  items: T[]
+  meta: PageMeta
 }
 
-export function buildPageResult<T>(
-  items: T[],
-  totalItems: number,
-  query: PageQuery,
-): PageResult<T>;
+export function buildPageResult<T>(items: T[], totalItems: number, query: PageQuery): PageResult<T>
 ```
 
 Defaults: `defaultLimit = 20`, `maxLimit = 100`. Both are per-call options, not module state.
@@ -399,37 +395,35 @@ Cursors are opaque `base64url` strings encoding a JSON payload. Consumers never 
 
 ```typescript
 /** Encodes an ordered key set into an opaque cursor. */
-export function encodeCursor(payload: Record<string, string | number>): string;
+export function encodeCursor(payload: Record<string, string | number>): string
 
 /**
  * Decodes a cursor produced by encodeCursor.
  * Throws a BYMAX_VALIDATION_FAILED HttpException on malformed input.
  */
-export function decodeCursor<T extends Record<string, string | number>>(
-  cursor: string,
-): T;
+export function decodeCursor<T extends Record<string, string | number>>(cursor: string): T
 
 export interface CursorQuery {
-  cursor?: string;
-  limit: number;
+  cursor?: string
+  limit: number
 }
 
 export function normalizeCursorQuery(
   raw: { cursor?: unknown; limit?: unknown },
-  options?: { defaultLimit?: number; maxLimit?: number },
-): CursorQuery;
+  options?: { defaultLimit?: number; maxLimit?: number }
+): CursorQuery
 
 export interface CursorResult<T> {
-  items: T[];
+  items: T[]
   /** null when there is no further page. */
-  nextCursor: string | null;
+  nextCursor: string | null
 }
 
 export function buildCursorResult<T>(
   items: T[],
   limit: number,
-  toCursor: (lastItem: T) => Record<string, string | number>,
-): CursorResult<T>;
+  toCursor: (lastItem: T) => Record<string, string | number>
+): CursorResult<T>
 ```
 
 `buildCursorResult` implements the fetch-one-extra convention: the repository queries `limit + 1` rows; the helper trims the extra row and derives `nextCursor` from the last returned item.
@@ -444,10 +438,10 @@ The package never generates SQL, never imports an ORM, and never assumes a speci
 
 ### 8.1 Endpoints
 
-| Route               | Purpose   | Success | Failure |
-| ------------------- | --------- | ------- | ------- |
-| `GET /health/live`  | Liveness: the process is up and the event loop responds | 200 | (unreachable process) |
-| `GET /health/ready` | Readiness: every registered indicator reports `up`      | 200 | 503 |
+| Route               | Purpose                                                 | Success | Failure               |
+| ------------------- | ------------------------------------------------------- | ------- | --------------------- |
+| `GET /health/live`  | Liveness: the process is up and the event loop responds | 200     | (unreachable process) |
+| `GET /health/ready` | Readiness: every registered indicator reports `up`      | 200     | 503                   |
 
 Response contract (stable, versioned with the package):
 
@@ -467,15 +461,15 @@ Response contract (stable, versioned with the package):
 
 ```typescript
 export interface HealthIndicatorResult {
-  status: 'up' | 'down';
-  details?: Record<string, unknown>;
+  status: 'up' | 'down'
+  details?: Record<string, unknown>
 }
 
 export interface IHealthIndicator {
   /** Unique name reported in the checks array. */
-  readonly name: string;
+  readonly name: string
   /** Performs the check. Rejections and timeouts are reported as down. */
-  check(): Promise<HealthIndicatorResult>;
+  check(): Promise<HealthIndicatorResult>
 }
 ```
 
@@ -484,16 +478,14 @@ Consumers register indicators by providing the multi-token:
 ```typescript
 @Injectable()
 export class RedisHealthIndicator implements IHealthIndicator {
-  public readonly name = 'redis';
+  public readonly name = 'redis'
 
-  public constructor(
-    @Inject(BYMAX_CACHE_SERVICE) private readonly cache: CacheService,
-  ) {}
+  public constructor(@Inject(BYMAX_CACHE_SERVICE) private readonly cache: CacheService) {}
 
   public async check(): Promise<HealthIndicatorResult> {
-    const start = performance.now();
-    await this.cache.ping();
-    return { status: 'up', details: { latencyMs: Math.round(performance.now() - start) } };
+    const start = performance.now()
+    await this.cache.ping()
+    return { status: 'up', details: { latencyMs: Math.round(performance.now() - start) } }
   }
 }
 ```
@@ -523,10 +515,10 @@ Disabled by default. When enabled, the module exposes a Prometheus text-format e
 
 When metrics and timing are both enabled, the module binds an internal `ITimingSink` bridge that feeds two metrics with bounded label sets (`method`, `route`, `status_code`):
 
-| Metric                          | Type      | Source                    |
-| ------------------------------- | --------- | ------------------------- |
-| `http_requests_total`           | counter   | one increment per sample  |
-| `http_request_duration_seconds` | histogram | `durationMs / 1000`       |
+| Metric                          | Type      | Source                   |
+| ------------------------------- | --------- | ------------------------ |
+| `http_requests_total`           | counter   | one increment per sample |
+| `http_request_duration_seconds` | histogram | `durationMs / 1000`      |
 
 `collectDefaultMetrics` (process CPU, memory, event loop lag) is on by default when metrics are enabled. Applications register custom metrics against the injected registry.
 
@@ -536,25 +528,25 @@ When metrics and timing are both enabled, the module binds an internal `ITimingS
 
 Codes are stable strings under the `BYMAX_` prefix. Derivation from HTTP status applies when the thrown exception does not carry an explicit `code`.
 
-| HTTP status | Code                           |
-| ----------- | ------------------------------ |
-| 400         | `BYMAX_BAD_REQUEST`            |
-| 400 (validation shape) | `BYMAX_VALIDATION_FAILED` |
-| 401         | `BYMAX_UNAUTHORIZED`           |
-| 403         | `BYMAX_FORBIDDEN`              |
-| 404         | `BYMAX_NOT_FOUND`              |
-| 409         | `BYMAX_CONFLICT`               |
-| 413         | `BYMAX_PAYLOAD_TOO_LARGE`      |
-| 415         | `BYMAX_UNSUPPORTED_MEDIA_TYPE` |
-| 422         | `BYMAX_UNPROCESSABLE_ENTITY`   |
-| 429         | `BYMAX_TOO_MANY_REQUESTS`      |
-| 500         | `BYMAX_INTERNAL_ERROR`         |
-| 501         | `BYMAX_NOT_IMPLEMENTED`        |
-| 502         | `BYMAX_BAD_GATEWAY`            |
-| 503         | `BYMAX_SERVICE_UNAVAILABLE`    |
-| 504         | `BYMAX_GATEWAY_TIMEOUT`        |
-| other 4xx   | `BYMAX_CLIENT_ERROR`           |
-| other 5xx   | `BYMAX_INTERNAL_ERROR`         |
+| HTTP status            | Code                           |
+| ---------------------- | ------------------------------ |
+| 400                    | `BYMAX_BAD_REQUEST`            |
+| 400 (validation shape) | `BYMAX_VALIDATION_FAILED`      |
+| 401                    | `BYMAX_UNAUTHORIZED`           |
+| 403                    | `BYMAX_FORBIDDEN`              |
+| 404                    | `BYMAX_NOT_FOUND`              |
+| 409                    | `BYMAX_CONFLICT`               |
+| 413                    | `BYMAX_PAYLOAD_TOO_LARGE`      |
+| 415                    | `BYMAX_UNSUPPORTED_MEDIA_TYPE` |
+| 422                    | `BYMAX_UNPROCESSABLE_ENTITY`   |
+| 429                    | `BYMAX_TOO_MANY_REQUESTS`      |
+| 500                    | `BYMAX_INTERNAL_ERROR`         |
+| 501                    | `BYMAX_NOT_IMPLEMENTED`        |
+| 502                    | `BYMAX_BAD_GATEWAY`            |
+| 503                    | `BYMAX_SERVICE_UNAVAILABLE`    |
+| 504                    | `BYMAX_GATEWAY_TIMEOUT`        |
+| other 4xx              | `BYMAX_CLIENT_ERROR`           |
+| other 5xx              | `BYMAX_INTERNAL_ERROR`         |
 
 Domain-specific codes are the application's responsibility: throw an `HttpException` whose response object includes a `code` property and the filter passes it through verbatim. The `BYMAX_` prefix is reserved for codes emitted by this package.
 
@@ -562,16 +554,16 @@ Domain-specific codes are the application's responsibility: throw an `HttpExcept
 
 ## 11. What is NOT in the package
 
-| Concern                    | Where it belongs                          |
-| -------------------------- | ----------------------------------------- |
-| Authentication, authorization, sessions | `@bymax-one/nest-auth`      |
-| Logging engine, transports, redaction   | `@bymax-one/nest-logger`    |
-| Caching, Redis access      | `@bymax-one/nest-cache`                   |
-| Queues and background jobs | `@bymax-one/nest-queue`                   |
-| Rate limiting              | application middleware or gateway         |
-| Internationalization       | application layer                         |
-| ORM, repositories, persistence | consumer application                  |
-| Distributed tracing SDK    | OpenTelemetry, wired by the application   |
+| Concern                                 | Where it belongs                        |
+| --------------------------------------- | --------------------------------------- |
+| Authentication, authorization, sessions | `@bymax-one/nest-auth`                  |
+| Logging engine, transports, redaction   | `@bymax-one/nest-logger`                |
+| Caching, Redis access                   | `@bymax-one/nest-cache`                 |
+| Queues and background jobs              | `@bymax-one/nest-queue`                 |
+| Rate limiting                           | application middleware or gateway       |
+| Internationalization                    | application layer                       |
+| ORM, repositories, persistence          | consumer application                    |
+| Distributed tracing SDK                 | OpenTelemetry, wired by the application |
 
 ---
 
@@ -582,8 +574,8 @@ Domain-specific codes are the application's responsibility: throw an `HttpExcept
 ```json
 {
   "peerDependencies": {
-    "@nestjs/common": "^11.0.0",
-    "@nestjs/core": "^11.0.0",
+    "@nestjs/common": "^11.0.16",
+    "@nestjs/core": "^11.1.18",
     "reflect-metadata": "^0.2.0",
     "rxjs": "^7.0.0",
     "prom-client": "^15.0.0"
@@ -615,12 +607,12 @@ Every provider constructor parameter and every factory `inject` entry uses an ex
 
 ### 13.1 Test Gates
 
-| Gate               | Tool                | Threshold                                  |
-| ------------------ | ------------------- | ------------------------------------------ |
-| Coverage           | Jest                | 100% line/branch/function/statement, enforced in both jest configs |
-| Mutation (pre-release) | Stryker         | `high: 99, low: 95, break: 95`             |
-| Bundle size        | `scripts/check-size.mjs` | Budgets in KiB brotli per subpath, calibrated to the real artifact |
-| Packaging          | `scripts/dogfood-smoke-test.mjs` | Every subpath imports cleanly in ESM and CJS from the packed tarball |
+| Gate                   | Tool                             | Threshold                                                            |
+| ---------------------- | -------------------------------- | -------------------------------------------------------------------- |
+| Coverage               | Jest                             | 100% line/branch/function/statement, enforced in both jest configs   |
+| Mutation (pre-release) | Stryker                          | `high: 99, low: 95, break: 95`                                       |
+| Bundle size            | `scripts/check-size.mjs`         | Budgets in KiB brotli per subpath, calibrated to the real artifact   |
+| Packaging              | `scripts/dogfood-smoke-test.mjs` | Every subpath imports cleanly in ESM and CJS from the packed tarball |
 
 Every `it()` carries a block comment stating the scenario and the rule it protects. Provisional bundle budgets at scaffold time: `.` 10 KiB, `./pagination` 3 KiB, `./health` 4 KiB (brotli), to be recalibrated once the first real artifact exists.
 
@@ -647,14 +639,14 @@ Every `it()` carries a block comment stating the scenario and the rule it protec
 ## 15. Example Integration
 
 ```typescript
-import { Controller, Get, Inject, Module, Query } from '@nestjs/common';
-import { BymaxCoreModule, BYMAX_CORRELATION_PROVIDER } from '@bymax-one/nest-core';
+import { Controller, Get, Inject, Module, Query } from '@nestjs/common'
+import { BymaxCoreModule, BYMAX_CORRELATION_PROVIDER } from '@bymax-one/nest-core'
 import {
   buildPageResult,
   normalizePageQuery,
-  type PageResult,
-} from '@bymax-one/nest-core/pagination';
-import type { IHealthIndicator } from '@bymax-one/nest-core/health';
+  type PageResult
+} from '@bymax-one/nest-core/pagination'
+import type { IHealthIndicator } from '@bymax-one/nest-core/health'
 
 @Module({
   imports: [
@@ -664,32 +656,28 @@ import type { IHealthIndicator } from '@bymax-one/nest-core/health';
         envelope: { exposeInternals: config.env === 'development' },
         timing: { slowRequestThresholdMs: 1_000 },
         health: { indicatorTimeoutMs: 3_000 },
-        metrics: { enabled: config.env === 'production' },
-      }),
-    }),
+        metrics: { enabled: config.env === 'production' }
+      })
+    })
   ],
   providers: [
     // Correlated error responses: reuse the logger's request context.
     { provide: BYMAX_CORRELATION_PROVIDER, useExisting: LogContextService },
     // Readiness: report Redis health through the shared indicator token.
-    { provide: BYMAX_HEALTH_INDICATORS, useClass: RedisHealthIndicator, multi: true },
-  ],
+    { provide: BYMAX_HEALTH_INDICATORS, useClass: RedisHealthIndicator, multi: true }
+  ]
 })
 export class AppModule {}
 
 @Controller('invoices')
 export class InvoiceController {
-  public constructor(
-    @Inject(INVOICE_REPOSITORY) private readonly invoices: IInvoiceRepository,
-  ) {}
+  public constructor(@Inject(INVOICE_REPOSITORY) private readonly invoices: IInvoiceRepository) {}
 
   @Get()
-  public async list(
-    @Query() raw: Record<string, unknown>,
-  ): Promise<PageResult<InvoiceDto>> {
-    const query = normalizePageQuery(raw, { maxLimit: 50 });
-    const { rows, total } = await this.invoices.findPage(query);
-    return buildPageResult(rows, total, query);
+  public async list(@Query() raw: Record<string, unknown>): Promise<PageResult<InvoiceDto>> {
+    const query = normalizePageQuery(raw, { maxLimit: 50 })
+    const { rows, total } = await this.invoices.findPage(query)
+    return buildPageResult(rows, total, query)
   }
 }
 ```

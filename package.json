@@ -21,42 +21,61 @@
     "CHANGELOG.md"
   ],
   "main": "./dist/index.cjs",
-  "types": "./dist/index.d.ts",
+  "types": "./dist/index.d.cts",
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.mjs",
-      "require": "./dist/index.cjs"
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.mjs"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
     },
     "./pagination": {
-      "types": "./dist/pagination/index.d.ts",
-      "import": "./dist/pagination/index.mjs",
-      "require": "./dist/pagination/index.cjs"
+      "import": {
+        "types": "./dist/pagination/index.d.ts",
+        "default": "./dist/pagination/index.mjs"
+      },
+      "require": {
+        "types": "./dist/pagination/index.d.cts",
+        "default": "./dist/pagination/index.cjs"
+      }
     },
     "./health": {
-      "types": "./dist/health/index.d.ts",
-      "import": "./dist/health/index.mjs",
-      "require": "./dist/health/index.cjs"
-    }
+      "import": {
+        "types": "./dist/health/index.d.ts",
+        "default": "./dist/health/index.mjs"
+      },
+      "require": {
+        "types": "./dist/health/index.d.cts",
+        "default": "./dist/health/index.cjs"
+      }
+    },
+    "./package.json": "./package.json"
   },
   "scripts": {
     "build": "pnpm clean && tsup",
-    "typecheck": "tsc --noEmit",
+    "check:exports": "attw --pack . --profile strict",
+    "check:published": "node scripts/check-published-surface.mjs",
+    "check:runtime": "node scripts/check-consumer-runtime.mjs",
+    "clean": "node -e \"const fs=require('node:fs');for(const d of ['dist','coverage'])fs.rmSync(d,{recursive:true,force:true})\"",
+    "dogfood": "node scripts/dogfood-smoke-test.mjs",
     "lint": "eslint --no-error-on-unmatched-pattern src scripts test",
     "lint:fix": "eslint --no-error-on-unmatched-pattern src scripts test --fix",
+    "mutation": "stryker run",
+    "mutation:dry-run": "stryker run --dryRunOnly",
+    "mutation:incremental": "stryker run --incremental",
+    "prepare": "husky",
+    "prepublishOnly": "pnpm clean && pnpm typecheck && pnpm lint && pnpm test:cov:all && pnpm build && pnpm size && pnpm dogfood",
+    "size": "node scripts/check-size.mjs",
     "test": "jest",
     "test:cov": "jest --coverage",
-    "test:watch": "jest --watch",
-    "test:e2e": "jest --config jest.e2e.config.ts",
     "test:cov:all": "jest --config jest.coverage.config.ts --coverage",
-    "mutation": "stryker run",
-    "mutation:incremental": "stryker run --incremental",
-    "mutation:dry-run": "stryker run --dryRunOnly",
-    "size": "node scripts/check-size.mjs",
-    "dogfood": "node scripts/dogfood-smoke-test.mjs",
-    "clean": "node -e \"const fs=require('node:fs');for(const d of ['dist','coverage'])fs.rmSync(d,{recursive:true,force:true})\"",
-    "prepublishOnly": "pnpm clean && pnpm typecheck && pnpm lint && pnpm test:cov:all && pnpm build && pnpm size && pnpm dogfood",
-    "prepare": "husky"
+    "test:e2e": "jest --config jest.e2e.config.ts",
+    "test:watch": "jest --watch",
+    "typecheck": "tsc --noEmit"
   },
   "lint-staged": {
     "*.{ts,tsx,js,mjs,cjs}": [
@@ -69,8 +88,8 @@
   },
   "dependencies": {},
   "peerDependencies": {
-    "@nestjs/common": "^11.0.0",
-    "@nestjs/core": "^11.0.0",
+    "@nestjs/common": "^11.0.16",
+    "@nestjs/core": "^11.1.18",
     "reflect-metadata": "^0.2.0",
     "rxjs": "^7.0.0",
     "prom-client": "^15.0.0"
@@ -81,6 +100,7 @@
     }
   },
   "devDependencies": {
+    "@arethetypeswrong/cli": "^0.18.2",
     "@commitlint/cli": "^19.6.0",
     "@commitlint/config-conventional": "^19.6.0",
     "@eslint/js": "^9.39.4",
@@ -135,5 +155,23 @@
   "publishConfig": {
     "access": "public",
     "registry": "https://registry.npmjs.org/"
+  },
+  "pnpm": {
+    "overrides": {
+      "brace-expansion": "^5.0.8",
+      "fast-uri": "^3.1.4",
+      "qs": "^6.15.2"
+    }
+  },
+  "module": "./dist/index.mjs",
+  "typesVersions": {
+    "*": {
+      "pagination": [
+        "./dist/pagination/index.d.cts"
+      ],
+      "health": [
+        "./dist/health/index.d.cts"
+      ]
+    }
   }
 }
