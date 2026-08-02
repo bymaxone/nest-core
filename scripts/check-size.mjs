@@ -52,7 +52,11 @@ for (const { name, path, brotli: limit } of BUDGETS) {
   let raw
   try {
     raw = readFileSync(abs)
-  } catch {
+  } catch (error) {
+    // Only a genuinely absent artifact gets the friendly message. Anything
+    // else — EACCES, EISDIR, a transient IO fault — keeps its own error, or
+    // the real cause would be reported as "run pnpm build" and hide itself.
+    if (error.code !== 'ENOENT' && error.code !== 'ENOTDIR') throw error
     console.error(`Missing build artifact: ${path}, run \`pnpm build\` first.`)
     process.exit(2)
   }
