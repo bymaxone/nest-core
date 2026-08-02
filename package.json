@@ -68,7 +68,7 @@
     "mutation:dry-run": "stryker run --dryRunOnly",
     "mutation:incremental": "stryker run --incremental",
     "prepare": "husky",
-    "prepublishOnly": "pnpm clean && pnpm typecheck && pnpm lint && pnpm test:cov:all && pnpm build && pnpm size && pnpm dogfood",
+    "prepublishOnly": "pnpm clean && pnpm typecheck && pnpm lint && pnpm test:cov:all && pnpm build && pnpm size && pnpm dogfood && pnpm check:exports && pnpm check:published && pnpm check:runtime",
     "size": "node scripts/check-size.mjs",
     "test": "jest",
     "test:cov": "jest --coverage",
