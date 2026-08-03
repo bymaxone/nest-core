@@ -505,16 +505,16 @@ guard you would to any internal endpoint, or keep it off the public listener.
 
 ## 🛡️ Security Table
 
-| Layer              | Implementation                                                                                     |
-| ------------------ | -------------------------------------------------------------------------------------------------- |
-| Error responses    | One shape for everything; unknown errors become a generic 500                                      |
-| Internals          | Message and stack captured for logging, in the body only under `exposeInternals` (default `false`) |
-| Health output      | Top-level `Error#message` only, truncated; no raw error, stack or cause                            |
-| Slow indicators    | Converted to `down` by the aggregator, so a probe cannot hang on one                               |
-| Correlation        | Resolved through `BYMAX_CORRELATION_PROVIDER` — the app decides where the id comes from            |
-| Pagination cursors | Opaque, not authenticated; treated as client-supplied input on the way back in                     |
-| Metrics            | Opt-in; `prom-client` never imported while it is off                                               |
-| Supply chain       | `dependencies: {}`; SHA-pinned Actions, OSV-Scanner, TruffleHog, OpenSSF Scorecard                 |
+| Layer              | Implementation                                                                                                             |
+| ------------------ | -------------------------------------------------------------------------------------------------------------------------- |
+| Error responses    | One shape for everything; unknown errors become a generic 500                                                              |
+| Internals          | Message and stack captured for logging, in the body only under `exposeInternals` (default `false`)                         |
+| Health output      | Top-level `Error#message` only, truncated; no raw error, stack or cause                                                    |
+| Slow indicators    | Converted to `down` by the aggregator, so a probe cannot hang on one                                                       |
+| Correlation        | Resolved through `BYMAX_CORRELATION_PROVIDER` — the app decides where the id comes from                                    |
+| Pagination cursors | Opaque, not authenticated; treated as client-supplied input on the way back in                                             |
+| Metrics            | Opt-in; `prom-client` never imported while it is off                                                                       |
+| Supply chain       | `dependencies: {}`; third-party Actions pinned by commit SHA (org-internal reusables by tag); CodeQL and OpenSSF Scorecard |
 
 > [!IMPORTANT]
 > **`exposeInternals` is a debugging switch, not a verbosity setting.** With it on,
@@ -612,8 +612,9 @@ quality gates.
 
 ## 🔒 Security Policy
 
-If you discover a security vulnerability, please **do not** open a public issue. Instead, email us
-at **support@bymax.one** with details. We take security seriously and will respond promptly. See
+If you discover a security vulnerability, please **do not** open a public
+issue. Instead, email us at **support@bymax.one** with details. We take
+security seriously and will respond promptly. See
 [`SECURITY.md`](./SECURITY.md) for the full policy.
 
 ---
