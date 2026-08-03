@@ -11,7 +11,7 @@ heading here.
 
 ## [Unreleased]
 
-## [0.1.0] - 2026-08-03
+## [1.0.0] - 2026-08-03
 
 First published release. Everything below ships in it.
 
@@ -73,5 +73,5 @@ have regressed from. They are kept because the reasoning is worth having.
   cleanly and silently. Corrected before the first publish, so no released version
   ever carried the permissive range. No runtime behaviour changed.
 
-[0.1.0]: https://github.com/bymaxone/nest-core/releases/tag/v0.1.0
-[Unreleased]: https://github.com/bymaxone/nest-core/compare/v0.1.0...HEAD
+[1.0.0]: https://github.com/bymaxone/nest-core/releases/tag/v1.0.0
+[Unreleased]: https://github.com/bymaxone/nest-core/compare/v1.0.0...HEAD
