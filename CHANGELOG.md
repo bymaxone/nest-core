@@ -38,8 +38,6 @@ have regressed from. They are kept because the reasoning is worth having.
 - Mutation-testing gate at the family threshold (score at least 95, `break: 95`), with the surviving mutants documented as genuine equivalents
 - Bundle-size budgets calibrated to the real release artifacts (KiB brotli per subpath, headroom below 2x)
 
-[0.1.0]: https://github.com/bymaxone/nest-core/releases/tag/v0.1.0
-
 - **`pnpm check:exports`** runs `attw --pack . --profile strict` against the packed
   tarball. Its absence is why both defects above went unnoticed: a source-level
   typecheck compiles `src` and never resolves through the `exports` map.
@@ -74,3 +72,6 @@ have regressed from. They are kept because the reasoning is worth having.
   supported one, and nothing in their tooling contradicts it — the install resolves
   cleanly and silently. Corrected before the first publish, so no released version
   ever carried the permissive range. No runtime behaviour changed.
+
+[0.1.0]: https://github.com/bymaxone/nest-core/releases/tag/v0.1.0
+[Unreleased]: https://github.com/bymaxone/nest-core/compare/v0.1.0...HEAD

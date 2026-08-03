@@ -83,20 +83,12 @@ jobs:
       - name: Verify (typecheck . lint . test . build)
         run: pnpm prepublishOnly
 
-      - name: Release-shape gates (bundle size + dogfood smoke test)
-        # prepublishOnly runs typecheck/lint/tests/build but NOT these two
-        # release-shape gates, and this tag-driven job is the only place the
-        # publish happens (it does not run on the branch CI matrix). Enforce
-        # them here so a tag cannot publish artifacts that exceed the size
-        # budget or have a broken exports/tarball shape.
-        run: |
-          pnpm size
-          pnpm dogfood
-
       - name: Dogfood smoke test
-        # Packs the tarball and installs it into a throwaway consumer, so it is a
-        # step for the same reason the two gates below are: a pack nested inside a
-        # publish fails, and prepublishOnly runs inside one.
+        # A step rather than a prepublishOnly entry, like the two gates below:
+        # it packs the tarball and installs it into a throwaway consumer, and a
+        # pack nested inside a publish fails — prepublishOnly runs inside one.
+        # The size budget it used to share this block with now runs there, since
+        # that gate packs nothing.
         run: pnpm dogfood
 
       - name: Verify published type resolution
@@ -131,10 +123,9 @@ jobs:
         #
         # `--access public` replaces pnpm's `--no-git-checks`: npm performs no git
         # check on publish, and the scope needs an explicit public access flag.
-        # OIDC trusted publishing: pnpm delegates to npm CLI, which exchanges
-        # the GitHub OIDC token (`id-token: write` above) for a short-lived
-        # publish credential. `--no-git-checks` is required because the CI
-        # runner checks out a detached HEAD at the tag SHA.
+        # Authentication is OIDC trusted publishing: the npm CLI exchanges the
+        # GitHub OIDC token (`id-token: write` above) for a short-lived publish
+        # credential, so no token secret is involved.
         run: npm publish --provenance --access public --ignore-scripts
 
       - name: Extract release notes from CHANGELOG
