@@ -1,19 +1,53 @@
-# @bymax-one/nest-core
+<p align="center">
+  <img src="https://img.shields.io/badge/%40bymax--one-nest--core-000000?style=for-the-badge&logo=nestjs&logoColor=E0234E" alt="@bymax-one/nest-core" />
+</p>
 
-Zero-dependency application foundation kit for NestJS 11: a stable error
-envelope, a request-timing interceptor with a pluggable sink, framework-neutral
-pagination helpers, health endpoints with a pluggable indicator contract, and
-an optional Prometheus metrics endpoint. Every dependency you see below is a
-peer you already control the version of; the package itself ships
-`"dependencies": {}`.
+<h1 align="center">@bymax-one/nest-core</h1>
 
-[![CI](https://img.shields.io/github/actions/workflow/status/bymaxone/nest-core/ci.yml?branch=main&style=flat-square&label=CI)](https://github.com/bymaxone/nest-core/actions/workflows/ci.yml)
-[![npm version](https://img.shields.io/npm/v/@bymax-one/nest-core?style=flat-square)](https://www.npmjs.com/package/@bymax-one/nest-core)
-[![license](https://img.shields.io/github/license/bymaxone/nest-core?style=flat-square)](./LICENSE)
-[![coverage](https://img.shields.io/badge/coverage-100%25-brightgreen?style=flat-square)](https://github.com/bymaxone/nest-core/actions/workflows/ci.yml)
-[![mutation score](https://img.shields.io/badge/mutation-pending-lightgrey?style=flat-square)](./docs/technical_specification.md)
+<p align="center">
+  <strong>Zero-dependency application foundation kit for NestJS</strong><br />
+  <sub>Error Envelope · Request Timing · Offset &amp; Cursor Pagination · Health Probes · Prometheus Metrics · Zero Runtime Dependencies</sub>
+</p>
 
-## Features
+<p align="center">
+  <a href="https://www.npmjs.com/package/@bymax-one/nest-core"><img src="https://img.shields.io/npm/v/@bymax-one/nest-core?style=flat-square&colorA=000000&colorB=000000" alt="npm version" /></a>
+  <a href="https://www.npmjs.com/package/@bymax-one/nest-core"><img src="https://img.shields.io/npm/dm/@bymax-one/nest-core?style=flat-square&colorA=000000&colorB=000000" alt="npm downloads" /></a>
+  <a href="https://github.com/bymaxone/nest-core/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/bymaxone/nest-core/ci.yml?branch=main&style=flat-square&colorA=000000&label=CI" alt="CI status" /></a>
+  <a href="https://github.com/bymaxone/nest-core/actions/workflows/ci.yml"><img src="https://img.shields.io/badge/coverage-100%25-brightgreen?style=flat-square&colorA=000000" alt="coverage" /></a>
+  <a href="https://github.com/bymaxone/nest-core/blob/main/docs/mutation_testing_results.md"><img src="https://img.shields.io/badge/mutation-97.86%25-brightgreen?style=flat-square&colorA=000000" alt="mutation score" /></a>
+  <a href="https://scorecard.dev/viewer/?uri=github.com/bymaxone/nest-core"><img src="https://api.scorecard.dev/projects/github.com/bymaxone/nest-core/badge?style=flat-square" alt="OpenSSF Scorecard" /></a>
+  <a href="https://github.com/bymaxone/nest-core/blob/main/LICENSE"><img src="https://img.shields.io/github/license/bymaxone/nest-core?style=flat-square&colorA=000000&colorB=000000" alt="license" /></a>
+  <a href="https://www.typescriptlang.org/"><img src="https://img.shields.io/badge/TypeScript-strict-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript" /></a>
+  <a href="https://nodejs.org/"><img src="https://img.shields.io/badge/Node.js-24%2B-339933?style=flat-square&logo=node.js&logoColor=white" alt="Node.js" /></a>
+</p>
+
+<p align="center">
+  <a href="https://github.com/bymaxone/nest-core">GitHub</a> ·
+  <a href="https://github.com/bymaxone/nest-core/issues">Issues</a> ·
+  <a href="#-quick-start">Quick Start</a> ·
+  <a href="#-api-reference">API Reference</a> ·
+  <a href="https://github.com/bymaxone/nest-core-example">Example App</a>
+</p>
+
+---
+
+## ✨ Overview
+
+`@bymax-one/nest-core` is the layer every service in a fleet ends up writing for
+itself: one error shape, one timing sample, one pagination contract, one health
+probe, one metrics endpoint. Writing it per service is how five services end up
+answering the same failure five different ways, and how a client integration breaks
+because one of them changed its error body.
+
+It ships `"dependencies": {}`. Everything it touches — NestJS, `rxjs`,
+`reflect-metadata`, and `prom-client` for the optional metrics endpoint — is a peer
+whose version you already control. Nothing here is imported unless the feature that
+needs it is enabled: turn metrics off and `prom-client` is never required.
+
+Each feature is independent. Enable the ones you want, and the providers for the
+rest are never registered in the container.
+
+## 🔥 Features
 
 - **Error envelope.** One stable JSON shape for every error an application
   returns, with a versioned code catalog. Enabled by default.
@@ -26,7 +60,18 @@ peer you already control the version of; the package itself ships
 - **Metrics.** An optional Prometheus scrape endpoint. Opt-in; `prom-client` is
   never imported unless you enable it.
 
-## Install
+## 📦 Subpath Exports
+
+| Subpath        | Contents                                                                                                                                                                           |
+| -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `.`            | `BymaxCoreModule`, the error envelope and its code catalog, the timing interceptor, the DI tokens, and every option type                                                           |
+| `./pagination` | `normalizePageQuery`, `buildPageResult`, `normalizeCursorQuery`, `buildCursorResult`, `encodeCursor`, `decodeCursor` and their types — pure functions, no NestJS provider involved |
+| `./health`     | `IHealthIndicator`, `HealthResponse` and the indicator contracts, so a package that only implements an indicator does not import the module                                        |
+
+Each subpath ships ESM and CommonJS with its own `.d.ts` and `.d.cts`, so
+`require()` and `import` both resolve the declarations meant for them.
+
+### Install
 
 ```bash
 pnpm add @bymax-one/nest-core @nestjs/common @nestjs/core reflect-metadata rxjs
@@ -39,7 +84,7 @@ peer dependency, so it is never required unless you turn metrics on:
 pnpm add prom-client
 ```
 
-## Quick start
+## 🚀 Quick Start
 
 ```typescript
 import { Module } from '@nestjs/common'
@@ -53,9 +98,9 @@ export class AppModule {}
 
 With no options, `forRoot()` enables the error envelope, request timing, and
 health endpoints, and leaves metrics off. Every documented default is listed
-in the [configuration reference](#configuration-reference) below.
+in the [configuration reference](#-configuration) below.
 
-## Production wiring with `forRootAsync`
+## 🏭 Production Wiring with `forRootAsync`
 
 The standard pattern in real applications: resolve options from your own
 configuration service, so behavior can vary by environment without a second
@@ -87,7 +132,7 @@ export class AppModule {}
 BymaxCoreModule.forRoot({ isGlobal: false })
 ```
 
-## Configuration reference
+## ⚙️ Configuration
 
 Every block is optional; an omitted block, or an omitted field within it,
 falls back to the documented default. Pass only what you want to change.
@@ -135,7 +180,7 @@ As with `health`, `enabled` and `path` register conditionally on `forRoot`. On
 and enforces `enabled` and the default path with a request-time guard, so a
 disabled or custom-path async configuration fails fast at the route.
 
-## DI tokens
+## 🔑 DI Tokens
 
 Every token is a `Symbol`. `BYMAX_CORRELATION_PROVIDER` and
 `BYMAX_HEALTH_INDICATORS` are consumed with `@Optional()` and are not bound by
@@ -147,7 +192,7 @@ module always binds and exports both (the timing sink as the metrics bridge or a
 no-op, the registry as a guarded placeholder when metrics are off), so a
 consumer `BYMAX_TIMING_SINK` override is honored on `forRoot` but shadowed on
 `forRootAsync`. Follow the pattern in
-[Integration with `@bymax-one/nest-logger`](#integration-with-bymax-onenest-logger)
+[Integration with `@bymax-one/nest-logger`](#-integration-with-bymax-onenest-logger)
 below.
 
 | Token                        | Provides                              | When you do not provide one                                                                       |
@@ -158,7 +203,7 @@ below.
 | `BYMAX_HEALTH_INDICATORS`    | `IHealthIndicator[]`                  | treated as an empty indicator set                                                                 |
 | `BYMAX_METRICS_REGISTRY`     | the `prom-client` `Registry`          | bound when metrics are enabled; on `forRootAsync` always registered, guarded-placeholder when off |
 
-## Error envelope
+## 🚨 Error Envelope
 
 Every error that leaves an application registered with the envelope feature
 follows this exact, versioned shape:
@@ -197,7 +242,7 @@ import { BadRequestException } from '@nestjs/common'
 throw new BadRequestException({ code: 'INVOICE_OVERDUE', message: 'Invoice is overdue' })
 ```
 
-## Request timing
+## ⏱️ Request Timing
 
 One `RequestTimingSample` is delivered per completed request, success or
 error, to whatever implements `ITimingSink`:
@@ -235,7 +280,7 @@ class LoggerTimingSink implements ITimingSink {
 export class ObservabilityModule {}
 ```
 
-## Pagination
+## 📄 Pagination
 
 Framework-neutral, pure functions on the `./pagination` subpath: no NestJS
 provider, no ORM awareness. Your repository translates the normalized query
@@ -294,7 +339,7 @@ A malformed or tampered cursor rejects with `BYMAX_VALIDATION_FAILED`. Cursors
 are opaque `base64url` strings but are neither encrypted nor signed: encode
 ordering keys only, never sensitive data.
 
-## Health
+## ❤️ Health
 
 Liveness always replies `200` with an empty checks array; readiness runs
 every registered indicator concurrently and replies `200` only when every
@@ -349,7 +394,7 @@ A rejecting, throwing, or slow indicator (past `indicatorTimeoutMs`) is
 converted to a `down` entry with a safe, bounded diagnostic detail; it never
 hides the results of the other registered indicators.
 
-## Metrics
+## 📈 Metrics
 
 Disabled by default. Enabling it registers `GET /metrics`, serving Prometheus
 text format from a dedicated `prom-client` registry:
@@ -374,7 +419,7 @@ default HTTP metrics with a bounded label set:
 Inject `BYMAX_METRICS_REGISTRY` to register your own application metrics
 against the same registry the endpoint scrapes.
 
-## Integration with `@bymax-one/nest-logger`
+## 🔗 Integration with `@bymax-one/nest-logger`
 
 Pairing this package with `@bymax-one/nest-logger` yields correlated logs and
 error responses with one binding and no hard coupling: `LogContextService`
@@ -401,7 +446,115 @@ same `@Global()`-module pattern is how every pluggable token in this package
 is overridden: `BYMAX_TIMING_SINK` and `BYMAX_HEALTH_INDICATORS` follow it
 identically.
 
-## API reference
+## 🏗️ Architecture
+
+```
+BymaxCoreModule (forRoot / forRootAsync)
+  │
+  ├── envelope/ ──────── APP_FILTER — one JSON shape for every error leaving the app
+  │                      · versioned code catalog (BYMAX_NOT_FOUND, BYMAX_CONFLICT, …)
+  │                      · correlation id, resolved through BYMAX_CORRELATION_PROVIDER
+  │
+  ├── timing/ ────────── APP_INTERCEPTOR — one sample per completed request,
+  │                      handed to the sink you register; the library stores nothing
+  │
+  ├── health/ ────────── liveness + readiness over BYMAX_HEALTH_INDICATORS (multi),
+  │                      aggregating whatever indicators the app registered
+  │
+  ├── pagination/ ────── pure functions on their own subpath — no provider, no module
+  │
+  └── metrics/ ───────── opt-in Prometheus endpoint over BYMAX_METRICS_REGISTRY;
+                         prom-client is imported only when it is enabled
+```
+
+Each feature registers only when it is on. Turning metrics off does not leave a
+disabled provider in the container — it leaves no provider, and `prom-client` is
+never imported, which is why it can stay an optional peer.
+
+Nothing here holds state across requests. The timing interceptor emits and forgets;
+the health service runs the indicators the app registered and folds their results;
+the pagination helpers are functions of their arguments.
+
+---
+
+## 🔐 Security Model
+
+**An error envelope is an exfiltration surface.** The filter's job is to make every
+failure look the same to a client, and that means an unknown error becomes a generic
+500 whose body carries the code, the correlation id and nothing else. The original
+message and stack are captured for your logger, not for the response.
+`envelope.exposeInternals` puts them in the body and exists for local debugging —
+its documentation says never enable it in production, and it defaults to `false`.
+
+**Health output is bounded by construction.** An indicator that rejects is folded
+into a `down` entry from its top-level `Error#message` only — never the raw error,
+its stack, or a nested cause — and the message is truncated. An indicator cannot leak
+more than it already chose to put in a message, and a slow one is converted to `down`
+by the aggregator rather than hanging the probe.
+
+**Cursors are opaque, not secret.** `encodeCursor` produces a token a client can
+round-trip; it is not encrypted and not authenticated. Do not put anything in a
+cursor that the client is not allowed to read, and do not treat a cursor as proof of
+anything.
+
+**The metrics endpoint is unauthenticated unless you put something in front of it.**
+It is off by default. When it is on, it is a route like any other — apply the same
+guard you would to any internal endpoint, or keep it off the public listener.
+
+---
+
+## 🛡️ Security Table
+
+| Layer              | Implementation                                                                                     |
+| ------------------ | -------------------------------------------------------------------------------------------------- |
+| Error responses    | One shape for everything; unknown errors become a generic 500                                      |
+| Internals          | Message and stack captured for logging, in the body only under `exposeInternals` (default `false`) |
+| Health output      | Top-level `Error#message` only, truncated; no raw error, stack or cause                            |
+| Slow indicators    | Converted to `down` by the aggregator, so a probe cannot hang on one                               |
+| Correlation        | Resolved through `BYMAX_CORRELATION_PROVIDER` — the app decides where the id comes from            |
+| Pagination cursors | Opaque, not authenticated; treated as client-supplied input on the way back in                     |
+| Metrics            | Opt-in; `prom-client` never imported while it is off                                               |
+| Supply chain       | `dependencies: {}`; SHA-pinned Actions, OSV-Scanner, TruffleHog, OpenSSF Scorecard                 |
+
+> [!IMPORTANT]
+> **`exposeInternals` is a debugging switch, not a verbosity setting.** With it on,
+> the body of a 500 carries the original message and stack of whatever failed —
+> including anything a driver, an SDK or a template put in them.
+
+---
+
+## 🧱 Tech Stack
+
+- **Runtime:** Node.js 24+
+- **Framework:** NestJS 11 (`ConfigurableModuleBuilder`, `APP_FILTER`, `APP_INTERCEPTOR`)
+- **Peers:** `@nestjs/common ^11`, `@nestjs/core ^11`, `rxjs ^7`, `reflect-metadata ^0.2`
+- **Optional peer:** `prom-client ^15` — required only when metrics are enabled
+- **Build:** tsup — ESM + CJS per subpath, with `.d.ts` _and_ `.d.cts` declarations
+- **Tests:** Jest (unit + e2e over a real Nest application) + Stryker (mutation)
+- **TypeScript:** 5.x strict (`noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`), zero `any`
+
+---
+
+## 🧪 Testing & Quality
+
+```bash
+pnpm test            # unit suite
+pnpm test:cov        # unit suite with coverage (100% threshold enforced)
+pnpm test:e2e        # end-to-end against a real Nest application
+pnpm mutation        # Stryker — run before a release, not on every commit
+```
+
+| Gate                              | Standing                                                         |
+| --------------------------------- | ---------------------------------------------------------------- |
+| Line / branch / function coverage | 100%, enforced                                                   |
+| Mutation score                    | [97.86%](./docs/mutation_testing_results.md), `break: 95`        |
+| Type resolution                   | `attw` against the packed tarball, in CI and in `prepublishOnly` |
+| Consumer load                     | Every subpath loaded from the tarball in ESM **and** CommonJS    |
+| Documentation                     | The README's snippets compile against `dist/`                    |
+
+---
+
+## 📖 API Reference
 
 Every export of every subpath, for quick lookup; each is documented in detail
 in the sections above.
@@ -412,7 +565,7 @@ in the sections above.
 | ---------------------------------------------------------------------------------------------------------------------------- | --------- | ---------------------------------------------------------------------- |
 | `BymaxCoreModule`                                                                                                            | class     | The dynamic module: `forRoot` and `forRootAsync`.                      |
 | `BymaxCoreModuleOptions`, `EnvelopeOptions`, `TimingOptions`, `HealthOptions`, `MetricsOptions`, `ResolvedCoreOptions`       | types     | The options surface and its resolved shape.                            |
-| `BYMAX_CORE_OPTIONS`, `BYMAX_CORRELATION_PROVIDER`, `BYMAX_TIMING_SINK`, `BYMAX_HEALTH_INDICATORS`, `BYMAX_METRICS_REGISTRY` | tokens    | The DI tokens; see the [token table](#di-tokens).                      |
+| `BYMAX_CORE_OPTIONS`, `BYMAX_CORRELATION_PROVIDER`, `BYMAX_TIMING_SINK`, `BYMAX_HEALTH_INDICATORS`, `BYMAX_METRICS_REGISTRY` | tokens    | The DI tokens; see the [token table](#-di-tokens).                     |
 | `ICorrelationIdProvider`                                                                                                     | type      | The correlation-provider contract.                                     |
 | `BymaxExceptionFilter`                                                                                                       | class     | The envelope exception filter.                                         |
 | `FilterErrorContext`                                                                                                         | type      | The neutral request context passed to the filter's observability seam. |
@@ -420,7 +573,7 @@ in the sections above.
 | `ErrorEnvelope`, `ErrorDetails`, `BuildErrorEnvelopeInput`                                                                   | types     | The envelope contract and its builder input.                           |
 | `TimingInterceptor`                                                                                                          | class     | The request-timing interceptor.                                        |
 | `ITimingSink`, `RequestTimingSample`                                                                                         | types     | The timing-sink contract and its sample shape.                         |
-| `BYMAX_BAD_GATEWAY` … `BYMAX_VALIDATION_FAILED`                                                                              | constants | The full error-code catalog (see [Error envelope](#error-envelope)).   |
+| `BYMAX_BAD_GATEWAY` … `BYMAX_VALIDATION_FAILED`                                                                              | constants | The full error-code catalog (see [Error envelope](#-error-envelope)).  |
 | `codeForStatus`                                                                                                              | function  | Derives a catalog code from an HTTP status.                            |
 
 ### `./pagination`
@@ -441,7 +594,7 @@ in the sections above.
 | `HealthCheckEntry`      | type | One named entry in a `HealthResponse.checks` array. |
 | `HealthResponse`        | type | The stable liveness and readiness response shape.   |
 
-## Compatibility
+## 🧩 Compatibility
 
 - Node.js `>= 24`
 - NestJS `^11`
@@ -450,11 +603,21 @@ in the sections above.
   error envelope and the timing interceptor in this release; both pass errors
   and requests through untouched.
 
-## Contributing
+## 🤝 Contributing
 
 See [`CONTRIBUTING.md`](./CONTRIBUTING.md) for the development workflow and
-quality gates, and [`SECURITY.md`](./SECURITY.md) to report a vulnerability.
+quality gates.
 
-## License
+---
+
+## 🔒 Security Policy
+
+If you discover a security vulnerability, please **do not** open a public issue. Instead, email us
+at **support@bymax.one** with details. We take security seriously and will respond promptly. See
+[`SECURITY.md`](./SECURITY.md) for the full policy.
+
+---
+
+## 📄 License
 
 MIT, see [`LICENSE`](./LICENSE).
