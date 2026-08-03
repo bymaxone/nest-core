@@ -149,7 +149,11 @@ try {
   // every context it can be invoked from.
   const packEnv = { ...process.env }
   delete packEnv['npm_config_dry_run']
+  // `cwd: rootDir`: the package to pack is this repository's, whatever directory
+  // the script was invoked from. Without it the gate would inspect whichever
+  // package npm resolved from the caller's cwd.
   run('npm', ['pack', '--ignore-scripts', '--silent', '--pack-destination', packDir], {
+    cwd: rootDir,
     env: packEnv
   })
   const packed = readdirSync(packDir).filter((name) => name.endsWith('.tgz'))
