@@ -11,44 +11,13 @@ heading here.
 
 ## [Unreleased]
 
-### Fixed
+## [0.1.0] - 2026-08-03
 
-- **CommonJS consumers resolved ESM type declarations.** The `exports` map
-  declared a single `types` condition, so `require()` landed on `.d.ts` instead of
-  `.d.cts` — `attw --profile strict` reports it as _Masquerading as ESM_ on every
-  subpath. Types are now declared per condition.
+First published release. Everything below ships in it.
 
-- **`node10` type resolution failed outright**: the manifest carried no complete
-  set of `main`, `module`, `types` and `typesVersions`. All four are now present.
-
-### Added
-
-- **`pnpm check:exports`** runs `attw --pack . --profile strict` against the packed
-  tarball. Its absence is why both defects above went unnoticed: a source-level
-  typecheck compiles `src` and never resolves through the `exports` map.
-- **`pnpm check:runtime`** packs the tarball, lays it out the way npm would, and
-  loads every subpath from it in ESM _and_ CommonJS, asserting the expected values
-  are really exported. `attw` proves the declarations resolve; it never runs the
-  JavaScript. Both gates run in CI.
-
-### Security
-
-- **Peer floors raised to exclude known-vulnerable NestJS versions.** The declared
-  ranges were `@nestjs/common ^11.0.0` and `@nestjs/core ^11.0.0`, and both
-  admitted versions carrying published advisories:
-
-  | Peer             | Advisory                                                                                                                                    | Vulnerable                    | New floor  |
-  | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------- | ---------- |
-  | `@nestjs/common` | [GHSA-cj7v-w2c7-cp7c](https://github.com/advisories/GHSA-cj7v-w2c7-cp7c) — remote code execution via the `Content-Type` header              | `>= 11.0.0-next.1, < 11.0.16` | `^11.0.16` |
-  | `@nestjs/core`   | [GHSA-36xv-jgw5-4q75](https://github.com/advisories/GHSA-36xv-jgw5-4q75) — improper neutralization of special elements in downstream output | `<= 11.1.17`                  | `^11.1.18` |
-
-  A peer range is a statement about which versions this library supports. A floor
-  below a published advisory tells a consumer that a vulnerable install is a
-  supported one, and nothing in their tooling contradicts it — the install resolves
-  cleanly and silently. Corrected before the first publish, so no released version
-  ever carried the permissive range. No runtime behaviour changed.
-
-## [0.1.0] - 2026-07-16
+The `Fixed` and `Security` entries record defects found and corrected before
+publication, not regressions any consumer saw — there is no earlier release to
+have regressed from. They are kept because the reasoning is worth having.
 
 ### Added
 
@@ -70,3 +39,38 @@ heading here.
 - Bundle-size budgets calibrated to the real release artifacts (KiB brotli per subpath, headroom below 2x)
 
 [0.1.0]: https://github.com/bymaxone/nest-core/releases/tag/v0.1.0
+
+- **`pnpm check:exports`** runs `attw --pack . --profile strict` against the packed
+  tarball. Its absence is why both defects above went unnoticed: a source-level
+  typecheck compiles `src` and never resolves through the `exports` map.
+- **`pnpm check:runtime`** packs the tarball, lays it out the way npm would, and
+  loads every subpath from it in ESM _and_ CommonJS, asserting the expected values
+  are really exported. `attw` proves the declarations resolve; it never runs the
+  JavaScript. Both gates run in CI.
+
+### Fixed
+
+- **CommonJS consumers resolved ESM type declarations.** The `exports` map
+  declared a single `types` condition, so `require()` landed on `.d.ts` instead of
+  `.d.cts` — `attw --profile strict` reports it as _Masquerading as ESM_ on every
+  subpath. Types are now declared per condition.
+
+- **`node10` type resolution failed outright**: the manifest carried no complete
+  set of `main`, `module`, `types` and `typesVersions`. All four are now present.
+
+### Security
+
+- **Peer floors raised to exclude known-vulnerable NestJS versions.** The declared
+  ranges were `@nestjs/common ^11.0.0` and `@nestjs/core ^11.0.0`, and both
+  admitted versions carrying published advisories:
+
+  | Peer             | Advisory                                                                                                                                    | Vulnerable                    | New floor  |
+  | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------- | ---------- |
+  | `@nestjs/common` | [GHSA-cj7v-w2c7-cp7c](https://github.com/advisories/GHSA-cj7v-w2c7-cp7c) — remote code execution via the `Content-Type` header              | `>= 11.0.0-next.1, < 11.0.16` | `^11.0.16` |
+  | `@nestjs/core`   | [GHSA-36xv-jgw5-4q75](https://github.com/advisories/GHSA-36xv-jgw5-4q75) — improper neutralization of special elements in downstream output | `<= 11.1.17`                  | `^11.1.18` |
+
+  A peer range is a statement about which versions this library supports. A floor
+  below a published advisory tells a consumer that a vulnerable install is a
+  supported one, and nothing in their tooling contradicts it — the install resolves
+  cleanly and silently. Corrected before the first publish, so no released version
+  ever carried the permissive range. No runtime behaviour changed.
