@@ -8,8 +8,7 @@ take vulnerability reports seriously and triage them ahead of feature work.
 
 ## Supported versions
 
-Security patches are issued for the most recent minor on the active `0.x` line.
-Once v1.0 ships, the support table will be updated.
+Security patches are issued for the most recent minor on the active `1.x` line.
 
 | Version | Status                          |
 | ------- | ------------------------------- |
