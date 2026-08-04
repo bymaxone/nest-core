@@ -10,6 +10,8 @@
  * Mocks: hand-built `IHealthIndicator` stubs (family convention, no test
  * double library).
  */
+import { Logger } from '@nestjs/common'
+
 import { normalizeCoreOptions } from '../core.options'
 import type { ResolvedCoreOptions } from '../core.options'
 import type { HealthIndicatorResult, IHealthIndicator } from './health.interfaces'
@@ -50,6 +52,16 @@ function synchronouslyThrowingIndicator(name: string, reason: unknown): IHealthI
 /** Resolve options with a specific `indicatorTimeoutMs`, defaults otherwise. */
 function optionsWithTimeout(indicatorTimeoutMs: number): ResolvedCoreOptions {
   return normalizeCoreOptions({ health: { indicatorTimeoutMs } })
+}
+
+/**
+ * Resolve options with the failure message surfaced in the response. The
+ * summarization tests below assert what the message *is*, which is only
+ * observable through the response when it is opted in — by default the reason
+ * reaches the log and nothing else.
+ */
+function optionsExposingErrors(): ResolvedCoreOptions {
+  return normalizeCoreOptions({ health: { exposeIndicatorErrors: true } })
 }
 
 describe('HealthService', () => {
@@ -154,7 +166,7 @@ describe('HealthService', () => {
   it('converts a rejecting indicator into a down entry with a summarized error detail', async () => {
     const failing = rejectingIndicator('database', new Error('connection refused'))
     const healthy = stubIndicator('redis', { status: 'up' })
-    const service = new HealthService([failing, healthy], normalizeCoreOptions())
+    const service = new HealthService([failing, healthy], optionsExposingErrors())
 
     const result = await service.checkReadiness()
 
@@ -166,6 +178,89 @@ describe('HealthService', () => {
   })
 
   /**
+   * The default: a failing indicator names itself and nothing else.
+   *
+   * Readiness is usually unauthenticated, and an indicator rarely authors its
+   * own failure text — it lets a driver's error propagate, and driver errors
+   * carry hosts, ports and sometimes credentials. The response says which check
+   * is down; the reason goes to the log.
+   */
+  it('omits the failure reason from the response by default', async () => {
+    const secret = 'postgres://user:hunter2@db:5432'
+    const failing = rejectingIndicator('database', new Error(`connection refused: ${secret}`))
+    const healthy = stubIndicator('redis', { status: 'up' })
+    const service = new HealthService([failing, healthy], normalizeCoreOptions())
+
+    const result = await service.checkReadiness()
+
+    expect(result.status).toBe('error')
+    expect(result.checks).toEqual([
+      { name: 'database', status: 'down' },
+      { name: 'redis', status: 'up' }
+    ])
+    // Assert against the values themselves, not a fragment: a later edit to
+    // `secret` would silently stop matching a hardcoded one. Both the credential
+    // and the surrounding message text must be absent.
+    const serialized = JSON.stringify(result)
+    expect(serialized).not.toContain(secret)
+    expect(serialized).not.toContain('connection refused')
+  })
+
+  /**
+   * The reason is not discarded — it is written to Nest's logger, so an operator
+   * keeps the diagnostic that the response no longer carries.
+   */
+  it('writes the failure reason to the logger', async () => {
+    const warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined)
+    const failing = rejectingIndicator('database', new Error('connection refused'))
+    const service = new HealthService([failing], normalizeCoreOptions())
+
+    await service.checkReadiness()
+
+    expect(warn).toHaveBeenCalledWith(
+      'Health indicator "database" reported down: connection refused'
+    )
+    warn.mockRestore()
+  })
+
+  /**
+   * The logger is written whether or not the response carries the message, so
+   * turning the exposure on for local debugging does not silence the log.
+   */
+  it('writes to the logger even when the response exposes the message', async () => {
+    const warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined)
+    const failing = rejectingIndicator('database', new Error('connection refused'))
+    const service = new HealthService([failing], optionsExposingErrors())
+
+    const result = await service.checkReadiness()
+
+    expect(result.checks).toEqual([
+      { name: 'database', status: 'down', details: { error: 'connection refused' } }
+    ])
+    expect(warn).toHaveBeenCalledTimes(1)
+    warn.mockRestore()
+  })
+
+  /**
+   * A timeout reports a number this library chose, not text an indicator
+   * produced, so it is surfaced regardless of the exposure setting.
+   */
+  it('still reports the timeout duration with the exposure off', async () => {
+    jest.useFakeTimers()
+    const slow = neverSettlingIndicator('slow')
+    const service = new HealthService([slow], optionsWithTimeout(50))
+
+    const pending = service.checkReadiness()
+    await jest.advanceTimersByTimeAsync(50)
+    const result = await pending
+
+    expect(result.checks).toEqual([
+      { name: 'slow', status: 'down', details: { timedOutAfterMs: 50 } }
+    ])
+    jest.useRealTimers()
+  })
+
+  /**
    * Rejection with a non-Error reason.
    *
    * A rejection reason that is not an `Error` instance is still summarized
@@ -173,7 +268,7 @@ describe('HealthService', () => {
    */
   it('summarizes a non-Error rejection reason using its string coercion', async () => {
     const failing = rejectingIndicator('queue', 'unavailable')
-    const service = new HealthService([failing], normalizeCoreOptions())
+    const service = new HealthService([failing], optionsExposingErrors())
 
     const result = await service.checkReadiness()
 
@@ -212,7 +307,7 @@ describe('HealthService', () => {
   it('converts a synchronously-throwing indicator into a down entry without hiding other checks', async () => {
     const broken = synchronouslyThrowingIndicator('broken', new Error('boom'))
     const healthy = stubIndicator('redis', { status: 'up' })
-    const service = new HealthService([broken, healthy], normalizeCoreOptions())
+    const service = new HealthService([broken, healthy], optionsExposingErrors())
 
     const result = await service.checkReadiness()
 
@@ -232,7 +327,7 @@ describe('HealthService', () => {
   it('truncates an overly long rejection message before surfacing it', async () => {
     const longMessage = 'x'.repeat(400)
     const failing = rejectingIndicator('database', new Error(longMessage))
-    const service = new HealthService([failing], normalizeCoreOptions())
+    const service = new HealthService([failing], optionsExposingErrors())
 
     const result = await service.checkReadiness()
 
@@ -252,7 +347,7 @@ describe('HealthService', () => {
   it('survives a rejection reason that cannot be coerced to a string', async () => {
     const uncoercible = rejectingIndicator('database', Object.create(null) as unknown)
     const healthy = stubIndicator('cache', { status: 'up' })
-    const service = new HealthService([uncoercible, healthy], normalizeCoreOptions())
+    const service = new HealthService([uncoercible, healthy], optionsExposingErrors())
 
     const result = await service.checkReadiness()
 
@@ -276,7 +371,7 @@ describe('HealthService', () => {
   it('surfaces a message exactly at the length bound without truncating it', async () => {
     const exactMessage = 'y'.repeat(300)
     const failing = rejectingIndicator('database', new Error(exactMessage))
-    const service = new HealthService([failing], normalizeCoreOptions())
+    const service = new HealthService([failing], optionsExposingErrors())
 
     const result = await service.checkReadiness()
 

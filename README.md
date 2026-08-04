@@ -199,11 +199,12 @@ falls back to the documented default. Pass only what you want to change.
 
 ### `health`
 
-| Option               | Type      | Default    | Description                                            |
-| -------------------- | --------- | ---------- | ------------------------------------------------------ |
-| `enabled`            | `boolean` | `true`     | Registers the health controller.                       |
-| `path`               | `string`  | `'health'` | Route prefix: `GET /<path>/live`, `GET /<path>/ready`. |
-| `indicatorTimeoutMs` | `number`  | `5000`     | Per-indicator timeout before a check reports down.     |
+| Option                  | Type      | Default    | Description                                                                                                             |
+| ----------------------- | --------- | ---------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `enabled`               | `boolean` | `true`     | Registers the health controller.                                                                                        |
+| `path`                  | `string`  | `'health'` | Route prefix: `GET /<path>/live`, `GET /<path>/ready`.                                                                  |
+| `indicatorTimeoutMs`    | `number`  | `5000`     | Per-indicator timeout before a check reports down.                                                                      |
+| `exposeIndicatorErrors` | `boolean` | `false`    | Includes the failing indicator's message in the response under `details.error`. Never enable in production — see below. |
 
 On `forRoot`, `enabled` and `path` are applied at module-definition time: a
 disabled feature registers no controller, and a custom `path` mounts the routes.
@@ -391,6 +392,12 @@ Liveness always replies `200` with an empty checks array; readiness runs
 every registered indicator concurrently and replies `200` only when every
 indicator reports `up`, `503` otherwise, naming every check either way.
 
+A failing indicator is named but not quoted: the response says which check is
+down, and the reason goes to the logger. See
+[the security model](#-security-model) for why, and
+`health.exposeIndicatorErrors` if you want the message in the response while
+debugging locally.
+
 ```json
 { "status": "ok", "checks": [{ "name": "redis", "status": "up" }] }
 ```
@@ -558,12 +565,28 @@ original message and stack are captured for your logger, not for the response.
 `envelope.exposeInternals` puts them in the body and exists for local debugging — its own
 documentation says never to enable it in production, and it defaults to `false`.
 
-### Health output is bounded by construction
+### The readiness response names the failure, it does not describe it
 
-An indicator that rejects is folded into a `down` entry from its top-level `Error#message`
-only — never the raw error, its stack, or a nested cause — and the message is truncated. An
-indicator cannot leak more than it already chose to put in a message, and a slow one is
-converted to `down` by the aggregator rather than hanging the probe.
+A failing indicator produces `{ name, status: 'down' }` and nothing else. The reason goes
+to the logger.
+
+That split is deliberate. Readiness is usually unauthenticated and reachable by whatever
+probes it, and an indicator rarely authors its own failure text — it writes
+`await this.redis.ping()` and lets the driver's error propagate. Driver errors carry hosts,
+ports, and in the case of a connection string, credentials. Putting that text in the
+response publishes it to everyone who can reach the endpoint; putting it in the log keeps
+it where access is already controlled, without losing the diagnostic.
+
+`health.exposeIndicatorErrors` puts the message back in the response for local debugging.
+It defaults to `false`, and its documentation says the same thing `envelope.exposeInternals`
+does: never enable it in production. The two options are the same decision, made the same
+way, about the same risk.
+
+What reaches the log is bounded the same way it always was: the top-level `Error#message`
+only — never the raw error, its stack, or a nested cause — truncated at 300 characters.
+A slow indicator is converted to `down` by the aggregator rather than hanging the probe,
+and its `timedOutAfterMs` stays in the response either way, because that number is one this
+library chose rather than text an indicator produced.
 
 ### Cursors are opaque, not secret
 
@@ -580,16 +603,16 @@ guard you would apply to any internal endpoint, or keep it off the public listen
 
 ## 🛡️ Security Table
 
-| Layer              | Implementation                                                                                                             |
-| ------------------ | -------------------------------------------------------------------------------------------------------------------------- |
-| Error responses    | One shape for everything; unknown errors become a generic 500                                                              |
-| Internals          | Message and stack captured for logging, in the body only under `exposeInternals` (default `false`)                         |
-| Health output      | Top-level `Error#message` only, truncated; no raw error, stack or cause                                                    |
-| Slow indicators    | Converted to `down` by the aggregator, so a probe cannot hang on one                                                       |
-| Correlation        | Resolved through `BYMAX_CORRELATION_PROVIDER` — the app decides where the id comes from                                    |
-| Pagination cursors | Opaque, not authenticated; treated as client-supplied input on the way back in                                             |
-| Metrics            | Opt-in; `prom-client` never imported while it is off                                                                       |
-| Supply chain       | `dependencies: {}`; third-party Actions pinned by commit SHA (org-internal reusables by tag); CodeQL and OpenSSF Scorecard |
+| Layer              | Implementation                                                                                                                                                                   |
+| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Error responses    | One shape for everything; unknown errors become a generic 500                                                                                                                    |
+| Internals          | Message and stack captured for logging, in the body only under `exposeInternals` (default `false`)                                                                               |
+| Health output      | The response names which indicator is down and nothing more; the reason goes to the logger. `exposeIndicatorErrors` (default `false`) puts it back in the response for debugging |
+| Slow indicators    | Converted to `down` by the aggregator, so a probe cannot hang on one                                                                                                             |
+| Correlation        | Resolved through `BYMAX_CORRELATION_PROVIDER` — the app decides where the id comes from                                                                                          |
+| Pagination cursors | Opaque, not authenticated; treated as client-supplied input on the way back in                                                                                                   |
+| Metrics            | Opt-in; `prom-client` never imported while it is off                                                                                                                             |
+| Supply chain       | `dependencies: {}`; third-party Actions pinned by commit SHA (org-internal reusables by tag); CodeQL and OpenSSF Scorecard                                                       |
 
 > [!IMPORTANT]
 > **`exposeInternals` is a debugging switch, not a verbosity setting.** With it on,

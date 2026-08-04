@@ -9,7 +9,7 @@
  * dependency ordering between checks.
  * @layer Service
  */
-import { Inject, Injectable, Optional } from '@nestjs/common'
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common'
 
 import type { ResolvedCoreOptions } from '../core.options'
 import { BYMAX_CORE_OPTIONS, BYMAX_HEALTH_INDICATORS } from '../core.tokens'
@@ -25,13 +25,15 @@ const MAX_ERROR_MESSAGE_LENGTH = 300
 const TRUNCATION_ELLIPSIS = '...'
 
 /**
- * Summarize a rejection reason into a safe, bounded-length message. Never
+ * Summarize a rejection reason into a bounded-length message for the log. Never
  * surfaces the raw error object, its stack, or any nested cause: only the
- * top-level message, so an indicator's failure cannot leak more than it
- * already chose to put in `Error#message`.
+ * top-level message, truncated.
  *
- * @param reason - The rejection reason thrown by an indicator's `check()`.
- * @returns A truncated message string.
+ * The result is written to the logger, not to the readiness response. An
+ * indicator usually does not author this text — it lets a driver's error
+ * propagate, and driver errors carry hosts, ports and sometimes credentials —
+ * so bounding it is not enough to make it safe to serve. Where it goes is what
+ * makes it safe.
  */
 function summarizeRejection(reason: unknown): string {
   let message: string
@@ -62,7 +64,9 @@ function summarizeRejection(reason: unknown): string {
  */
 async function runIndicator(
   indicator: IHealthIndicator,
-  timeoutMs: number
+  timeoutMs: number,
+  exposeErrors: boolean,
+  logger: Logger
 ): Promise<HealthCheckEntry> {
   let timer: ReturnType<typeof setTimeout> | undefined
   const timedOut = new Promise<HealthCheckEntry>((resolve) => {
@@ -81,11 +85,17 @@ async function runIndicator(
     // Spread the result first, then set the name, so a misbehaving indicator
     // that returns its own `name` cannot spoof the declared check name.
     .then((result) => ({ ...result, name: indicator.name }))
-    .catch((reason: unknown): HealthCheckEntry => ({
-      name: indicator.name,
-      status: 'down',
-      details: { error: summarizeRejection(reason) }
-    }))
+    .catch((reason: unknown): HealthCheckEntry => {
+      const message = summarizeRejection(reason)
+      // The message goes to the log unconditionally: readiness is usually
+      // unauthenticated, and an indicator rarely authors its own failure text —
+      // it lets a driver's error propagate, and those carry hosts, ports and
+      // sometimes credentials. The log is where access is already controlled.
+      logger.warn(`Health indicator "${indicator.name}" reported down: ${message}`)
+      return exposeErrors
+        ? { name: indicator.name, status: 'down', details: { error: message } }
+        : { name: indicator.name, status: 'down' }
+    })
   try {
     return await Promise.race([checked, timedOut])
   } finally {
@@ -100,6 +110,13 @@ async function runIndicator(
  */
 @Injectable()
 export class HealthService {
+  /**
+   * Nest's own logger, scoped to this class. The failure reason of a `down`
+   * indicator is written here rather than into the HTTP response, so the
+   * diagnostic survives without being served to whoever can reach the probe.
+   */
+  private readonly logger = new Logger(HealthService.name)
+
   /**
    * @param indicators - Every registered indicator; empty when none resolve.
    *   Injected with `@Optional()`: `BymaxCoreModule` binds no local default for
@@ -134,8 +151,11 @@ export class HealthService {
    */
   async checkReadiness(): Promise<HealthResponse> {
     const timeoutMs = this.options.health.indicatorTimeoutMs
+    const exposeErrors = this.options.health.exposeIndicatorErrors
     const checks = await Promise.all(
-      this.indicators.map((indicator) => runIndicator(indicator, timeoutMs))
+      this.indicators.map((indicator) =>
+        runIndicator(indicator, timeoutMs, exposeErrors, this.logger)
+      )
     )
     const status = checks.every((check) => check.status === 'up') ? 'ok' : 'error'
     return { status, checks }

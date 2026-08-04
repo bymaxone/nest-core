@@ -11,6 +11,41 @@ heading here.
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-08-04
+
+**Behaviour change on the readiness endpoint.** A failing indicator's message no
+longer appears in the HTTP response by default; it goes to the logger instead.
+
+### Security
+
+- **The readiness response no longer publishes an indicator's failure message.**
+  `GET /health/ready` returned `details.error` carrying the rejecting indicator's
+  `Error#message`. That endpoint is typically unauthenticated and reachable by
+  whatever probes it — and an indicator rarely authors its own failure text: it
+  writes `await this.redis.ping()` and lets the driver's error propagate. Driver
+  errors carry hosts, ports and, for a connection string, credentials. An
+  indicator failing with `connection refused: postgres://user:PASSWORD@db:5432`
+  served that string to anyone who could reach the probe.
+
+  A failing check is now `{ name, status: 'down' }` and nothing more. The message
+  is written to Nest's `Logger` instead, so the diagnostic survives in a channel
+  that already has access control rather than being lost.
+
+  `health.exposeIndicatorErrors` (default `false`) puts it back in the response
+  for local debugging — the same shape, and the same warning, as
+  `envelope.exposeInternals`. The library made opposite choices about the same
+  risk in two places; they now agree.
+
+  `timedOutAfterMs` is unaffected: that number is one this library chose, not text
+  an indicator produced.
+
+### Changed
+
+- **The Health and Security Model sections describe the split**, and the
+  configuration table documents the new option. The previous text said an
+  indicator "cannot leak more than it already chose to put in a message", which
+  assigned a choice the indicator's author usually never makes.
+
 ## [1.0.0] - 2026-08-03
 
 First published release. Everything below ships in it.
@@ -73,5 +108,6 @@ have regressed from. They are kept because the reasoning is worth having.
   cleanly and silently. Corrected before the first publish, so no released version
   ever carried the permissive range. No runtime behaviour changed.
 
+[1.0.1]: https://github.com/bymaxone/nest-core/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/bymaxone/nest-core/releases/tag/v1.0.0
 [Unreleased]: https://github.com/bymaxone/nest-core/compare/v1.0.0...HEAD

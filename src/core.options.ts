@@ -33,6 +33,18 @@ export interface HealthOptions {
   path?: string
   /** Per-indicator timeout before a check is reported as down. Default: `5000`. */
   indicatorTimeoutMs?: number
+  /**
+   * Include the failing indicator's message in the readiness response under
+   * `details.error`. Never enable in production. Default: `false`.
+   *
+   * Readiness is typically unauthenticated and reachable by whatever probes it,
+   * and an indicator usually does not author its own failure message — it lets a
+   * driver's error propagate, and driver errors carry hosts, ports and sometimes
+   * credentials. With this off, the response names which indicator is down and
+   * nothing else; the message goes to the logger, where access is already
+   * controlled.
+   */
+  exposeIndicatorErrors?: boolean
 }
 
 /** Prometheus metrics endpoint configuration. */
@@ -79,6 +91,7 @@ export interface ResolvedHealthOptions {
   enabled: boolean
   path: string
   indicatorTimeoutMs: number
+  exposeIndicatorErrors: boolean
 }
 
 /** Fully-resolved metrics options. */
@@ -172,6 +185,7 @@ function resolveHealth(raw?: HealthOptions): ResolvedHealthOptions {
   return {
     enabled: raw?.enabled ?? true,
     path: raw?.path ?? DEFAULT_HEALTH_PATH,
+    exposeIndicatorErrors: raw?.exposeIndicatorErrors ?? false,
     indicatorTimeoutMs: raw?.indicatorTimeoutMs ?? DEFAULT_INDICATOR_TIMEOUT_MS
   }
 }

@@ -21,7 +21,12 @@ describe('normalizeCoreOptions', () => {
     expect(normalizeCoreOptions()).toEqual({
       envelope: { enabled: true, exposeInternals: false },
       timing: { enabled: true },
-      health: { enabled: true, path: 'health', indicatorTimeoutMs: 5000 },
+      health: {
+        enabled: true,
+        path: 'health',
+        indicatorTimeoutMs: 5000,
+        exposeIndicatorErrors: false
+      },
       metrics: { enabled: false, path: 'metrics', collectDefaultMetrics: true, defaultLabels: {} }
     })
   })
@@ -45,7 +50,12 @@ describe('normalizeCoreOptions', () => {
   it('merges a partial feature block without dropping sibling defaults', () => {
     const resolved = normalizeCoreOptions({ health: { path: 'status' } })
 
-    expect(resolved.health).toEqual({ enabled: true, path: 'status', indicatorTimeoutMs: 5000 })
+    expect(resolved.health).toEqual({
+      enabled: true,
+      path: 'status',
+      indicatorTimeoutMs: 5000,
+      exposeIndicatorErrors: false
+    })
     expect(resolved.metrics.enabled).toBe(false)
     expect(resolved.envelope.enabled).toBe(true)
   })
@@ -60,7 +70,7 @@ describe('normalizeCoreOptions', () => {
     const resolved = normalizeCoreOptions({
       envelope: { enabled: false, exposeInternals: true },
       timing: { enabled: false, slowRequestThresholdMs: 1000 },
-      health: { enabled: false, path: 'hz', indicatorTimeoutMs: 250 },
+      health: { enabled: false, path: 'hz', indicatorTimeoutMs: 250, exposeIndicatorErrors: true },
       metrics: {
         enabled: true,
         path: 'prom',
@@ -72,7 +82,7 @@ describe('normalizeCoreOptions', () => {
     expect(resolved).toEqual({
       envelope: { enabled: false, exposeInternals: true },
       timing: { enabled: false, slowRequestThresholdMs: 1000 },
-      health: { enabled: false, path: 'hz', indicatorTimeoutMs: 250 },
+      health: { enabled: false, path: 'hz', indicatorTimeoutMs: 250, exposeIndicatorErrors: true },
       metrics: {
         enabled: true,
         path: 'prom',
