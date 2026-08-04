@@ -33,32 +33,78 @@
 
 ## ✨ Overview
 
-`@bymax-one/nest-core` is the layer every service in a fleet ends up writing for
-itself: one error shape, one timing sample, one pagination contract, one health
-probe, one metrics endpoint. Writing it per service is how five services end up
-answering the same failure five different ways, and how a client integration breaks
-because one of them changed its error body.
+`@bymax-one/nest-core` is the layer every service in a fleet ends up writing for itself: one
+error shape, one timing sample, one pagination contract, one health probe, one metrics
+endpoint. Writing it per service is how five services end up answering the same failure five
+different ways, and how a client integration breaks because one of them changed its error
+body.
 
-It ships `"dependencies": {}`. Everything it touches — NestJS, `rxjs`,
-`reflect-metadata`, and `prom-client` for the optional metrics endpoint — is a peer
-whose version you already control. Nothing here is imported unless the feature that
-needs it is enabled: turn metrics off and `prom-client` is never required.
+It ships `"dependencies": {}`. Everything it touches — NestJS, `rxjs`, `reflect-metadata`, and
+`prom-client` for the optional metrics endpoint — is a peer whose version you already control.
 
-Each feature is independent. Enable the ones you want, and the providers for the
-rest are never registered in the container.
+### Why nest-core?
+
+- **One error shape, fleet-wide.** A versioned code catalog and a fixed envelope, so a client
+  writes one error handler instead of one per service — and an unknown failure becomes a
+  generic 500 rather than whatever the framework happened to serialize.
+- **Features register only when enabled.** Turning metrics off does not leave a disabled
+  provider in the container; it leaves no provider, and `prom-client` is never imported. That
+  is what lets it stay an optional peer.
+- **Pagination without a provider.** `./pagination` is pure functions on their own subpath —
+  no module to import, nothing to inject, usable from a script or a test.
+- **Health that cannot hang.** An indicator that rejects becomes a `down` entry from its
+  top-level message alone, truncated; a slow one is converted by the aggregator rather than
+  holding the probe open.
+
+---
 
 ## 🔥 Features
 
-- **Error envelope.** One stable JSON shape for every error an application
-  returns, with a versioned code catalog. Enabled by default.
-- **Request timing.** One timing sample per completed request, delivered to a
-  sink you plug in. Enabled by default.
-- **Pagination.** Offset and cursor helpers on the `./pagination` subpath, pure
-  functions with no NestJS provider involved.
-- **Health.** Liveness and readiness endpoints backed by a pluggable indicator
-  contract on the `./health` subpath. Enabled by default.
-- **Metrics.** An optional Prometheus scrape endpoint. Opt-in; `prom-client` is
-  never imported unless you enable it.
+### 🚨 Errors
+
+- ✅ **Stable envelope** — one JSON shape for every error an application returns:
+  `statusCode`, `code`, `message`, `details`, `correlationId`, `timestamp`, `path`
+- ✅ **Versioned code catalog** — `BYMAX_NOT_FOUND`, `BYMAX_CONFLICT`, `BYMAX_BAD_GATEWAY`
+  and the rest, exported as constants so a client maps a `code` rather than a message string
+- ✅ **Internals stay internal** — an unknown error becomes a generic 500; its message and
+  stack are captured for your logger, and reach the body only under `exposeInternals`
+- ✅ **Correlation id** — resolved through `BYMAX_CORRELATION_PROVIDER`, so the id comes from
+  wherever your request context already keeps it
+
+### ⏱️ Observability
+
+- ✅ **Request timing** — one sample per completed request, handed to the sink you register;
+  the library stores nothing itself
+- ✅ **Slow-request flag** — samples above `slowRequestThresholdMs` are marked, so a sink can
+  branch without re-deriving the threshold
+- ✅ **Prometheus endpoint** — opt-in scrape route over `BYMAX_METRICS_REGISTRY`;
+  `prom-client` is imported only when it is enabled
+
+### 📄 Pagination & Health
+
+- ✅ **Offset and cursor** — `normalizePageQuery` / `buildPageResult` and
+  `normalizeCursorQuery` / `buildCursorResult`, pure functions with no NestJS involvement
+- ✅ **Opaque cursors** — `encodeCursor` / `decodeCursor` round-trip a token a client carries
+  back, treated as untrusted input on the way in
+- ✅ **Liveness and readiness** — separate endpoints, so a slow dependency fails readiness
+  without restarting the pod
+- ✅ **Pluggable indicators** — implement `IHealthIndicator` against a client you already own
+  and register it under the `BYMAX_HEALTH_INDICATORS` multi-token
+
+### 🧩 Developer Experience
+
+- ✅ **Zero runtime dependencies** — `@nestjs/*`, `rxjs` and `reflect-metadata` arrive as
+  peers, so you pin the versions
+- ✅ **Three subpaths** — the module, plus `./pagination` and `./health` that a package can
+  import without pulling the module in
+- ✅ **Dual-format output** — ESM + CJS with declarations for each format, verified against
+  the packed tarball on every run
+- ✅ **Independent features** — each is enabled on its own; the providers for the rest are
+  never registered
+- ✅ **Typed end to end** — TypeScript `strict` with `exactOptionalPropertyTypes` and
+  `noUncheckedIndexedAccess`; zero `any`
+
+---
 
 ## 📦 Subpath Exports
 
@@ -475,31 +521,50 @@ Nothing here holds state across requests. The timing interceptor emits and forge
 the health service runs the indicators the app registered and folds their results;
 the pagination helpers are functions of their arguments.
 
+### Design Principles
+
+| Principle                          | Description                                                                                                                                                               |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 🎭 **One shape for every failure** | The filter's job is to make a client's error handling independent of which service failed and how. An unknown error becomes a generic 500 with a code, not a leaked stack |
+| 🔌 **Enabled means registered**    | A feature that is off registers no provider at all, which is what lets `prom-client` remain an optional peer instead of an always-installed one                           |
+| 🧮 **Pure where it can be**        | Pagination is functions on their own subpath — no provider, no module, no container. A script can use it                                                                  |
+| 🧊 **Zero runtime dependencies**   | `dependencies` is `{}`. Every version you install is one you chose                                                                                                        |
+| 🩺 **A probe cannot hang**         | The aggregator converts a rejecting or slow indicator to `down` itself, so an indicator implementation never needs to guard its own timeout                               |
+| 🧬 **Explicit DI tokens**          | Tokens are `Symbol()`, so no string token can collide with them, and every injectable constructor parameter is decorated explicitly                                       |
+
 ---
 
 ## 🔐 Security Model
 
-**An error envelope is an exfiltration surface.** The filter's job is to make every
-failure look the same to a client, and that means an unknown error becomes a generic
-500 whose body carries the code, the correlation id and nothing else. The original
-message and stack are captured for your logger, not for the response.
-`envelope.exposeInternals` puts them in the body and exists for local debugging —
-its documentation says never enable it in production, and it defaults to `false`.
+This library writes the response a client sees when something fails, and exposes the
+endpoints an operator scrapes. Its security contract is about what those two surfaces
+disclose.
 
-**Health output is bounded by construction.** An indicator that rejects is folded
-into a `down` entry from its top-level `Error#message` only — never the raw error,
-its stack, or a nested cause — and the message is truncated. An indicator cannot leak
-more than it already chose to put in a message, and a slow one is converted to `down`
-by the aggregator rather than hanging the probe.
+### An error envelope is an exfiltration surface
 
-**Cursors are opaque, not secret.** `encodeCursor` produces a token a client can
-round-trip; it is not encrypted and not authenticated. Do not put anything in a
-cursor that the client is not allowed to read, and do not treat a cursor as proof of
-anything.
+The filter's job is to make every failure look the same to a client, so an unknown error
+becomes a generic 500 whose body carries the code, the correlation id and nothing else. The
+original message and stack are captured for your logger, not for the response.
+`envelope.exposeInternals` puts them in the body and exists for local debugging — its own
+documentation says never to enable it in production, and it defaults to `false`.
 
-**The metrics endpoint is unauthenticated unless you put something in front of it.**
-It is off by default. When it is on, it is a route like any other — apply the same
-guard you would to any internal endpoint, or keep it off the public listener.
+### Health output is bounded by construction
+
+An indicator that rejects is folded into a `down` entry from its top-level `Error#message`
+only — never the raw error, its stack, or a nested cause — and the message is truncated. An
+indicator cannot leak more than it already chose to put in a message, and a slow one is
+converted to `down` by the aggregator rather than hanging the probe.
+
+### Cursors are opaque, not secret
+
+`encodeCursor` produces a token a client can round-trip; it is not encrypted and not
+authenticated. Do not put anything in a cursor that the client is not allowed to read, and
+do not treat a cursor as proof of anything.
+
+### The metrics endpoint is a route like any other
+
+It is off by default. When it is on, nothing in this library authenticates it — apply the
+guard you would apply to any internal endpoint, or keep it off the public listener.
 
 ---
 
@@ -537,20 +602,28 @@ guard you would to any internal endpoint, or keep it off the public listener.
 
 ## 🧪 Testing & Quality
 
-```bash
-pnpm test            # unit suite
-pnpm test:cov        # unit suite with coverage (100% threshold enforced)
-pnpm test:e2e        # end-to-end against a real Nest application
-pnpm mutation        # Stryker — run before a release, not on every commit
-```
+This library sits in the path of every request and every failure of every service that
+installs it, so the suite is held to a bar beyond "the tests pass".
 
-| Gate                              | Standing                                                         |
-| --------------------------------- | ---------------------------------------------------------------- |
-| Line / branch / function coverage | 100%, enforced                                                   |
-| Mutation score                    | [97.86%](./docs/mutation_testing_results.md), `break: 95`        |
-| Type resolution                   | `attw` against the packed tarball, in CI and in `prepublishOnly` |
-| Consumer load                     | Every subpath loaded from the tarball in ESM **and** CommonJS    |
-| Documentation                     | The README's snippets compile against `dist/`                    |
+- ✅ **100% line coverage** — statements, branches, functions and lines, enforced as a gate
+- ✅ **97.86% mutation score** — verified with [Stryker](https://stryker-mutator.io/) at
+  `break: 95`; every killable survivor was killed by a strengthened test, with no production
+  change ([report](./docs/mutation_testing_results.md))
+- ✅ **End-to-end against a real application** — the filter, the interceptor and the health
+  routes are exercised through a booted Nest app, not against mocks of it
+- ✅ **Published-artifact gates** — `check:exports` resolves the types the way each module
+  system does, `check:runtime` loads every subpath from the packed tarball in ESM and
+  CommonJS, and `check:published` compiles this README's snippets against `dist/`
+- ✅ **Zero suppressions** — no coverage or mutation directives in the production source
+
+```bash
+pnpm test          # unit suite
+pnpm test:cov      # unit suite with the 100% coverage gate
+pnpm test:e2e      # end-to-end against a real Nest application
+pnpm mutation      # Stryker mutation testing (break: 95)
+pnpm typecheck     # tsc strict check
+pnpm lint          # ESLint
+```
 
 ---
 
@@ -605,8 +678,11 @@ in the sections above.
 
 ## 🤝 Contributing
 
-See [`CONTRIBUTING.md`](./CONTRIBUTING.md) for the development workflow and
-quality gates.
+Pull requests are welcome. Please open an issue first for significant changes.
+
+- Read [`docs/technical_specification.md`](./docs/technical_specification.md) for architecture decisions.
+- Run the full gate listed in [`CONTRIBUTING.md`](./CONTRIBUTING.md) before opening a PR.
+- Conventional Commits are enforced by `commitlint.config.cjs`.
 
 ---
 
@@ -621,4 +697,10 @@ security seriously and will respond promptly. See
 
 ## 📄 License
 
-MIT, see [`LICENSE`](./LICENSE).
+[MIT](./LICENSE) © [Bymax One](https://github.com/bymaxone)
+
+---
+
+<p align="center">
+  <sub>Built with ❤️ by <a href="https://github.com/bymaxone">Bymax One</a></sub>
+</p>
