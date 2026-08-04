@@ -52,10 +52,13 @@ jobs:
           # reusing it.
           persist-credentials: false
 
+      # No `version:` on purpose. The action falls back to the `packageManager`
+      # field of package.json, which is the single place this repository declares
+      # its pnpm version — the same source the CI reusable reads. Pinning it here
+      # too created a second source of truth that drifted.
       - name: Setup pnpm
         uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
         with:
-          version: 10.8.1
           run_install: false
 
       - name: Setup Node.js

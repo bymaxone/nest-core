@@ -149,7 +149,7 @@
     "metrics",
     "typescript"
   ],
-  "packageManager": "pnpm@10.8.1",
+  "packageManager": "pnpm@11.20.0",
   "engines": {
     "node": ">=24.0.0"
   },
@@ -157,16 +157,6 @@
     "access": "public",
     "provenance": true,
     "registry": "https://registry.npmjs.org/"
-  },
-  "pnpm": {
-    "overrides": {
-      "brace-expansion@1": "^1.1.18",
-      "brace-expansion@2": "^2.1.4",
-      "brace-expansion@5": "^5.0.9",
-      "esbuild": "^0.28.1",
-      "fast-uri": "^3.1.5",
-      "qs": "^6.15.2"
-    }
   },
   "module": "./dist/index.mjs",
   "typesVersions": {
