@@ -1,11 +1,11 @@
-# Build scripts are denied by default since pnpm 10; these two are the only
-# dependencies that legitimately need one — esbuild fetches its platform binary
-# and unrs-resolver its native addon. Without this, `pnpm install` fails with
-# ERR_PNPM_IGNORED_BUILDS.
-onlyBuiltDependencies:
-  - esbuild
-  - unrs-resolver
-
+# Build scripts are denied by default; an unlisted package counts as unreviewed.
+# These two legitimately need one — esbuild fetches its platform binary and
+# unrs-resolver its native addon — so without them `pnpm install` exits with
+# ERR_PNPM_IGNORED_BUILDS rather than warning.
+#
+# `allowBuilds` is the only spelling pnpm 11 reads: onlyBuiltDependencies,
+# neverBuiltDependencies and their siblings were removed in v11 and replaced by
+# this map.
 allowBuilds:
   esbuild: true
   unrs-resolver: true
