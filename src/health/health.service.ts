@@ -27,11 +27,13 @@ const TRUNCATION_ELLIPSIS = '...'
 /**
  * Summarize a rejection reason into a bounded-length message for the log. Never
  * surfaces the raw error object, its stack, or any nested cause: only the
- * top-level message, so an indicator's failure cannot leak more than it
- * already chose to put in `Error#message`.
+ * top-level message, truncated.
  *
- * @param reason - The rejection reason thrown by an indicator's `check()`.
- * @returns A truncated message string.
+ * The result is written to the logger, not to the readiness response. An
+ * indicator usually does not author this text — it lets a driver's error
+ * propagate, and driver errors carry hosts, ports and sometimes credentials —
+ * so bounding it is not enough to make it safe to serve. Where it goes is what
+ * makes it safe.
  */
 function summarizeRejection(reason: unknown): string {
   let message: string

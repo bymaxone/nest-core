@@ -198,7 +198,12 @@ describe('HealthService', () => {
       { name: 'database', status: 'down' },
       { name: 'redis', status: 'up' }
     ])
-    expect(JSON.stringify(result)).not.toContain('hunter2')
+    // Assert against the values themselves, not a fragment: a later edit to
+    // `secret` would silently stop matching a hardcoded one. Both the credential
+    // and the surrounding message text must be absent.
+    const serialized = JSON.stringify(result)
+    expect(serialized).not.toContain(secret)
+    expect(serialized).not.toContain('connection refused')
   })
 
   /**
