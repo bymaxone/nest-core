@@ -523,6 +523,10 @@ BYMAX_CORRELATION_PROVIDER               no module,
  comes from)                             script or a test
 ```
 
+Each feature registers only when it is on. Turning metrics off does not leave a
+disabled provider in the container — it leaves no provider, and `prom-client` is
+never imported, which is why it can stay an optional peer.
+
 Nothing here holds state across requests. The timing interceptor emits and forgets;
 the health service runs the indicators the app registered and folds their results;
 the pagination helpers are functions of their arguments.
