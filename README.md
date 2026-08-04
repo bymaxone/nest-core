@@ -495,22 +495,32 @@ identically.
 ## 🏗️ Architecture
 
 ```
-BymaxCoreModule (forRoot / forRootAsync)
-  │
-  ├── envelope/ ──────── APP_FILTER — one JSON shape for every error leaving the app
-  │                      · versioned code catalog (BYMAX_NOT_FOUND, BYMAX_CONFLICT, …)
-  │                      · correlation id, resolved through BYMAX_CORRELATION_PROVIDER
-  │
-  ├── timing/ ────────── APP_INTERCEPTOR — one sample per completed request,
-  │                      handed to the sink you register; the library stores nothing
-  │
-  ├── health/ ────────── liveness + readiness over BYMAX_HEALTH_INDICATORS (multi),
-  │                      aggregating whatever indicators the app registered
-  │
-  ├── pagination/ ────── pure functions on their own subpath — no provider, no module
-  │
-  └── metrics/ ───────── opt-in Prometheus endpoint over BYMAX_METRICS_REGISTRY;
-                         prom-client is imported only when it is enabled
+              BymaxCoreModule.forRoot / forRootAsync
+                                │
+                    each feature registers only if enabled
+                    (off means no provider, not a disabled one)
+                                │
+    ┌───────────┬───────────────┼───────────────┬───────────┐
+    │           │               │               │           │
+ envelope/    timing/        health/       pagination/   metrics/
+    │           │               │               │           │
+APP_FILTER  APP_INTERCEPTOR  liveness +    pure functions  Prometheus
+    │           │            readiness     on their own    scrape route
+    │           │               │           subpath        (opt-in)
+    ▼           ▼               ▼               │             │
+one JSON    one sample     BYMAX_HEALTH_        │             ▼
+shape for   per request    INDICATORS           │      BYMAX_METRICS_
+every       → your sink    (multi-token)        │        REGISTRY
+error           │               │               │             │
+    │           │               ▼               │      prom-client is
+versioned   library      a rejecting or         │      imported ONLY
+code        stores       slow indicator         │      while enabled
+catalog     nothing      → `down`, bounded      │
+    │                                           │
+    ▼                                    no provider,
+BYMAX_CORRELATION_PROVIDER               no module,
+(the app decides where the id            usable from a
+ comes from)                             script or a test
 ```
 
 Each feature registers only when it is on. Turning metrics off does not leave a
