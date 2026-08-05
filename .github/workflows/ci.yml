@@ -47,16 +47,26 @@ jobs:
         # Confirms every declared subpath produced both ESM and CJS bundles plus
         # type declarations. A missing artifact here indicates a tsup
         # misconfiguration that would ship a broken package to npm.
+        #
+        # The list is derived from the `exports` map rather than written out
+        # here: a hardcoded list silently stops covering a subpath the moment
+        # one is added, which is the failure this step exists to catch.
         run: |
-          for subpath in index pagination/index health/index; do
-            for ext in mjs cjs d.ts d.cts; do
-              if [ ! -f "dist/$subpath.$ext" ]; then
-                echo "Missing dist/$subpath.$ext"
-                exit 1
-              fi
-            done
-          done
-          echo "All three subpaths produced ESM + CJS + .d.ts + .d.cts"
+          node -e "
+            const { existsSync } = require('node:fs');
+            const entries = Object.entries(require('./package.json').exports)
+              .filter(([subpath]) => subpath !== './package.json');
+            const missing = entries.flatMap(([subpath, entry]) =>
+              [entry.import.types, entry.import.default, entry.require.types, entry.require.default]
+                .filter((file) => !existsSync(file))
+                .map((file) => subpath + ' -> ' + file)
+            );
+            if (missing.length) {
+              console.error('Missing build output:\n  ' + missing.join('\n  '));
+              process.exit(1);
+            }
+            console.log(entries.length + ' subpaths produced ESM + CJS + .d.ts + .d.cts');
+          "
       - name: Verify published type resolution
         # A source-level typecheck compiles `src`, so it cannot catch a broken
         # `exports` map: a consumer resolving through the packed tarball may
