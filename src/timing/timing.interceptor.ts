@@ -22,7 +22,7 @@ import { extractRequestInfo } from './request-info.accessor'
 import { BYMAX_TIMING_CLOCK, DEFAULT_MONOTONIC_CLOCK } from './timing.clock'
 import type { MonotonicClock } from './timing.clock'
 import type { ITimingSink, RequestTimingSample } from './timing.interfaces'
-import type { ITraceContextProvider } from '../telemetry/trace-context'
+import type { ITraceContextProvider, TraceContext } from '../telemetry/trace-context'
 import { NoopTraceContextProvider } from '../telemetry/trace-context'
 
 /** Status recorded when a response completes without an explicit status code. */
@@ -137,12 +137,18 @@ export class TimingInterceptor implements NestInterceptor {
     const durationMs = this.clock.now() - start
     const threshold = this.options.timing.slowRequestThresholdMs
     const slow = threshold !== undefined && durationMs > threshold
+    // Two guards, not one: a failed trace lookup must cost the optional trace
+    // fields and nothing else. Folding it into the sink's guard would drop the
+    // whole sample, so a broken tracer would silently stop the request counter
+    // — a worse outcome than the missing ids it was meant to tolerate.
+    let trace: TraceContext | undefined
     try {
-      // The trace read is inside the guard, not before it: the provider contract
-      // says it never throws, but this interceptor's guarantee is that request
-      // timing cannot break a request — and a guarantee that assumes another
-      // component's good behavior is not one.
-      const trace = this.traceContext.getTraceContext()
+      trace = this.traceContext.getTraceContext()
+    } catch {
+      // The provider contract says it never throws; this interceptor's guarantee
+      // does not depend on that being true.
+    }
+    try {
       this.sink.record({
         method,
         route,
@@ -154,8 +160,8 @@ export class TimingInterceptor implements NestInterceptor {
         ...(trace !== undefined ? { traceId: trace.traceId, spanId: trace.spanId } : {})
       })
     } catch {
-      // Fire-and-forget contract: neither a throwing sink nor a throwing trace
-      // provider may break the request being observed, so both are silenced here.
+      // Fire-and-forget contract: a throwing sink must never break the request
+      // it is observing, so its failure is caught and silenced here.
     }
   }
 }

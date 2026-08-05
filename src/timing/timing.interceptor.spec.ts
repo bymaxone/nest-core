@@ -448,14 +448,14 @@ describe('TimingInterceptor, trace correlation', () => {
   })
 
   /**
-   * A throwing trace provider cannot break the request. Regression guard.
+   * A throwing trace provider costs the trace fields and nothing else.
    *
-   * The provider contract says it never throws, but this interceptor's guarantee
-   * is that request timing can never break a request — and a guarantee that
-   * assumes another component's good behavior is not one. A broken tracer must
-   * cost the trace fields, not the response.
+   * Two things have to survive it: the request, and the sample. Folding the
+   * trace read into the sink's guard would drop the whole sample, so a broken
+   * tracer would silently stop the request counter — a worse outcome than the
+   * missing ids it was meant to tolerate.
    */
-  it('completes the request when the trace provider throws', (done) => {
+  it('still records the sample, without trace ids, when the trace provider throws', (done) => {
     const sink = recordingSink()
     const interceptor = buildInterceptor({
       sink,
@@ -477,7 +477,10 @@ describe('TimingInterceptor, trace correlation', () => {
       )
       .subscribe({
         complete: () => {
-          expect(sink.samples).toHaveLength(0)
+          expect(sink.samples).toHaveLength(1)
+          expect(sink.samples[0]).toMatchObject({ method: 'GET', route: '/invoices' })
+          expect(sink.samples[0]).not.toHaveProperty('traceId')
+          expect(sink.samples[0]).not.toHaveProperty('spanId')
           done()
         },
         error: () => done(new Error('the request must not fail because telemetry did'))
