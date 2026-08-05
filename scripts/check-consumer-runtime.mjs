@@ -43,9 +43,9 @@ const consumerDir = join(rootDir, '.consumer-runtime-check')
 /**
  * Subpath → the values a consumer must find on it.
  *
- * `./health` is listed with no values because it is type-only: it exports nothing
- * at runtime. Loading it still matters — a broken `exports` entry or a missing
- * bundle fails here, and CI checks that `dist/health/*` was produced.
+ * A subpath that exports mostly types still earns its entry here: loading it
+ * proves the `exports` map resolves and the bundle was produced, which no type
+ * check can tell you.
  */
 const SUBPATHS = {
   '.': [
@@ -61,9 +61,9 @@ const SUBPATHS = {
     'BYMAX_CORRELATION_PROVIDER',
     'BYMAX_VALIDATION_FAILED'
   ],
-  // Type-only at runtime: it exports nothing, but loading it still proves the
-  // `exports` entry resolves and the bundle was produced.
-  './health': [],
+  // Types plus the discoverable-indicator marker: the only runtime value this
+  // subpath ships, and the one a sibling library imports to mark its indicator.
+  './health': ['BymaxHealthIndicator', 'BYMAX_HEALTH_INDICATOR_METADATA'],
   './pagination': [
     'buildPageResult',
     'normalizePageQuery',
@@ -71,8 +71,22 @@ const SUBPATHS = {
     'decodeCursor',
     'encodeCursor',
     'normalizeCursorQuery'
-  ]
+  ],
+  './openapi': ['applyBymaxOpenApi'],
+  './metrics': ['BymaxMetricsContributor', 'BYMAX_METRICS_CONTRIBUTOR_METADATA']
 }
+
+/**
+ * Optional peers that must not be loaded by merely importing the package.
+ *
+ * Each is reached through a lazy dynamic import inside one loader, so a consumer
+ * who leaves the corresponding feature disabled never resolves the module. That
+ * is easy to break by accident — a top-level `import`, or a decorator, which
+ * runs when its class is defined — and the break is invisible: the peers are
+ * installed here as devDependencies, so a leaked import still resolves and every
+ * other gate stays green. This one fails.
+ */
+const LAZY_PEERS = ['prom-client', '@nestjs/swagger', '@opentelemetry/api']
 
 const probeBody = `
 const failures = []
@@ -105,15 +119,35 @@ const loaded = { ${Object.keys(SUBPATHS)
 const FORMAT = 'ESM'
 ${probeBody}`
 
+// Only the CommonJS probe can answer "was this module loaded?" — `require.cache`
+// is the module registry, and ESM exposes no equivalent. One format is enough:
+// both formats are built from the same sources, so a leaked import is in both.
+const peerGuard = `
+// Separators are normalized before matching: on Windows the cache keys are
+// backslash-delimited, and a forward-slash-only check would never match — the
+// guard would pass by never firing, which is worse than not having it.
+const cached = Object.keys(require.cache).map((file) => file.split('\\\\').join('/'))
+const leaked = LAZY_PEERS.filter((peer) =>
+  cached.some((file) => file.includes('node_modules/' + peer + '/'))
+)
+if (leaked.length) {
+  console.error('  ✗ optional peer loaded with its feature disabled: ' + leaked.join(', '))
+  process.exit(1)
+}
+console.log('  ✓ CJS: ' + LAZY_PEERS.length + ' optional peer(s) stayed unloaded')
+`
+
 const cjsProbe = `${Object.keys(SUBPATHS)
   .map((s, i) => `const m${i} = require('${specifier(s)}')`)
   .join('\n')}
 const SUBPATHS = ${JSON.stringify(SUBPATHS)}
+const LAZY_PEERS = ${JSON.stringify(LAZY_PEERS)}
 const loaded = { ${Object.keys(SUBPATHS)
   .map((s, i) => `'${s}': m${i}`)
   .join(', ')} }
 const FORMAT = 'CJS'
-${probeBody}`
+${probeBody}
+${peerGuard}`
 
 function run(command, args, options = {}) {
   return execFileSync(command, args, { encoding: 'utf8', stdio: 'pipe', ...options })

@@ -14,6 +14,10 @@ export type {
   TimingOptions,
   HealthOptions,
   MetricsOptions,
+  TelemetryOptions,
+  OpenApiOptions,
+  OpenApiSecurityScheme,
+  OpenApiServerDescriptor,
   ResolvedCoreOptions
 } from './core.options'
 
@@ -22,10 +26,13 @@ export {
   BYMAX_CORRELATION_PROVIDER,
   BYMAX_TIMING_SINK,
   BYMAX_HEALTH_INDICATORS,
-  BYMAX_METRICS_REGISTRY
+  BYMAX_METRICS_REGISTRY,
+  BYMAX_TRACE_CONTEXT
 } from './core.tokens'
 
 export type { ICorrelationIdProvider } from './envelope/correlation.interfaces'
+
+export type { ITraceContextProvider, TraceContext } from './telemetry/trace-context'
 
 export { BymaxExceptionFilter } from './envelope/exception.filter'
 

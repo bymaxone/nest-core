@@ -29,7 +29,9 @@ const config: Config = {
   moduleNameMapper: {
     '^@bymax-one/nest-core$': '<rootDir>/src/index.ts',
     '^@bymax-one/nest-core/pagination$': '<rootDir>/src/pagination/index.ts',
-    '^@bymax-one/nest-core/health$': '<rootDir>/src/health/index.ts'
+    '^@bymax-one/nest-core/health$': '<rootDir>/src/health/index.ts',
+    '^@bymax-one/nest-core/openapi$': '<rootDir>/src/openapi/index.ts',
+    '^@bymax-one/nest-core/metrics$': '<rootDir>/src/metrics/index.ts'
   },
   transform: {
     '^.+\\.ts$': [

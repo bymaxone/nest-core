@@ -15,10 +15,15 @@
  * `timing/timing.registration.spec.ts`, `health/health.contract.spec.ts`).
  * Mocks: none.
  */
+import { normalizeCoreOptions } from './core.options'
+import type { ResolvedCoreOptions } from './core.options'
+import { BYMAX_CORE_OPTIONS, BYMAX_TRACE_CONTEXT } from './core.tokens'
+import type { ITraceContextProvider } from './telemetry/trace-context'
 import { BYMAX_TIMING_CLOCK, DEFAULT_MONOTONIC_CLOCK } from './timing/timing.clock'
 import type { ITimingSink, RequestTimingSample } from './timing/timing.interfaces'
 import {
   buildDefaultProviders,
+  buildTraceContextProvider,
   NoopCorrelationIdProvider,
   NoopTimingSink
 } from './defaults.providers'
@@ -65,13 +70,49 @@ describe('buildDefaultProviders', () => {
    *
    * The correlation provider, timing sink, and health indicators are consumer
    * override points and must never be bound here (see the file's own
-   * documentation for why a competing local binding would defeat a
-   * consumer's override); the timing clock is an internal seam, not an
-   * override point, so it is the sole default this function contributes.
+   * documentation for why a competing local binding would defeat a consumer's
+   * override); the timing clock is an internal seam, not an override point, so
+   * it is the sole default this function contributes.
    */
   it('binds exactly the timing-clock default', () => {
     const providers = buildDefaultProviders()
 
     expect(providers).toEqual([{ provide: BYMAX_TIMING_CLOCK, useValue: DEFAULT_MONOTONIC_CLOCK }])
+  })
+})
+
+describe('buildTraceContextProvider', () => {
+  /**
+   * The provider is bound under the documented token, as a factory.
+   *
+   * A factory rather than a value because resolving the reader may have to load
+   * the optional peer, which has to happen while the module resolves — not while
+   * a request is being served.
+   */
+  it('binds an async factory under BYMAX_TRACE_CONTEXT', () => {
+    expect(buildTraceContextProvider()).toEqual({
+      provide: BYMAX_TRACE_CONTEXT,
+      useFactory: expect.any(Function),
+      inject: [BYMAX_CORE_OPTIONS]
+    })
+  })
+
+  /**
+   * The factory gates on the resolved options.
+   *
+   * On the asynchronous path this provider is registered whatever the options
+   * say, so the factory's own gate is the only thing keeping a disabled
+   * application from reaching the optional peer.
+   */
+  it('resolves a provider reporting no trace while telemetry is off', async () => {
+    const factory = (
+      buildTraceContextProvider() as {
+        useFactory: (options: ResolvedCoreOptions) => Promise<ITraceContextProvider>
+      }
+    ).useFactory
+
+    const resolved = await factory(normalizeCoreOptions())
+
+    expect(resolved.getTraceContext()).toBeUndefined()
   })
 })

@@ -16,12 +16,14 @@ import type { Observable } from 'rxjs'
 import { catchError, tap, throwError } from 'rxjs'
 
 import type { ResolvedCoreOptions } from '../core.options'
-import { BYMAX_CORE_OPTIONS, BYMAX_TIMING_SINK } from '../core.tokens'
+import { BYMAX_CORE_OPTIONS, BYMAX_TIMING_SINK, BYMAX_TRACE_CONTEXT } from '../core.tokens'
 import { NoopTimingSink } from '../defaults.providers'
 import { extractRequestInfo } from './request-info.accessor'
 import { BYMAX_TIMING_CLOCK, DEFAULT_MONOTONIC_CLOCK } from './timing.clock'
 import type { MonotonicClock } from './timing.clock'
 import type { ITimingSink, RequestTimingSample } from './timing.interfaces'
+import type { ITraceContextProvider } from '../telemetry/trace-context'
+import { NoopTraceContextProvider } from '../telemetry/trace-context'
 
 /** Status recorded when a response completes without an explicit status code. */
 const DEFAULT_SUCCESS_STATUS = 200
@@ -45,6 +47,9 @@ export class TimingInterceptor implements NestInterceptor {
   /** The bound timing sink, or the no-op fallback when none resolves. */
   private readonly sink: ITimingSink
 
+  /** The bound trace-context provider, or the no-op fallback when none resolves. */
+  private readonly traceContext: ITraceContextProvider
+
   /**
    * @param options - Resolved core options; supplies `slowRequestThresholdMs`.
    * @param sink - The bound timing sink; its `record` failures are swallowed.
@@ -55,13 +60,19 @@ export class TimingInterceptor implements NestInterceptor {
    * @param clock - Monotonic clock seam; defaults to `performance.now()`, and
    *   is bound explicitly through {@link BYMAX_TIMING_CLOCK} so tests inject a
    *   stub advancing by controlled amounts.
+   * @param traceContext - Reads the active span's identifiers. Injected with
+   *   `@Optional()` so this interceptor stays constructible on its own; when
+   *   nothing resolves, a no-op resolves no trace and the sample simply omits
+   *   the fields.
    */
   constructor(
     @Inject(BYMAX_CORE_OPTIONS) private readonly options: ResolvedCoreOptions,
     @Optional() @Inject(BYMAX_TIMING_SINK) sink: ITimingSink | undefined,
-    @Inject(BYMAX_TIMING_CLOCK) private readonly clock: MonotonicClock = DEFAULT_MONOTONIC_CLOCK
+    @Inject(BYMAX_TIMING_CLOCK) private readonly clock: MonotonicClock = DEFAULT_MONOTONIC_CLOCK,
+    @Optional() @Inject(BYMAX_TRACE_CONTEXT) traceContext?: ITraceContextProvider
   ) {
     this.sink = sink ?? new NoopTimingSink()
+    this.traceContext = traceContext ?? new NoopTraceContextProvider()
   }
 
   /**
@@ -126,12 +137,25 @@ export class TimingInterceptor implements NestInterceptor {
     const durationMs = this.clock.now() - start
     const threshold = this.options.timing.slowRequestThresholdMs
     const slow = threshold !== undefined && durationMs > threshold
-    const sample: RequestTimingSample = { method, route, statusCode, durationMs, slow }
     try {
-      this.sink.record(sample)
+      // The trace read is inside the guard, not before it: the provider contract
+      // says it never throws, but this interceptor's guarantee is that request
+      // timing cannot break a request — and a guarantee that assumes another
+      // component's good behavior is not one.
+      const trace = this.traceContext.getTraceContext()
+      this.sink.record({
+        method,
+        route,
+        statusCode,
+        durationMs,
+        slow,
+        // Spread rather than assigned: an absent trace must leave the keys off
+        // the sample entirely, so a sink cannot mistake `undefined` for an id.
+        ...(trace !== undefined ? { traceId: trace.traceId, spanId: trace.spanId } : {})
+      })
     } catch {
-      // Fire-and-forget contract: a throwing sink must never break the request
-      // it is observing, so its failure is caught and silenced here.
+      // Fire-and-forget contract: neither a throwing sink nor a throwing trace
+      // provider may break the request being observed, so both are silenced here.
     }
   }
 }

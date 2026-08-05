@@ -21,6 +21,14 @@ export interface RequestTimingSample {
   durationMs: number
   /** Whether the sample exceeded the configured slow-request threshold. */
   slow: boolean
+  /**
+   * Trace this request ran under. Present only when telemetry is enabled and a
+   * span was recording, so a sink can correlate the sample with the trace
+   * without deciding what "no trace" looks like.
+   */
+  traceId?: string
+  /** Span active when the request completed. Present under the same conditions. */
+  spanId?: string
 }
 
 /**

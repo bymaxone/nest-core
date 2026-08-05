@@ -24,6 +24,7 @@ import { normalizeCoreOptions } from '../core.options'
 import type { ResolvedCoreOptions } from '../core.options'
 
 import type { ICorrelationIdProvider } from './correlation.interfaces'
+import type { ITraceContextProvider, TraceContext } from '../telemetry/trace-context'
 import { BymaxExceptionFilter } from './exception.filter'
 import type { ErrorEnvelope } from './error-envelope'
 
@@ -38,10 +39,20 @@ function stubCorrelation(id?: string): ICorrelationIdProvider {
   return { getCorrelationId: (): string | undefined => id }
 }
 
+/** Build a trace-context provider resolving the given trace, or nothing. */
+function stubTraceContext(traceId?: string): ITraceContextProvider {
+  return {
+    getTraceContext: (): TraceContext | undefined =>
+      traceId === undefined ? undefined : { traceId, spanId: 'b'.repeat(16) }
+  }
+}
+
 /** Build a filter plus an HTTP host wired to capture the reply. */
 function buildHarness(params?: {
   options?: ResolvedCoreOptions
   correlation?: ICorrelationIdProvider
+  /** Trace-context provider; omitted leaves the filter's own no-op fallback. */
+  traceContext?: ITraceContextProvider
   /** Pass `undefined` for the correlation provider instead of the default stub. */
   noCorrelation?: boolean
   contextType?: string
@@ -50,7 +61,8 @@ function buildHarness(params?: {
   filterCtor?: new (
     options: ResolvedCoreOptions,
     correlation: ICorrelationIdProvider | undefined,
-    adapterHost: HttpAdapterHost
+    adapterHost: HttpAdapterHost,
+    traceContext?: ITraceContextProvider
   ) => BymaxExceptionFilter
 }): {
   filter: BymaxExceptionFilter
@@ -78,7 +90,12 @@ function buildHarness(params?: {
   } as unknown as ArgumentsHost
   const FilterCtor = params?.filterCtor ?? BymaxExceptionFilter
   const correlation = params?.noCorrelation ? undefined : (params?.correlation ?? stubCorrelation())
-  const filter = new FilterCtor(params?.options ?? normalizeCoreOptions(), correlation, adapterHost)
+  const filter = new FilterCtor(
+    params?.options ?? normalizeCoreOptions(),
+    correlation,
+    adapterHost,
+    params?.traceContext
+  )
   return { filter, host, captured, adapterHost }
 }
 
@@ -502,5 +519,125 @@ describe('BymaxExceptionFilter, correlation-provider fallback', () => {
     filter.catch(new NotFoundException('missing'), host)
 
     expect(captured.body).not.toHaveProperty('correlationId')
+  })
+})
+
+describe('BymaxExceptionFilter, trace correlation', () => {
+  /** A trace id the stub provider resolves. */
+  const TRACE_ID = 'a'.repeat(32)
+
+  /**
+   * The trace id reaches the body only when publishing it was opted into.
+   *
+   * With telemetry on but `exposeTraceId` off, the identifier still travels to
+   * the observability seam; the response must not carry it, because putting it
+   * there is a decision about what clients see.
+   */
+  it('omits traceId from the body while exposeTraceId is off', () => {
+    const { filter, host, captured } = buildHarness({
+      options: normalizeCoreOptions({ telemetry: { enabled: true } }),
+      traceContext: stubTraceContext(TRACE_ID)
+    })
+
+    filter.catch(new NotFoundException('missing'), host)
+
+    expect(captured.body).not.toHaveProperty('traceId')
+  })
+
+  /**
+   * Opting in publishes the trace id.
+   *
+   * This is what a support team asks for: the identifier that ties the response
+   * a caller is holding to the trace an engineer can open.
+   */
+  it('includes traceId in the body when exposeTraceId is on', () => {
+    const { filter, host, captured } = buildHarness({
+      options: normalizeCoreOptions({ telemetry: { enabled: true, exposeTraceId: true } }),
+      traceContext: stubTraceContext(TRACE_ID)
+    })
+
+    filter.catch(new NotFoundException('missing'), host)
+
+    expect(captured.body?.traceId).toBe(TRACE_ID)
+  })
+
+  /**
+   * An untraced request carries no key. Edge case: nothing recording.
+   *
+   * Even with the option on, a request outside any trace must omit the field
+   * rather than serialize an empty or null one.
+   */
+  it('omits traceId when no span is active', () => {
+    const { filter, host, captured } = buildHarness({
+      options: normalizeCoreOptions({ telemetry: { enabled: true, exposeTraceId: true } }),
+      traceContext: stubTraceContext(undefined)
+    })
+
+    filter.catch(new NotFoundException('missing'), host)
+
+    expect(captured.body).not.toHaveProperty('traceId')
+  })
+
+  /**
+   * A throwing correlation provider still yields an envelope. Regression guard.
+   *
+   * The correlation provider is supplied by the consumer — it commonly reads a
+   * request-scoped context that may simply not exist for a given call. If that
+   * read could throw here, an application would lose the error response instead
+   * of one optional field, on exactly the requests it most needs to see.
+   */
+  it('still serves the envelope when the correlation provider throws', () => {
+    const { filter, host, captured } = buildHarness({
+      correlation: {
+        getCorrelationId: (): string | undefined => {
+          throw new Error('no request context')
+        }
+      }
+    })
+
+    filter.catch(new NotFoundException('missing'), host)
+
+    expect(captured.body).toMatchObject({ statusCode: 404, code: 'BYMAX_NOT_FOUND' })
+    expect(captured.body).not.toHaveProperty('correlationId')
+  })
+
+  /**
+   * A throwing trace provider still yields an envelope. Regression guard.
+   *
+   * This filter is the last thing between an error and the client. If a
+   * telemetry read could throw here, a broken tracer would turn every error
+   * response into no response at all — the one failure this feature exists to
+   * prevent.
+   */
+  it('still serves the envelope when the trace provider throws', () => {
+    const { filter, host, captured } = buildHarness({
+      options: normalizeCoreOptions({ telemetry: { enabled: true, exposeTraceId: true } }),
+      traceContext: {
+        getTraceContext: (): TraceContext | undefined => {
+          throw new Error('tracer exploded')
+        }
+      }
+    })
+
+    filter.catch(new NotFoundException('missing'), host)
+
+    expect(captured.body).toMatchObject({ statusCode: 404, code: 'BYMAX_NOT_FOUND' })
+    expect(captured.body).not.toHaveProperty('traceId')
+  })
+
+  /**
+   * No bound provider behaves like no trace. Edge case: nothing injected.
+   *
+   * The filter is constructible on its own, and its in-code fallback must make
+   * an unbound token indistinguishable from an untraced request.
+   */
+  it('omits traceId when no trace provider is bound at all', () => {
+    const { filter, host, captured } = buildHarness({
+      options: normalizeCoreOptions({ telemetry: { enabled: true, exposeTraceId: true } })
+    })
+
+    filter.catch(new NotFoundException('missing'), host)
+
+    expect(captured.body).not.toHaveProperty('traceId')
   })
 })

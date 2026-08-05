@@ -7,6 +7,9 @@
 # neverBuiltDependencies and their siblings were removed in v11 and replaced by
 # this map.
 allowBuilds:
+  # Analytics ping pulled in transitively by @nestjs/swagger. Denied: a build
+  # script that phones home has no place in this repository's install.
+  '@scarf/scarf': false
   esbuild: true
   unrs-resolver: true
 

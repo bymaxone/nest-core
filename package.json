@@ -1,7 +1,7 @@
 {
   "name": "@bymax-one/nest-core",
-  "version": "1.0.1",
-  "description": "Zero-dependency NestJS 11 application foundation kit: error-envelope exception filter, request-timing interceptor, pagination helpers, health endpoints, and an optional Prometheus metrics endpoint.",
+  "version": "1.1.0",
+  "description": "Zero-dependency NestJS 11 application foundation kit: error-envelope exception filter, request-timing interceptor, pagination helpers, health endpoints with indicator discovery, an optional Prometheus metrics endpoint with a contribution contract, OpenAPI documents in development, and OpenTelemetry trace correlation.",
   "author": "Bymax One <support@bymax.one>",
   "license": "MIT",
   "homepage": "https://github.com/bymaxone/nest-core#readme",
@@ -53,6 +53,26 @@
         "default": "./dist/health/index.cjs"
       }
     },
+    "./metrics": {
+      "import": {
+        "types": "./dist/metrics/index.d.ts",
+        "default": "./dist/metrics/index.mjs"
+      },
+      "require": {
+        "types": "./dist/metrics/index.d.cts",
+        "default": "./dist/metrics/index.cjs"
+      }
+    },
+    "./openapi": {
+      "import": {
+        "types": "./dist/openapi/index.d.ts",
+        "default": "./dist/openapi/index.mjs"
+      },
+      "require": {
+        "types": "./dist/openapi/index.d.cts",
+        "default": "./dist/openapi/index.cjs"
+      }
+    },
     "./package.json": "./package.json"
   },
   "scripts": {
@@ -87,15 +107,22 @@
       "prettier --write"
     ]
   },
-  "dependencies": {},
   "peerDependencies": {
     "@nestjs/common": "^11.0.16",
     "@nestjs/core": "^11.1.18",
+    "@nestjs/swagger": "^11.0.0",
+    "@opentelemetry/api": "^1.9.0",
+    "prom-client": "^15.0.0",
     "reflect-metadata": "^0.2.0",
-    "rxjs": "^7.0.0",
-    "prom-client": "^15.0.0"
+    "rxjs": "^7.0.0"
   },
   "peerDependenciesMeta": {
+    "@nestjs/swagger": {
+      "optional": true
+    },
+    "@opentelemetry/api": {
+      "optional": true
+    },
     "prom-client": {
       "optional": true
     }
@@ -108,7 +135,10 @@
     "@nestjs/common": "^11.1.20",
     "@nestjs/core": "^11.1.20",
     "@nestjs/platform-express": "^11.1.20",
+    "@nestjs/swagger": "^11.4.6",
     "@nestjs/testing": "^11.1.20",
+    "@opentelemetry/api": "^1.9.1",
+    "@opentelemetry/context-async-hooks": "^2.10.0",
     "@stryker-mutator/core": "^9",
     "@stryker-mutator/jest-runner": "^9",
     "@stryker-mutator/typescript-checker": "^9",
@@ -147,6 +177,10 @@
     "health-check",
     "prometheus",
     "metrics",
+    "openapi",
+    "swagger",
+    "opentelemetry",
+    "tracing",
     "typescript"
   ],
   "packageManager": "pnpm@11.20.0",
@@ -166,6 +200,12 @@
       ],
       "health": [
         "./dist/health/index.d.cts"
+      ],
+      "openapi": [
+        "./dist/openapi/index.d.cts"
+      ],
+      "metrics": [
+        "./dist/metrics/index.d.cts"
       ]
     }
   }

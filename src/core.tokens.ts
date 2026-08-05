@@ -34,3 +34,10 @@ export const BYMAX_HEALTH_INDICATORS: unique symbol = Symbol('BYMAX_HEALTH_INDIC
  * lazily and only when the metrics feature is enabled.
  */
 export const BYMAX_METRICS_REGISTRY: unique symbol = Symbol('BYMAX_METRICS_REGISTRY')
+
+/**
+ * Provide the `ITraceContextProvider` that reads the active span's identifiers.
+ * Bound on every path: the real reader when telemetry is enabled, a no-op that
+ * resolves nothing otherwise.
+ */
+export const BYMAX_TRACE_CONTEXT: unique symbol = Symbol('BYMAX_TRACE_CONTEXT')

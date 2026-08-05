@@ -52,7 +52,19 @@ const SUBPATHS = [
     label: './health',
     distName: 'health/index',
     specifier: '@bymax-one/nest-core/health',
-    exports: []
+    exports: ['BymaxHealthIndicator', 'BYMAX_HEALTH_INDICATOR_METADATA']
+  },
+  {
+    label: './openapi',
+    distName: 'openapi/index',
+    specifier: '@bymax-one/nest-core/openapi',
+    exports: ['applyBymaxOpenApi']
+  },
+  {
+    label: './metrics',
+    distName: 'metrics/index',
+    specifier: '@bymax-one/nest-core/metrics',
+    exports: ['BymaxMetricsContributor', 'BYMAX_METRICS_CONTRIBUTOR_METADATA']
   }
 ]
 

@@ -16,7 +16,7 @@ import type {
   Provider,
   Type
 } from '@nestjs/common'
-import { APP_FILTER, APP_INTERCEPTOR, HttpAdapterHost } from '@nestjs/core'
+import { APP_FILTER, APP_INTERCEPTOR, DiscoveryModule, HttpAdapterHost } from '@nestjs/core'
 
 import { DEFAULT_HEALTH_PATH, DEFAULT_METRICS_PATH, normalizeCoreOptions } from './core.options'
 import type { BymaxCoreModuleOptions, ResolvedCoreOptions } from './core.options'
@@ -26,11 +26,12 @@ import {
   BYMAX_METRICS_REGISTRY,
   BYMAX_TIMING_SINK
 } from './core.tokens'
-import { buildDefaultProviders } from './defaults.providers'
+import { buildDefaultProviders, buildTraceContextProvider } from './defaults.providers'
 import type { ICorrelationIdProvider } from './envelope/correlation.interfaces'
 import { BymaxExceptionFilter } from './envelope/exception.filter'
 import { createHealthController } from './health/health.controller'
 import { HealthService } from './health/health.service'
+import { MetricsContributionRunner } from './metrics/metrics.contribution'
 import { createMetricsController } from './metrics/metrics.controller'
 import {
   buildMetricsRegistryProvider,
@@ -97,8 +98,12 @@ function buildSyncProviders(resolved: ResolvedCoreOptions): Provider[] {
   if (resolved.health.enabled) {
     providers.push(HealthService)
   }
+  if (resolved.telemetry.enabled) {
+    providers.push(buildTraceContextProvider())
+  }
   if (resolved.metrics.enabled) {
     providers.push(buildMetricsRegistryProvider())
+    providers.push(MetricsContributionRunner)
     if (resolved.timing.enabled) {
       providers.push(buildMetricsTimingSinkProvider())
     }
@@ -188,11 +193,13 @@ export function augmentModule(
   base: DynamicModule,
   providers: Provider[],
   controllers: Type[],
-  exportTokens: (string | symbol)[] = [BYMAX_CORE_OPTIONS]
+  exportTokens: (string | symbol)[] = [BYMAX_CORE_OPTIONS],
+  imports: NonNullable<DynamicModule['imports']> = []
 ): DynamicModule {
   return {
     ...base,
     module: BymaxCoreModule,
+    imports: [...(base.imports ?? []), ...imports],
     providers: [...(base.providers ?? []), ...providers],
     controllers: [...(base.controllers ?? []), ...controllers],
     exports: [...(base.exports ?? []), ...exportTokens]
@@ -234,11 +241,18 @@ export class BymaxCoreModule extends BymaxCoreModuleBase {
         exportTokens.push(BYMAX_TIMING_SINK)
       }
     }
+    // `DiscoveryModule` is imported only when a marker-based scan can actually
+    // run — readiness discovery, or metrics contribution — so a configuration
+    // that needs neither registers nothing extra.
+    const scansProviders =
+      (resolved.health.enabled && resolved.health.autoDiscover) || resolved.metrics.enabled
+    const imports = scansProviders ? [DiscoveryModule] : []
     return augmentModule(
       super.forRoot(options),
       providers,
       buildControllers(resolved),
-      exportTokens
+      exportTokens,
+      imports
     )
   }
 
@@ -274,17 +288,24 @@ export class BymaxCoreModule extends BymaxCoreModuleBase {
       ...buildAsyncSlots(),
       HealthService,
       buildMetricsRegistryProvider(),
-      buildMetricsTimingSinkProvider()
+      buildMetricsTimingSinkProvider(),
+      MetricsContributionRunner,
+      buildTraceContextProvider()
     ]
     // The metrics registry and the timing-sink bridge are always registered on
     // this path (see the `providers` array above), so both are always
     // exported. `BYMAX_CORRELATION_PROVIDER` and `BYMAX_HEALTH_INDICATORS` are
     // never exported here; see `augmentModule`.
+    // `DiscoveryModule` is imported unconditionally here: whether discovery is
+    // enabled is unknown when the module is defined, and an import cannot be
+    // decided later. It contributes two providers from an already-required peer
+    // and nothing runs unless the resolved options ask for it.
     return augmentModule(
       super.forRootAsync(options),
       providers,
       [createHealthController(DEFAULT_HEALTH_PATH), createMetricsController(DEFAULT_METRICS_PATH)],
-      [BYMAX_CORE_OPTIONS, BYMAX_TIMING_SINK, BYMAX_METRICS_REGISTRY]
+      [BYMAX_CORE_OPTIONS, BYMAX_TIMING_SINK, BYMAX_METRICS_REGISTRY],
+      [DiscoveryModule]
     )
   }
 }

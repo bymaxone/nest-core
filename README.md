@@ -14,7 +14,7 @@
   <a href="https://www.npmjs.com/package/@bymax-one/nest-core"><img src="https://img.shields.io/npm/dm/@bymax-one/nest-core?style=flat-square&colorA=000000&colorB=000000" alt="npm downloads" /></a>
   <a href="https://github.com/bymaxone/nest-core/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/bymaxone/nest-core/ci.yml?branch=main&style=flat-square&colorA=000000&label=CI" alt="CI status" /></a>
   <a href="https://github.com/bymaxone/nest-core/actions/workflows/ci.yml"><img src="https://img.shields.io/badge/coverage-100%25-brightgreen?style=flat-square&colorA=000000" alt="coverage" /></a>
-  <a href="https://github.com/bymaxone/nest-core/blob/main/docs/mutation_testing_results.md"><img src="https://img.shields.io/badge/mutation-97.86%25-brightgreen?style=flat-square&colorA=000000" alt="mutation score" /></a>
+  <a href="https://github.com/bymaxone/nest-core/blob/main/docs/mutation_testing_results.md"><img src="https://img.shields.io/badge/mutation-98.76%25-brightgreen?style=flat-square&colorA=000000" alt="mutation score" /></a>
   <a href="https://scorecard.dev/viewer/?uri=github.com/bymaxone/nest-core"><img src="https://api.scorecard.dev/projects/github.com/bymaxone/nest-core/badge?style=flat-square" alt="OpenSSF Scorecard" /></a>
   <a href="https://github.com/bymaxone/nest-core/blob/main/LICENSE"><img src="https://img.shields.io/github/license/bymaxone/nest-core?style=flat-square&colorA=000000&colorB=000000" alt="license" /></a>
   <a href="https://www.typescriptlang.org/"><img src="https://img.shields.io/badge/TypeScript-strict-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript" /></a>
@@ -40,7 +40,9 @@ different ways, and how a client integration breaks because one of them changed 
 body.
 
 It ships `"dependencies": {}`. Everything it touches — NestJS, `rxjs`, `reflect-metadata`, and
-`prom-client` for the optional metrics endpoint — is a peer whose version you already control.
+the three optional peers behind the features that need them (`prom-client`, `@nestjs/swagger`,
+`@opentelemetry/api`) — is a peer whose version you already control. A feature you leave off
+never loads its peer, which the release gate asserts against the packed tarball.
 
 ### Why nest-core?
 
@@ -79,6 +81,12 @@ It ships `"dependencies": {}`. Everything it touches — NestJS, `rxjs`, `reflec
   branch without re-deriving the threshold
 - ✅ **Prometheus endpoint** — opt-in scrape route over `BYMAX_METRICS_REGISTRY`;
   `prom-client` is imported only when it is enabled
+- ✅ **Contributed metrics** — a provider marked `@BymaxMetricsContributor()` publishes its
+  own collectors on that same registry, so an imported library's metrics land in your scrape
+- ✅ **Trace correlation** — reads the active OpenTelemetry span, so timing samples (and,
+  when you opt in, error envelopes) carry the trace id; never creates a span or an SDK
+- ✅ **OpenAPI document, development only** — one bootstrap call publishes an interactive
+  UI carrying the schemas this package owns; in production it is never served, guarded twice
 
 ### 📄 Pagination & Health
 
@@ -90,13 +98,15 @@ It ships `"dependencies": {}`. Everything it touches — NestJS, `rxjs`, `reflec
   without restarting the pod
 - ✅ **Pluggable indicators** — implement `IHealthIndicator` against a client you already own
   and register it under the `BYMAX_HEALTH_INDICATORS` multi-token
+- ✅ **Discovered indicators** — opt in, and any provider marked
+  `@BymaxHealthIndicator()` joins readiness: a library you import brings its own check
 
 ### 🧩 Developer Experience
 
 - ✅ **Zero runtime dependencies** — `@nestjs/*`, `rxjs` and `reflect-metadata` arrive as
   peers, so you pin the versions
-- ✅ **Three subpaths** — the module, plus `./pagination` and `./health` that a package can
-  import without pulling the module in
+- ✅ **Five subpaths** — the module, plus `./pagination`, `./health`, `./metrics` and
+  `./openapi` that a package can import without pulling the module in
 - ✅ **Dual-format output** — ESM + CJS with declarations for each format, verified against
   the packed tarball on every run
 - ✅ **Independent features** — each is enabled on its own; the providers for the rest are
@@ -108,11 +118,13 @@ It ships `"dependencies": {}`. Everything it touches — NestJS, `rxjs`, `reflec
 
 ## 📦 Subpath Exports
 
-| Subpath        | Contents                                                                                                                                                                           |
-| -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `.`            | `BymaxCoreModule`, the error envelope and its code catalog, the timing interceptor, the DI tokens, and every option type                                                           |
-| `./pagination` | `normalizePageQuery`, `buildPageResult`, `normalizeCursorQuery`, `buildCursorResult`, `encodeCursor`, `decodeCursor` and their types — pure functions, no NestJS provider involved |
-| `./health`     | `IHealthIndicator`, `HealthResponse` and the indicator contracts, so a package that only implements an indicator does not import the module                                        |
+| Subpath        | Contents                                                                                                                                                                                                                                                            |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `.`            | `BymaxCoreModule`, the error envelope and its code catalog, the timing interceptor, the DI tokens, and every option type                                                                                                                                            |
+| `./pagination` | `normalizePageQuery`, `buildPageResult`, `normalizeCursorQuery`, `buildCursorResult`, `encodeCursor`, `decodeCursor` and their types — pure functions, no NestJS provider involved                                                                                  |
+| `./health`     | `IHealthIndicator`, `HealthResponse`, the indicator contracts and the `@BymaxHealthIndicator()` marker, so a package that only implements an indicator does not import the module                                                                                   |
+| `./metrics`    | `IMetricsContributor` and the `@BymaxMetricsContributor()` marker, so a package that only publishes metrics imports neither the module nor its DI tokens. The one subpath whose types name `prom-client`, which anyone implementing the contract already depends on |
+| `./openapi`    | `applyBymaxOpenApi`, the one bootstrap call that builds and mounts the OpenAPI document — separate so an application that never documents its API never loads the code that does                                                                                    |
 
 Each subpath ships ESM and CommonJS with its own `.d.ts` and `.d.cts`, so
 `require()` and `import` both resolve the declarations meant for them.
@@ -123,12 +135,19 @@ Each subpath ships ESM and CommonJS with its own `.d.ts` and `.d.cts`, so
 pnpm add @bymax-one/nest-core @nestjs/common @nestjs/core reflect-metadata rxjs
 ```
 
-Add `prom-client` as well if you enable the metrics feature; it is an optional
-peer dependency, so it is never required unless you turn metrics on:
+Add `prom-client` if you enable the metrics feature, `@nestjs/swagger` if you
+enable the OpenAPI feature, and `@opentelemetry/api` if you enable trace
+correlation. All three are optional peer dependencies: none is required, or ever
+loaded, unless you turn its feature on.
 
 ```bash
 pnpm add prom-client
+pnpm add @opentelemetry/api
+pnpm add -D @nestjs/swagger
 ```
+
+`@nestjs/swagger` belongs in `devDependencies`: the document is never served in
+production, so a production install has no reason to carry it.
 
 ## 🚀 Quick Start
 
@@ -205,6 +224,7 @@ falls back to the documented default. Pass only what you want to change.
 | `path`                  | `string`  | `'health'` | Route prefix: `GET /<path>/live`, `GET /<path>/ready`.                                                                  |
 | `indicatorTimeoutMs`    | `number`  | `5000`     | Per-indicator timeout before a check reports down.                                                                      |
 | `exposeIndicatorErrors` | `boolean` | `false`    | Includes the failing indicator's message in the response under `details.error`. Never enable in production — see below. |
+| `autoDiscover`          | `boolean` | `false`    | Also aggregates every provider marked `@BymaxHealthIndicator()`, anywhere in the application.                           |
 
 On `forRoot`, `enabled` and `path` are applied at module-definition time: a
 disabled feature registers no controller, and a custom `path` mounts the routes.
@@ -227,6 +247,31 @@ As with `health`, `enabled` and `path` register conditionally on `forRoot`. On
 and enforces `enabled` and the default path with a request-time guard, so a
 disabled or custom-path async configuration fails fast at the route.
 
+### `telemetry`
+
+| Option          | Type      | Default | Description                                                                     |
+| --------------- | --------- | ------- | ------------------------------------------------------------------------------- |
+| `enabled`       | `boolean` | `false` | Reads the active span and carries its ids into timing samples and the log seam. |
+| `exposeTraceId` | `boolean` | `false` | Also publishes `traceId` in the error-envelope body served to the client.       |
+
+### `openapi`
+
+| Option               | Type                      | Default       | Description                                                                    |
+| -------------------- | ------------------------- | ------------- | ------------------------------------------------------------------------------ |
+| `enabled`            | `boolean`                 | `false`       | Builds and serves the document. Ignored in production, where it is always off. |
+| `path`               | `string`                  | `'docs'`      | Route serving the interactive UI.                                              |
+| `jsonPath`           | `string`                  | `'docs-json'` | Route serving the raw JSON document.                                           |
+| `title`              | `string`                  | `'API'`       | Document title.                                                                |
+| `description`        | `string`                  | `''`          | Document description.                                                          |
+| `version`            | `string`                  | `'1.0.0'`     | Document version, independent of the package version.                          |
+| `servers`            | `{ url, description? }[]` | `[]`          | Servers advertised by the document.                                            |
+| `securitySchemes`    | `Record<string, object>`  | `{}`          | Security schemes copied into the document's components.                        |
+| `includeCoreSchemas` | `boolean`                 | `true`        | Contributes this package's own schemas — envelope, health, pagination.         |
+
+Unlike `health` and `metrics`, this block behaves identically on `forRoot` and
+`forRootAsync`: the document is mounted from the bootstrap helper, after the
+options have resolved, so a custom `path` is honored on both registration paths.
+
 ## 🔑 DI Tokens
 
 Every token is a `Symbol`. `BYMAX_CORRELATION_PROVIDER` and
@@ -242,13 +287,14 @@ consumer `BYMAX_TIMING_SINK` override is honored on `forRoot` but shadowed on
 [Integration with `@bymax-one/nest-logger`](#-integration-with-bymax-onenest-logger)
 below.
 
-| Token                        | Provides                              | When you do not provide one                                                                       |
-| ---------------------------- | ------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| `BYMAX_CORE_OPTIONS`         | The resolved `BymaxCoreModuleOptions` | always set by the module                                                                          |
-| `BYMAX_CORRELATION_PROVIDER` | `ICorrelationIdProvider`              | internal no-op (omits `correlationId`)                                                            |
-| `BYMAX_TIMING_SINK`          | `ITimingSink`                         | internal no-op, or the metrics bridge when timing and metrics are both enabled                    |
-| `BYMAX_HEALTH_INDICATORS`    | `IHealthIndicator[]`                  | treated as an empty indicator set                                                                 |
-| `BYMAX_METRICS_REGISTRY`     | the `prom-client` `Registry`          | bound when metrics are enabled; on `forRootAsync` always registered, guarded-placeholder when off |
+| Token                        | Provides                              | When you do not provide one                                                                                       |
+| ---------------------------- | ------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `BYMAX_CORE_OPTIONS`         | The resolved `BymaxCoreModuleOptions` | always set by the module                                                                                          |
+| `BYMAX_CORRELATION_PROVIDER` | `ICorrelationIdProvider`              | internal no-op (omits `correlationId`)                                                                            |
+| `BYMAX_TIMING_SINK`          | `ITimingSink`                         | internal no-op, or the metrics bridge when timing and metrics are both enabled                                    |
+| `BYMAX_HEALTH_INDICATORS`    | `IHealthIndicator[]`                  | treated as an empty indicator set                                                                                 |
+| `BYMAX_METRICS_REGISTRY`     | the `prom-client` `Registry`          | bound when metrics are enabled; on `forRootAsync` always registered, guarded-placeholder when off                 |
+| `BYMAX_TRACE_CONTEXT`        | `ITraceContextProvider`               | bound on every path: the OpenTelemetry reader when telemetry is enabled, a no-op that resolves no trace otherwise |
 
 ## 🚨 Error Envelope
 
@@ -447,6 +493,52 @@ A rejecting, throwing, or slow indicator (past `indicatorTimeoutMs`) is
 converted to a `down` entry with a safe, bounded diagnostic detail; it never
 hides the results of the other registered indicators.
 
+### Discovered indicators
+
+Registering every indicator by hand stops scaling once the libraries an
+application imports have their own health to report. Mark a provider instead,
+and turn discovery on:
+
+```typescript
+// in a library, or anywhere in your application
+import { Injectable } from '@nestjs/common'
+import { BymaxHealthIndicator } from '@bymax-one/nest-core/health'
+import type { HealthIndicatorResult, IHealthIndicator } from '@bymax-one/nest-core/health'
+
+@BymaxHealthIndicator()
+@Injectable()
+export class RedisHealthIndicator implements IHealthIndicator {
+  readonly name = 'redis'
+
+  async check(): Promise<HealthIndicatorResult> {
+    await this.redis.ping()
+    return { status: 'up' }
+  }
+}
+```
+
+```typescript
+BymaxCoreModule.forRoot({ health: { autoDiscover: true } })
+```
+
+Readiness now includes `redis` with nothing registered anywhere. The rules:
+
+| Rule                        | Behavior                                                                                                                                              |
+| --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Marked, not shaped          | Only providers carrying the marker are collected. A provider that merely has `name` and `check` is ignored.                                           |
+| Explicit wins               | An indicator registered under `BYMAX_HEALTH_INDICATORS` keeps its name and its position; a discovered one with the same name is dropped.              |
+| Stable order                | Discovered indicators are sorted by name, so the `checks` array does not reshuffle between restarts.                                                  |
+| Marked but incomplete fails | A marked provider that does not implement `IHealthIndicator` fails the boot, naming the class. Skipping it would hide a check you believe is running. |
+| Scanned once                | The provider graph is walked at bootstrap, not per probe.                                                                                             |
+
+It is off by default because it changes which failures can take an application
+out of rotation: with it on, a library you merely import gains the ability to
+fail your readiness probe. That is the point — the dependency understands its own
+health better than you do — but it is your decision, not something you inherit.
+
+`@BymaxHealthIndicator()` lives in `./health`, alongside the contract, so a
+library that only ships an indicator never imports the module.
+
 ## 📈 Metrics
 
 Disabled by default. Enabling it registers `GET /metrics`, serving Prometheus
@@ -471,6 +563,165 @@ default HTTP metrics with a bounded label set:
 
 Inject `BYMAX_METRICS_REGISTRY` to register your own application metrics
 against the same registry the endpoint scrapes.
+
+### Contributed metrics
+
+Injecting the token works for your own code, but it makes a library depend on
+this package's DI tokens — and therefore on the module. A library declares its
+metrics instead:
+
+```typescript
+// in a library
+import { Injectable } from '@nestjs/common'
+import { BymaxMetricsContributor } from '@bymax-one/nest-core/metrics'
+import type { IMetricsContributor, MetricsRegistry } from '@bymax-one/nest-core/metrics'
+import { Gauge } from 'prom-client'
+
+@BymaxMetricsContributor()
+@Injectable()
+export class QueueMetrics implements IMetricsContributor {
+  registerMetrics(registry: MetricsRegistry): void {
+    new Gauge({ name: 'bymax_queue_depth', help: 'Jobs waiting', registers: [registry] })
+  }
+}
+```
+
+Enable metrics and the contributor runs — there is no second flag:
+
+```typescript
+BymaxCoreModule.forRoot({ metrics: { enabled: true } })
+```
+
+| Rule               | Behavior                                                                                                                                                                              |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Marked, not shaped | Only providers carrying the marker are called. A provider that merely has `registerMetrics` is never touched.                                                                         |
+| Called once        | At bootstrap, with the registry the scrape endpoint serves. Never per request, never per scrape.                                                                                      |
+| Stable order       | Contributors run sorted by class name, so a collision fails the same way on every boot.                                                                                               |
+| Named failures     | A registration failure — usually a metric name another library already claimed — fails the boot naming the contributor. `prom-client` names the metric; this names who registered it. |
+| Off with metrics   | With the metrics feature disabled, no contributor runs and `prom-client` is never loaded.                                                                                             |
+
+**Naming and labels.** Contributors share one registry and one namespace, so the
+conventions are part of the contract:
+
+- Prefix every metric with `bymax_<library>_` (`bymax_queue_depth`,
+  `bymax_cache_hits_total`). An application's own metrics need no prefix — they
+  have no one to collide with but themselves.
+- Follow Prometheus naming: `_total` for counters, `_seconds` for durations, base
+  units, no units in the middle of a name.
+- Keep labels bounded. Route templates, never raw paths; status codes, never
+  messages. **Never** a tenant, user, or request id — one unbounded label is
+  enough to make a scrape endpoint the most expensive route in a service.
+
+## 📘 OpenAPI
+
+Disabled by default, and **never served in production**. Enabling it and calling
+one helper during bootstrap publishes an interactive UI at `GET /docs` and the
+raw document at `GET /docs-json`:
+
+```typescript
+// app.module.ts — configuration lives with every other feature
+BymaxCoreModule.forRoot({ openapi: { enabled: true, title: 'Invoices API' } })
+```
+
+```typescript
+// main.ts — the one call that needs the application instance
+import { NestFactory } from '@nestjs/core'
+import { applyBymaxOpenApi } from '@bymax-one/nest-core/openapi'
+import { AppModule } from './app.module'
+
+async function bootstrap(): Promise<void> {
+  const app = await NestFactory.create(AppModule)
+  await applyBymaxOpenApi(app)
+  await app.listen(3000)
+}
+
+void bootstrap()
+```
+
+> [!IMPORTANT]
+> Call `applyBymaxOpenApi` **before** `app.listen()`. Mounting the document
+> re-registers routes on the HTTP adapter, and doing that against an
+> already-initialized Express 5 application replaces the router: the document
+> appears and every other route in the application — yours and this package's
+> health endpoints alike — starts returning 404.
+
+The call is safe to make unconditionally. It returns what it did, so a template
+can emit it once and never branch:
+
+| Result                                     | Meaning                                                 |
+| ------------------------------------------ | ------------------------------------------------------- |
+| `{ mounted: true, path }`                  | The UI and the document are served at `path`.           |
+| `{ mounted: false, reason: 'disabled' }`   | `openapi.enabled` is off.                               |
+| `{ mounted: false, reason: 'production' }` | The runtime is production. Nothing was built or served. |
+
+### Production is a closed door
+
+`NODE_ENV` decides, and the decision is fail-closed: only `development` and
+`test` are non-production. Any other value — including an unset variable —
+is production, and in production the document is never built and never mounted,
+whatever the configuration says. The guard runs twice, independently: the option
+resolver forces the feature off, and the bootstrap helper refuses again without
+trusting that resolution. There is no override.
+
+Enabling it in production is not an error, it is a no-op with a warning naming
+the option that was ignored, so a single configuration can be shared across
+environments.
+
+### What the library contributes
+
+With `includeCoreSchemas` on, the document carries the contracts this package
+already serves, so an operation can `$ref` them instead of redeclaring them:
+
+| Component                                                             | Describes                               |
+| --------------------------------------------------------------------- | --------------------------------------- |
+| `BymaxErrorEnvelope`, `BymaxErrorDetails`, `BymaxErrorCode`           | The error contract and its code catalog |
+| `BymaxHealthResponse`, `BymaxHealthCheckEntry`                        | The liveness and readiness bodies       |
+| `BymaxPageResult`, `BymaxPageMeta`, `BymaxCursorResult`               | The offset and cursor page shapes       |
+| `BymaxPageQueryPage`, `BymaxPageQueryLimit`, `BymaxCursorQueryCursor` | The pagination query parameters         |
+
+They are contributed as plain specification objects, not as decorated classes.
+That is what keeps `@nestjs/swagger` genuinely optional: a decorator runs when
+its class is defined, so describing these contracts with `@ApiProperty` would
+load the peer in every application that imports this package, including the ones
+that never enable the feature.
+
+A contributed entry never overwrites one the document already has: if you
+document your own `BymaxErrorEnvelope`, yours wins.
+
+## 🧵 Trace correlation
+
+Off by default. Enabled, it reads the span your instrumentation already opened
+and carries its identifiers into the signals this package produces:
+
+```typescript
+BymaxCoreModule.forRoot({ telemetry: { enabled: true } })
+```
+
+| Where it lands                            | When                                                                                                                  |
+| ----------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `RequestTimingSample.traceId` / `.spanId` | Whenever a span is recording. Your sink forwards them to logs or wherever samples go.                                 |
+| `FilterErrorContext.traceId`              | Always available to the `onUnexpectedError` seam, so a logging pipeline can record it.                                |
+| The error-envelope body                   | Only with `exposeTraceId` on.                                                                                         |
+| Metric labels                             | Never. A trace id is unbounded; as a label it would make the scrape endpoint the most expensive route in the service. |
+
+This package **reads**; it never traces. It starts no span, configures no SDK,
+registers no exporter, and installs no instrumentation — all of which your
+collector setup already does, and doing it twice produces two spans per request.
+`@opentelemetry/api` is an optional peer, loaded once at bootstrap and only when
+the feature is on.
+
+A request with nothing recording, or an all-zero span context, resolves to no
+trace at all: the fields are absent rather than set to a sentinel, so a sink
+never has to recognize a string of zeros.
+
+### Publishing the id is a separate decision
+
+`exposeTraceId` is off by default. A trace id is not a secret, but in a response
+body it tells a caller that a tracing backend exists and hands them the
+identifier that ties their request to everything else in that trace. Support
+teams often want exactly that, which is why the option exists; it is opt-in so it
+is a decision rather than a side effect. With it off, the identifiers still reach
+your samples and your logs.
 
 ## 🔗 Integration with `@bymax-one/nest-logger`
 
@@ -530,9 +781,21 @@ BYMAX_CORRELATION_PROVIDER               no module,
  comes from)                             script or a test
 ```
 
+Four opt-in integrations attach to that spine rather than adding columns to it:
+
+```
+health/     + @BymaxHealthIndicator()   → a marked provider joins readiness
+metrics/    + @BymaxMetricsContributor() → a marked provider publishes on the registry
+envelope/   + telemetry                  → the active trace id reaches the envelope and the seam
+timing/     + telemetry                  → the sample carries traceId and spanId
+./openapi                                → one bootstrap call serves the document, in development
+```
+
 Each feature registers only when it is on. Turning metrics off does not leave a
 disabled provider in the container — it leaves no provider, and `prom-client` is
-never imported, which is why it can stay an optional peer.
+never imported, which is why it can stay an optional peer. The same holds for
+`@nestjs/swagger` and `@opentelemetry/api`: the release gate loads the packed
+tarball and fails if any of the three is reachable with its feature off.
 
 Nothing here holds state across requests. The timing interceptor emits and forgets;
 the health service runs the indicators the app registered and folds their results;
@@ -599,20 +862,33 @@ do not treat a cursor as proof of anything.
 It is off by default. When it is on, nothing in this library authenticates it — apply the
 guard you would apply to any internal endpoint, or keep it off the public listener.
 
+### The OpenAPI document does not exist in production
+
+A published document is a map of every route, parameter and error shape an application has —
+useful to a developer, and just as useful to anyone probing the service. So unlike the metrics
+endpoint, it is not left to a guard: it is refused outright whenever the runtime is not
+positively `development` or `test`, in two independent layers, with no option to override.
+An unset `NODE_ENV` counts as production, because the deployment nobody configured is the one
+most likely to be exposed.
+
 ---
 
 ## 🛡️ Security Table
 
-| Layer              | Implementation                                                                                                                                                                   |
-| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Error responses    | One shape for everything; unknown errors become a generic 500                                                                                                                    |
-| Internals          | Message and stack captured for logging, in the body only under `exposeInternals` (default `false`)                                                                               |
-| Health output      | The response names which indicator is down and nothing more; the reason goes to the logger. `exposeIndicatorErrors` (default `false`) puts it back in the response for debugging |
-| Slow indicators    | Converted to `down` by the aggregator, so a probe cannot hang on one                                                                                                             |
-| Correlation        | Resolved through `BYMAX_CORRELATION_PROVIDER` — the app decides where the id comes from                                                                                          |
-| Pagination cursors | Opaque, not authenticated; treated as client-supplied input on the way back in                                                                                                   |
-| Metrics            | Opt-in; `prom-client` never imported while it is off                                                                                                                             |
-| Supply chain       | `dependencies: {}`; third-party Actions pinned by commit SHA (org-internal reusables by tag); CodeQL and OpenSSF Scorecard                                                       |
+| Layer               | Implementation                                                                                                                                                                   |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Error responses     | One shape for everything; unknown errors become a generic 500                                                                                                                    |
+| Internals           | Message and stack captured for logging, in the body only under `exposeInternals` (default `false`)                                                                               |
+| Health output       | The response names which indicator is down and nothing more; the reason goes to the logger. `exposeIndicatorErrors` (default `false`) puts it back in the response for debugging |
+| Slow indicators     | Converted to `down` by the aggregator, so a probe cannot hang on one                                                                                                             |
+| Correlation         | Resolved through `BYMAX_CORRELATION_PROVIDER` — the app decides where the id comes from                                                                                          |
+| Pagination cursors  | Opaque, not authenticated; treated as client-supplied input on the way back in                                                                                                   |
+| Metrics             | Opt-in; `prom-client` never imported while it is off                                                                                                                             |
+| OpenAPI             | Opt-in and development-only; refused in production by two independent guards, `@nestjs/swagger` never imported while it is off                                                   |
+| Discovered checks   | Matched by an explicit marker, never by shape; off by default, because it lets an imported library fail your readiness probe                                                     |
+| Contributed metrics | Called only when marked; a name collision fails the boot naming the contributor rather than half-populating a scrape                                                             |
+| Trace ids           | Read-only, never used as a metric label; published in a response body only under `telemetry.exposeTraceId` (default off)                                                         |
+| Supply chain        | `dependencies: {}`; third-party Actions pinned by commit SHA (org-internal reusables by tag); CodeQL and OpenSSF Scorecard                                                       |
 
 > [!IMPORTANT]
 > **`exposeInternals` is a debugging switch, not a verbosity setting.** With it on,
@@ -626,7 +902,9 @@ guard you would apply to any internal endpoint, or keep it off the public listen
 - **Runtime:** Node.js 24+
 - **Framework:** NestJS 11 (`ConfigurableModuleBuilder`, `APP_FILTER`, `APP_INTERCEPTOR`)
 - **Peers:** `@nestjs/common ^11`, `@nestjs/core ^11`, `rxjs ^7`, `reflect-metadata ^0.2`
-- **Optional peer:** `prom-client ^15` — required only when metrics are enabled
+- **Optional peers:** `prom-client ^15` when metrics are enabled, `@nestjs/swagger ^11` when
+  OpenAPI is enabled, `@opentelemetry/api ^1.9` when trace correlation is enabled — none is
+  imported while its feature is off
 - **Build:** tsup — ESM + CJS per subpath, with `.d.ts` _and_ `.d.cts` declarations
 - **Tests:** Jest (unit + e2e over a real Nest application) + Stryker (mutation)
 - **TypeScript:** 5.x strict (`noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`), zero `any`
@@ -639,11 +917,13 @@ This library sits in the path of every request and every failure of every servic
 installs it, so the suite is held to a bar beyond "the tests pass".
 
 - ✅ **100% line coverage** — statements, branches, functions and lines, enforced as a gate
-- ✅ **97.86% mutation score** — verified with [Stryker](https://stryker-mutator.io/) at
+- ✅ **98.76% mutation score** — verified with [Stryker](https://stryker-mutator.io/) at
   `break: 95`; every killable survivor was killed by a strengthened test, with no production
-  change ([report](./docs/mutation_testing_results.md))
-- ✅ **End-to-end against a real application** — the filter, the interceptor and the health
-  routes are exercised through a booted Nest app, not against mocks of it
+  change, and the nine that remain are documented equivalents rather than suppressions
+  ([report](./docs/mutation_testing_results.md))
+- ✅ **End-to-end against a real application** — the filter, the interceptor, the health and
+  metrics routes, the served OpenAPI document, discovered indicators, contributed metrics and
+  trace correlation are all exercised through a booted Nest app, not against mocks of it
 - ✅ **Published-artifact gates** — `check:exports` resolves the types the way each module
   system does, `check:runtime` loads every subpath from the packed tarball in ESM and
   CommonJS, and `check:published` compiles this README's snippets against `dist/`
@@ -667,20 +947,21 @@ in the sections above.
 
 ### `.` (root)
 
-| Export                                                                                                                       | Kind      | Description                                                            |
-| ---------------------------------------------------------------------------------------------------------------------------- | --------- | ---------------------------------------------------------------------- |
-| `BymaxCoreModule`                                                                                                            | class     | The dynamic module: `forRoot` and `forRootAsync`.                      |
-| `BymaxCoreModuleOptions`, `EnvelopeOptions`, `TimingOptions`, `HealthOptions`, `MetricsOptions`, `ResolvedCoreOptions`       | types     | The options surface and its resolved shape.                            |
-| `BYMAX_CORE_OPTIONS`, `BYMAX_CORRELATION_PROVIDER`, `BYMAX_TIMING_SINK`, `BYMAX_HEALTH_INDICATORS`, `BYMAX_METRICS_REGISTRY` | tokens    | The DI tokens; see the [token table](#-di-tokens).                     |
-| `ICorrelationIdProvider`                                                                                                     | type      | The correlation-provider contract.                                     |
-| `BymaxExceptionFilter`                                                                                                       | class     | The envelope exception filter.                                         |
-| `FilterErrorContext`                                                                                                         | type      | The neutral request context passed to the filter's observability seam. |
-| `buildErrorEnvelope`                                                                                                         | function  | Pure builder assembling an `ErrorEnvelope`.                            |
-| `ErrorEnvelope`, `ErrorDetails`, `BuildErrorEnvelopeInput`                                                                   | types     | The envelope contract and its builder input.                           |
-| `TimingInterceptor`                                                                                                          | class     | The request-timing interceptor.                                        |
-| `ITimingSink`, `RequestTimingSample`                                                                                         | types     | The timing-sink contract and its sample shape.                         |
-| `BYMAX_BAD_GATEWAY` … `BYMAX_VALIDATION_FAILED`                                                                              | constants | The full error-code catalog (see [Error envelope](#-error-envelope)).  |
-| `codeForStatus`                                                                                                              | function  | Derives a catalog code from an HTTP status.                            |
+| Export                                                                                                                                                                                                           | Kind      | Description                                                            |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- | ---------------------------------------------------------------------- |
+| `BymaxCoreModule`                                                                                                                                                                                                | class     | The dynamic module: `forRoot` and `forRootAsync`.                      |
+| `BymaxCoreModuleOptions`, `EnvelopeOptions`, `TimingOptions`, `HealthOptions`, `MetricsOptions`, `TelemetryOptions`, `OpenApiOptions`, `OpenApiServerDescriptor`, `OpenApiSecurityScheme`, `ResolvedCoreOptions` | types     | The options surface and its resolved shape.                            |
+| `BYMAX_CORE_OPTIONS`, `BYMAX_CORRELATION_PROVIDER`, `BYMAX_TIMING_SINK`, `BYMAX_HEALTH_INDICATORS`, `BYMAX_METRICS_REGISTRY`                                                                                     | tokens    | The DI tokens; see the [token table](#-di-tokens).                     |
+| `ICorrelationIdProvider`                                                                                                                                                                                         | type      | The correlation-provider contract.                                     |
+| `ITraceContextProvider`, `TraceContext`                                                                                                                                                                          | types     | The trace-context contract and the identifiers it resolves.            |
+| `BymaxExceptionFilter`                                                                                                                                                                                           | class     | The envelope exception filter.                                         |
+| `FilterErrorContext`                                                                                                                                                                                             | type      | The neutral request context passed to the filter's observability seam. |
+| `buildErrorEnvelope`                                                                                                                                                                                             | function  | Pure builder assembling an `ErrorEnvelope`.                            |
+| `ErrorEnvelope`, `ErrorDetails`, `BuildErrorEnvelopeInput`                                                                                                                                                       | types     | The envelope contract and its builder input.                           |
+| `TimingInterceptor`                                                                                                                                                                                              | class     | The request-timing interceptor.                                        |
+| `ITimingSink`, `RequestTimingSample`                                                                                                                                                                             | types     | The timing-sink contract and its sample shape.                         |
+| `BYMAX_BAD_GATEWAY` … `BYMAX_VALIDATION_FAILED`                                                                                                                                                                  | constants | The full error-code catalog (see [Error envelope](#-error-envelope)).  |
+| `codeForStatus`                                                                                                                                                                                                  | function  | Derives a catalog code from an HTTP status.                            |
 
 ### `./pagination`
 
@@ -693,12 +974,31 @@ in the sections above.
 
 ### `./health`
 
-| Export                  | Kind | Description                                         |
-| ----------------------- | ---- | --------------------------------------------------- |
-| `IHealthIndicator`      | type | The pluggable indicator contract.                   |
-| `HealthIndicatorResult` | type | The outcome of a single indicator check.            |
-| `HealthCheckEntry`      | type | One named entry in a `HealthResponse.checks` array. |
-| `HealthResponse`        | type | The stable liveness and readiness response shape.   |
+| Export                            | Kind     | Description                                         |
+| --------------------------------- | -------- | --------------------------------------------------- |
+| `IHealthIndicator`                | type     | The pluggable indicator contract.                   |
+| `HealthIndicatorResult`           | type     | The outcome of a single indicator check.            |
+| `HealthCheckEntry`                | type     | One named entry in a `HealthResponse.checks` array. |
+| `HealthResponse`                  | type     | The stable liveness and readiness response shape.   |
+| `BymaxHealthIndicator`            | function | Class decorator marking a provider as discoverable. |
+| `BYMAX_HEALTH_INDICATOR_METADATA` | constant | The metadata key the marker writes.                 |
+
+### `./metrics`
+
+| Export                               | Kind     | Description                                                  |
+| ------------------------------------ | -------- | ------------------------------------------------------------ |
+| `BymaxMetricsContributor`            | function | Class decorator marking a provider as a metrics contributor. |
+| `BYMAX_METRICS_CONTRIBUTOR_METADATA` | constant | The metadata key the marker writes.                          |
+| `IMetricsContributor`                | type     | The contract: `registerMetrics(registry)`.                   |
+| `MetricsRegistry`                    | type     | The `prom-client` registry the scrape endpoint serves.       |
+
+### `./openapi`
+
+| Export                | Kind     | Description                                                       |
+| --------------------- | -------- | ----------------------------------------------------------------- |
+| `applyBymaxOpenApi`   | function | Builds and mounts the document; call it before `app.listen()`.    |
+| `OpenApiMountOutcome` | type     | What the helper did: mounted at a path, or skipped with a reason. |
+| `OpenApiSkipReason`   | type     | Why it was skipped: `'disabled'` or `'production'`.               |
 
 ## 🧩 Compatibility
 

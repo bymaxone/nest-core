@@ -10,9 +10,13 @@
  * @layer Service
  */
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common'
+import type { OnApplicationBootstrap } from '@nestjs/common'
+import { DiscoveryService, Reflector } from '@nestjs/core'
 
 import type { ResolvedCoreOptions } from '../core.options'
 import { BYMAX_CORE_OPTIONS, BYMAX_HEALTH_INDICATORS } from '../core.tokens'
+import type { ProviderScanner } from '../discovery'
+import { discoverIndicators, mergeIndicators } from './health.discovery'
 import type { HealthCheckEntry, HealthResponse, IHealthIndicator } from './health.interfaces'
 
 /**
@@ -109,7 +113,7 @@ async function runIndicator(
  * `health.indicatorTimeoutMs`.
  */
 @Injectable()
-export class HealthService {
+export class HealthService implements OnApplicationBootstrap {
   /**
    * Nest's own logger, scoped to this class. The failure reason of a `down`
    * indicator is written here rather than into the HTTP response, so the
@@ -118,19 +122,86 @@ export class HealthService {
   private readonly logger = new Logger(HealthService.name)
 
   /**
-   * @param indicators - Every registered indicator; empty when none resolve.
-   *   Injected with `@Optional()`: `BymaxCoreModule` binds no local default for
-   *   this token, so a consumer's own `BYMAX_HEALTH_INDICATORS` binding (from
-   *   their own, globally-visible module) is not shadowed by one; when nothing
-   *   is bound, this defaults to an empty array.
+   * The effective readiness set, computed once. Discovery walks the whole
+   * provider graph, and readiness is polled continuously; recomputing per
+   * request would put that walk on the probe's path for no benefit, since the
+   * container's providers do not change after bootstrap.
+   */
+  private effectiveIndicators: readonly IHealthIndicator[] | undefined
+
+  /**
+   * @param indicators - Every explicitly registered indicator; empty when none
+   *   resolve. Injected with `@Optional()`: `BymaxCoreModule` binds no local
+   *   default for this token, so a consumer's own `BYMAX_HEALTH_INDICATORS`
+   *   binding (from their own, globally-visible module) is not shadowed by one;
+   *   when nothing is bound, this defaults to an empty array.
    * @param options - Resolved core options; supplies `indicatorTimeoutMs`.
+   * @param discovery - Nest's provider-graph reader, present only when
+   *   `DiscoveryModule` is imported, which `BymaxCoreModule` does exactly when
+   *   discovery can be needed. Optional so this service stays constructible
+   *   without it when the feature is off.
+   * @param reflector - Nest's metadata reader, used to match the indicator
+   *   marker. Optional for the same reason.
    */
   constructor(
     @Optional()
     @Inject(BYMAX_HEALTH_INDICATORS)
     private readonly indicators: readonly IHealthIndicator[] = [],
-    @Inject(BYMAX_CORE_OPTIONS) private readonly options: ResolvedCoreOptions
+    @Inject(BYMAX_CORE_OPTIONS) private readonly options: ResolvedCoreOptions,
+    // Injected by Nest's token, but typed as the narrow contract this service
+    // actually uses: the dependency is "something that lists providers", not the
+    // whole discovery service.
+    @Optional() @Inject(DiscoveryService) private readonly discovery?: ProviderScanner,
+    @Optional() @Inject(Reflector) private readonly reflector?: Reflector
   ) {}
+
+  /**
+   * Resolve the readiness set once the whole container is instantiated.
+   *
+   * Bound to `onApplicationBootstrap`, not `onModuleInit`: module-init hooks run
+   * concurrently across modules, so a provider this scan needs may not exist
+   * yet. Running here also means a provider marked as an indicator but not
+   * implementing the contract fails the boot, instead of failing the first
+   * readiness probe in production.
+   */
+  onApplicationBootstrap(): void {
+    this.resolveIndicators()
+  }
+
+  /**
+   * The effective readiness set, computed on first use and memoized.
+   *
+   * @returns The explicit indicators, plus the discovered ones when the feature
+   *   is enabled.
+   * @throws Error When discovery is enabled but Nest's discovery services are
+   *   not reachable, which means this service was constructed outside
+   *   `BymaxCoreModule`; a silent fallback would leave an operator believing
+   *   checks are running that never run.
+   */
+  private resolveIndicators(): readonly IHealthIndicator[] {
+    if (this.effectiveIndicators !== undefined) {
+      return this.effectiveIndicators
+    }
+    // Gated on `enabled` as well as `autoDiscover`: the asynchronous path
+    // registers this service whatever the options say, and scanning for a
+    // feature that is switched off would let a misdeclared indicator fail a boot
+    // that never asked for readiness at all.
+    if (!this.options.health.enabled || !this.options.health.autoDiscover) {
+      this.effectiveIndicators = this.indicators
+      return this.effectiveIndicators
+    }
+    if (this.discovery === undefined || this.reflector === undefined) {
+      throw new Error(
+        "[BymaxCoreModule] health.autoDiscover is enabled but Nest's DiscoveryService is not available. " +
+          'Register the health feature through BymaxCoreModule, which imports DiscoveryModule for it.'
+      )
+    }
+    this.effectiveIndicators = mergeIndicators(
+      this.indicators,
+      discoverIndicators(this.discovery, this.reflector)
+    )
+    return this.effectiveIndicators
+  }
 
   /**
    * Liveness check: the process is up and able to respond. Runs no
@@ -143,7 +214,7 @@ export class HealthService {
   }
 
   /**
-   * Readiness check: run every registered indicator concurrently and
+   * Readiness check: run every indicator in the effective set concurrently and
    * aggregate the results. `status` is `'ok'` only when every indicator
    * reports `up`; an empty indicator list is vacuously `'ok'`.
    *
@@ -153,7 +224,7 @@ export class HealthService {
     const timeoutMs = this.options.health.indicatorTimeoutMs
     const exposeErrors = this.options.health.exposeIndicatorErrors
     const checks = await Promise.all(
-      this.indicators.map((indicator) =>
+      this.resolveIndicators().map((indicator) =>
         runIndicator(indicator, timeoutMs, exposeErrors, this.logger)
       )
     )

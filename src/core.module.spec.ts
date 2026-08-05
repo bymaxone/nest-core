@@ -9,13 +9,19 @@
  * testing module.
  */
 import type { DynamicModule, Provider } from '@nestjs/common'
-import { APP_FILTER, APP_INTERCEPTOR } from '@nestjs/core'
+import { APP_FILTER, APP_INTERCEPTOR, DiscoveryModule } from '@nestjs/core'
 import { Test } from '@nestjs/testing'
 
 import { normalizeCoreOptions } from './core.options'
 import { augmentModule, BymaxCoreModule } from './core.module'
-import { BYMAX_CORE_OPTIONS, BYMAX_METRICS_REGISTRY, BYMAX_TIMING_SINK } from './core.tokens'
+import {
+  BYMAX_CORE_OPTIONS,
+  BYMAX_METRICS_REGISTRY,
+  BYMAX_TIMING_SINK,
+  BYMAX_TRACE_CONTEXT
+} from './core.tokens'
 import { HealthService } from './health/health.service'
+import { MetricsContributionRunner } from './metrics/metrics.contribution'
 
 /** Extract the injection token of a provider regardless of its shape. */
 function tokenOf(provider: Provider): unknown {
@@ -216,5 +222,104 @@ describe('augmentModule', () => {
     )
 
     expect(merged.exports).toEqual([BYMAX_CORE_OPTIONS, 'CUSTOM_TOKEN'])
+  })
+})
+
+describe('BymaxCoreModule, trace-context wiring', () => {
+  /**
+   * A disabled feature contributes no provider — telemetry included.
+   *
+   * This is the package's own rule, and the trace-context provider is the one
+   * that could quietly break it: it is bound unconditionally on the asynchronous
+   * path, so the synchronous path has to gate it like every other feature.
+   */
+  it('binds the trace-context provider on the sync path only when telemetry is enabled', () => {
+    const off = BymaxCoreModule.forRoot({})
+    const on = BymaxCoreModule.forRoot({ telemetry: { enabled: true } })
+
+    expect((off.providers ?? []).map(tokenOf)).not.toContain(BYMAX_TRACE_CONTEXT)
+    expect((on.providers ?? []).map(tokenOf)).toContain(BYMAX_TRACE_CONTEXT)
+  })
+
+  /**
+   * The async path binds it unconditionally, on purpose.
+   *
+   * Whether telemetry is enabled is unknown when the module is defined, so the
+   * token is always bound there and its factory gates instead. Asserted so the
+   * asymmetry stays deliberate rather than becoming a surprise.
+   */
+  it('always binds the trace-context provider on the async path', () => {
+    const def = BymaxCoreModule.forRootAsync({ inject: [], useFactory: () => ({}) })
+
+    expect((def.providers ?? []).map(tokenOf)).toContain(BYMAX_TRACE_CONTEXT)
+  })
+})
+
+describe('BymaxCoreModule, DiscoveryModule wiring', () => {
+  /**
+   * Discovery imports nothing until it is asked for.
+   *
+   * The sync path knows the options at definition time, so a configuration that
+   * never enables discovery must not carry `DiscoveryModule` at all — the same
+   * "disabled means absent" rule every other feature follows.
+   */
+  it('imports DiscoveryModule on the sync path only when discovery is enabled', () => {
+    const off = BymaxCoreModule.forRoot({ health: { enabled: true } })
+    const on = BymaxCoreModule.forRoot({ health: { enabled: true, autoDiscover: true } })
+
+    expect(off.imports ?? []).not.toContain(DiscoveryModule)
+    expect(on.imports ?? []).toContain(DiscoveryModule)
+  })
+
+  /**
+   * Metrics alone are enough to need the scan.
+   *
+   * Contribution rides on the metrics feature with no separate flag, so enabling
+   * metrics must bring the scanner in even when readiness discovery is off.
+   */
+  it('imports DiscoveryModule when metrics are enabled without health discovery', () => {
+    const def = BymaxCoreModule.forRoot({ health: { enabled: false }, metrics: { enabled: true } })
+
+    expect(def.imports ?? []).toContain(DiscoveryModule)
+  })
+
+  /**
+   * The contribution runner follows the metrics feature.
+   *
+   * It is what calls contributors at bootstrap, so registering it while metrics
+   * are off would scan the container for a registry that does not exist.
+   */
+  it('registers the contribution runner only when metrics are enabled', () => {
+    const off = BymaxCoreModule.forRoot({ metrics: { enabled: false } })
+    const on = BymaxCoreModule.forRoot({ metrics: { enabled: true } })
+
+    expect((off.providers ?? []).map(tokenOf)).not.toContain(MetricsContributionRunner)
+    expect((on.providers ?? []).map(tokenOf)).toContain(MetricsContributionRunner)
+  })
+
+  /**
+   * Discovery cannot outlive a disabled health feature.
+   *
+   * With health off there is no readiness endpoint to aggregate into, so the
+   * import would register a scanner nothing can ever read.
+   */
+  it('does not import DiscoveryModule when health is disabled', () => {
+    const def = BymaxCoreModule.forRoot({ health: { enabled: false, autoDiscover: true } })
+
+    expect(def.imports ?? []).not.toContain(DiscoveryModule)
+  })
+
+  /**
+   * The async path imports it unconditionally, on purpose.
+   *
+   * Whether discovery is enabled is unknown when the module is defined and an
+   * import cannot be decided later, so the async path always carries it and
+   * gates at runtime instead. Asserted so the asymmetry stays deliberate rather
+   * than becoming a surprise.
+   */
+  it('always imports DiscoveryModule on the async path', () => {
+    const def = BymaxCoreModule.forRootAsync({ inject: [], useFactory: () => ({}) })
+
+    expect(def.imports ?? []).toContain(DiscoveryModule)
   })
 })

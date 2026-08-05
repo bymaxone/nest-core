@@ -6,7 +6,9 @@ export default defineConfig({
   entry: {
     index: 'src/index.ts',
     'pagination/index': 'src/pagination/index.ts',
-    'health/index': 'src/health/index.ts'
+    'health/index': 'src/health/index.ts',
+    'openapi/index': 'src/openapi/index.ts',
+    'metrics/index': 'src/metrics/index.ts'
   },
   format: ['esm', 'cjs'],
   dts: true,

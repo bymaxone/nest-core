@@ -62,7 +62,7 @@ suites).
 | `pnpm lint && pnpm typecheck && pnpm build`                                                  | phase 0                                     |
 | `pnpm test:cov` (Jest, 100% line/branch/function/statement in both configs)                  | phase 0                                     |
 | `node scripts/check-size.mjs` (after `pnpm build`; provisional budgets until P8 calibration) | phase 0                                     |
-| `node scripts/dogfood-smoke-test.mjs` (all three subpaths, ESM + CJS, packed tarball)        | phase 0                                     |
+| `node scripts/dogfood-smoke-test.mjs` (every subpath, ESM + CJS, packed tarball)             | phase 0                                     |
 | `pnpm test:e2e` (in-process fixture app, bounded workers, one suite at a time)               | phase 7                                     |
 | Stryker mutation score >= 95 (`break: 95`)                                                   | phase 8 only — pre-release gate, not per-PR |
 

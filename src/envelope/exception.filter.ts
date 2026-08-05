@@ -25,12 +25,14 @@ import type { ArgumentsHost, ExceptionFilter } from '@nestjs/common'
 import { HttpAdapterHost } from '@nestjs/core'
 
 import type { ResolvedCoreOptions } from '../core.options'
-import { BYMAX_CORE_OPTIONS, BYMAX_CORRELATION_PROVIDER } from '../core.tokens'
+import { BYMAX_CORE_OPTIONS, BYMAX_CORRELATION_PROVIDER, BYMAX_TRACE_CONTEXT } from '../core.tokens'
 import { NoopCorrelationIdProvider } from '../defaults.providers'
 import type { ICorrelationIdProvider } from './correlation.interfaces'
 import { BYMAX_INTERNAL_ERROR, BYMAX_VALIDATION_FAILED, codeForStatus } from './error-codes'
 import { buildErrorEnvelope } from './error-envelope'
 import type { ErrorDetails, ErrorEnvelope } from './error-envelope'
+import type { ITraceContextProvider } from '../telemetry/trace-context'
+import { NoopTraceContextProvider } from '../telemetry/trace-context'
 
 /** HTTP status used for the production-safe collapse of any unknown error. */
 const INTERNAL_ERROR_STATUS = 500
@@ -44,7 +46,8 @@ const VALIDATION_FAILED_MESSAGE = 'Validation failed'
 /**
  * Neutral view of the current request handed to {@link BymaxExceptionFilter}
  * mappers and to the {@link BymaxExceptionFilter.onUnexpectedError} seam. It
- * exposes only the framework-agnostic surface (path, method, correlation id).
+ * exposes only the framework-agnostic surface (path, method, correlation id,
+ * trace id).
  */
 export interface FilterErrorContext {
   /** HTTP method, read through the adapter (Express and Fastify neutral). */
@@ -53,6 +56,13 @@ export interface FilterErrorContext {
   readonly path: string
   /** Correlation id for the current request; absent when no provider resolves one. */
   readonly correlationId?: string
+  /**
+   * Trace the request ran under; absent when telemetry is off or nothing was
+   * recording. Present here whatever `telemetry.exposeTraceId` says: the seam
+   * feeds a logging pipeline, where the id is exactly what makes an error
+   * findable, and only the response body is gated by that option.
+   */
+  readonly traceId?: string
 }
 
 /**
@@ -149,6 +159,9 @@ export class BymaxExceptionFilter implements ExceptionFilter {
   /** The resolved correlation provider, or the no-op fallback when none is bound. */
   private readonly correlation: ICorrelationIdProvider
 
+  /** The resolved trace-context provider, or the no-op fallback when none is bound. */
+  private readonly traceContext: ITraceContextProvider
+
   /**
    * @param options - Resolved core options; drives the `exposeInternals` switch.
    * @param correlation - Provider resolving the current request's correlation id.
@@ -161,9 +174,11 @@ export class BymaxExceptionFilter implements ExceptionFilter {
   constructor(
     @Inject(BYMAX_CORE_OPTIONS) private readonly options: ResolvedCoreOptions,
     @Optional() @Inject(BYMAX_CORRELATION_PROVIDER) correlation: ICorrelationIdProvider | undefined,
-    @Inject(HttpAdapterHost) private readonly adapterHost: HttpAdapterHost
+    @Inject(HttpAdapterHost) private readonly adapterHost: HttpAdapterHost,
+    @Optional() @Inject(BYMAX_TRACE_CONTEXT) traceContext?: ITraceContextProvider
   ) {
     this.correlation = correlation ?? new NoopCorrelationIdProvider()
+    this.traceContext = traceContext ?? new NoopTraceContextProvider()
   }
 
   /**
@@ -175,6 +190,35 @@ export class BymaxExceptionFilter implements ExceptionFilter {
    * @param exception - The error that escaped the handler.
    * @param host - The arguments host for the current execution context.
    */
+  /**
+   * Resolve one optional annotation for the envelope, treating any failure as
+   * "absent".
+   *
+   * Both annotations this filter attaches — the correlation id and the trace id
+   * — come from providers it does not own: one is supplied by the consumer, the
+   * other reads a third-party API. Their contracts say they do not throw, but
+   * this filter is the last thing standing between an error and the client, and
+   * a guarantee that depends on someone else's good behavior is not one. A
+   * failed lookup costs an optional field; an unguarded one would cost the whole
+   * response.
+   *
+   * The failure is deliberately silent, and the same reasoning applies as for
+   * the {@link BymaxExceptionFilter.onUnexpectedError} seam a few lines below:
+   * this runs while an error is already being formatted, so reporting a
+   * telemetry failure here would replace the failure the caller actually needs
+   * to see.
+   *
+   * @param read - The lookup to attempt.
+   * @returns The resolved value, or `undefined` when absent or on failure.
+   */
+  private readAnnotation(read: () => string | undefined): string | undefined {
+    try {
+      return read()
+    } catch {
+      return undefined
+    }
+  }
+
   catch(exception: unknown, host: ArgumentsHost): void {
     if (host.getType() !== 'http') {
       throw exception
@@ -183,11 +227,13 @@ export class BymaxExceptionFilter implements ExceptionFilter {
     const ctx = host.switchToHttp()
     const request = ctx.getRequest<unknown>()
     const response = ctx.getResponse<unknown>()
-    const correlationId = this.correlation.getCorrelationId()
+    const correlationId = this.readAnnotation(() => this.correlation.getCorrelationId())
+    const traceId = this.readAnnotation(() => this.traceContext.getTraceContext()?.traceId)
     const context: FilterErrorContext = {
       method: String(httpAdapter.getRequestMethod(request)),
       path: String(httpAdapter.getRequestUrl(request)),
-      ...(correlationId !== undefined ? { correlationId } : {})
+      ...(correlationId !== undefined ? { correlationId } : {}),
+      ...(traceId !== undefined ? { traceId } : {})
     }
     const envelope = this.buildEnvelope(exception, context)
     httpAdapter.reply(response, envelope, envelope.statusCode)
@@ -295,7 +341,13 @@ export class BymaxExceptionFilter implements ExceptionFilter {
       path: context.path,
       now: this.now,
       ...(details !== undefined ? { details } : {}),
-      ...(context.correlationId !== undefined ? { correlationId: context.correlationId } : {})
+      ...(context.correlationId !== undefined ? { correlationId: context.correlationId } : {}),
+      // Gated separately from the context above: the trace id reaches the
+      // observability seam either way, and the response body only when the
+      // operator opted into publishing it.
+      ...(this.options.telemetry.exposeTraceId && context.traceId !== undefined
+        ? { traceId: context.traceId }
+        : {})
     })
   }
 

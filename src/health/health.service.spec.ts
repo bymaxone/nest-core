@@ -11,11 +11,44 @@
  * double library).
  */
 import { Logger } from '@nestjs/common'
+import { Reflector } from '@nestjs/core'
 
 import { normalizeCoreOptions } from '../core.options'
 import type { ResolvedCoreOptions } from '../core.options'
+import type { ProviderScanner } from '../discovery'
 import type { HealthIndicatorResult, IHealthIndicator } from './health.interfaces'
+import { BymaxHealthIndicator } from './health.marker'
 import { HealthService } from './health.service'
+
+/** A marked indicator, as a sibling library would ship one. */
+@BymaxHealthIndicator()
+class DiscoverableIndicator {
+  readonly name = 'discovered'
+
+  /**
+   * Report healthy.
+   *
+   * @returns An `up` result.
+   */
+  async check(): Promise<HealthIndicatorResult> {
+    return { status: 'up' }
+  }
+}
+
+/** A marked indicator that reports its dependency as unreachable. */
+@BymaxHealthIndicator()
+class FailingIndicator {
+  readonly name = 'failing'
+
+  /**
+   * Report unhealthy.
+   *
+   * @returns A `down` result.
+   */
+  async check(): Promise<HealthIndicatorResult> {
+    return { status: 'down' }
+  }
+}
 
 /** Build an indicator whose `check()` resolves immediately with the given result. */
 function stubIndicator(name: string, result: HealthIndicatorResult): IHealthIndicator {
@@ -460,5 +493,161 @@ describe('HealthService', () => {
     } finally {
       jest.useRealTimers()
     }
+  })
+})
+
+describe('HealthService, indicator discovery', () => {
+  const reflector = new Reflector()
+
+  /** Options with discovery on and everything else at its default. */
+  function withDiscovery(autoDiscover: boolean): ResolvedCoreOptions {
+    return normalizeCoreOptions({ health: { autoDiscover } })
+  }
+
+  /** A provider graph exposing exactly the given marked indicator classes. */
+  function scannerOver(classes: ReadonlyArray<new () => object>): ProviderScanner {
+    return {
+      getProviders: () => classes.map((metatype) => ({ metatype, instance: new metatype() }))
+    }
+  }
+
+  /**
+   * Discovery stays off unless asked for.
+   *
+   * The default must be observationally identical to the behavior before this
+   * feature existed: a marked provider sitting in the container changes nothing
+   * until the application opts in.
+   */
+  it('ignores marked providers while autoDiscover is off', async () => {
+    const service = new HealthService(
+      [stubIndicator('cache', { status: 'up' })],
+      withDiscovery(false),
+      scannerOver([DiscoverableIndicator]),
+      reflector
+    )
+
+    const response = await service.checkReadiness()
+
+    expect(response.checks.map((check) => check.name)).toEqual(['cache'])
+  })
+
+  /**
+   * Enabled discovery extends the readiness set.
+   *
+   * This is the feature: an indicator the application never registered appears
+   * in readiness because the provider carrying it was imported.
+   */
+  it('aggregates marked providers alongside explicit ones when enabled', async () => {
+    const service = new HealthService(
+      [stubIndicator('cache', { status: 'up' })],
+      withDiscovery(true),
+      scannerOver([DiscoverableIndicator]),
+      reflector
+    )
+
+    const response = await service.checkReadiness()
+
+    expect(response.checks.map((check) => check.name)).toEqual(['cache', 'discovered'])
+  })
+
+  /**
+   * A discovered indicator can fail readiness.
+   *
+   * Aggregation is not cosmetic: a discovered check reporting `down` must flip
+   * the overall status, or the feature would report health it never verified.
+   */
+  it('lets a discovered indicator fail the aggregate status', async () => {
+    const service = new HealthService(
+      [],
+      withDiscovery(true),
+      scannerOver([FailingIndicator]),
+      reflector
+    )
+
+    const response = await service.checkReadiness()
+
+    expect(response.status).toBe('error')
+    expect(response.checks).toEqual([{ name: 'failing', status: 'down' }])
+  })
+
+  /**
+   * The scan runs once, not per probe.
+   *
+   * Readiness is polled continuously; walking the whole provider graph on every
+   * request would put that cost on the probe's path for a result that cannot
+   * change after bootstrap.
+   */
+  it('scans the provider graph only once across many probes', async () => {
+    const getProviders = jest.fn(() => [
+      { metatype: DiscoverableIndicator, instance: new DiscoverableIndicator() }
+    ])
+    const service = new HealthService([], withDiscovery(true), { getProviders }, reflector)
+
+    await service.checkReadiness()
+    await service.checkReadiness()
+    await service.checkReadiness()
+
+    expect(getProviders).toHaveBeenCalledTimes(1)
+  })
+
+  /**
+   * The bootstrap hook resolves the set eagerly.
+   *
+   * Resolving at bootstrap is what turns a misdeclared indicator into a failed
+   * boot instead of a failed probe in production, so the hook must do the work
+   * rather than leave it to the first request.
+   */
+  it('resolves the readiness set during application bootstrap', () => {
+    const getProviders = jest.fn(() => [
+      { metatype: DiscoverableIndicator, instance: new DiscoverableIndicator() }
+    ])
+    const service = new HealthService([], withDiscovery(true), { getProviders }, reflector)
+
+    service.onApplicationBootstrap()
+
+    expect(getProviders).toHaveBeenCalledTimes(1)
+  })
+
+  /**
+   * A disabled health feature never scans. Regression guard.
+   *
+   * The asynchronous registration path binds this service whatever the options
+   * say, so `health.enabled: false` with discovery left on would otherwise scan
+   * the container at bootstrap — and let a misdeclared indicator fail a boot that
+   * never asked for a readiness endpoint at all.
+   */
+  it('skips discovery entirely when the health feature is disabled', () => {
+    const getProviders = jest.fn(() => [
+      { metatype: DiscoverableIndicator, instance: new DiscoverableIndicator() }
+    ])
+    const service = new HealthService(
+      [],
+      normalizeCoreOptions({ health: { enabled: false, autoDiscover: true } }),
+      { getProviders },
+      reflector
+    )
+
+    service.onApplicationBootstrap()
+
+    expect(getProviders).not.toHaveBeenCalled()
+  })
+
+  /**
+   * Discovery without Nest's scanner fails loudly. Edge case.
+   *
+   * Reachable only when this service is constructed outside `BymaxCoreModule`,
+   * which is the one case where the module has not imported `DiscoveryModule`.
+   * Falling back silently would leave an operator believing discovered checks
+   * are running when none are.
+   */
+  it('throws when discovery is enabled but the scanner is unavailable', async () => {
+    const service = new HealthService([], withDiscovery(true))
+
+    // Whole message: the second sentence is the actionable half — it names what
+    // to register — and a message that only states the failure is a dead end.
+    await expect(service.checkReadiness()).rejects.toThrow(
+      "[BymaxCoreModule] health.autoDiscover is enabled but Nest's DiscoveryService is not available. " +
+        'Register the health feature through BymaxCoreModule, which imports DiscoveryModule for it.'
+    )
   })
 })
