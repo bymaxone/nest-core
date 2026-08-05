@@ -23,6 +23,8 @@ export type ErrorDetails = readonly unknown[] | Readonly<Record<string, unknown>
  * - `details` is present only when structured context exists (validation issues
  *   or, in development, the collapsed internal error).
  * - `correlationId` is present only when a correlation provider resolves an id.
+ * - `traceId` is present only when telemetry is enabled, a span was recording,
+ *   and `telemetry.exposeTraceId` opted into publishing it.
  */
 export interface ErrorEnvelope {
   /** HTTP status code of the response. Always present. */
@@ -35,6 +37,8 @@ export interface ErrorEnvelope {
   readonly details?: ErrorDetails
   /** Correlation id for the current request. Present only when a provider resolves one. */
   readonly correlationId?: string
+  /** Trace this request ran under. Present only when publishing it was opted into. */
+  readonly traceId?: string
   /** ISO 8601 instant the error was formatted. Always present. */
   readonly timestamp: string
   /** Request URL path. Always present. */
@@ -57,6 +61,8 @@ export interface BuildErrorEnvelopeInput {
   readonly details?: ErrorDetails
   /** Correlation id. Omit when none is bound; never pass `undefined`. */
   readonly correlationId?: string
+  /** Trace id. Omit when absent or not opted into; never pass `undefined`. */
+  readonly traceId?: string
   /** Request URL path. */
   readonly path: string
   /** Injectable clock; called once to stamp the ISO 8601 timestamp. */
@@ -84,6 +90,7 @@ export function buildErrorEnvelope(input: BuildErrorEnvelopeInput): ErrorEnvelop
   return {
     ...base,
     ...(input.details !== undefined ? { details: input.details } : {}),
-    ...(input.correlationId !== undefined ? { correlationId: input.correlationId } : {})
+    ...(input.correlationId !== undefined ? { correlationId: input.correlationId } : {}),
+    ...(input.traceId !== undefined ? { traceId: input.traceId } : {})
   }
 }

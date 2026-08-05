@@ -25,7 +25,9 @@
     "paths": {
       "@bymax-one/nest-core": ["./src/index.ts"],
       "@bymax-one/nest-core/pagination": ["./src/pagination/index.ts"],
-      "@bymax-one/nest-core/health": ["./src/health/index.ts"]
+      "@bymax-one/nest-core/health": ["./src/health/index.ts"],
+      "@bymax-one/nest-core/openapi": ["./src/openapi/index.ts"],
+      "@bymax-one/nest-core/metrics": ["./src/metrics/index.ts"]
     }
   },
   "include": ["src/**/*"],

@@ -95,8 +95,12 @@ describe('loadPromClient, absent optional peer', () => {
     const { loadPromClient: load } =
       require('./metrics.registry') as typeof import('./metrics.registry')
 
-    await expect(load()).rejects.toThrow(/prom-client is not installed/)
-    await expect(load()).rejects.toThrow(/pnpm add prom-client/)
+    // The whole message: it must name the option that turned the feature on as
+    // well as the package, or an operator running several optional features
+    // cannot tell which switch produced the failure.
+    await expect(load()).rejects.toThrow(
+      'metrics.enabled is true but the optional peer prom-client is not installed. Run: pnpm add prom-client'
+    )
   })
 
   /**

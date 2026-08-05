@@ -21,7 +21,11 @@
  */
 import type { Provider } from '@nestjs/common'
 
+import type { ResolvedCoreOptions } from './core.options'
+import { BYMAX_CORE_OPTIONS, BYMAX_TRACE_CONTEXT } from './core.tokens'
 import type { ICorrelationIdProvider } from './envelope/correlation.interfaces'
+import { resolveTraceContextProvider } from './telemetry/trace-context'
+import type { ITraceContextProvider } from './telemetry/trace-context'
 import { BYMAX_TIMING_CLOCK, DEFAULT_MONOTONIC_CLOCK } from './timing/timing.clock'
 import type { ITimingSink, RequestTimingSample } from './timing/timing.interfaces'
 
@@ -67,4 +71,25 @@ export class NoopTimingSink implements ITimingSink {
  */
 export function buildDefaultProviders(): Provider[] {
   return [{ provide: BYMAX_TIMING_CLOCK, useValue: DEFAULT_MONOTONIC_CLOCK }]
+}
+
+/**
+ * Build the `BYMAX_TRACE_CONTEXT` provider: an async factory resolving the
+ * OpenTelemetry reader when telemetry is enabled and a no-op otherwise.
+ *
+ * Registered conditionally on the synchronous path, where the options are known,
+ * so a disabled feature contributes no provider — the rule every other feature
+ * follows. On the asynchronous path it is registered unconditionally, because
+ * the options resolve after the module is defined; there the factory's own gate
+ * is what keeps the optional peer unloaded.
+ *
+ * @returns The trace-context provider.
+ */
+export function buildTraceContextProvider(): Provider {
+  return {
+    provide: BYMAX_TRACE_CONTEXT,
+    useFactory: (options: ResolvedCoreOptions): Promise<ITraceContextProvider> =>
+      resolveTraceContextProvider(options),
+    inject: [BYMAX_CORE_OPTIONS]
+  }
 }

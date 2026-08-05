@@ -11,6 +11,125 @@ heading here.
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-08-05
+
+Four optional integrations, each off by default and each loading nothing until it
+is turned on: OpenAPI documents in development, health-indicator discovery, a
+metrics contribution contract, and OpenTelemetry trace correlation.
+
+### Added
+
+- **OpenAPI documents, development only.** A new `openapi` option block and a new
+  `./openapi` subpath exporting `applyBymaxOpenApi`. Enabling the block and calling
+  the helper once during bootstrap serves an interactive UI and the raw document,
+  carrying the schemas this package already owns — the error envelope and its code
+  catalog, the health response, and the offset and cursor page shapes with their
+  query parameters.
+
+  `@nestjs/swagger` is an optional peer, reached only through a lazy dynamic import,
+  exactly like `prom-client`: an application that leaves the feature off never loads
+  it, and enabling the feature without installing it fails at boot with a message
+  naming the package and the install command.
+
+  The schemas are contributed as plain specification objects rather than decorated
+  classes. A decorator runs when its class is defined, so describing these contracts
+  with `@ApiProperty` would load the peer in every application that imports this
+  package, including the ones that never enable the feature.
+
+  A contributed entry never overwrites one the document already defines.
+
+- **Health-indicator discovery.** A new `health.autoDiscover` option and a
+  `@BymaxHealthIndicator()` marker, exported from the `./health` subpath alongside
+  the contract it belongs to. With discovery enabled, every marked provider in the
+  application joins readiness — so a library an application merely imports can
+  contribute its own check without the application registering anything.
+
+  Discovery matches the marker, never the shape of an object: a provider that
+  happens to expose a `name` and a `check` is not a readiness probe, and scraping
+  one in would let an unrelated failure take an application out of rotation. A
+  provider that is marked but does not implement `IHealthIndicator` fails the boot
+  naming the class, rather than being skipped silently.
+
+  Explicit registration still wins: an indicator bound under
+  `BYMAX_HEALTH_INDICATORS` keeps its name and its position, and a discovered one
+  with the same name is dropped. Discovered indicators are sorted by name, so the
+  `checks` array is stable across restarts. The provider graph is walked once, at
+  bootstrap.
+
+  Off by default. It changes which failures can fail a readiness probe, which is
+  a decision an application makes rather than one it inherits from its imports.
+
+- **A metrics contribution contract.** A new `./metrics` subpath exporting
+  `IMetricsContributor` and a `@BymaxMetricsContributor()` marker. A marked provider
+  is handed the registry once at bootstrap and registers its own collectors, so a
+  library's metrics appear on the application's existing scrape endpoint with
+  nothing wired.
+
+  Contributors receive the registry rather than injecting `BYMAX_METRICS_REGISTRY`:
+  a library that injected the token would depend on this package's DI tokens, and
+  therefore on the module. Receiving it as an argument means the only thing a
+  contributing library imports is the contract and the marker.
+
+  Registration failures are rethrown with the contributor named and the original
+  error chained. `prom-client` reports a duplicate metric name but not who
+  registered it, which in an application composing several libraries is the hard
+  half of the question. Contributors run sorted by class name, so a collision fails
+  the same way on every boot.
+
+  No separate flag: contribution rides on the metrics feature. With metrics
+  disabled no contributor runs and `prom-client` is still never loaded.
+
+  This is the one subpath whose types name `prom-client`. Implementing the contract
+  means constructing `prom-client` collectors, so anyone importing it already
+  depends on the peer; every other subpath stays free of it.
+
+- **Trace correlation.** A new `telemetry` option block reads the active OpenTelemetry
+  span and carries its identifiers into the request-timing sample, into the exception
+  filter's observability seam, and — behind `telemetry.exposeTraceId` — into the error
+  envelope served to the client.
+
+  `@opentelemetry/api` is an optional peer. Unlike the other two it is read on every
+  request, so it is loaded once at bootstrap rather than at the point of use, and only
+  when the feature is enabled.
+
+  This package reads; it never traces. No span is created, no SDK configured, no
+  exporter registered: all of that belongs to the instrumentation an operator already
+  runs, and duplicating it would produce two spans per request.
+
+  A request with nothing recording, or an all-zero span context, resolves to no trace:
+  the fields are absent rather than set to a sentinel. Trace identifiers are never used
+  as metric labels — a trace id is unbounded, and one unbounded label is enough to make
+  a scrape endpoint the most expensive route in a service.
+
+### Changed
+
+- **The marker-based provider scan is now shared.** Readiness discovery and metrics
+  contribution use one scan, which reads Nest's provider graph, matches a literal
+  metadata key, and labels each match by class name — falling back to the provider
+  token for an anonymous class. Behavior is unchanged for readiness.
+
+### Security
+
+- **A trace id is not published in a response body by default.** `telemetry.exposeTraceId`
+  is off: a trace id is not a secret, but in a response it tells a caller that a tracing
+  backend exists and hands them the identifier correlating their request with everything
+  else in that trace. With the option off the identifiers still reach the timing sample and
+  the logging seam.
+- **The OpenAPI document is never served in production.** `NODE_ENV` decides, and
+  the decision is fail-closed: only `development` and `test` are non-production, so
+  an unset or unrecognized value is production. The guard runs in two independent
+  layers — the option resolver forces the feature off, and the bootstrap helper
+  refuses again without trusting that resolution — and there is no override. Asking
+  for the document in production is a no-op with a warning, not an error, so one
+  configuration can be shared across environments.
+
+### Notes
+
+- `applyBymaxOpenApi` must be called **before** `app.listen()`. Mounting the document
+  re-registers routes on the HTTP adapter, and doing that against an
+  already-initialized Express 5 application replaces the router: every other route,
+  including this package's health endpoints, stops resolving.
+
 ## [1.0.1] - 2026-08-04
 
 **Behaviour change on the readiness endpoint.** A failing indicator's message no
@@ -108,6 +227,7 @@ have regressed from. They are kept because the reasoning is worth having.
   cleanly and silently. Corrected before the first publish, so no released version
   ever carried the permissive range. No runtime behaviour changed.
 
+[1.1.0]: https://github.com/bymaxone/nest-core/compare/v1.0.1...v1.1.0
 [1.0.1]: https://github.com/bymaxone/nest-core/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/bymaxone/nest-core/releases/tag/v1.0.0
-[Unreleased]: https://github.com/bymaxone/nest-core/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/bymaxone/nest-core/compare/v1.1.0...HEAD

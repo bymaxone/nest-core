@@ -18,6 +18,7 @@ import { of, throwError } from 'rxjs'
 import { normalizeCoreOptions } from '../core.options'
 import type { ResolvedCoreOptions } from '../core.options'
 import type { ITimingSink, RequestTimingSample } from './timing.interfaces'
+import type { ITraceContextProvider, TraceContext } from '../telemetry/trace-context'
 import type { MonotonicClock } from './timing.clock'
 import { TimingInterceptor } from './timing.interceptor'
 
@@ -69,9 +70,21 @@ function buildInterceptor(params: {
   options?: ResolvedCoreOptions
   ticks?: readonly number[]
   sink: ITimingSink
+  /** Trace-context provider; omitted leaves the interceptor's no-op fallback. */
+  traceContext?: ITraceContextProvider
 }): TimingInterceptor {
   const clock = stubClock(params.ticks ?? [0, 10])
-  return new TimingInterceptor(params.options ?? normalizeCoreOptions(), params.sink, clock)
+  return new TimingInterceptor(
+    params.options ?? normalizeCoreOptions(),
+    params.sink,
+    clock,
+    params.traceContext
+  )
+}
+
+/** Build a trace-context provider resolving the given trace, or nothing. */
+function stubTraceContext(trace?: TraceContext): ITraceContextProvider {
+  return { getTraceContext: (): TraceContext | undefined => trace }
 }
 
 describe('TimingInterceptor, success path', () => {
@@ -371,5 +384,133 @@ describe('TimingInterceptor, sink fallback', () => {
       next: (value) => expect(value).toBe('ok'),
       complete: () => done()
     })
+  })
+})
+
+describe('TimingInterceptor, trace correlation', () => {
+  /** A recording span's identifiers. */
+  const TRACE: TraceContext = { traceId: 'a'.repeat(32), spanId: 'b'.repeat(16) }
+
+  /**
+   * The sample carries the trace it ran under.
+   *
+   * A sink that forwards samples to logs or to a trace backend needs both ids to
+   * tie the measurement to the request; without them the sample is an orphan.
+   */
+  it('stamps the sample with the active trace and span ids', (done) => {
+    const sink = recordingSink()
+    const interceptor = buildInterceptor({ sink, traceContext: stubTraceContext(TRACE) })
+    const context = contextFor({
+      request: { method: 'GET', route: { path: '/invoices' } },
+      response: { statusCode: 200 }
+    })
+
+    interceptor
+      .intercept(
+        context,
+        handlerReturning(() => of('ok'))
+      )
+      .subscribe({
+        complete: () => {
+          expect(sink.samples[0]).toMatchObject({ traceId: TRACE.traceId, spanId: TRACE.spanId })
+          done()
+        }
+      })
+  })
+
+  /**
+   * An untraced request leaves the keys off entirely. Edge case.
+   *
+   * `exactOptionalPropertyTypes` distinguishes an absent key from one set to
+   * `undefined`, and a sink serializing the sample must not emit `traceId: null`
+   * for every request made before instrumentation started.
+   */
+  it('omits the trace keys when nothing is recording', (done) => {
+    const sink = recordingSink()
+    const interceptor = buildInterceptor({ sink, traceContext: stubTraceContext(undefined) })
+    const context = contextFor({
+      request: { method: 'GET', route: { path: '/invoices' } },
+      response: { statusCode: 200 }
+    })
+
+    interceptor
+      .intercept(
+        context,
+        handlerReturning(() => of('ok'))
+      )
+      .subscribe({
+        complete: () => {
+          expect(sink.samples[0]).not.toHaveProperty('traceId')
+          expect(sink.samples[0]).not.toHaveProperty('spanId')
+          done()
+        }
+      })
+  })
+
+  /**
+   * A throwing trace provider costs the trace fields and nothing else.
+   *
+   * Two things have to survive it: the request, and the sample. Folding the
+   * trace read into the sink's guard would drop the whole sample, so a broken
+   * tracer would silently stop the request counter — a worse outcome than the
+   * missing ids it was meant to tolerate.
+   */
+  it('still records the sample, without trace ids, when the trace provider throws', (done) => {
+    const sink = recordingSink()
+    const interceptor = buildInterceptor({
+      sink,
+      traceContext: {
+        getTraceContext: (): TraceContext | undefined => {
+          throw new Error('tracer exploded')
+        }
+      }
+    })
+    const context = contextFor({
+      request: { method: 'GET', route: { path: '/invoices' } },
+      response: { statusCode: 200 }
+    })
+
+    interceptor
+      .intercept(
+        context,
+        handlerReturning(() => of('ok'))
+      )
+      .subscribe({
+        complete: () => {
+          expect(sink.samples).toHaveLength(1)
+          expect(sink.samples[0]).toMatchObject({ method: 'GET', route: '/invoices' })
+          expect(sink.samples[0]).not.toHaveProperty('traceId')
+          expect(sink.samples[0]).not.toHaveProperty('spanId')
+          done()
+        },
+        error: () => done(new Error('the request must not fail because telemetry did'))
+      })
+  })
+
+  /**
+   * No bound provider behaves like no trace. Edge case: nothing injected.
+   *
+   * The interceptor is constructible on its own, so its in-code fallback must
+   * make an unbound token indistinguishable from an untraced request.
+   */
+  it('omits the trace keys when no provider is bound at all', (done) => {
+    const sink = recordingSink()
+    const interceptor = buildInterceptor({ sink })
+    const context = contextFor({
+      request: { method: 'GET', route: { path: '/invoices' } },
+      response: { statusCode: 200 }
+    })
+
+    interceptor
+      .intercept(
+        context,
+        handlerReturning(() => of('ok'))
+      )
+      .subscribe({
+        complete: () => {
+          expect(sink.samples[0]).not.toHaveProperty('traceId')
+          done()
+        }
+      })
   })
 })

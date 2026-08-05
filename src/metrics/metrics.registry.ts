@@ -11,6 +11,7 @@
 import type * as PromClient from 'prom-client'
 
 import type { ResolvedCoreOptions } from '../core.options'
+import { isMissingModuleError, missingPeerMessage } from '../optional-peer'
 
 /** The dedicated `prom-client` `Registry` backing the metrics endpoint. */
 export type MetricsRegistry = PromClient.Registry
@@ -43,23 +44,7 @@ export interface PromClientModule {
  * the package and the exact install command so the failure is self-explanatory
  * at boot rather than a cryptic module-resolution error at request time.
  */
-const MISSING_PEER_MESSAGE =
-  'metrics.enabled is true but the optional peer prom-client is not installed. Run: pnpm add prom-client'
-
-/**
- * True when a dynamic-import failure means the module could not be resolved,
- * the only case that indicates the optional peer is absent. Any other failure
- * (a syntax or runtime error inside `prom-client`, a broken transitive
- * dependency) is left unwrapped so operators see the real cause instead of a
- * misleading "not installed".
- *
- * @param cause - The error thrown by the dynamic import.
- * @returns `true` for a module-not-found error, `false` otherwise.
- */
-function isMissingModuleError(cause: unknown): boolean {
-  const code = (cause as { code?: string }).code
-  return code === 'ERR_MODULE_NOT_FOUND' || code === 'MODULE_NOT_FOUND'
-}
+const MISSING_PEER_MESSAGE = missingPeerMessage('metrics.enabled', 'prom-client')
 
 /**
  * Load `prom-client` lazily through a dynamic import. This is the only runtime
