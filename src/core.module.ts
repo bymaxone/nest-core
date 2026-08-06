@@ -55,6 +55,7 @@ export interface BymaxCoreModuleExtras {
  * separately under {@link BYMAX_CORE_OPTIONS}. `isGlobal` (default `true`) maps
  * to `DynamicModule.global`, replacing a manual `@Global()` decorator.
  */
+// Stryker disable ObjectLiteral: equivalent — removing the `{ isGlobal: true }` default does not change `global`. The callback below reads `isGlobal !== false`: with the default present a caller who says nothing gets `true`, and with it gone the same caller gets `undefined`, which is also not `false`. Either way the module is global for every extras input. The literal stays because it states the default where the extras are declared and gives them their type. The block form is required because a directive does not attach inside a builder chain.
 export const {
   ConfigurableModuleClass: BymaxCoreModuleBase,
   MODULE_OPTIONS_TOKEN: BUILDER_OPTIONS_TOKEN,
@@ -62,12 +63,6 @@ export const {
   ASYNC_OPTIONS_TYPE
 } = new ConfigurableModuleBuilder<BymaxCoreModuleOptions>()
   .setClassMethodName('forRoot')
-  // Removing `{ isGlobal: true }` would not change `global`, which is why mutation testing
-  // reports this literal as surviving. The callback below reads `isGlobal !== false`: with the
-  // default present a caller who says nothing gets `true`, and with it gone the same caller
-  // gets `undefined` — which is also not `false`. Either way the module is global. The literal
-  // stays because it states the default where the extras are declared and gives them their
-  // type. No Stryker directive attaches inside a builder chain, so the note lives here.
   .setExtras<BymaxCoreModuleExtras>({ isGlobal: true }, (definition, extras) => ({
     ...definition,
     // `setExtras` merges the `{ isGlobal: true }` default first, so `isGlobal`
@@ -75,6 +70,7 @@ export const {
     global: extras.isGlobal !== false
   }))
   .build()
+// Stryker restore ObjectLiteral
 
 /**
  * Build the feature providers registered on the synchronous path. Disabled

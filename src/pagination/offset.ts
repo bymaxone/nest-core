@@ -84,6 +84,7 @@ export function buildPageResult<T>(
   query: PageQuery
 ): PageResult<T> {
   const safePage = coercePositiveInt(query.page, MINIMUM)
+  // Stryker disable next-line EqualityOperator: equivalent — only `totalItems === 0` selects a different branch, and both branches yield `0` (`Math.floor(0)` on one side, the literal `0` on the other), so `safeTotal` is identical for every input.
   const safeTotal = Number.isFinite(totalItems) && totalItems > 0 ? Math.floor(totalItems) : 0
   const safeLimit = coercePositiveInt(query.limit, DEFAULT_LIMIT)
   const totalPages = Math.ceil(safeTotal / safeLimit)
