@@ -156,3 +156,37 @@ pnpm mutation
 Runs the full gate sequentially (about three and a half minutes on the reference
 machine). The HTML report is written to `reports/mutation/mutation.html` and the
 machine-readable report to `reports/mutation/mutation.json`.
+
+---
+
+## Re-run — 2026-08-06
+
+| Metric             | Value        |
+| ------------------ | ------------ |
+| **Mutation score** | **98.76 %**  |
+| Surviving mutants  | 9            |
+| Break threshold    | 95 % -> PASS |
+
+No change to the score. All nine survivors are equivalent, and this pass verified each rather
+than assuming it.
+
+The two envelope spreads are the notable ones: `buildErrorEnvelope` applies the same conditional
+spreads to its own input, so a key handed over as `undefined` is dropped there regardless — the
+filter's guards state intent at the call site, they do not decide the envelope. Assertions were
+added that the envelope OMITS those keys rather than carrying them as `undefined`, which
+`toHaveProperty` and `JSON.stringify` both fail to distinguish.
+
+The rest: 400 and 500 are catalogued and return before the range check, so neither boundary is
+reachable; the two pagination clamps agree with their else branch at zero; the cursor's decode
+catch leaves `parsed` undefined, which the shape check rejects identically; and JSON has no
+literal for NaN or Infinity, so the finite-number check cannot see one.
+
+Inline directives were added during this pass and then removed, for the same reason as the
+sibling config package: equivalents are documented here, not annotated in the source.
+
+Every equivalence claim in this section was checked by running the mutant, not by reading it.
+Where a `// Stryker disable next-line` directive was found not to apply — above a `} catch {`, a
+`.replace()` inside a method chain, a multi-line `sort(...)` argument, or anywhere inside a
+builder chain — it was replaced with the block `disable`/`restore` form, or, where that does not
+work either, with a plain comment at the line so the reasoning is visible rather than silently
+ineffective.

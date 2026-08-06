@@ -334,7 +334,6 @@ export class BymaxExceptionFilter implements ExceptionFilter {
     context: FilterErrorContext,
     details?: ErrorDetails
   ): ErrorEnvelope {
-    // Stryker disable ConditionalExpression: equivalent — `buildErrorEnvelope` applies the same conditional spreads to its own input, so a key handed over as `undefined` is dropped there; these guards state the intent at the call site rather than deciding the envelope
     return buildErrorEnvelope({
       statusCode,
       code,
@@ -350,7 +349,6 @@ export class BymaxExceptionFilter implements ExceptionFilter {
         ? { traceId: context.traceId }
         : {})
     })
-    // Stryker restore ConditionalExpression
   }
 
   /**
