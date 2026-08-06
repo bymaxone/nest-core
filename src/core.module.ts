@@ -62,6 +62,12 @@ export const {
   ASYNC_OPTIONS_TYPE
 } = new ConfigurableModuleBuilder<BymaxCoreModuleOptions>()
   .setClassMethodName('forRoot')
+  // Removing `{ isGlobal: true }` would not change `global`, which is why mutation testing
+  // reports this literal as surviving. The callback below reads `isGlobal !== false`: with the
+  // default present a caller who says nothing gets `true`, and with it gone the same caller
+  // gets `undefined` — which is also not `false`. Either way the module is global. The literal
+  // stays because it states the default where the extras are declared and gives them their
+  // type. No Stryker directive attaches inside a builder chain, so the note lives here.
   .setExtras<BymaxCoreModuleExtras>({ isGlobal: true }, (definition, extras) => ({
     ...definition,
     // `setExtras` merges the `{ isGlobal: true }` default first, so `isGlobal`

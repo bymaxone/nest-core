@@ -519,6 +519,12 @@ describe('BymaxExceptionFilter, correlation-provider fallback', () => {
     filter.catch(new NotFoundException('missing'), host)
 
     expect(captured.body).not.toHaveProperty('correlationId')
+    // The KEY has to be absent, not present holding `undefined`. `toHaveProperty` does not
+    // separate those and `JSON.stringify` erases the difference, so nothing here could tell a
+    // conditional spread from an unconditional one — but anything that reads the envelope as an
+    // object rather than as a response body can: an `onEnvelope` hook, a structured log, a
+    // snapshot. Both spreads are conditional on purpose, so that is what is asserted.
+    expect(Object.hasOwn(captured.body as object, 'correlationId')).toBe(false)
   })
 })
 
@@ -542,6 +548,7 @@ describe('BymaxExceptionFilter, trace correlation', () => {
     filter.catch(new NotFoundException('missing'), host)
 
     expect(captured.body).not.toHaveProperty('traceId')
+    expect(Object.hasOwn(captured.body as object, 'traceId')).toBe(false)
   })
 
   /**
@@ -576,6 +583,7 @@ describe('BymaxExceptionFilter, trace correlation', () => {
     filter.catch(new NotFoundException('missing'), host)
 
     expect(captured.body).not.toHaveProperty('traceId')
+    expect(Object.hasOwn(captured.body as object, 'traceId')).toBe(false)
   })
 
   /**
@@ -599,6 +607,7 @@ describe('BymaxExceptionFilter, trace correlation', () => {
 
     expect(captured.body).toMatchObject({ statusCode: 404, code: 'BYMAX_NOT_FOUND' })
     expect(captured.body).not.toHaveProperty('correlationId')
+    expect(Object.hasOwn(captured.body as object, 'correlationId')).toBe(false)
   })
 
   /**
@@ -623,6 +632,7 @@ describe('BymaxExceptionFilter, trace correlation', () => {
 
     expect(captured.body).toMatchObject({ statusCode: 404, code: 'BYMAX_NOT_FOUND' })
     expect(captured.body).not.toHaveProperty('traceId')
+    expect(Object.hasOwn(captured.body as object, 'traceId')).toBe(false)
   })
 
   /**
@@ -639,5 +649,6 @@ describe('BymaxExceptionFilter, trace correlation', () => {
     filter.catch(new NotFoundException('missing'), host)
 
     expect(captured.body).not.toHaveProperty('traceId')
+    expect(Object.hasOwn(captured.body as object, 'traceId')).toBe(false)
   })
 })
