@@ -99,6 +99,7 @@ export function codeForStatus(status: number): string {
   if (catalogued !== undefined) {
     return catalogued
   }
+  // Stryker disable next-line EqualityOperator: equivalent — 400 and 500 are both catalogued above and return before this line, so the only statuses reaching the range check are strictly inside it and neither boundary can be exercised
   if (status >= CLIENT_ERROR_MIN && status < CLIENT_ERROR_MAX) {
     return BYMAX_CLIENT_ERROR
   }

@@ -62,6 +62,11 @@ export const {
   ASYNC_OPTIONS_TYPE
 } = new ConfigurableModuleBuilder<BymaxCoreModuleOptions>()
   .setClassMethodName('forRoot')
+  // The `{ isGlobal: true }` default is documentation, not behaviour: the callback below reads
+  // `isGlobal !== false`, so an absent default leaves it undefined, which is also not false and
+  // still yields a global module. Mutation testing reports this literal as surviving for exactly
+  // that reason — a Stryker directive cannot be attached inside this builder chain, so the note
+  // lives here instead.
   .setExtras<BymaxCoreModuleExtras>({ isGlobal: true }, (definition, extras) => ({
     ...definition,
     // `setExtras` merges the `{ isGlobal: true }` default first, so `isGlobal`

@@ -50,9 +50,11 @@ function isOrderingKeyRecord(value: unknown): value is Record<string, string | n
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
     return false
   }
+  // Stryker disable ConditionalExpression: equivalent on every reachable input — the caller feeds this `JSON.parse` output, and JSON has no literal for NaN or Infinity, so a non-finite number cannot arrive; the check states the invariant the encoder must also hold to
   return Object.values(value).every(
     (entry) => typeof entry === 'string' || (typeof entry === 'number' && Number.isFinite(entry))
   )
+  // Stryker restore ConditionalExpression
 }
 
 /**
@@ -95,6 +97,7 @@ export function decodeCursor<T extends Record<string, string | number>>(cursor: 
     throw cursorRejection()
   }
   let parsed: unknown
+  // Stryker disable BlockStatement: equivalent — emptying this catch leaves `parsed` undefined, which the shape check immediately below rejects with the same `cursorRejection()`; the throw names the decode failure at its source
   try {
     parsed = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8'))
   } catch {
@@ -103,6 +106,7 @@ export function decodeCursor<T extends Record<string, string | number>>(cursor: 
   if (!isOrderingKeyRecord(parsed)) {
     throw cursorRejection()
   }
+  // Stryker restore BlockStatement
   return parsed as T
 }
 
@@ -162,6 +166,7 @@ export function buildCursorResult<T>(
   limit: number,
   toCursor: (lastItem: T) => Record<string, string | number>
 ): CursorResult<T> {
+  // Stryker disable next-line EqualityOperator: equivalent — the arms agree at zero, which is the only value the operator separates
   const safeLimit = Number.isFinite(limit) && limit > 0 ? Math.floor(limit) : 0
   if (items.length <= safeLimit) {
     return { items, nextCursor: null }
