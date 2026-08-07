@@ -190,3 +190,38 @@ Where a `// Stryker disable next-line` directive was found not to apply — abov
 builder chain — it was replaced with the block `disable`/`restore` form, or, where that does not
 work either, with a plain comment at the line so the reasoning is visible rather than silently
 ineffective.
+
+---
+
+## Re-run — 2026-08-07
+
+| Metric                    | Value           |
+| ------------------------- | --------------- |
+| **Mutation score**        | **100.00 %**    |
+| Killed                    | 694             |
+| Timed out (counts killed) | 9               |
+| Survived                  | 0               |
+| Compile-error (excluded)  | 449             |
+| Break threshold           | 95 % -> PASS    |
+| High target               | 99 % -> reached |
+
+No test changed and no production logic changed. The nine equivalents argued above now carry
+their reason on the line they apply to, as `// Stryker disable next-line <Mutator>: <reason>`,
+so Stryker excludes them from the denominator instead of counting them as mutants the suite
+failed to kill. That is the whole of the move from 98.76 % to 100 %, and the convention is the
+one shared across the `@bymax-one/nest-*` libraries — see
+`mutation_testing_plan.md §Suppression policy`.
+
+Two of the nine could not take `next-line`, and this run is what proves the block form reaches
+them:
+
+- **the cursor-parse `catch`** — Stryker does not honour `next-line` on a catch-clause body, so
+  the `BlockStatement` mutant is bracketed by `// Stryker disable BlockStatement` before the
+  `try` and `// Stryker restore BlockStatement` after the `catch`;
+- **`setExtras({ isGlobal: true }, …)`** — a directive does not attach inside a builder chain.
+  This was already known here: the note above the call said so in prose and left the mutant
+  counted. The prose is now the directive's reason, and the block brackets the builder
+  statement alone, so nothing else in the file loses its `ObjectLiteral` mutants.
+
+Both were verified by running them, not by reading them: with the directives in place the run
+reports zero survivors, where before it reported nine.

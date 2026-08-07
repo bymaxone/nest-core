@@ -51,6 +51,7 @@ function isOrderingKeyRecord(value: unknown): value is Record<string, string | n
     return false
   }
   return Object.values(value).every(
+    // Stryker disable next-line ConditionalExpression: equivalent — replacing the `typeof entry === 'number'` guard with `true` leaves `Number.isFinite(entry)`, which never coerces and so already returns `false` for every non-number. The guard is redundant and the predicate is unchanged for every value.
     (entry) => typeof entry === 'string' || (typeof entry === 'number' && Number.isFinite(entry))
   )
 }
@@ -95,11 +96,13 @@ export function decodeCursor<T extends Record<string, string | number>>(cursor: 
     throw cursorRejection()
   }
   let parsed: unknown
+  // Stryker disable BlockStatement: equivalent — emptying the catch leaves `parsed` at its initial `undefined`, `isOrderingKeyRecord(undefined)` is then `false`, and the very next guard throws the identical `cursorRejection()`. Same exception and message for every non-JSON input. The block form is required because Stryker does not honour `next-line` on a catch-clause body.
   try {
     parsed = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8'))
   } catch {
     throw cursorRejection()
   }
+  // Stryker restore BlockStatement
   if (!isOrderingKeyRecord(parsed)) {
     throw cursorRejection()
   }
@@ -162,6 +165,7 @@ export function buildCursorResult<T>(
   limit: number,
   toCursor: (lastItem: T) => Record<string, string | number>
 ): CursorResult<T> {
+  // Stryker disable next-line EqualityOperator: equivalent — only `limit === 0` selects a different branch, and both branches yield `0` (`Math.floor(0)` on one side, the literal `0` on the other), so `safeLimit` is identical for every input.
   const safeLimit = Number.isFinite(limit) && limit > 0 ? Math.floor(limit) : 0
   if (items.length <= safeLimit) {
     return { items, nextCursor: null }

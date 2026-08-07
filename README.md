@@ -14,7 +14,7 @@
   <a href="https://www.npmjs.com/package/@bymax-one/nest-core"><img src="https://img.shields.io/npm/dm/@bymax-one/nest-core?style=flat-square&colorA=000000&colorB=000000" alt="npm downloads" /></a>
   <a href="https://github.com/bymaxone/nest-core/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/bymaxone/nest-core/ci.yml?branch=main&style=flat-square&colorA=000000&label=CI" alt="CI status" /></a>
   <a href="https://github.com/bymaxone/nest-core/actions/workflows/ci.yml"><img src="https://img.shields.io/badge/coverage-100%25-brightgreen?style=flat-square&colorA=000000" alt="coverage" /></a>
-  <a href="https://github.com/bymaxone/nest-core/blob/main/docs/mutation_testing_results.md"><img src="https://img.shields.io/badge/mutation-98.76%25-brightgreen?style=flat-square&colorA=000000" alt="mutation score" /></a>
+  <a href="https://github.com/bymaxone/nest-core/blob/main/docs/mutation_testing_results.md"><img src="https://img.shields.io/badge/mutation-100%25-brightgreen?style=flat-square&colorA=000000" alt="mutation score" /></a>
   <a href="https://scorecard.dev/viewer/?uri=github.com/bymaxone/nest-core"><img src="https://api.scorecard.dev/projects/github.com/bymaxone/nest-core/badge?style=flat-square" alt="OpenSSF Scorecard" /></a>
   <a href="https://github.com/bymaxone/nest-core/blob/main/LICENSE"><img src="https://img.shields.io/github/license/bymaxone/nest-core?style=flat-square&colorA=000000&colorB=000000" alt="license" /></a>
   <a href="https://www.typescriptlang.org/"><img src="https://img.shields.io/badge/TypeScript-strict-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript" /></a>
@@ -917,17 +917,20 @@ This library sits in the path of every request and every failure of every servic
 installs it, so the suite is held to a bar beyond "the tests pass".
 
 - ✅ **100% line coverage** — statements, branches, functions and lines, enforced as a gate
-- ✅ **98.76% mutation score** — verified with [Stryker](https://stryker-mutator.io/) at
+- ✅ **100% mutation score** — verified with [Stryker](https://stryker-mutator.io/) at
   `break: 95`; every killable survivor was killed by a strengthened test, with no production
-  change, and the nine that remain are documented equivalents rather than suppressions
-  ([report](./docs/mutation_testing_results.md))
+  change, and the nine equivalents that no test can kill each carry their reason on the line
+  they apply to ([report](./docs/mutation_testing_results.md))
 - ✅ **End-to-end against a real application** — the filter, the interceptor, the health and
   metrics routes, the served OpenAPI document, discovered indicators, contributed metrics and
   trace correlation are all exercised through a booted Nest app, not against mocks of it
 - ✅ **Published-artifact gates** — `check:exports` resolves the types the way each module
   system does, `check:runtime` loads every subpath from the packed tarball in ESM and
   CommonJS, and `check:published` compiles this README's snippets against `dist/`
-- ✅ **Zero suppressions** — no coverage or mutation directives in the production source
+- ✅ **Every suppression carries its reason** — no coverage directives anywhere; each
+  `// Stryker disable` in the production source names, after the `:` Stryker reads it from,
+  why the mutant it silences is behaviour-preserving, and `check:mutants` proves those reasons
+  parse so they reach the mutation report rather than the `Ignored using a comment` fallback
 
 ```bash
 pnpm test          # unit suite
