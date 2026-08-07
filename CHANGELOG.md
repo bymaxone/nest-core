@@ -11,6 +11,39 @@ heading here.
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-08-07
+
+**Documentation and tooling.** `dist/` differs from `1.1.0` only in the text of the comments
+described below; no runtime code changed.
+
+### Changed
+
+- **Equivalent mutants are documented in the source instead of only in the report.** The nine
+  now carry `// Stryker disable next-line <Mutator>: <reason>` on the line they apply to,
+  which is the convention now shared across the `@bymax-one/nest-*` libraries. The measured
+  score moves from **98.76%** to **100%** — no test and no production logic changed; Stryker
+  excludes an ignored mutant from the denominator instead of counting it as one the suite
+  failed to kill.
+
+  Two needed the block `disable`/`restore` form, because `next-line` binds to the following
+  statement and those mutants do not sit on one: the cursor-parse catch body, and
+  `setExtras({ isGlobal: true }, …)` inside the builder chain. The second was already known —
+  the note above that call said a directive does not attach there and left the mutant counted.
+  That prose is now the directive's reason, and the block brackets the builder statement alone
+  so nothing else in the file loses its `ObjectLiteral` mutants. Both were confirmed by
+  running them: the pass reports zero survivors where it reported nine.
+
+- The README claimed **Zero suppressions** as a rule. It states what is true now: every
+  suppression carries its reason, in the grammar Stryker parses.
+
+### Added
+
+- `check:mutants` gate (`scripts/check-mutation-directives.mjs`) — validates every
+  `// Stryker` comment against the parser's own regular expression, rejecting a reason
+  written after `--` instead of a colon, a reason wrapped onto a second comment line, a stray
+  comma in the mutator list, and a mutator name Stryker does not know, which matches nothing
+  and so silences nothing. Wired into CI and `prepublishOnly`.
+
 ## [1.1.0] - 2026-08-05
 
 Four optional integrations, each off by default and each loading nothing until it
@@ -230,4 +263,5 @@ have regressed from. They are kept because the reasoning is worth having.
 [1.1.0]: https://github.com/bymaxone/nest-core/compare/v1.0.1...v1.1.0
 [1.0.1]: https://github.com/bymaxone/nest-core/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/bymaxone/nest-core/releases/tag/v1.0.0
-[Unreleased]: https://github.com/bymaxone/nest-core/compare/v1.1.0...HEAD
+[1.1.1]: https://github.com/bymaxone/nest-core/compare/v1.1.0...v1.1.1
+[Unreleased]: https://github.com/bymaxone/nest-core/compare/v1.1.1...HEAD
