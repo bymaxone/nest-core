@@ -11,6 +11,13 @@ heading here.
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-08-08
+
+Both entries change what a caller receives, which is why this is a minor rather than a patch: an
+application wiring `@bymax-one/nest-auth` starts seeing that library's own error codes where it
+previously saw one collapsed `BYMAX_BAD_REQUEST`, and a deployment with a feature disabled starts
+answering `404` where it answered `500`.
+
 ### Fixed
 
 - **A feature disabled on the `forRootAsync` path answers `404` instead of `500`.** Route metadata
@@ -294,4 +301,5 @@ have regressed from. They are kept because the reasoning is worth having.
 [1.0.1]: https://github.com/bymaxone/nest-core/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/bymaxone/nest-core/releases/tag/v1.0.0
 [1.1.1]: https://github.com/bymaxone/nest-core/compare/v1.1.0...v1.1.1
-[Unreleased]: https://github.com/bymaxone/nest-core/compare/v1.1.1...HEAD
+[1.2.0]: https://github.com/bymaxone/nest-core/compare/v1.1.1...v1.2.0
+[Unreleased]: https://github.com/bymaxone/nest-core/compare/v1.2.0...HEAD
