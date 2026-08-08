@@ -190,8 +190,19 @@ function resolveExposedClientError(exception: unknown): ExposedClientError | und
   if (candidate.expose !== true) {
     return undefined
   }
-  const status = typeof candidate.status === 'number' ? candidate.status : candidate.statusCode
-  if (typeof status !== 'number' || status < CLIENT_ERROR_MIN || status >= CLIENT_ERROR_MAX) {
+  // Prefer `status`, fall back to `statusCode` — `http-errors` sets both, other libraries set one.
+  const status = Number.isInteger(candidate.status) ? candidate.status : candidate.statusCode
+  // `Number.isInteger` rather than `typeof === 'number'`: the latter admits `NaN` and a
+  // non-integer, and `NaN` slips past both range comparisons (`NaN < 400` and `NaN >= 500` are
+  // each false), which would carry an invalid `statusCode` into the envelope and on to
+  // `httpAdapter.reply`. Only a whole number in the 4xx range is a status this honours. The
+  // `typeof` narrows `unknown` to `number`; `Number.isInteger` then rejects `NaN` and a fraction.
+  if (
+    typeof status !== 'number' ||
+    !Number.isInteger(status) ||
+    status < CLIENT_ERROR_MIN ||
+    status >= CLIENT_ERROR_MAX
+  ) {
     return undefined
   }
   const message = exception instanceof Error ? exception.message : ''

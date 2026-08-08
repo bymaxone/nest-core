@@ -593,6 +593,41 @@ describe('BymaxExceptionFilter, context handling', () => {
   })
 
   /**
+   * A NaN or non-integer status is not honoured.
+   *
+   * `typeof NaN === 'number'` and `NaN` slips past both range comparisons, so a guard that only
+   * checked `typeof` would carry `NaN` — or a fraction like `413.5` — into the envelope and on to
+   * the adapter as a status. Both must collapse to the generic 500.
+   */
+  it.each([NaN, 413.5, Infinity])('collapses an exposed error whose status is %p', (status) => {
+    const { filter, host, captured } = buildHarness()
+    const weird = Object.assign(new Error('odd status'), { status, expose: true })
+
+    filter.catch(weird, host)
+
+    expect(captured.status).toBe(500)
+    expect(captured.body?.code).toBe('BYMAX_INTERNAL_ERROR')
+  })
+
+  /**
+   * `statusCode` is honoured when `status` is absent or invalid.
+   *
+   * `http-errors` sets both `status` and `statusCode`; some libraries set only `statusCode`. When
+   * `status` is missing (or not an integer), the code falls back to `statusCode`.
+   */
+  it('reads statusCode when status is absent', () => {
+    const { filter, host, captured } = buildHarness()
+    const onlyStatusCode = Object.assign(new Error('payload too large'), {
+      statusCode: 413,
+      expose: true
+    })
+
+    filter.catch(onlyStatusCode, host)
+
+    expect(captured.status).toBe(413)
+  })
+
+  /**
    * A non-`Error` object marked exposable keeps its status but not its (absent) message.
    *
    * `expose` and `status` can sit on a plain object that is not an `Error`. Its status is honoured,
