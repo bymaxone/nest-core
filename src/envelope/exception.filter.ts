@@ -8,9 +8,11 @@
  *
  * Three mapping rules apply, in order:
  *
- * 1. `HttpException` with an explicit `code` on its response object passes that
- *    domain code through verbatim, so the `BYMAX_` prefix stays reserved for
- *    codes this package emits.
+ * 1. `HttpException` carrying an explicit `code` passes that domain code, its
+ *    message and its details through verbatim, so the `BYMAX_` prefix stays
+ *    reserved for codes this package emits. The fields are read flat off the
+ *    response or from a nested `error` object, since both shapes are in use
+ *    across the `@bymax-one` libraries.
  * 2. A validation-shaped `HttpException` (response carrying a `message` array,
  *    the form produced by Nest validation pipes) becomes
  *    `BYMAX_VALIDATION_FAILED` with one structured `details` entry per violation.
@@ -66,17 +68,85 @@ export interface FilterErrorContext {
 }
 
 /**
- * Extract an explicit domain `code` from an `HttpException` response object.
+ * Locate the object carrying a domain error's `code`, `message` and `details`.
+ *
+ * Two shapes are accepted, because both are in use across the `@bymax-one`
+ * libraries and a consumer wiring two of them should not have to know which one
+ * each throws:
+ *
+ * - flat, `{ code, message, details }` directly on the response, and
+ * - nested, `{ error: { code, message, details } }`, which is what
+ *   `@bymax-one/nest-auth`'s `AuthException` builds.
+ *
+ * Nesting is only followed when the inner object actually carries a string
+ * `code`. Without that check, any exception whose body happens to have an
+ * `error` key — a passthrough from an upstream service, a hand-built response —
+ * would have its `message` read from a place that means something else.
  *
  * @param response - The value returned by `HttpException.getResponse()`.
- * @returns The string `code` when the response object carries one, else `undefined`.
+ * @returns The object to read the domain fields from, or `undefined` when the
+ *   response carries no domain error at all.
  */
-function extractExplicitCode(response: string | object): string | undefined {
-  if (typeof response !== 'object' || response === null || !('code' in response)) {
+function resolveErrorCarrier(response: string | object): object | undefined {
+  if (typeof response !== 'object' || response === null) {
     return undefined
   }
-  const code: unknown = (response as { code: unknown }).code
-  return typeof code === 'string' ? code : undefined
+  if (hasStringCode(response)) {
+    return response
+  }
+  if ('error' in response) {
+    const nested: unknown = (response as { error: unknown }).error
+    if (typeof nested === 'object' && nested !== null && hasStringCode(nested)) {
+      return nested
+    }
+  }
+  return undefined
+}
+
+/**
+ * Whether an object carries a string `code`, which is what marks it as a domain
+ * error rather than an arbitrary response body.
+ *
+ * @param value - The candidate carrier.
+ * @returns `true` when a string `code` is present.
+ */
+function hasStringCode(value: object): boolean {
+  return 'code' in value && typeof (value as { code: unknown }).code === 'string'
+}
+
+/**
+ * Extract an explicit domain `code` from a resolved carrier.
+ *
+ * @param carrier - The object located by {@link resolveErrorCarrier}.
+ * @returns The string `code`.
+ */
+function extractExplicitCode(carrier: object): string {
+  return (carrier as { code: string }).code
+}
+
+/**
+ * Extract the structured `details` a domain error attached to itself.
+ *
+ * The value is whatever the throwing library put there, so it is passed through
+ * unchanged when it is one of the two shapes the contract admits, and dropped
+ * otherwise rather than reshaped into something the caller did not write. A
+ * `null` — which `AuthException` uses to mean "no details" — is not details.
+ *
+ * @param carrier - The object located by {@link resolveErrorCarrier}.
+ * @returns The structured context, or `undefined` when there is none.
+ */
+function extractExplicitDetails(carrier: object): ErrorDetails | undefined {
+  if (!('details' in carrier)) {
+    return undefined
+  }
+  const details: unknown = (carrier as { details: unknown }).details
+  if (Array.isArray(details)) {
+    return details as readonly unknown[]
+  }
+  if (typeof details === 'object' && details !== null) {
+    return details as Readonly<Record<string, unknown>>
+  }
+  return undefined
 }
 
 /**
@@ -117,12 +187,22 @@ function toValidationDetails(violations: readonly unknown[]): ErrorDetails {
  * @param exception - The exception, used as the fallback message source.
  * @returns The string message from the response, or the exception's own message.
  */
-function extractHttpMessage(response: string | object, exception: HttpException): string {
+function extractHttpMessage(
+  response: string | object,
+  exception: HttpException,
+  carrier?: object
+): string {
   if (typeof response === 'string') {
     return response
   }
-  if (typeof response === 'object' && response !== null && 'message' in response) {
-    const message: unknown = (response as { message: unknown }).message
+  // The carrier is preferred when one was resolved, because a domain error that
+  // nests its fields also carries the message that belongs to its code. Reading
+  // the response's own `message` there would answer with the framework's
+  // summary of the exception — `"Auth Exception"` for every distinct failure —
+  // while the message naming the actual one sits one level down.
+  const source = carrier ?? response
+  if (typeof source === 'object' && source !== null && 'message' in source) {
+    const message: unknown = (source as { message: unknown }).message
     if (typeof message === 'string') {
       return message
     }
@@ -262,9 +342,10 @@ export class BymaxExceptionFilter implements ExceptionFilter {
   }
 
   /**
-   * Map an `HttpException` to the envelope. Explicit domain codes pass through;
-   * the validation shape becomes `BYMAX_VALIDATION_FAILED` with structured
-   * details; everything else derives its code from the status.
+   * Map an `HttpException` to the envelope. A domain error passes its own code,
+   * message and details through, whether it wrote them flat on the response or
+   * nested under `error`; the validation shape becomes `BYMAX_VALIDATION_FAILED`
+   * with structured details; everything else derives its code from the status.
    *
    * @param exception - The HTTP exception to format.
    * @param context - The neutral request context.
@@ -273,9 +354,15 @@ export class BymaxExceptionFilter implements ExceptionFilter {
   private mapHttpException(exception: HttpException, context: FilterErrorContext): ErrorEnvelope {
     const status = exception.getStatus()
     const response = exception.getResponse()
-    const explicitCode = extractExplicitCode(response)
-    if (explicitCode !== undefined) {
-      return this.toEnvelope(status, explicitCode, extractHttpMessage(response, exception), context)
+    const carrier = resolveErrorCarrier(response)
+    if (carrier !== undefined) {
+      return this.toEnvelope(
+        status,
+        extractExplicitCode(carrier),
+        extractHttpMessage(response, exception, carrier),
+        context,
+        extractExplicitDetails(carrier)
+      )
     }
     if (isValidationResponse(response)) {
       return this.toEnvelope(
