@@ -94,11 +94,11 @@ function resolveErrorCarrier(response: string | object): object | undefined {
   if (hasStringCode(response)) {
     return response
   }
-  if ('error' in response) {
-    const nested: unknown = (response as { error: unknown }).error
-    if (typeof nested === 'object' && nested !== null && hasStringCode(nested)) {
-      return nested
-    }
+  // No `'error' in response` guard: an absent key reads as `undefined`, which the type test
+  // below rejects on its own. The extra check only restated it.
+  const nested: unknown = (response as { error?: unknown }).error
+  if (typeof nested === 'object' && nested !== null && hasStringCode(nested)) {
+    return nested
   }
   return undefined
 }
@@ -136,17 +136,12 @@ function extractExplicitCode(carrier: object): string {
  * @returns The structured context, or `undefined` when there is none.
  */
 function extractExplicitDetails(carrier: object): ErrorDetails | undefined {
-  if (!('details' in carrier)) {
-    return undefined
-  }
-  const details: unknown = (carrier as { details: unknown }).details
-  if (Array.isArray(details)) {
-    return details as readonly unknown[]
-  }
-  if (typeof details === 'object' && details !== null) {
-    return details as Readonly<Record<string, unknown>>
-  }
-  return undefined
+  const details: unknown = (carrier as { details?: unknown }).details
+  // One test admits both shapes the contract allows and rejects everything else. An array is an
+  // object, so it needs no branch of its own; an absent key and a scalar both fail the type test;
+  // and `null` is excluded explicitly, which is the only one of those that `typeof` would let
+  // through.
+  return typeof details === 'object' && details !== null ? (details as ErrorDetails) : undefined
 }
 
 /**
