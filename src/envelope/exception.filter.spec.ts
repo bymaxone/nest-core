@@ -137,6 +137,139 @@ describe('BymaxExceptionFilter, HttpException mapping', () => {
   })
 
   /**
+   * A domain error's own details reach the caller.
+   *
+   * A code the caller can branch on is only half the contract: an exception that
+   * attached structured context did so because the caller needs it. Dropping it
+   * left a client able to tell *that* something failed and not *what*.
+   */
+  it('passes an explicit response details array through verbatim', () => {
+    const { filter, host, captured } = buildHarness()
+
+    filter.catch(
+      new BadRequestException({
+        code: 'INVOICE_OVERDUE',
+        message: 'Overdue',
+        details: [{ field: 'dueDate', message: 'is in the past' }]
+      }),
+      host
+    )
+
+    expect(captured.body?.details).toEqual([{ field: 'dueDate', message: 'is in the past' }])
+  })
+
+  /**
+   * The nested shape is read as readily as the flat one.
+   *
+   * `@bymax-one/nest-auth` builds `{ error: { code, message, details } }`, so a
+   * backend wiring both libraries saw every distinct auth failure — a duplicate
+   * e-mail, a short password, a missing field — render as one opaque
+   * `BYMAX_BAD_REQUEST` / "Auth Exception". Neither the client nor whoever was
+   * debugging could tell them apart.
+   */
+  it('reads code, message and details from a nested error object', () => {
+    const { filter, host, captured } = buildHarness()
+
+    filter.catch(
+      new BadRequestException({
+        error: {
+          code: 'auth.validation',
+          message: 'Validation failed',
+          details: [{ field: 'tenantId', message: 'tenantId is required' }]
+        }
+      }),
+      host
+    )
+
+    expect(captured.body?.code).toBe('auth.validation')
+    expect(captured.body?.message).toBe('Validation failed')
+    expect(captured.body?.details).toEqual([{ field: 'tenantId', message: 'tenantId is required' }])
+  })
+
+  /**
+   * A nested object without a string code is not a domain error.
+   *
+   * `error` is an ordinary word for a response body to use — a passthrough from
+   * an upstream service, a hand-built payload. Following it unconditionally
+   * would read the message from a place that means something else, so the code
+   * is what marks the object as a carrier.
+   */
+  it('ignores a nested error object that carries no string code', () => {
+    const { filter, host, captured } = buildHarness()
+
+    filter.catch(new HttpException({ error: { message: 'upstream said so' } }, 409), host)
+
+    expect(captured.body?.code).toBe('BYMAX_CONFLICT')
+    expect(captured.body?.details).toBeUndefined()
+  })
+
+  /**
+   * A flat code wins over a nested one.
+   *
+   * Only reachable if a response carried both, which no library here does. The
+   * flat form is the one this filter documented first, so it is the one that
+   * decides, rather than the answer depending on property order.
+   */
+  it('prefers a flat code over a nested one', () => {
+    const { filter, host, captured } = buildHarness()
+
+    filter.catch(new HttpException({ code: 'FLAT', error: { code: 'NESTED' } }, 400), host)
+
+    expect(captured.body?.code).toBe('FLAT')
+  })
+
+  /**
+   * `null` details are absent details.
+   *
+   * `AuthException` writes `details: null` to mean "none", and the envelope's
+   * contract is that the field is present only when structured context exists.
+   * A literal `null` in the body would be a third state for a client to handle.
+   */
+  it('omits details when the carrier sets them to null', () => {
+    const { filter, host, captured } = buildHarness()
+
+    filter.catch(
+      new BadRequestException({ error: { code: 'auth.invalid', message: 'no', details: null } }),
+      host
+    )
+
+    expect(captured.body?.code).toBe('auth.invalid')
+    expect(captured.body).not.toHaveProperty('details')
+  })
+
+  /**
+   * The object form of details passes through as readily as the array form.
+   *
+   * `ErrorDetails` admits both — the array for one entry per violation, the
+   * object for context that is not a list. A domain error using the second must
+   * not be silently reduced to no details at all.
+   */
+  it('passes an explicit details object through verbatim', () => {
+    const { filter, host, captured } = buildHarness()
+
+    filter.catch(
+      new BadRequestException({ code: 'QUOTA', message: 'over', details: { limit: 10, used: 11 } }),
+      host
+    )
+
+    expect(captured.body?.details).toEqual({ limit: 10, used: 11 })
+  })
+
+  /**
+   * A details value of a shape the contract does not admit is dropped.
+   *
+   * `ErrorDetails` is an array or an object. A scalar is neither, and reshaping
+   * it into one would publish something the throwing library never wrote.
+   */
+  it('drops a scalar details value rather than reshaping it', () => {
+    const { filter, host, captured } = buildHarness()
+
+    filter.catch(new BadRequestException({ code: 'X', message: 'y', details: 'nope' }), host)
+
+    expect(captured.body).not.toHaveProperty('details')
+  })
+
+  /**
    * Uncatalogued 4xx derives the client-error fallback.
    *
    * A 418 has no dedicated catalog row, so the code must fall back to

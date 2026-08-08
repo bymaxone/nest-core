@@ -27,6 +27,20 @@ heading here.
   disagrees with the route the controller was registered at is a genuine misconfiguration and
   still throws.
 
+- **A domain error's `details` reach the caller, and a nested `{ error: { … } }` body is read as
+  readily as a flat one.** The filter passed an explicit `code` through but dropped the structured
+  context beside it, and recognised the fields only when they sat directly on the response.
+
+  `@bymax-one/nest-auth` builds `{ error: { code, message, details } }`, so a backend wiring both
+  libraries rendered every distinct auth failure identically — a duplicate e-mail, a password below
+  the policy floor, a missing field all arrived as `BYMAX_BAD_REQUEST` / `"Auth Exception"` with no
+  details. A client could not branch on the failure, and neither could whoever was debugging it.
+
+  A nested object is followed only when it carries a string `code`, since `error` is an ordinary
+  word for a response body to use; a flat code still wins over a nested one; and a `details` value
+  that is neither an array nor an object — including the `null` `AuthException` writes to mean
+  "none" — is omitted rather than reshaped, so the field stays present only when context exists.
+
 ## [1.1.1] - 2026-08-07
 
 **Documentation and tooling.** `dist/` differs from `1.1.0` only in the text of the comments
