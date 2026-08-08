@@ -11,6 +11,11 @@ heading here.
 
 ## [Unreleased]
 
+## [1.2.1] - 2026-08-08
+
+A patch: the envelope fix below changes a response status for a class of client errors, without
+touching the module's API or any option.
+
 ### Fixed
 
 - **An error carrying a 4xx status it marked exposable keeps that status, instead of collapsing to 500.** Express's body pipeline throws `http-errors` instances before any handler runs — a payload
@@ -312,5 +317,6 @@ have regressed from. They are kept because the reasoning is worth having.
 [1.0.1]: https://github.com/bymaxone/nest-core/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/bymaxone/nest-core/releases/tag/v1.0.0
 [1.1.1]: https://github.com/bymaxone/nest-core/compare/v1.1.0...v1.1.1
+[1.2.1]: https://github.com/bymaxone/nest-core/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/bymaxone/nest-core/compare/v1.1.1...v1.2.0
-[Unreleased]: https://github.com/bymaxone/nest-core/compare/v1.2.0...HEAD
+[Unreleased]: https://github.com/bymaxone/nest-core/compare/v1.2.1...HEAD
