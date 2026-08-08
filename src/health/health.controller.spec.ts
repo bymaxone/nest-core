@@ -150,10 +150,11 @@ describe('createHealthController', () => {
    *
    * When the resolved options report health as disabled, but the controller
    * is still reached (only possible on the async path, since routes register
-   * unconditionally there), the handler fails fast with a descriptive error
-   * instead of silently serving a disabled feature.
+   * unconditionally there), the handler answers `404` instead of silently
+   * serving a disabled feature. A disabled feature is the intended state, so
+   * the route has to read as absent rather than as broken.
    */
-  it('throws a descriptive error when health resolves disabled', () => {
+  it('answers 404 when health resolves disabled', () => {
     const options = normalizeCoreOptions({ health: { enabled: false, path: 'health' } })
     const { controller } = buildController({
       path: 'health',

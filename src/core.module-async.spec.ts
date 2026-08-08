@@ -4,8 +4,9 @@
  * Layer: integration.
  * Goal: prove the async factory resolves and normalizes options, the always-on
  * pipeline slots are transparent (a request and a thrown error flow through
- * Nest's default handling unchanged), and the async controller guard fails fast
- * when its feature is disabled.
+ * Nest's default handling unchanged), and the async controller guard answers
+ * `404` when its feature is disabled, so a route the async path could not avoid
+ * registering reads as absent rather than broken.
  * Mocks: none; a real Express Nest app exercises the pipeline via supertest.
  */
 import { Controller, Get, HttpStatus, NotFoundException } from '@nestjs/common'
