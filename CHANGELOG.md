@@ -11,6 +11,17 @@ heading here.
 
 ## [Unreleased]
 
+### Fixed
+
+- **An error carrying a 4xx status it marked exposable keeps that status, instead of collapsing to 500.** Express's body pipeline throws `http-errors` instances before any handler runs — a payload
+  past the limit is `PayloadTooLargeError` (413), malformed JSON is a `SyntaxError` (400), an
+  unsupported media type is 415. None is a Nest `HttpException`, so each reached the generic
+  500 collapse: a client that sent too large a body, or malformed JSON, was told the server failed,
+  and a monitor counted a 5xx for a request that never entered the application. The filter now reads
+  the `expose: true` flag and the numeric status these carry and honours it — restricted to the 4xx
+  range, because a self-reported 5xx is still a server failure whose account of itself must not
+  surface, so it stays a generic 500.
+
 ## [1.2.0] - 2026-08-08
 
 Both entries change what a caller receives, which is why this is a minor rather than a patch: an
