@@ -8,7 +8,7 @@
  * when its feature is disabled.
  * Mocks: none; a real Express Nest app exercises the pipeline via supertest.
  */
-import { Controller, Get, NotFoundException } from '@nestjs/common'
+import { Controller, Get, HttpStatus, NotFoundException } from '@nestjs/common'
 import type { INestApplication } from '@nestjs/common'
 import { Test } from '@nestjs/testing'
 import request from 'supertest'
@@ -128,18 +128,46 @@ describe('BymaxCoreModule.forRootAsync, health controller guard', () => {
   })
 
   /**
-   * Health is always registered, but fails fast when resolved disabled.
+   * Health is always registered, and reads as absent when resolved disabled.
    *
    * The health controller cannot be conditionally omitted on the async path,
-   * since its route metadata is fixed before the async options resolve. A
-   * real request against a disabled resolved configuration must therefore
-   * fail with a server error instead of silently serving liveness or
-   * readiness for a feature the consumer asked to disable.
+   * since its route metadata is fixed before the async options resolve. A real
+   * request against a disabled resolved configuration must therefore answer
+   * exactly as it would have had the route never been registered — not serve
+   * liveness for a feature the consumer disabled, and not report a server error
+   * for a state nothing is wrong with, which a deployment would see in alerting
+   * and in its error budget for as long as the feature stays off.
    */
-  it('fails a real request instead of silently serving health when resolved disabled', async () => {
+  it('answers 404 rather than serving health when resolved disabled', async () => {
     app = await createAsyncApp(() => ({ health: { enabled: false } }))
 
-    await request(app.getHttpServer()).get('/health/live').expect(500)
+    await request(app.getHttpServer()).get('/health/live').expect(404)
+  })
+})
+
+describe('BymaxCoreModule.forRootAsync, metrics controller guard', () => {
+  let app: INestApplication | undefined
+
+  afterEach(async () => {
+    await app?.close()
+    app = undefined
+  })
+
+  /**
+   * Metrics off is the default, and the route must not exist.
+   *
+   * This is the shape almost every consumer runs: metrics disabled so the
+   * optional `prom-client` peer is never loaded. The scrape route is registered
+   * regardless, because the async path fixes route metadata before the options
+   * resolve, so what a caller finds there is the only thing separating "the
+   * feature is off" from "the service is broken". An unauthenticated endpoint
+   * answering 500 on every request is a real error in every alert and uptime
+   * check pointed at the service.
+   */
+  it('answers 404 rather than a server error while metrics are disabled', async () => {
+    app = await createAsyncApp(() => ({ metrics: { enabled: false } }))
+
+    await request(app.getHttpServer()).get('/metrics').expect(404)
   })
 })
 
@@ -155,12 +183,20 @@ describe('assertAsyncFeatureEnabled', () => {
   })
 
   /**
-   * Disabled feature fails fast.
+   * Disabled feature answers 404.
    *
-   * Reaching a controller whose feature is disabled on the async path must throw
-   * a descriptive configuration error naming the feature.
+   * A disabled feature is the ordinary state, not a misconfiguration, so the
+   * route it could not avoid registering must read as absent. The status is
+   * asserted rather than the message: a caller sees the status, and it is what
+   * keeps a deliberately disabled feature out of alerting and error budgets.
    */
-  it('throws a descriptive error naming the feature when disabled', () => {
+  it('throws a 404 naming the feature when disabled', () => {
+    expect(() => assertAsyncFeatureEnabled('metrics', false)).toThrow(NotFoundException)
     expect(() => assertAsyncFeatureEnabled('metrics', false)).toThrow(/"metrics"/)
+    try {
+      assertAsyncFeatureEnabled('metrics', false)
+    } catch (error) {
+      expect((error as NotFoundException).getStatus()).toBe(HttpStatus.NOT_FOUND)
+    }
   })
 })

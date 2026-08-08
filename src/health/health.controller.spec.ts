@@ -12,6 +12,7 @@
  * capturing the replied body and status (family convention, no supertest at
  * this layer).
  */
+import { HttpStatus, NotFoundException } from '@nestjs/common'
 import type { HttpAdapterHost } from '@nestjs/core'
 
 import { normalizeCoreOptions } from '../core.options'
@@ -167,15 +168,13 @@ describe('createHealthController', () => {
       thrown = error
     }
 
-    // Assert every segment of the disabled-feature guidance so no part can empty
-    // out: it must state the feature was reached while disabled, explain why the
-    // route is always registered on the async path, and give the two remedies.
-    expect(thrown).toBeInstanceOf(Error)
-    const message = (thrown as Error).message
-    expect(message).toContain('The "health" controller was reached while the feature is disabled.')
-    expect(message).toContain('On the forRootAsync path this controller is always registered')
-    expect(message).toContain('enable "health" in the resolved options, or do not')
-    expect(message).toContain('expose this controller while the feature is disabled.')
+    // A disabled feature is the ordinary state, so the route the async path could
+    // not avoid registering has to read as absent rather than broken. The status
+    // is what the caller sees and what keeps this out of alerting; the message
+    // still names the feature so an operator reading a log knows which one.
+    expect(thrown).toBeInstanceOf(NotFoundException)
+    expect((thrown as NotFoundException).getStatus()).toBe(HttpStatus.NOT_FOUND)
+    expect((thrown as Error).message).toContain('"health"')
   })
 
   /**
