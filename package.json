@@ -86,6 +86,7 @@
     "lint": "eslint --no-error-on-unmatched-pattern src scripts test",
     "lint:fix": "eslint --no-error-on-unmatched-pattern src scripts test --fix",
     "mutation": "stryker run",
+    "mutation:full": "node -e \"require('node:fs').rmSync('reports/stryker-incremental.json',{force:true})\" && stryker run",
     "mutation:dry-run": "stryker run --dryRunOnly",
     "mutation:incremental": "stryker run --incremental",
     "prepare": "husky",
