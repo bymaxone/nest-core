@@ -44,7 +44,7 @@ The gate for release is a score of at least 95 with the `break` check passing.
 
 - **Full run (release gate):** `pnpm mutation` (`stryker run`). Ten to twenty
   minutes. Runs the whole mutated surface.
-- **Incremental run (iteration):** `pnpm mutation:incremental`
+- **Incremental run (iteration):** `pnpm mutation:full`
   (`stryker run --incremental`). Reuses `reports/stryker-incremental.json` to
   re-test only mutants affected by changed files. Used while hardening; the
   release gate is always a full run.
