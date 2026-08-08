@@ -190,16 +190,19 @@ describe('metrics registration, async enabled', () => {
   })
 
   /**
-   * Async disabled metrics fail fast at the route.
+   * Async disabled metrics leave no route behind.
    *
    * The metrics controller is always registered on the async path, so a scrape
-   * against a disabled resolved configuration must fail with a server error
-   * instead of serving a disabled feature.
+   * against a disabled resolved configuration must answer exactly as it would
+   * have had the route never been registered: not a scrape, and not a server
+   * error either. Metrics off is the default and therefore the ordinary state —
+   * an endpoint that answers 500 to every caller while nothing is wrong shows up
+   * as a real failure in alerting and in the error budget.
    */
-  it('fails the scrape instead of serving it when metrics resolve disabled', async () => {
+  it('answers 404 for the scrape when metrics resolve disabled', async () => {
     app = await bootAsyncApp({ metrics: { enabled: false } })
 
-    await request(app.getHttpServer()).get('/metrics').expect(500)
+    await request(app.getHttpServer()).get('/metrics').expect(404)
   })
 })
 

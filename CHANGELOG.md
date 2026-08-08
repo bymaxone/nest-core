@@ -11,6 +11,22 @@ heading here.
 
 ## [Unreleased]
 
+### Fixed
+
+- **A feature disabled on the `forRootAsync` path answers `404` instead of `500`.** Route metadata
+  is fixed before the async options resolve, so the health and metrics controllers register
+  regardless and guard at request time. That guard threw a plain `Error`, which the envelope
+  renders as `BYMAX_INTERNAL_ERROR` — so every consumer registering asynchronously with
+  `metrics: { enabled: false }`, which is the ordinary configuration and the one that keeps the
+  optional `prom-client` peer unloaded, served an unauthenticated `/metrics` that answered a
+  server error to anyone who asked. It counted as a real failure in alerting, in error budgets and
+  in any uptime check pointed at the service, describing a state nothing was wrong with.
+
+  The route now reads as absent, which is what the caller would have seen had the framework been
+  able to skip the registration. Only the feature's _absence_ is normalised: a resolved path that
+  disagrees with the route the controller was registered at is a genuine misconfiguration and
+  still throws.
+
 ## [1.1.1] - 2026-08-07
 
 **Documentation and tooling.** `dist/` differs from `1.1.0` only in the text of the comments

@@ -8,7 +8,7 @@
  * interceptor forwards the stream untouched.
  * @layer Provider
  */
-import { Catch } from '@nestjs/common'
+import { Catch, NotFoundException } from '@nestjs/common'
 import type {
   ArgumentsHost,
   CallHandler,
@@ -75,20 +75,36 @@ export class PassThroughInterceptor implements NestInterceptor {
 
 /**
  * Guard a controller route that could only be registered unconditionally on the
- * async path. When the owning feature resolves to disabled, fail fast with a
- * descriptive configuration error instead of serving a half-configured route.
+ * async path. When the owning feature resolves to disabled, answer `404` so the
+ * route reads as absent.
  *
- * @param feature - The feature name, used in the error message.
+ * A disabled feature is the ordinary, intended state — not a misconfiguration —
+ * and the async path registers its controller anyway because route metadata is
+ * fixed before the options resolve. Throwing a plain `Error` here made every
+ * such deployment serve an unauthenticated endpoint that answered `500` to
+ * anyone who asked: a real server error in alerting, in error budgets and in any
+ * uptime check, describing a state nothing was wrong with. `404` is the status
+ * the caller would have seen had the framework been able to skip the
+ * registration, which is the whole intent.
+ *
+ * The *status* is what matches; the body does not. This carries a message naming
+ * the disabled feature, where a route that was never registered carries Nest's
+ * own "Cannot GET /path". That is deliberate — an operator reading a log needs
+ * to know which feature answered — and it is why the claim here is "reads as
+ * absent" rather than "is indistinguishable".
+ *
+ * Only the *absence* of the feature is normalised. A path that disagrees with
+ * the one the controller was registered at is a genuine misconfiguration and
+ * still fails loudly at its own call site.
+ *
+ * @param feature - The feature name, used in the message.
  * @param enabled - Whether the feature is enabled in the resolved options.
- * @throws Error When the feature is disabled.
+ * @throws NotFoundException When the feature is disabled.
  */
 export function assertAsyncFeatureEnabled(feature: string, enabled: boolean): void {
   if (!enabled) {
-    throw new Error(
-      `[BymaxCoreModule] The "${feature}" controller was reached while the feature is disabled. ` +
-        `On the forRootAsync path this controller is always registered because options resolve ` +
-        `after the module is defined; enable "${feature}" in the resolved options, or do not ` +
-        `expose this controller while the feature is disabled.`
+    throw new NotFoundException(
+      `[BymaxCoreModule] The "${feature}" feature is disabled, so this route does not exist.`
     )
   }
 }
