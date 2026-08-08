@@ -459,6 +459,156 @@ describe('BymaxExceptionFilter, context handling', () => {
   })
 
   /**
+   * An exposed 4xx error from the body pipeline keeps its status.
+   *
+   * `body-parser` throws `http-errors` instances before any handler runs — a payload past the
+   * limit is `PayloadTooLargeError`, a plain `Error` with `status: 413` and `expose: true`. It is
+   * not a Nest `HttpException`, so it used to collapse to 500: a client that sent too large a body
+   * was told the server failed. The status and the safe message are honoured now.
+   */
+  it('honours the status of an exposed 4xx error raised outside a handler', () => {
+    const { filter, host, captured } = buildHarness()
+    const tooLarge = Object.assign(new Error('request entity too large'), {
+      status: 413,
+      statusCode: 413,
+      expose: true
+    })
+
+    filter.catch(tooLarge, host)
+
+    expect(captured.status).toBe(413)
+    expect(captured.body).toMatchObject({
+      statusCode: 413,
+      code: 'BYMAX_PAYLOAD_TOO_LARGE',
+      message: 'request entity too large'
+    })
+  })
+
+  /**
+   * An exposed 4xx error with no dedicated catalogue row falls back to the client-error code.
+   *
+   * A 405 has no `BYMAX_*` row of its own, so it must derive `BYMAX_CLIENT_ERROR` rather than
+   * leaking an unmapped value — the same derivation an uncatalogued `HttpException` status takes.
+   */
+  it('derives the client-error code for an exposed 4xx status without a catalogue row', () => {
+    const { filter, host, captured } = buildHarness()
+    const methodNotAllowed = Object.assign(new Error('method not allowed'), {
+      statusCode: 405,
+      expose: true
+    })
+
+    filter.catch(methodNotAllowed, host)
+
+    expect(captured.status).toBe(405)
+    expect(captured.body?.code).toBe('BYMAX_CLIENT_ERROR')
+  })
+
+  /**
+   * A self-reported 5xx never escapes the generic collapse, even with `expose` set.
+   *
+   * The point of the 500 collapse is that a server failure never surfaces its own account of
+   * itself. A library that flags a 5xx as exposable does not change that, so a 502 stays a generic
+   * 500 with no leaked message.
+   */
+  it('still collapses an exposed 5xx to the generic 500', () => {
+    const { filter, host, captured } = buildHarness()
+    const upstream = Object.assign(new Error('upstream said 502'), {
+      status: 502,
+      expose: true
+    })
+
+    filter.catch(upstream, host)
+
+    expect(captured.status).toBe(500)
+    expect(captured.body).toMatchObject({
+      code: 'BYMAX_INTERNAL_ERROR',
+      message: 'Internal server error'
+    })
+    expect(JSON.stringify(captured.body)).not.toContain('502')
+  })
+
+  /**
+   * The 5xx boundary is exactly 500.
+   *
+   * The range that gets honoured is `[400, 500)`, so status 500 itself is a server error and must
+   * collapse — pinning the boundary at 500 rather than one either side. Its message must not leak.
+   */
+  it('collapses an exposed status of exactly 500 without leaking its message', () => {
+    const { filter, host, captured } = buildHarness()
+    const boundary = Object.assign(new Error('five hundred leak'), { status: 500, expose: true })
+
+    filter.catch(boundary, host)
+
+    expect(captured.status).toBe(500)
+    expect(captured.body?.code).toBe('BYMAX_INTERNAL_ERROR')
+    expect(JSON.stringify(captured.body)).not.toContain('five hundred leak')
+  })
+
+  /**
+   * A status below the client-error range is not honoured.
+   *
+   * The lower bound is 400, so a status like 399 — a redirect or an informational code that has no
+   * business on a thrown error — collapses to the generic 500 rather than being surfaced.
+   */
+  it('collapses an exposed status below 400', () => {
+    const { filter, host, captured } = buildHarness()
+    const belowRange = Object.assign(new Error('not a client error'), { status: 399, expose: true })
+
+    filter.catch(belowRange, host)
+
+    expect(captured.status).toBe(500)
+  })
+
+  /**
+   * A thrown `null` collapses without the exposed-error probe crashing on it.
+   *
+   * `null` is the one non-object value `typeof` reports as `'object'`, so the exposed-error check
+   * has to exclude it explicitly before reading a property; a caught `null` must still reach the
+   * generic 500 like any other unrecognised throw.
+   */
+  it('collapses a thrown null to the generic 500', () => {
+    const { filter, host, captured } = buildHarness()
+
+    filter.catch(null, host)
+
+    expect(captured.status).toBe(500)
+    expect(captured.body?.code).toBe('BYMAX_INTERNAL_ERROR')
+  })
+
+  /**
+   * An error carrying a status but not marked exposable stays collapsed.
+   *
+   * `expose` is the http-errors flag that means "safe to show the client". Without it — a plain
+   * error that happens to have a `status` property — the status is not trusted, and the error
+   * collapses to the generic 500 rather than surfacing a status the thrower never vouched for.
+   */
+  it('does not honour a status on an error that is not marked exposable', () => {
+    const { filter, host, captured } = buildHarness()
+    const notExposed = Object.assign(new Error('internal with a status field'), { status: 418 })
+
+    filter.catch(notExposed, host)
+
+    expect(captured.status).toBe(500)
+    expect(captured.body?.code).toBe('BYMAX_INTERNAL_ERROR')
+  })
+
+  /**
+   * A non-`Error` object marked exposable keeps its status but not its (absent) message.
+   *
+   * `expose` and `status` can sit on a plain object that is not an `Error`. Its status is honoured,
+   * and because there is no `Error` message to trust, the generic message stands in — proving the
+   * message only ever comes from an actual `Error`.
+   */
+  it('honours the status of an exposed non-Error object with the generic message', () => {
+    const { filter, host, captured } = buildHarness()
+
+    filter.catch({ status: 400, expose: true }, host)
+
+    expect(captured.status).toBe(400)
+    expect(captured.body?.message).toBe('Internal server error')
+  })
+
+  /**
    * A throwing observability hook must not break error formatting.
    *
    * The `onUnexpectedError` seam is documented as never throwing, but an

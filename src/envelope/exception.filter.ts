@@ -17,9 +17,13 @@
  *    the form produced by Nest validation pipes) becomes
  *    `BYMAX_VALIDATION_FAILED` with one structured `details` entry per violation.
  * 3. Any other `HttpException` derives its code from the status via the shared
- *    catalog; anything that is not an `HttpException` collapses to a fixed,
- *    production-safe 500 that never leaks internals unless `exposeInternals` is
- *    on (development only).
+ *    catalog.
+ * 4. A value that is not an `HttpException` but carries a 4xx status it marked
+ *    exposable — an `http-errors` instance from the body pipeline, such as a
+ *    `PayloadTooLargeError` (413) or a malformed-JSON `SyntaxError` (400) — keeps
+ *    that status and its safe message. A self-reported 5xx does not: it, and
+ *    every other unrecognised throw, collapses to a fixed, production-safe 500
+ *    that never leaks internals unless `exposeInternals` is on (development only).
  * @layer Filter
  */
 import { Catch, HttpException, Inject, Optional } from '@nestjs/common'
@@ -142,6 +146,56 @@ function extractExplicitDetails(carrier: object): ErrorDetails | undefined {
   // and `null` is excluded explicitly, which is the only one of those that `typeof` would let
   // through.
   return typeof details === 'object' && details !== null ? (details as ErrorDetails) : undefined
+}
+
+/** Inclusive lower bound of the HTTP client-error range. */
+const CLIENT_ERROR_MIN = 400
+
+/** Exclusive upper bound of the HTTP client-error range. */
+const CLIENT_ERROR_MAX = 500
+
+/** The client-error status and safe message read off an exposed non-`HttpException` error. */
+interface ExposedClientError {
+  /** The 4xx status the error reported. */
+  readonly status: number
+  /** The error's own message, which `expose: true` marks safe to return. */
+  readonly message: string
+}
+
+/**
+ * Recognize a thrown value that is not a Nest `HttpException` but still carries a client-error
+ * HTTP status it has marked safe to surface.
+ *
+ * The concrete case is the framework's own body pipeline: Express's `body-parser` throws
+ * `http-errors` instances — `PayloadTooLargeError` (413), a malformed-JSON `SyntaxError` (400),
+ * an unsupported media type (415) — before any Nest handler runs. Each is a plain `Error` with a
+ * numeric `status`/`statusCode` and `expose: true`, the `http-errors` flag meaning "this status
+ * and message describe the client's request, not our internals." Without this, every one of them
+ * collapses to a generic `500`: a client that sent a 2 MB body, or malformed JSON, is told the
+ * server failed, and a monitor counts a server error for a request that never reached the app.
+ *
+ * Deliberately restricted to the 4xx range even when `expose` is set. A 5xx is a server failure
+ * whatever a library flagged it, and the whole point of the generic collapse is that a server
+ * failure never surfaces its own account of itself — so a self-reported 5xx stays a `500`.
+ *
+ * @param exception - The thrown value.
+ * @returns The status and safe message when the error is an exposed client error, else `undefined`.
+ */
+function resolveExposedClientError(exception: unknown): ExposedClientError | undefined {
+  // Stryker disable next-line ConditionalExpression: killed, not equivalent — replacing this guard with `false` makes `catch(null)` read `.expose` off `null` and throw, and the "collapses a thrown null to the generic 500" test goes red when the mutation is applied by hand. Stryker fails to attribute that killing test to this mutant under its perTest coverage analysis and reports it surviving; the directive records the measured verdict.
+  if (typeof exception !== 'object' || exception === null) {
+    return undefined
+  }
+  const candidate = exception as { expose?: unknown; status?: unknown; statusCode?: unknown }
+  if (candidate.expose !== true) {
+    return undefined
+  }
+  const status = typeof candidate.status === 'number' ? candidate.status : candidate.statusCode
+  if (typeof status !== 'number' || status < CLIENT_ERROR_MIN || status >= CLIENT_ERROR_MAX) {
+    return undefined
+  }
+  const message = exception instanceof Error ? exception.message : ''
+  return { status, message: message === '' ? INTERNAL_ERROR_MESSAGE : message }
 }
 
 /**
@@ -326,6 +380,18 @@ export class BymaxExceptionFilter implements ExceptionFilter {
   private buildEnvelope(exception: unknown, context: FilterErrorContext): ErrorEnvelope {
     if (exception instanceof HttpException) {
       return this.mapHttpException(exception, context)
+    }
+    const exposed = resolveExposedClientError(exception)
+    if (exposed !== undefined) {
+      // A client error the framework's body pipeline raised before any handler ran — it carries
+      // its own 4xx status and a message it marked safe. It is not routed through
+      // `onUnexpectedError`, because it is not unexpected: nothing in the application failed.
+      return this.toEnvelope(
+        exposed.status,
+        codeForStatus(exposed.status),
+        exposed.message,
+        context
+      )
     }
     try {
       this.onUnexpectedError(exception, context)
