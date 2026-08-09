@@ -51,6 +51,14 @@ describe('normalizePageQuery', () => {
       expected: { page: 2, limit: 7 }
     },
     {
+      name: 'clamps a page above MAX_SAFE_INTEGER to the safe-integer ceiling',
+      // 1e308 is finite and >= 1, so it clears the lower guards, but `Math.floor`
+      // leaves it above MAX_SAFE_INTEGER — no longer a precise integer, and a
+      // nonsensical OFFSET for a repository. It must clamp to the safe ceiling.
+      raw: { page: 1e308, limit: 10 },
+      expected: { page: Number.MAX_SAFE_INTEGER, limit: 10 }
+    },
+    {
       name: 'caps a limit above the default maximum at 100',
       raw: { page: 1, limit: 500 },
       expected: { page: 1, limit: 100 }

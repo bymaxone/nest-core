@@ -34,9 +34,17 @@ export interface PaginationLimitOptions {
  * not enough: values below the minimum also fall back, keeping non-numeric,
  * negative, and zero input from producing an out-of-range result.
  *
+ * The result is capped at {@link Number.MAX_SAFE_INTEGER}. Above that boundary a
+ * finite `Number` is no longer a precise integer — `1e308` floors to itself — and
+ * such a value handed back as a `page` becomes an OFFSET no repository can honour
+ * (`(page - 1) * limit` is meaningless once `page` has lost integer precision).
+ * Capping keeps every result a safe integer; a consumer still bounds `page`
+ * against its own `totalPages` for deep-offset safety.
+ *
  * @param value - The raw, untrusted value to coerce.
  * @param fallback - The value returned when coercion yields nothing usable.
- * @returns A positive integer: the truncated coercion, or the fallback.
+ * @returns A positive, safe integer: the truncated coercion capped at
+ *   {@link Number.MAX_SAFE_INTEGER}, or the fallback.
  */
 export function coercePositiveInt(value: unknown, fallback: number): number {
   if (typeof value !== 'number' && typeof value !== 'string') {
@@ -46,7 +54,7 @@ export function coercePositiveInt(value: unknown, fallback: number): number {
   if (!Number.isFinite(coerced) || coerced < MINIMUM) {
     return fallback
   }
-  return Math.floor(coerced)
+  return Math.min(Math.floor(coerced), Number.MAX_SAFE_INTEGER)
 }
 
 /**

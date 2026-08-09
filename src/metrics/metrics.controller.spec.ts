@@ -9,6 +9,7 @@
  * Mocks: a hand-built registry stub and a hand-built `HttpAdapterHost` capturing
  * the header and reply (family convention, no supertest at this layer).
  */
+import { UnauthorizedException } from '@nestjs/common'
 import type { HttpAdapterHost } from '@nestjs/core'
 
 import { normalizeCoreOptions } from '../core.options'
@@ -18,7 +19,12 @@ import type { MetricsRegistry } from './metrics.registry'
 
 /** The subset of controller methods the tests invoke directly. */
 interface MetricsControllerInstance {
-  scrape(response: unknown): Promise<void>
+  scrape(response: unknown, request?: { headers?: Record<string, unknown> }): Promise<void>
+}
+
+/** Resolved options enabling metrics at `metrics` with a required scrape bearer. */
+function tokenOptions(authToken: string): ResolvedCoreOptions {
+  return normalizeCoreOptions({ metrics: { enabled: true, path: 'metrics', authToken } })
 }
 
 /** Build a stub registry returning a fixed exposition text and content type. */
@@ -157,5 +163,59 @@ describe('createMetricsController', () => {
     expect(message).toContain("Route metadata is fixed before forRootAsync's options")
     expect(message).toContain('a custom "metrics.path" is only honored through forRoot()')
     expect(message).toContain('keep the default "metrics" route on the async path.')
+  })
+
+  // -------------------------------------------------------------------------
+  // Scrape authentication (metrics.authToken)
+  // -------------------------------------------------------------------------
+
+  /**
+   * With a token configured, a matching `Authorization: Bearer <token>` is served
+   * — the credentialed path that lets a deployment expose `/metrics` without
+   * publishing its internals to every caller.
+   */
+  it('serves the exposition when the configured bearer token matches', async () => {
+    const { controller, captured } = buildController({
+      path: 'metrics',
+      options: tokenOptions('s3cret')
+    })
+
+    await controller.scrape({}, { headers: { authorization: 'Bearer s3cret' } })
+
+    expect(captured.status).toBe(200)
+  })
+
+  /** A present but wrong bearer is refused with 401 (digest mismatch branch). */
+  it('refuses the scrape with 401 when the bearer token is wrong', async () => {
+    const { controller } = buildController({ path: 'metrics', options: tokenOptions('s3cret') })
+
+    await expect(
+      controller.scrape({}, { headers: { authorization: 'Bearer wrong' } })
+    ).rejects.toBeInstanceOf(UnauthorizedException)
+  })
+
+  /** A non-Bearer scheme is refused with 401 (the `startsWith` branch). */
+  it('refuses the scrape with 401 when the scheme is not Bearer', async () => {
+    const { controller } = buildController({ path: 'metrics', options: tokenOptions('s3cret') })
+
+    await expect(
+      controller.scrape({}, { headers: { authorization: 'Token s3cret' } })
+    ).rejects.toBeInstanceOf(UnauthorizedException)
+  })
+
+  /** An absent Authorization header is refused with 401 (the non-string branch). */
+  it('refuses the scrape with 401 when the Authorization header is absent', async () => {
+    const { controller } = buildController({ path: 'metrics', options: tokenOptions('s3cret') })
+
+    await expect(controller.scrape({}, {})).rejects.toBeInstanceOf(UnauthorizedException)
+  })
+
+  /** With no token configured the endpoint stays open even when a request is present. */
+  it('serves the exposition unauthenticated when no token is configured', async () => {
+    const { controller, captured } = buildController({ path: 'metrics' })
+
+    await controller.scrape({}, { headers: {} })
+
+    expect(captured.status).toBe(200)
   })
 })

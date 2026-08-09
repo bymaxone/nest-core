@@ -148,6 +148,32 @@ describe('normalizeCoreOptions', () => {
   })
 
   /**
+   * A configured scrape token is carried onto the resolved options so the
+   * controller can enforce it.
+   */
+  it('carries a configured metrics authToken through resolution', () => {
+    const resolved = normalizeCoreOptions({ metrics: { authToken: 's3cret' } })
+
+    expect(resolved.metrics.authToken).toBe('s3cret')
+  })
+
+  /**
+   * With no token, or an empty one, `authToken` stays absent rather than
+   * present-and-empty: an empty token would arm the guard against a bearer nobody
+   * can present, silently sealing the endpoint shut.
+   */
+  it.each([
+    ['omitted', undefined],
+    ['an empty string', '']
+  ])('leaves metrics authToken absent when %s', (_label, authToken) => {
+    const resolved = normalizeCoreOptions({
+      metrics: authToken === undefined ? {} : { authToken }
+    })
+
+    expect('authToken' in resolved.metrics).toBe(false)
+  })
+
+  /**
    * Deep immutability.
    *
    * The snapshot and every nested block must be frozen so no consumer can mutate

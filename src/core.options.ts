@@ -148,6 +148,16 @@ export interface MetricsOptions {
   defaultLabels?: Record<string, string>
   /** Collect `prom-client` default process metrics. Default: `true`. */
   collectDefaultMetrics?: boolean
+  /**
+   * A bearer token the scrape endpoint requires. When set, a request must carry
+   * `Authorization: Bearer <token>` matching this value (compared in constant
+   * time) or it is refused with `401`. When unset (the default) the endpoint is
+   * open, so a deployment that exposes `/metrics` beyond a trusted network must
+   * either set this or protect the route at its edge — the exposition otherwise
+   * publishes the route inventory and `collectDefaultMetrics` process internals
+   * to any caller.
+   */
+  authToken?: string
 }
 
 /**
@@ -196,12 +206,13 @@ export interface ResolvedTelemetryOptions {
   exposeTraceId: boolean
 }
 
-/** Fully-resolved metrics options. */
+/** Fully-resolved metrics options. `authToken` stays absent when unset. */
 export interface ResolvedMetricsOptions {
   enabled: boolean
   path: string
   collectDefaultMetrics: boolean
   defaultLabels: Record<string, string>
+  authToken?: string
 }
 
 /** Fully-resolved OpenAPI options. */
@@ -344,7 +355,10 @@ function resolveMetrics(raw?: MetricsOptions): ResolvedMetricsOptions {
     enabled: raw?.enabled ?? false,
     path: raw?.path ?? DEFAULT_METRICS_PATH,
     collectDefaultMetrics: raw?.collectDefaultMetrics ?? true,
-    defaultLabels: { ...(raw?.defaultLabels ?? {}) }
+    defaultLabels: { ...(raw?.defaultLabels ?? {}) },
+    // An empty string is treated as unset: it would otherwise arm the check
+    // against a bearer nobody can present, silently sealing the endpoint shut.
+    ...(raw?.authToken !== undefined && raw.authToken !== '' ? { authToken: raw.authToken } : {})
   }
 }
 
