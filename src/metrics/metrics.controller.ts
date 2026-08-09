@@ -66,6 +66,10 @@ function assertControllerMatchesOptions(
 /**
  * Whether an `Authorization` header presents the configured scrape bearer.
  *
+ * The scheme name is matched case-insensitively and tolerates more than one space
+ * or tab before the credential, because an HTTP auth scheme is case-insensitive
+ * (RFC 7235) — `bearer s3cret` and `Bearer  s3cret` are valid and must be accepted.
+ *
  * Both sides are reduced to a fixed-length SHA-256 digest before the constant-time
  * comparison: `timingSafeEqual` throws on unequal buffer lengths, so comparing the
  * raw strings would both crash on a wrong-length token and leak the token's length
@@ -73,14 +77,19 @@ function assertControllerMatchesOptions(
  *
  * @param authorization - The raw `Authorization` header value (anything).
  * @param expected - The configured bearer token, known to be non-empty.
- * @returns Whether the header carries `Bearer <expected>`.
+ * @returns Whether the header carries `Bearer <expected>` under any valid casing.
  */
 function bearerMatches(authorization: unknown, expected: string): boolean {
-  const prefix = 'Bearer '
-  if (typeof authorization !== 'string' || !authorization.startsWith(prefix)) {
+  if (typeof authorization !== 'string') {
     return false
   }
-  const presented = authorization.slice(prefix.length)
+  // Strip the `Bearer` scheme prefix and its whitespace separator. `replace` returns
+  // the string unchanged when the pattern does not match, so an unchanged result
+  // means no bearer scheme was present and the header is rejected.
+  const presented = authorization.replace(/^bearer[ \t]+/i, '')
+  if (presented === authorization) {
+    return false
+  }
   const presentedDigest = createHash('sha256').update(presented).digest()
   const expectedDigest = createHash('sha256').update(expected).digest()
   return timingSafeEqual(presentedDigest, expectedDigest)

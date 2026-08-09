@@ -194,7 +194,7 @@ describe('createMetricsController', () => {
     ).rejects.toBeInstanceOf(UnauthorizedException)
   })
 
-  /** A non-Bearer scheme is refused with 401 (the `startsWith` branch). */
+  /** A non-Bearer scheme is refused with 401 (the scheme-prefix mismatch branch). */
   it('refuses the scrape with 401 when the scheme is not Bearer', async () => {
     const { controller } = buildController({ path: 'metrics', options: tokenOptions('s3cret') })
 
@@ -203,11 +203,77 @@ describe('createMetricsController', () => {
     ).rejects.toBeInstanceOf(UnauthorizedException)
   })
 
+  /**
+   * The auth scheme name is case-insensitive per RFC 7235, so a lowercase (or mixed
+   * case) `bearer` must still be accepted — a valid client must not be rejected on
+   * casing alone. Pins the `/i` flag on the scheme match.
+   */
+  it.each(['bearer s3cret', 'BEARER s3cret', 'BeArEr s3cret'])(
+    'serves the exposition for a case-insensitive scheme %p',
+    async (authorization) => {
+      const { controller, captured } = buildController({
+        path: 'metrics',
+        options: tokenOptions('s3cret')
+      })
+
+      await controller.scrape({}, { headers: { authorization } })
+
+      expect(captured.status).toBe(200)
+    }
+  )
+
+  /**
+   * More than one space or a tab may separate the scheme from the credential; the
+   * separator is consumed, not treated as part of the token. Pins the `[ \t]+`
+   * separator match.
+   */
+  it.each(['Bearer  s3cret', 'Bearer\ts3cret'])(
+    'serves the exposition when the separator is %p',
+    async (authorization) => {
+      const { controller, captured } = buildController({
+        path: 'metrics',
+        options: tokenOptions('s3cret')
+      })
+
+      await controller.scrape({}, { headers: { authorization } })
+
+      expect(captured.status).toBe(200)
+    }
+  )
+
   /** An absent Authorization header is refused with 401 (the non-string branch). */
   it('refuses the scrape with 401 when the Authorization header is absent', async () => {
     const { controller } = buildController({ path: 'metrics', options: tokenOptions('s3cret') })
 
     await expect(controller.scrape({}, {})).rejects.toBeInstanceOf(UnauthorizedException)
+  })
+
+  /**
+   * A bare credential with no scheme must be refused even when it equals the
+   * configured token: the header must present the `Bearer` scheme, not the raw
+   * secret. Pins the no-scheme-matched guard (a header that carries no bearer prefix
+   * is rejected before any digest comparison).
+   */
+  it('refuses the scrape with 401 when the token is sent without a scheme', async () => {
+    const { controller } = buildController({ path: 'metrics', options: tokenOptions('s3cret') })
+
+    await expect(
+      controller.scrape({}, { headers: { authorization: 's3cret' } })
+    ).rejects.toBeInstanceOf(UnauthorizedException)
+  })
+
+  /**
+   * The scheme must sit at the START of the header. A `Bearer <token>` embedded after
+   * other characters must be refused even if stripping it mid-string would reconstruct
+   * the configured token — pins the `^` anchor on the scheme match, closing a
+   * header-smuggling path.
+   */
+  it('refuses the scrape with 401 when the Bearer scheme is not at the start', async () => {
+    const { controller } = buildController({ path: 'metrics', options: tokenOptions('abctoken') })
+
+    await expect(
+      controller.scrape({}, { headers: { authorization: 'abcBearer token' } })
+    ).rejects.toBeInstanceOf(UnauthorizedException)
   })
 
   /** With no token configured the endpoint stays open even when a request is present. */

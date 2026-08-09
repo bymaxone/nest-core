@@ -158,19 +158,44 @@ describe('normalizeCoreOptions', () => {
   })
 
   /**
-   * With no token, or an empty one, `authToken` stays absent rather than
-   * present-and-empty: an empty token would arm the guard against a bearer nobody
-   * can present, silently sealing the endpoint shut.
+   * With no token, `authToken` stays absent rather than present-and-`undefined`:
+   * an omitted token is the documented open default, not a misconfiguration.
    */
-  it.each([
-    ['omitted', undefined],
-    ['an empty string', '']
-  ])('leaves metrics authToken absent when %s', (_label, authToken) => {
-    const resolved = normalizeCoreOptions({
-      metrics: authToken === undefined ? {} : { authToken }
-    })
+  it('leaves metrics authToken absent when it is omitted', () => {
+    const resolved = normalizeCoreOptions({ metrics: {} })
 
     expect('authToken' in resolved.metrics).toBe(false)
+  })
+
+  /**
+   * An explicitly configured empty or whitespace-only token is a misconfiguration
+   * and must fail closed at boot, not be silently treated as unset — otherwise a
+   * deployment that believed it armed authentication would publish its metrics to
+   * every caller. Each malformed value must throw.
+   */
+  it.each([
+    ['an empty string', ''],
+    ['a single space', ' '],
+    ['only whitespace', '  \t ']
+  ])('rejects a metrics authToken that is %s', (_label, authToken) => {
+    // Assert the whole message so every fragment of the guidance is pinned: a
+    // deployment that hits this at boot must be told both what is wrong and the two
+    // valid alternatives (leave unset, or set a real token).
+    expect(() => normalizeCoreOptions({ metrics: { authToken } })).toThrow(
+      '[BymaxCoreModule] "metrics.authToken" was configured empty or whitespace-only. Leave it ' +
+        'unset to expose an open /metrics endpoint (protected at the edge), or set a non-empty ' +
+        'bearer token to require credentialed scrapes.'
+    )
+  })
+
+  /**
+   * A token surrounded by significant characters is opaque and kept verbatim — only
+   * an entirely blank token is rejected, so a real secret is never trimmed.
+   */
+  it('keeps a non-blank metrics authToken verbatim', () => {
+    const resolved = normalizeCoreOptions({ metrics: { authToken: ' s3cret ' } })
+
+    expect(resolved.metrics.authToken).toBe(' s3cret ')
   })
 
   /**
