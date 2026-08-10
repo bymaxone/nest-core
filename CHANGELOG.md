@@ -11,6 +11,30 @@ heading here.
 
 ## [Unreleased]
 
+## [1.2.2] - 2026-08-10
+
+Remediation of a local audit's metrics-auth and pagination-bound findings (merged in #62). No
+API changed.
+
+### Fixed
+
+- **Offset-safe page cap.** `normalizePageQuery` resolves the limit first and caps `page` to
+  `floor(MAX_SAFE_INTEGER / limit) + 1`, so a hostile `page` can no longer drive
+  `(page - 1) * limit` past the safe-integer range and lose precision before a repository computes
+  its offset.
+- **The `/metrics` bearer scheme is matched case-insensitively.** An HTTP auth scheme is
+  case-insensitive (RFC 7235) and may be separated from the credential by more than one space or a
+  tab; the check now accepts `bearer`/`BEARER`/mixed case and that whitespace, and anchors the
+  scheme to the start of the header to close a mid-string smuggling path.
+- **A misconfigured scrape token fails closed.** A `metrics.authToken` configured empty or
+  whitespace-only is now rejected at boot instead of being silently treated as unset — which left
+  `/metrics` open. A real token is kept verbatim.
+
+### Documentation
+
+- `metrics.authToken` is documented in the README and the technical specification, including a
+  protected-scrape example.
+
 ## [1.2.1] - 2026-08-08
 
 A patch: the envelope fix below changes a response status for a class of client errors, without
@@ -317,6 +341,7 @@ have regressed from. They are kept because the reasoning is worth having.
 [1.0.1]: https://github.com/bymaxone/nest-core/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/bymaxone/nest-core/releases/tag/v1.0.0
 [1.1.1]: https://github.com/bymaxone/nest-core/compare/v1.1.0...v1.1.1
+[1.2.2]: https://github.com/bymaxone/nest-core/compare/v1.2.1...v1.2.2
 [1.2.1]: https://github.com/bymaxone/nest-core/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/bymaxone/nest-core/compare/v1.1.1...v1.2.0
-[Unreleased]: https://github.com/bymaxone/nest-core/compare/v1.2.1...HEAD
+[Unreleased]: https://github.com/bymaxone/nest-core/compare/v1.2.2...HEAD
