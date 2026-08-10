@@ -15,7 +15,17 @@
  * Express and Fastify behave identically and no metric is ever mutated here.
  * @layer Controller
  */
-import { Controller, Get, HttpStatus, Inject, Res } from '@nestjs/common'
+import { createHash, timingSafeEqual } from 'node:crypto'
+
+import {
+  Controller,
+  Get,
+  HttpStatus,
+  Inject,
+  Req,
+  Res,
+  UnauthorizedException
+} from '@nestjs/common'
 import type { Type } from '@nestjs/common'
 import { HttpAdapterHost } from '@nestjs/core'
 
@@ -54,6 +64,38 @@ function assertControllerMatchesOptions(
 }
 
 /**
+ * Whether an `Authorization` header presents the configured scrape bearer.
+ *
+ * The scheme name is matched case-insensitively and tolerates more than one space
+ * or tab before the credential, because an HTTP auth scheme is case-insensitive
+ * (RFC 7235) — `bearer s3cret` and `Bearer  s3cret` are valid and must be accepted.
+ *
+ * Both sides are reduced to a fixed-length SHA-256 digest before the constant-time
+ * comparison: `timingSafeEqual` throws on unequal buffer lengths, so comparing the
+ * raw strings would both crash on a wrong-length token and leak the token's length
+ * through that crash. The digest makes every comparison the same shape.
+ *
+ * @param authorization - The raw `Authorization` header value (anything).
+ * @param expected - The configured bearer token, known to be non-empty.
+ * @returns Whether the header carries `Bearer <expected>` under any valid casing.
+ */
+function bearerMatches(authorization: unknown, expected: string): boolean {
+  if (typeof authorization !== 'string') {
+    return false
+  }
+  // Strip the `Bearer` scheme prefix and its whitespace separator. `replace` returns
+  // the string unchanged when the pattern does not match, so an unchanged result
+  // means no bearer scheme was present and the header is rejected.
+  const presented = authorization.replace(/^bearer[ \t]+/i, '')
+  if (presented === authorization) {
+    return false
+  }
+  const presentedDigest = createHash('sha256').update(presented).digest()
+  const expectedDigest = createHash('sha256').update(expected).digest()
+  return timingSafeEqual(presentedDigest, expectedDigest)
+}
+
+/**
  * Build a `MetricsController` class bound to `registeredPath`. The route is
  * baked into the class's `@Controller` metadata, so calling this factory twice
  * with different routes yields two independently routable controller classes.
@@ -85,8 +127,21 @@ export function createMetricsController(registeredPath: string): Type<object> {
      *   across HTTP platforms.
      */
     @Get()
-    async scrape(@Res() response: unknown): Promise<void> {
+    async scrape(
+      @Res() response: unknown,
+      @Req() request: { readonly headers?: Record<string, unknown> }
+    ): Promise<void> {
       assertControllerMatchesOptions(this.options, registeredPath)
+      // When a token is configured the scrape is credentialed: without it the
+      // exposition publishes the route inventory and process internals to anyone.
+      // Unset (the default) leaves the endpoint open, to be protected at the edge.
+      const { authToken } = this.options.metrics
+      if (
+        authToken !== undefined &&
+        !bearerMatches(request.headers?.['authorization'], authToken)
+      ) {
+        throw new UnauthorizedException()
+      }
       const body = await this.registry.metrics()
       this.adapterHost.httpAdapter.setHeader(response, 'Content-Type', this.registry.contentType)
       this.adapterHost.httpAdapter.reply(response, body, HttpStatus.OK)

@@ -235,17 +235,33 @@ configuration fails fast at the route rather than at boot.
 
 ### `metrics`
 
-| Option                  | Type                     | Default     | Description                                                           |
-| ----------------------- | ------------------------ | ----------- | --------------------------------------------------------------------- |
-| `enabled`               | `boolean`                | `false`     | Registers the metrics controller and the registry.                    |
-| `path`                  | `string`                 | `'metrics'` | Route serving the Prometheus scrape.                                  |
-| `defaultLabels`         | `Record<string, string>` | `{}`        | Static labels attached to every metric.                               |
-| `collectDefaultMetrics` | `boolean`                | `true`      | Collects `prom-client`'s process CPU, memory, and event-loop metrics. |
+| Option                  | Type                     | Default     | Description                                                                                      |
+| ----------------------- | ------------------------ | ----------- | ------------------------------------------------------------------------------------------------ |
+| `enabled`               | `boolean`                | `false`     | Registers the metrics controller and the registry.                                               |
+| `path`                  | `string`                 | `'metrics'` | Route serving the Prometheus scrape.                                                             |
+| `defaultLabels`         | `Record<string, string>` | `{}`        | Static labels attached to every metric.                                                          |
+| `collectDefaultMetrics` | `boolean`                | `true`      | Collects `prom-client`'s process CPU, memory, and event-loop metrics.                            |
+| `authToken`             | `string`                 | _(unset)_   | Bearer required to scrape. Unset leaves the endpoint open; empty/whitespace is rejected at boot. |
 
 As with `health`, `enabled` and `path` register conditionally on `forRoot`. On
 `forRootAsync` the metrics controller is always registered at the default path
 and enforces `enabled` and the default path with a request-time guard, so a
 disabled or custom-path async configuration fails fast at the route.
+
+By default the scrape endpoint is **open** — the exposition publishes the route
+inventory and, with `collectDefaultMetrics`, process internals to any caller. Set
+`authToken` to require `Authorization: Bearer <token>` (the scheme is matched
+case-insensitively; the token is compared in constant time), or protect the route at
+your edge (network policy, ingress auth). A token configured empty or whitespace-only
+is rejected at boot rather than silently ignored, so a mistyped secret fails loud
+instead of leaving the endpoint open:
+
+```ts
+BymaxCoreModule.forRoot({
+  metrics: { enabled: true, authToken: process.env.METRICS_TOKEN }
+})
+// Scrape: curl -H "Authorization: Bearer $METRICS_TOKEN" http://host/metrics
+```
 
 ### `telemetry`
 

@@ -225,6 +225,13 @@ export interface BymaxCoreModuleOptions {
     defaultLabels?: Record<string, string>
     /** Collect prom-client default process metrics. Default: true when enabled. */
     collectDefaultMetrics?: boolean
+    /**
+     * Bearer required to scrape. Unset (the default) leaves the endpoint open, to
+     * be protected at the edge. When set, a request must carry
+     * `Authorization: Bearer <token>` (scheme matched case-insensitively, token
+     * compared in constant time). Empty or whitespace-only is rejected at boot.
+     */
+    authToken?: string
   }
 }
 ```

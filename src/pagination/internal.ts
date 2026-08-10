@@ -34,9 +34,17 @@ export interface PaginationLimitOptions {
  * not enough: values below the minimum also fall back, keeping non-numeric,
  * negative, and zero input from producing an out-of-range result.
  *
+ * The result is capped at {@link Number.MAX_SAFE_INTEGER}. Above that boundary a
+ * finite `Number` is no longer a precise integer — `1e308` floors to itself — so a
+ * value handed back would already have lost integer precision. Capping keeps every
+ * result a safe integer. A `page` needs one more bound to be offset-safe: even a
+ * safe-integer page can drive `(page - 1) * limit` past the safe range, which
+ * {@link clampPageToLimit} closes once the limit is known.
+ *
  * @param value - The raw, untrusted value to coerce.
  * @param fallback - The value returned when coercion yields nothing usable.
- * @returns A positive integer: the truncated coercion, or the fallback.
+ * @returns A positive, safe integer: the truncated coercion capped at
+ *   {@link Number.MAX_SAFE_INTEGER}, or the fallback.
  */
 export function coercePositiveInt(value: unknown, fallback: number): number {
   if (typeof value !== 'number' && typeof value !== 'string') {
@@ -46,7 +54,25 @@ export function coercePositiveInt(value: unknown, fallback: number): number {
   if (!Number.isFinite(coerced) || coerced < MINIMUM) {
     return fallback
   }
-  return Math.floor(coerced)
+  return Math.min(Math.floor(coerced), Number.MAX_SAFE_INTEGER)
+}
+
+/**
+ * Cap a page index so the repository offset it drives, `(page - 1) * limit`, stays a
+ * safe integer. {@link coercePositiveInt} keeps `page` itself safe, but the offset is
+ * a product and can still exceed {@link Number.MAX_SAFE_INTEGER} and lose precision
+ * before a repository ever sees it. The largest page whose offset is exact is
+ * `floor(MAX_SAFE_INTEGER / limit) + 1` — its offset is `floor(MAX / limit) * limit`,
+ * which is `<= MAX` by construction. `page` is already `<= MAX` from coercion, so a
+ * plain `min` of the two is enough (for `limit === 1` the bound is `MAX + 1`, and the
+ * already-capped page wins).
+ *
+ * @param page - A positive, safe-integer page index.
+ * @param limit - The resolved page size, always `>= 1`.
+ * @returns `page` capped so `(page - 1) * limit` stays a safe integer.
+ */
+export function clampPageToLimit(page: number, limit: number): number {
+  return Math.min(page, Math.floor(Number.MAX_SAFE_INTEGER / limit) + 1)
 }
 
 /**

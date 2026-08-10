@@ -10,6 +10,7 @@ import {
   DEFAULT_LIMIT,
   MINIMUM,
   clampLimit,
+  clampPageToLimit,
   coercePositiveInt,
   type PaginationLimitOptions
 } from './internal'
@@ -46,8 +47,11 @@ export interface PageResult<T> {
  * Clamp raw request input into a safe {@link PageQuery}.
  *
  * `page` floors to `1`; `limit` floors to `1` and caps at `maxLimit`. Absent,
- * non-numeric, negative, or zero fields fall back to defaults. Options are
- * per-call and never retained between calls.
+ * non-numeric, negative, or zero fields fall back to defaults. The limit is resolved
+ * first so `page` can be capped relative to it: a page is bounded not only to a safe
+ * integer but to one whose offset `(page - 1) * limit` also stays a safe integer, so a
+ * hostile `page` cannot lose precision before the repository computes its offset.
+ * Options are per-call and never retained between calls.
  *
  * @param raw - The untrusted page and limit values from the request.
  * @param options - Per-call `defaultLimit` (default `20`) and `maxLimit`
@@ -58,9 +62,10 @@ export function normalizePageQuery(
   raw: { page?: unknown; limit?: unknown },
   options?: PaginationLimitOptions
 ): PageQuery {
+  const limit = clampLimit(raw.limit, options)
   return {
-    page: coercePositiveInt(raw.page, MINIMUM),
-    limit: clampLimit(raw.limit, options)
+    page: clampPageToLimit(coercePositiveInt(raw.page, MINIMUM), limit),
+    limit
   }
 }
 

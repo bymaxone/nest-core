@@ -148,6 +148,18 @@ export interface MetricsOptions {
   defaultLabels?: Record<string, string>
   /** Collect `prom-client` default process metrics. Default: `true`. */
   collectDefaultMetrics?: boolean
+  /**
+   * A bearer token the scrape endpoint requires. When set, a request must carry
+   * `Authorization: Bearer <token>` matching this value (the scheme is matched
+   * case-insensitively; the token is compared in constant time) or it is refused
+   * with `401`. When unset (the default) the endpoint is open, so a deployment that
+   * exposes `/metrics` beyond a trusted network must either set this or protect the
+   * route at its edge — the exposition otherwise publishes the route inventory and
+   * `collectDefaultMetrics` process internals to any caller. Configuring this empty
+   * or whitespace-only is rejected at boot rather than treated as unset, so a
+   * mistyped secret fails loud instead of silently leaving the endpoint open.
+   */
+  authToken?: string
 }
 
 /**
@@ -196,12 +208,13 @@ export interface ResolvedTelemetryOptions {
   exposeTraceId: boolean
 }
 
-/** Fully-resolved metrics options. */
+/** Fully-resolved metrics options. `authToken` stays absent when unset. */
 export interface ResolvedMetricsOptions {
   enabled: boolean
   path: string
   collectDefaultMetrics: boolean
   defaultLabels: Record<string, string>
+  authToken?: string
 }
 
 /** Fully-resolved OpenAPI options. */
@@ -333,18 +346,49 @@ function resolveHealth(raw?: HealthOptions): ResolvedHealthOptions {
 }
 
 /**
+ * Normalize the scrape bearer token, failing closed on a misconfiguration.
+ *
+ * An absent token (`undefined`) is the documented open default. An explicitly
+ * configured token that is empty or only whitespace is rejected rather than silently
+ * treated as unset: a deployment that set `authToken` believing it had armed
+ * authentication would otherwise publish its metrics to every caller. Security
+ * configuration fails loud, at boot, not open. A non-empty token is kept verbatim —
+ * it is an opaque secret, never trimmed.
+ *
+ * @param raw - The consumer-supplied `authToken`, if any.
+ * @returns The bearer to enforce, or `undefined` when authentication is not configured.
+ * @throws Error When a token is configured but empty or whitespace-only.
+ */
+function resolveMetricsAuthToken(raw?: string): string | undefined {
+  if (raw === undefined) {
+    return undefined
+  }
+  if (raw.trim() === '') {
+    throw new Error(
+      '[BymaxCoreModule] "metrics.authToken" was configured empty or whitespace-only. Leave it ' +
+        'unset to expose an open /metrics endpoint (protected at the edge), or set a non-empty ' +
+        'bearer token to require credentialed scrapes.'
+    )
+  }
+  return raw
+}
+
+/**
  * Resolve metrics options against their defaults. `defaultLabels` is cloned so
  * freezing the resolved snapshot never freezes a consumer-owned object.
  *
  * @param raw - The consumer metrics block, if any.
  * @returns The fully-populated metrics options.
+ * @throws Error When `authToken` is configured empty or whitespace-only.
  */
 function resolveMetrics(raw?: MetricsOptions): ResolvedMetricsOptions {
+  const authToken = resolveMetricsAuthToken(raw?.authToken)
   return {
     enabled: raw?.enabled ?? false,
     path: raw?.path ?? DEFAULT_METRICS_PATH,
     collectDefaultMetrics: raw?.collectDefaultMetrics ?? true,
-    defaultLabels: { ...(raw?.defaultLabels ?? {}) }
+    defaultLabels: { ...(raw?.defaultLabels ?? {}) },
+    ...(authToken !== undefined ? { authToken } : {})
   }
 }
 
