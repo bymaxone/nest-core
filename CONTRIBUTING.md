@@ -49,9 +49,21 @@ All of the following must pass:
 - **Build**, tsup produces ESM + CJS + `.d.ts` for every subpath
 - **Size**, every subpath stays within the budget in `scripts/check-size.mjs`
 - **Dogfood**, every subpath resolves in ESM and CJS from the packed tarball
+- **Consumer runtime**, `pnpm check:runtime`: the packed tarball is laid out the way npm would, every subpath is loaded in ESM and CJS, the optional peers are asserted to stay unloaded, and a real application is booted across two entries — registered from the package root, then driven through `applyBymaxOpenApi` from the `./openapi` subpath. Nothing that runs against `src/` can see a defect that only exists once the code is bundled, so this gate is the only one that observes what a consumer observes
 
 Mutation testing (`pnpm mutation`) is a **release gate**, run manually before
 tagging a version, never on every PR.
+
+### Before a major
+
+The DI tokens in `src/core.tokens.ts` are minted with `Symbol.for` against the
+runtime's global symbol registry, and their keys carry no version. Every copy of
+this package loaded into one process therefore shares those identities, which is
+what makes a duplicated install of the same major harmless — and what makes a
+mixed-major process silently wrong, since a helper from one major would resolve
+a snapshot registered by another. So: **a major that changes the shape of the
+resolved options must change the token keys in the same commit.** That is itself
+a breaking change, which is why a major is the only place it can happen.
 
 ## Commits, Conventional Commits
 

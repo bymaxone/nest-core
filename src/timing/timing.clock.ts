@@ -36,5 +36,10 @@ export const DEFAULT_MONOTONIC_CLOCK: MonotonicClock = {
  * package API: it exists so `TimingInterceptor` can be constructed through
  * Nest's container (which cannot resolve a plain interface type) while tests
  * substitute a stub clock through the same explicit injection site.
+ *
+ * Minted with `Symbol.for` like every other token in this package, so it keeps
+ * one identity across the per-subpath bundles that each inline this module; see
+ * `core.tokens.ts` for why that matters. Being internal makes the token no less
+ * duplicable — only less noticeable when it duplicates.
  */
-export const BYMAX_TIMING_CLOCK: unique symbol = Symbol('BYMAX_TIMING_CLOCK')
+export const BYMAX_TIMING_CLOCK: unique symbol = Symbol.for('@bymax-one/nest-core:timing-clock')

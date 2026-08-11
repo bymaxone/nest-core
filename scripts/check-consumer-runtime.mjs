@@ -11,6 +11,16 @@
  * broken `exports` map, a bundler misconfiguration, or an entry that ships an
  * empty module all pass a type check and fail here.
  *
+ * It then boots a real Nest application against the packed artifact and drives
+ * `applyBymaxOpenApi` through all three of its outcomes. That probe exists
+ * because of a specific defect class the unit suite structurally cannot see:
+ * under ts-jest every module is loaded once, so a DI token shared between two
+ * entries is one object no matter how it was minted. In the published package it
+ * is not — each subpath is a separate bundle with the shared modules inlined —
+ * and in 1.3.0 that made `applyBymaxOpenApi` unable to resolve a token the
+ * package root had provided, throwing on every consumer boot. Only a probe that
+ * loads two entries of the built artifact into one process can catch it.
+ *
  * It shells out to `npm pack` and `tar`, both of which have to be on PATH. That
  * is deliberate: packing through npm itself is what makes the gate inspect the
  * same tarball a publish would produce, rather than a directory that resembles
@@ -38,6 +48,14 @@ const rootDir = join(dirname(fileURLToPath(import.meta.url)), '..')
 // the packed artifact, so a rename must not leave it silently checking a
 // package that no longer exists.
 const packageName = JSON.parse(readFileSync(join(rootDir, 'package.json'), 'utf8')).name
+// Inside the repository, and that is load-bearing rather than incidental: the
+// packed package is laid out under `<consumerDir>/node_modules`, but its peers
+// are not, so `@nestjs/common`, `@nestjs/core`, `@nestjs/platform-express`,
+// `@nestjs/swagger` and `reflect-metadata` resolve by walking up into the
+// repository's own `node_modules`, where they sit as devDependencies. Moving
+// this to `os.tmpdir()` — as the dogfood smoke test does, which makes it a
+// plausible consistency refactor — cuts that path and every probe dies on
+// MODULE_NOT_FOUND for a reason that has nothing to do with the package.
 const consumerDir = join(rootDir, '.consumer-runtime-check')
 
 /**
@@ -149,6 +167,113 @@ const FORMAT = 'CJS'
 ${probeBody}
 ${peerGuard}`
 
+/**
+ * Cross-entry boot probe: the package root registers the module, the `./openapi`
+ * subpath consumes what it registered.
+ *
+ * The two specifiers resolve to two separate bundles that each inline the shared
+ * internals, so this is the only place any gate observes what a consumer
+ * observes — a provider bound by one bundle being looked up by another. The
+ * three cases are `applyBymaxOpenApi`'s entire contract, and the first of them
+ * is the one that regressed: with the feature *off*, the helper still resolves
+ * the options before it reads the flag, so a token that does not match takes
+ * down the boot of an application that never asked for a document.
+ *
+ * The decorator is applied as a plain call rather than with `@` syntax so the
+ * probe is valid JavaScript in both module formats with no transpiler involved.
+ */
+const bootBody = `
+const failures = []
+
+/** Build and initialize an application registering the module asynchronously. */
+async function boot(openapi) {
+  class ProbeModule {}
+  Module({
+    imports: [BymaxCoreModule.forRootAsync({ useFactory: () => ({ openapi }) })]
+  })(ProbeModule)
+  return NestFactory.create(ProbeModule, { logger: false, abortOnError: false })
+}
+
+/** Assert one outcome of the helper, booting a fresh application for it. */
+async function check(label, nodeEnv, openapi, expected) {
+  process.env.NODE_ENV = nodeEnv
+  let app
+  try {
+    app = await boot(openapi)
+    const outcome = await applyBymaxOpenApi(app)
+    for (const key of ['mounted', 'reason', 'path']) {
+      if (outcome[key] !== expected[key]) {
+        failures.push(
+          label + ': expected ' + key + '=' + String(expected[key]) +
+            ', got ' + String(outcome[key])
+        )
+      }
+    }
+  } catch (error) {
+    failures.push(label + ': threw "' + (error && error.message) + '"')
+  } finally {
+    if (app) await app.close()
+  }
+}
+
+const originalNodeEnv = process.env.NODE_ENV
+try {
+  // Disabled: mounts nothing and must not throw. This is the case a consumer
+  // that never enabled the feature hits on every single boot.
+  await check('openapi disabled', 'development', undefined, {
+    mounted: false,
+    reason: 'disabled',
+    path: undefined
+  })
+  // Enabled outside production: the document and its UI mount at the configured
+  // route, which also proves the cross-entry options snapshot carried its values.
+  await check('openapi enabled', 'development', { enabled: true, path: 'probe-docs' }, {
+    mounted: true,
+    reason: undefined,
+    path: 'probe-docs'
+  })
+  // Enabled in production: refused, by the helper's own guard.
+  await check('openapi enabled in production', 'production', { enabled: true }, {
+    mounted: false,
+    reason: 'production',
+    path: undefined
+  })
+} finally {
+  if (originalNodeEnv === undefined) delete process.env.NODE_ENV
+  else process.env.NODE_ENV = originalNodeEnv
+}
+
+if (failures.length) {
+  for (const failure of failures) console.error('  ✗ ' + failure)
+  process.exit(1)
+}
+console.log('  ✓ ' + FORMAT + ': applyBymaxOpenApi resolved the module registered by the package root (3 outcomes)')
+`
+
+const esmBoot = `import 'reflect-metadata'
+import { Module } from '@nestjs/common'
+import { NestFactory } from '@nestjs/core'
+import { BymaxCoreModule } from '${specifier('.')}'
+import { applyBymaxOpenApi } from '${specifier('./openapi')}'
+const FORMAT = 'ESM'
+${bootBody}`
+
+const cjsBoot = `require('reflect-metadata')
+const { Module } = require('@nestjs/common')
+const { NestFactory } = require('@nestjs/core')
+const { BymaxCoreModule } = require('${specifier('.')}')
+const { applyBymaxOpenApi } = require('${specifier('./openapi')}')
+const FORMAT = 'CJS'
+// Wrapped because a CommonJS file has no top-level await. The rejection handler
+// is not decoration: without it a throw inside the IIFE would leave the exit
+// code at 0 and the gate would report a pass.
+void (async () => {
+${bootBody}
+})().catch((error) => {
+  console.error(error)
+  process.exit(1)
+})`
+
 function run(command, args, options = {}) {
   return execFileSync(command, args, { encoding: 'utf8', stdio: 'pipe', ...options })
 }
@@ -206,8 +331,13 @@ try {
   )
   writeFileSync(join(consumerDir, 'probe.mjs'), esmProbe)
   writeFileSync(join(consumerDir, 'probe.cjs'), cjsProbe)
+  writeFileSync(join(consumerDir, 'boot.mjs'), esmBoot)
+  writeFileSync(join(consumerDir, 'boot.cjs'), cjsBoot)
 
-  for (const probe of ['probe.mjs', 'probe.cjs']) {
+  // The boot probes run last: they are the only ones that need the framework
+  // peers resolvable, and a failure to even load a subpath is a clearer message
+  // than a failure to bootstrap one.
+  for (const probe of ['probe.mjs', 'probe.cjs', 'boot.mjs', 'boot.cjs']) {
     try {
       process.stdout.write(run('node', [probe], { cwd: consumerDir, stdio: 'pipe' }))
     } catch (error) {
