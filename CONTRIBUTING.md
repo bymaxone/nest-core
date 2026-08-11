@@ -60,10 +60,16 @@ The DI tokens in `src/core.tokens.ts` are minted with `Symbol.for` against the
 runtime's global symbol registry, and their keys carry no version. Every copy of
 this package loaded into one process therefore shares those identities, which is
 what makes a duplicated install of the same major harmless — and what makes a
-mixed-major process silently wrong, since a helper from one major would resolve
-a snapshot registered by another. So: **a major that changes the shape of the
-resolved options must change the token keys in the same commit.** That is itself
-a breaking change, which is why a major is the only place it can happen.
+mixed-major process silently wrong, since a consumer of one major would resolve a
+value registered by another against a contract it does not know.
+
+This applies to **every** token, not only the options snapshot: each one binds
+its own contract — `ResolvedCoreOptions`, `ICorrelationIdProvider`, `ITimingSink`,
+the `IHealthIndicator` array, the metrics `Registry`, `ITraceContextProvider`,
+and the internal `MonotonicClock`. So: **a major that changes the contract behind
+any of those tokens must change that token's key in the same commit.** Changing a
+key is itself a breaking change, which is why a major is the only place it can
+happen.
 
 ## Commits, Conventional Commits
 

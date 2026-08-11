@@ -24,16 +24,20 @@
  * The keys carry no version, which is a deliberate choice with a consequence
  * worth stating plainly. Every copy of this package loaded into one process
  * shares these identities, whatever its version. Within a major that is exactly
- * what is wanted: two resolved instances of the same major agree on the options
- * shape, so sharing one identity is what makes a duplicated install harmless
- * rather than broken. Across majors it is a hazard: a helper from one major
- * would resolve, without complaint, a snapshot registered by another whose shape
- * it does not know, and fail later on an undefined field instead of immediately
- * on an unresolvable token.
+ * what is wanted: two resolved instances of the same major agree on what each
+ * token binds, so sharing one identity is what makes a duplicated install
+ * harmless rather than broken. Across majors it is a hazard: a consumer of one
+ * major would resolve, without complaint, a value registered by another against
+ * a contract it does not know, and fail later on an unexpected shape instead of
+ * immediately on an unresolvable token.
  *
- * So this belongs on the major-release checklist, not in a comment nobody reads
- * at the right moment: **a major that changes the resolved-options shape must
- * change these keys in the same commit.** Changing them is already a breaking
+ * That hazard is not specific to the options snapshot. Each token below binds
+ * its own contract — the correlation provider, the timing sink, the health
+ * indicator array, the metrics registry, the trace-context reader — and every
+ * one of them is now shared across majors by the same mechanism. So this belongs
+ * on the major-release checklist, not in a comment nobody reads at the right
+ * moment: **a major that changes the contract behind any token here must change
+ * that token's key in the same commit.** Changing a key is already a breaking
  * change, which is precisely why a major is the only place it can happen.
  * @layer Constants
  */
