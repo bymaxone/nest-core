@@ -11,6 +11,45 @@ heading here.
 
 ## [Unreleased]
 
+## [1.3.1] - 2026-08-11
+
+A patch fixing a defect that existed only in the published artifact: `applyBymaxOpenApi` threw on
+every consumer boot, including consumers that never enabled the OpenAPI document. No API changed —
+the type declarations are byte-identical to `1.3.0` apart from one added documentation comment.
+
+**Apply to a derived backend:** `pnpm up @bymax-one/nest-core`. No code change on the consumer
+side; the DI token identities are internal to the package.
+
+### Fixed
+
+- **`applyBymaxOpenApi` resolves the options registered by `BymaxCoreModule` again.** The DI
+  tokens were minted with `Symbol()`. This package ships one bundle per published subpath with the
+  shared internals inlined into each, so `core.tokens` existed twice at runtime — once in
+  `dist/index.cjs`, once in `dist/openapi/index.cjs` — and `Symbol('X') !== Symbol('X')`. The
+  provider bound by the package root carried one identity and the `./openapi` helper looked up
+  another, so `app.get()` found nothing and the helper threw its "could not resolve
+  BYMAX_CORE_OPTIONS" error with `BymaxCoreModule` correctly registered. Under Nest's default
+  `abortOnError` that took down the process. The feature flag did not protect anyone: the helper
+  resolves the options before it reads `openapi.enabled`, so an application with the document
+  switched off failed exactly the same way. Every token is now minted with `Symbol.for` against the
+  runtime's global symbol registry, which is immune to bundle duplication by construction.
+  `./health`, `./metrics` and `./pagination` were audited and carry no DI token at all, so
+  `./openapi` was the only subpath where the defect could manifest; the remaining tokens are
+  converted anyway, so a future subpath that starts consuming one is safe before the fact.
+
+### Internal
+
+- **The consumer load gate now boots a real application against the packed tarball.** It registers
+  `BymaxCoreModule.forRootAsync` from the package root, calls `applyBymaxOpenApi` from the
+  `./openapi` subpath, and asserts all three outcomes — disabled, mounted outside production, and
+  refused in production — in ESM and in CommonJS. The unit suite structurally could not catch this
+  class of defect: under ts-jest every module is loaded once, so tokens shared between two entries
+  are the same object however they were minted, and the bug only exists once the code is bundled.
+  The gate fails against the `1.3.0` artifact and passes against this one.
+- The token specs assert that every exported token round-trips through `Symbol.for`, swept from the
+  module namespace rather than a hand-maintained list, so a token added later is covered without
+  anyone remembering to add it.
+
 ## [1.3.0] - 2026-08-11
 
 Coordinated ecosystem release aligning every `@bymax-one/*` package after the ioredis 6 /
@@ -355,8 +394,9 @@ have regressed from. They are kept because the reasoning is worth having.
 [1.0.1]: https://github.com/bymaxone/nest-core/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/bymaxone/nest-core/releases/tag/v1.0.0
 [1.1.1]: https://github.com/bymaxone/nest-core/compare/v1.1.0...v1.1.1
+[1.3.1]: https://github.com/bymaxone/nest-core/compare/v1.3.0...v1.3.1
 [1.3.0]: https://github.com/bymaxone/nest-core/compare/v1.2.2...v1.3.0
 [1.2.2]: https://github.com/bymaxone/nest-core/compare/v1.2.1...v1.2.2
 [1.2.1]: https://github.com/bymaxone/nest-core/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/bymaxone/nest-core/compare/v1.1.1...v1.2.0
-[Unreleased]: https://github.com/bymaxone/nest-core/compare/v1.3.0...HEAD
+[Unreleased]: https://github.com/bymaxone/nest-core/compare/v1.3.1...HEAD
