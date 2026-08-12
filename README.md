@@ -889,7 +889,14 @@ export class AuthOpenApi implements IOpenApiContributor {
         securitySchemes: {
           // Derived from resolved options — which is why this cannot be a
           // static map a consumer writes by hand.
-          authCookie: { type: 'apiKey', in: 'cookie', name: this.options.cookies.accessTokenName }
+          authCookie: { type: 'apiKey', in: 'cookie', name: this.options.cookies.accessTokenName },
+          // Declared because the refresh operation below requires it: a
+          // requirement naming an undeclared scheme fails the document build.
+          refreshCookie: {
+            type: 'apiKey',
+            in: 'cookie',
+            name: this.options.cookies.refreshTokenName
+          }
         }
       },
       operations: {

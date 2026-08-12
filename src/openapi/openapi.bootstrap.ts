@@ -173,7 +173,7 @@ function recordingOperationIdFactory(
       configured === undefined
         ? defaultOperationId(controllerKey, methodKey, version)
         : configured(controllerKey, methodKey, version)
-    handlers.record(controllerKey, methodKey, id)
+    handlers.record(controllerKey, methodKey, version, id)
     return id
   }
 }
@@ -201,11 +201,12 @@ function defaultOperationId(controllerKey: string, methodKey: string, version?: 
 /**
  * Collect what the libraries in this application contribute to the document.
  *
- * Returns nothing when the provider scan is unavailable. `DiscoveryModule` is
- * imported by `BymaxCoreModule` only when a marker scan can run, so an
- * application on `forRoot` that enables nothing but the document has no scanner
- * — and failing to mount over a library's optional description would be a poor
- * trade for a feature that is documentation.
+ * Returns nothing when the provider scan is unavailable. Enabling the document
+ * imports `DiscoveryModule`, so an ordinary application always has a scanner;
+ * this fallback covers the container that somehow does not — a consumer
+ * assembling providers by hand, or a future in which the token moves. Failing
+ * to mount over a library's optional description would be a poor trade for a
+ * feature that is documentation.
  *
  * @param app - The initialized Nest application.
  * @param handlers - The handler-to-id map filled during the scan.

@@ -43,7 +43,7 @@ function mapOf(handlers: Readonly<Record<string, string>>): HandlerIdMap {
   const map = createHandlerIdMap()
   for (const [handlerKey, id] of Object.entries(handlers)) {
     const [controllerKey = '', methodKey = ''] = handlerKey.split('.')
-    map.record(controllerKey, methodKey, id)
+    map.record(controllerKey, methodKey, undefined, id)
   }
   return map
 }
@@ -58,10 +58,51 @@ describe('createHandlerIdMap', () => {
   it('records an id per handler and reads it back', () => {
     const map = createHandlerIdMap()
 
-    map.record('AuthController', 'login', 'AuthController_login')
+    map.record('AuthController', 'login', undefined, 'AuthController_login')
 
-    expect(map.idFor('AuthController.login')).toBe('AuthController_login')
+    expect(map.idsFor('AuthController.login')).toEqual(['AuthController_login'])
     expect(map.keys()).toEqual(['AuthController.login'])
+  })
+
+  /**
+   * A versioned handler keeps every id it produced.
+   *
+   * Under URI versioning the same handler answers at `/v1/...` and `/v2/...`,
+   * and the peer asks for an id per version. Keeping only the last would leave
+   * every other version undocumented while the fragment looked applied.
+   */
+  it('records one id per version of the same handler', () => {
+    const map = createHandlerIdMap()
+
+    map.record('AuthController', 'login', 'v1', 'AuthController_login_v1')
+    map.record('AuthController', 'login', 'v2', 'AuthController_login_v2')
+
+    expect(map.idsFor('AuthController.login')).toEqual([
+      'AuthController_login_v1',
+      'AuthController_login_v2'
+    ])
+  })
+
+  /**
+   * Two controllers sharing a name are refused, not merged.
+   *
+   * The key addresses both, so a fragment written for one would document the
+   * other as well. That is unresolvable rather than awkward, and silence would
+   * mean a library's description landing on a route it has never heard of.
+   */
+  it('throws when the same handler and version is recorded twice', () => {
+    const map = createHandlerIdMap()
+    map.record('AuthController', 'login', undefined, 'AuthController_login')
+
+    const again = (): void =>
+      map.record('AuthController', 'login', undefined, 'AuthController_login')
+
+    expect(again).toThrow(
+      /two route handlers in this application answer to "AuthController\.login"/
+    )
+    expect(again).toThrow(/an OpenAPI fragment addressing it would apply to both/)
+    expect(again).toThrow(/Handler keys are "<ControllerClassName>\.<methodName>"/)
+    expect(again).toThrow(/rename one of the controller classes/)
   })
 
   /**
@@ -71,7 +112,7 @@ describe('createHandlerIdMap', () => {
    * resolver report a stale key instead of writing a fragment nowhere.
    */
   it('returns undefined for a handler it never saw', () => {
-    expect(createHandlerIdMap().idFor('Missing.handler')).toBeUndefined()
+    expect(createHandlerIdMap().idsFor('Missing.handler')).toEqual([])
   })
 })
 
@@ -386,6 +427,64 @@ describe('collectContributions', () => {
     expect(build).toThrow(/"Ahead" contributed a fragment written against OpenAPI contract/)
     expect(build).toThrow(/version 2, and this package speaks version 1/)
     expect(build).toThrow(/the shapes are not interchangeable/i)
+  })
+
+  /**
+   * Two contributors sharing a class name are refused, not ordered.
+   *
+   * They sort equal, so whichever wins a collision between them would be
+   * decided by the container's traversal — stable-looking right up until a
+   * refactor moves a provider. The label is also the only identity an error
+   * could name, so there is no report that would help either.
+   */
+  it('throws when two contributors share a class name', () => {
+    const first = contributorClass('AuthOpenApi', {
+      contractVersion: BYMAX_OPENAPI_CONTRACT_VERSION
+    })
+    const second = contributorClass('AuthOpenApi', {
+      contractVersion: BYMAX_OPENAPI_CONTRACT_VERSION
+    })
+
+    expect(() =>
+      collectContributions(
+        scannerOf([
+          { metatype: first, instance: new first() },
+          { metatype: second, instance: new second() }
+        ]),
+        reflector,
+        mapOf({})
+      )
+    ).toThrow(
+      /more than one OpenAPI contributor is named "AuthOpenApi", so the order they merge in would depend on the container rather than on anything stated\. Rename one of the contributor classes\./
+    )
+  })
+
+  /**
+   * Every duplicated name is reported, separated.
+   *
+   * One boot per collision would be a poor trade, and a list rendered without
+   * separators reads as a single nonsense class name — the opposite of what a
+   * message naming the mistake is for.
+   */
+  it('lists every duplicated contributor name it found', () => {
+    const version = BYMAX_OPENAPI_CONTRACT_VERSION
+    const alphaOne = contributorClass('AlphaOpenApi', { contractVersion: version })
+    const alphaTwo = contributorClass('AlphaOpenApi', { contractVersion: version })
+    const zuluOne = contributorClass('ZuluOpenApi', { contractVersion: version })
+    const zuluTwo = contributorClass('ZuluOpenApi', { contractVersion: version })
+
+    expect(() =>
+      collectContributions(
+        scannerOf([
+          { metatype: alphaOne, instance: new alphaOne() },
+          { metatype: alphaTwo, instance: new alphaTwo() },
+          { metatype: zuluOne, instance: new zuluOne() },
+          { metatype: zuluTwo, instance: new zuluTwo() }
+        ]),
+        reflector,
+        mapOf({})
+      )
+    ).toThrow(/is named "AlphaOpenApi", "ZuluOpenApi", so the order/)
   })
 
   /**

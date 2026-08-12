@@ -162,7 +162,8 @@ export const BYMAX_OPENAPI_CONTRIBUTOR_METADATA = 'bymax-one:openapi-contributor
  *       return {
  *         components: {
  *           securitySchemes: {
- *             authCookie: { type: 'apiKey', in: 'cookie', name: this.options.cookies.accessTokenName }
+ *             authCookie: { type: 'apiKey', in: 'cookie', name: this.options.cookies.accessTokenName },
+ *             refreshCookie: { type: 'apiKey', in: 'cookie', name: this.options.cookies.refreshTokenName }
  *           }
  *         },
  *         operations: {

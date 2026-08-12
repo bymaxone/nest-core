@@ -711,11 +711,17 @@ export function augmentDocument<T extends OpenApiDocumentLike>(
 ): AugmentedDocument<T> {
   const { openapi } = options
   const components = asRecord(document.components)
-  const merged: Record<string, unknown> = { ...components }
+  // Accumulated in a `Map`, converted once at the end. Component member names
+  // reach this from contributors, and writing one onto an object is not merely
+  // the shape an analyser flags: `Object.assign` invokes the target's
+  // `__proto__` setter, so a member by that name would replace the prototype
+  // instead of becoming an own component — and inherited entries would then
+  // take part in the scheme validation below. A `Map` key cannot do that.
+  const merged = new Map(Object.entries(components))
 
   if (openapi.includeCoreSchemas) {
-    merged['schemas'] = mergeAbsent(asRecord(components['schemas']), CORE_SCHEMAS)
-    merged['parameters'] = mergeAbsent(asRecord(components['parameters']), CORE_PARAMETERS)
+    merged.set('schemas', mergeAbsent(asRecord(components['schemas']), CORE_SCHEMAS))
+    merged.set('parameters', mergeAbsent(asRecord(components['parameters']), CORE_PARAMETERS))
   }
 
   // Contributed only when the scrape endpoint is actually protected, so the
@@ -730,32 +736,33 @@ export function augmentDocument<T extends OpenApiDocumentLike>(
             description: 'Bearer token required by the metrics scrape endpoint.'
           }
         }
-  // Contributed components land beneath whatever the document already defines,
-  // and beneath this package's own contributions above, so the document keeps
-  // winning every collision no matter who supplied the loser.
-  for (const contribution of contributions) {
-    for (const [member, entries] of Object.entries(contribution.components)) {
-      // Same reason as everywhere else in this module: accumulate through a
-      // spread rather than writing under a key the contributor chose.
-      Object.assign(merged, { [member]: mergeAbsent(asRecord(merged[member]), entries) })
-    }
-  }
-
   assertScrapeSchemeIsOurs(openapi, components, options.metrics.authToken !== undefined)
-  // Everything the served document will define — what it already carried, what
-  // a library contributed, the consumer's own, and the scrape scheme. All four
-  // are things a requirement may legitimately reference, so all four are what
-  // the requirements are checked against. Validating before the contributed
-  // ones landed would reject a consumer for naming a scheme a library supplies,
-  // which is the arrangement this lane exists to enable.
-  const schemes = mergeAbsent(asRecord(merged['securitySchemes']), {
+
+  // The consumer's schemes and this package's own land *before* the libraries',
+  // because the precedence is document over consumer over library and
+  // `mergeAbsent` gives the existing side the win. Folding the libraries in
+  // first would have let a dependency's scheme outrank the deployment's — and
+  // let one claim the reserved scrape name behind the check just above.
+  const declaredSchemes = mergeAbsent(asRecord(components['securitySchemes']), {
     ...openapi.securitySchemes,
     ...scrapeScheme
   })
-  if (Object.keys(schemes).length > 0) {
-    merged['securitySchemes'] = schemes
+  if (Object.keys(declaredSchemes).length > 0) {
+    merged.set('securitySchemes', declaredSchemes)
   }
-  assertSchemesDeclared(openapi, schemes)
+
+  // Contributed components land beneath everything above: the document, this
+  // package's catalogue and the consumer's own configuration all keep winning.
+  for (const contribution of contributions) {
+    for (const [member, entries] of Object.entries(contribution.components)) {
+      merged.set(member, mergeAbsent(asRecord(merged.get(member)), entries))
+    }
+  }
+
+  // Validated against everything the served document will define, libraries
+  // included: rejecting a consumer for naming a scheme their own library
+  // supplies would fail on the arrangement this lane exists to enable.
+  assertSchemesDeclared(openapi, asRecord(merged.get('securitySchemes')))
 
   const routes = indexOwnRoutes(options, pathPrefixes)
   const served = withoutDisabledRoutes(asRecord(document.paths), options, routes)
@@ -774,5 +781,5 @@ export function augmentDocument<T extends OpenApiDocumentLike>(
       ? { security: openapi.security }
       : {}
 
-  return { ...document, components: merged, ...paths, ...security }
+  return { ...document, components: Object.fromEntries(merged), ...paths, ...security }
 }

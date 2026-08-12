@@ -51,10 +51,18 @@ export interface ResolvedContribution {
  * existing consumer generates changes.
  */
 export interface HandlerIdMap {
-  /** Record the id assigned to one handler. */
-  record(controllerKey: string, methodKey: string, id: string): void
-  /** The id assigned to a handler key, or `undefined` when it has none. */
-  idFor(handlerKey: string): string | undefined
+  /**
+   * Record the id assigned to one handler, for one version.
+   *
+   * @throws Error When the same handler and version is recorded twice, which
+   *   means two controller classes in the application share a name.
+   */
+  record(controllerKey: string, methodKey: string, version: string | undefined, id: string): void
+  /**
+   * Every id assigned to a handler key — more than one when the application
+   * serves that route under several URI versions.
+   */
+  idsFor(handlerKey: string): readonly string[]
   /** Every handler key seen, for an error that has to say what does exist. */
   keys(): readonly string[]
 }
@@ -65,12 +73,34 @@ export interface HandlerIdMap {
  * @returns The recorder and its reader.
  */
 export function createHandlerIdMap(): HandlerIdMap {
-  const ids = new Map<string, string>()
+  const ids = new Map<string, string[]>()
+  // Versions tracked per handler in a `Set`, which holds `undefined` as a value
+  // like any other — a composite string key would need a separator that no
+  // version can contain, and inventing one is a rule with no way to observe it
+  // being wrong.
+  const versions = new Map<string, Set<string | undefined>>()
   return {
-    record: (controllerKey, methodKey, id): void => {
-      ids.set(`${controllerKey}.${methodKey}`, id)
+    record: (controllerKey, methodKey, version, id): void => {
+      const handlerKey = `${controllerKey}.${methodKey}`
+      // A handler legitimately produces one operation per URI version, so the
+      // same key recording twice is only a collision when the version repeats.
+      // Two controller classes sharing a name is the case that reaches here,
+      // and it is unresolvable rather than merely awkward: the key addresses
+      // both, so a fragment for one would document the other too.
+      const seen = versions.get(handlerKey) ?? new Set<string | undefined>()
+      if (seen.has(version)) {
+        throw new Error(
+          `[BymaxCoreModule] two route handlers in this application answer to ` +
+            `"${handlerKey}", so an OpenAPI fragment addressing it would apply to both. ` +
+            'Handler keys are "<ControllerClassName>.<methodName>"; rename one of the ' +
+            'controller classes.'
+        )
+      }
+      seen.add(version)
+      versions.set(handlerKey, seen)
+      ids.set(handlerKey, [...(ids.get(handlerKey) ?? []), id])
     },
-    idFor: (handlerKey) => ids.get(handlerKey),
+    idsFor: (handlerKey) => ids.get(handlerKey) ?? [],
     keys: () => [...ids.keys()]
   }
 }
@@ -170,7 +200,7 @@ function resolveOperations(
   handlers: HandlerIdMap
 ): Readonly<Record<string, OpenApiFragmentObject>> {
   const entries = Object.entries(fragment.operations ?? {})
-  const unmatched = entries.filter(([handlerKey]) => handlers.idFor(handlerKey) === undefined)
+  const unmatched = entries.filter(([handlerKey]) => handlers.idsFor(handlerKey).length === 0)
   if (unmatched.length > 0) {
     const known = handlers.keys()
     throw new Error(
@@ -181,8 +211,13 @@ function resolveOperations(
     )
   }
 
+  // Expanded across every id the handler produced: under URI versioning the
+  // same handler answers at `/v1/...` and `/v2/...`, and a fragment describing
+  // it describes both. Resolving to one would leave the other undocumented.
   return Object.fromEntries(
-    entries.map(([handlerKey, operation]) => [handlers.idFor(handlerKey) as string, operation])
+    entries.flatMap(([handlerKey, operation]) =>
+      handlers.idsFor(handlerKey).map((id) => [id, operation] as const)
+    )
   )
 }
 
@@ -207,6 +242,20 @@ export function collectContributions(
   handlers: HandlerIdMap
 ): readonly ResolvedContribution[] {
   const marked = [...findMarkedProviders(discovery, reflector, BYMAX_OPENAPI_CONTRIBUTOR_METADATA)]
+  // Two contributors sharing a class name would sort equal, leaving the winner
+  // of any collision between them decided by the container's traversal order —
+  // stable-looking until a refactor moves a provider. Unresolvable for the same
+  // reason a duplicate handler key is: the label is the only identity a report
+  // can name, so a duplicate is refused rather than ordered arbitrarily.
+  const labels = marked.map(({ label }) => label)
+  const duplicated = labels.filter((label, index) => labels.indexOf(label) !== index)
+  if (duplicated.length > 0) {
+    throw new Error(
+      `[BymaxCoreModule] more than one OpenAPI contributor is named ` +
+        `"${[...new Set(duplicated)].join('", "')}", so the order they merge in would depend on ` +
+        'the container rather than on anything stated. Rename one of the contributor classes.'
+    )
+  }
   marked.sort((left, right) => left.label.localeCompare(right.label))
 
   return marked.map(({ instance, label }) => {
