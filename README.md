@@ -881,6 +881,10 @@ export class AuthOpenApi implements IOpenApiContributor {
 
   contributeOpenApi(): OpenApiFragment {
     return {
+      // Required, and declared rather than inferred: a fragment crosses a
+      // boundary between independently released packages, where each side
+      // type-checked against its own copy.
+      contractVersion: 1,
       components: {
         securitySchemes: {
           // Derived from resolved options — which is why this cannot be a
@@ -923,6 +927,18 @@ to learn which handler produced which operation, and delegates the id string —
 to `openapi.operationIdFactory` when you set one, to the format `@nestjs/swagger`
 itself produces otherwise. A client generated from your document before adopting
 this keeps working after.
+
+**The fragment shape is translatable to an OpenAPI Overlay, deliberately.** The
+[Overlay Specification](https://spec.openapis.org/overlay/v1.0.0.html) is the
+OpenAPI Initiative's format for describing changes to a document, and a
+contributor's fragments are that in all but notation: a handler key resolves to
+an operation id, which resolves to a JSONPath target, which is what an overlay
+action addresses. Overlays are not used as the mechanism — their targets are
+paths, which is the one thing a library mounted through `RouterModule.register`
+cannot write, and a JSONPath engine would be a runtime dependency this package
+does not have. But the translation is mechanical, so a tool that emits a
+library's contribution as a standalone overlay can exist the day a pipeline
+wants one. No such tool ships here, and none is promised.
 
 **Deriving the fragments is the library's business, not this package's.** A
 library that wants its schemas to track its own validation decorators should

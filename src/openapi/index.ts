@@ -20,7 +20,11 @@ export { applyBymaxOpenApi } from './openapi.bootstrap'
 
 export type { OpenApiMountOutcome, OpenApiSkipReason } from './openapi.bootstrap'
 
-export { BymaxOpenApiContributor, BYMAX_OPENAPI_CONTRIBUTOR_METADATA } from './openapi.contract'
+export {
+  BymaxOpenApiContributor,
+  BYMAX_OPENAPI_CONTRACT_VERSION,
+  BYMAX_OPENAPI_CONTRIBUTOR_METADATA
+} from './openapi.contract'
 
 export type {
   IOpenApiContributor,

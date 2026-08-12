@@ -35,13 +35,18 @@ describe('openapi subpath barrel', () => {
    */
   it('exports only the bootstrap helper and the contributor contract', () => {
     expect(Object.keys(barrel).sort()).toEqual([
+      'BYMAX_OPENAPI_CONTRACT_VERSION',
       'BYMAX_OPENAPI_CONTRIBUTOR_METADATA',
       'BymaxOpenApiContributor',
       'applyBymaxOpenApi'
     ])
     expect(typeof applyBymaxOpenApi).toBe('function')
     expect(typeof barrel.BymaxOpenApiContributor).toBe('function')
+    // Both literals are pinned on their exact value: a library writes them into
+    // its own source rather than importing them at runtime, so a change here is
+    // a change to a contract another repository already copied.
     expect(barrel.BYMAX_OPENAPI_CONTRIBUTOR_METADATA).toBe('bymax-one:openapi-contributor')
+    expect(barrel.BYMAX_OPENAPI_CONTRACT_VERSION).toBe(1)
   })
 
   /**

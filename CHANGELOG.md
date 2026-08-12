@@ -31,6 +31,15 @@ heading here.
 - **The contract types** `IOpenApiContributor`, `OpenApiFragment`,
   `OpenApiFragmentObject` and `OpenApiHandlerKey`, exported from `./openapi` so a
   sibling library can target them at its own compile time.
+- **`BYMAX_OPENAPI_CONTRACT_VERSION`**, and a required `contractVersion` on every
+  fragment. A fragment crosses a boundary between independently released
+  packages, and on that boundary compile-time types protect nothing: each side
+  type-checks against its own installed copy, so only the value travelling at
+  runtime can say which shape it is. A revision this package does not speak fails
+  the build naming both. Required rather than inferred from absence, following
+  the pattern Kubernetes objects use for `apiVersion` — an optional discriminator
+  is unambiguous only while exactly one revision exists, which is precisely when
+  nobody checks it.
 
 ### Fixed
 

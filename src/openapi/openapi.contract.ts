@@ -28,6 +28,11 @@ import type { CustomDecorator } from '@nestjs/common'
 /**
  * Addresses one route handler, as `'<ControllerClassName>.<methodName>'`.
  *
+ * Controller handlers only. A route the application mounts some other way — raw
+ * middleware, a router the framework never scanned — produces no operation in
+ * the generated document and therefore no handler to address; a fragment naming
+ * one fails the build rather than being quietly dropped.
+ *
  * This is the key a library writes its fragments against, and it is a contract:
  * `@nestjs/swagger` hands the same pair to the operation-id factory this package
  * installs, so a fragment can be matched to the operation the scan produced
@@ -62,6 +67,24 @@ export type OpenApiFragmentObject = Readonly<Record<string, unknown>>
  * rather than in a union type.
  */
 export interface OpenApiFragment {
+  /**
+   * Which revision of this contract the fragment is written against. Always
+   * {@link BYMAX_OPENAPI_CONTRACT_VERSION}.
+   *
+   * A fragment is data crossing a boundary between independently released
+   * packages, and on that boundary compile-time types protect nothing: a
+   * library compiled against one revision of this contract runs inside an
+   * application that installed another, each having type-checked against its
+   * own copy. Only the value travelling at runtime can say which shape it is.
+   * So it self-describes, and a revision this package does not know fails the
+   * document build naming both — the same reason a Kubernetes object carries
+   * `apiVersion` rather than trusting that client and server agree.
+   *
+   * A plain integer rather than a semver range: this is the shape of the
+   * exchange, not the version of any package, and it changes only when the
+   * shape does.
+   */
+  readonly contractVersion: typeof BYMAX_OPENAPI_CONTRACT_VERSION
   /**
    * Operation objects to merge, keyed by the handler that produced the
    * operation. A key addressing a handler the document does not contain fails
@@ -99,6 +122,15 @@ export interface IOpenApiContributor {
    */
   contributeOpenApi(): OpenApiFragment
 }
+
+/**
+ * The revision of the fragment exchange this package speaks.
+ *
+ * Bumped only when the shape of {@link OpenApiFragment} changes in a way a
+ * previous revision's fragment would be misread under — not when a member is
+ * added, which older fragments simply do not carry.
+ */
+export const BYMAX_OPENAPI_CONTRACT_VERSION = 1
 
 /**
  * Reflect metadata key carrying the contributor marker.

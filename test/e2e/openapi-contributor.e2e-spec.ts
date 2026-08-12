@@ -17,7 +17,11 @@ import request from 'supertest'
 
 import { BymaxCoreModule } from '@bymax-one/nest-core'
 import type { BymaxCoreModuleOptions } from '@bymax-one/nest-core'
-import { applyBymaxOpenApi, BymaxOpenApiContributor } from '@bymax-one/nest-core/openapi'
+import {
+  applyBymaxOpenApi,
+  BymaxOpenApiContributor,
+  BYMAX_OPENAPI_CONTRACT_VERSION
+} from '@bymax-one/nest-core/openapi'
 import type { IOpenApiContributor, OpenApiFragment } from '@bymax-one/nest-core/openapi'
 
 /** The library's own controller, mounted by the application rather than by itself. */
@@ -55,6 +59,7 @@ class AuthOpenApi implements IOpenApiContributor {
   /** Produce the fragments this library's resolved options imply. */
   contributeOpenApi(): OpenApiFragment {
     return {
+      contractVersion: BYMAX_OPENAPI_CONTRACT_VERSION,
       components: {
         securitySchemes: {
           authCookie: { type: 'apiKey', in: 'cookie', name: this.accessCookie },

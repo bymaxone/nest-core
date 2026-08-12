@@ -19,7 +19,10 @@ import type { Reflector } from '@nestjs/core'
 
 import { findMarkedProviders } from '../discovery'
 import type { ProviderScanner } from '../discovery'
-import { BYMAX_OPENAPI_CONTRIBUTOR_METADATA } from './openapi.contract'
+import {
+  BYMAX_OPENAPI_CONTRACT_VERSION,
+  BYMAX_OPENAPI_CONTRIBUTOR_METADATA
+} from './openapi.contract'
 import type {
   IOpenApiContributor,
   OpenApiFragment,
@@ -119,6 +122,33 @@ function callContributor(contributor: IOpenApiContributor, label: string): OpenA
 }
 
 /**
+ * Reject a fragment written against a revision of the contract this package
+ * does not speak.
+ *
+ * The check exists because compile-time types cannot make it: a library and the
+ * application that installs it each type-check against their own copy of this
+ * package, so a shape mismatch between them is invisible until the value
+ * arrives. Failing loud names both revisions, which is the difference between
+ * "upgrade the library" and an afternoon reading a document that came out
+ * subtly wrong.
+ *
+ * @param fragment - What the contributor returned.
+ * @param label - How to name the contributor in an error.
+ * @throws Error When the fragment declares an unknown revision.
+ */
+function assertContractVersion(fragment: OpenApiFragment, label: string): void {
+  if (fragment.contractVersion === BYMAX_OPENAPI_CONTRACT_VERSION) {
+    return
+  }
+  throw new Error(
+    `[BymaxCoreModule] "${label}" contributed a fragment written against OpenAPI contract ` +
+      `version ${String(fragment.contractVersion)}, and this package speaks version ` +
+      `${String(BYMAX_OPENAPI_CONTRACT_VERSION)}. Upgrade whichever of the two is behind; the ` +
+      'shapes are not interchangeable.'
+  )
+}
+
+/**
  * Resolve one fragment's handler keys into the operation ids the document uses.
  *
  * A key addressing a handler the application does not have is a configuration
@@ -167,8 +197,9 @@ function resolveOperations(
  * @param reflector - Nest's metadata reader.
  * @param handlers - The handler-to-id map built during the scan.
  * @returns One entry per contributor, in a stable order.
- * @throws Error When a marked provider is not a contributor, when one throws, or
- *   when a fragment addresses a handler the application does not have.
+ * @throws Error When a marked provider is not a contributor, when one throws,
+ *   when a fragment declares a contract revision this package does not speak, or
+ *   when one addresses a handler the application does not have.
  */
 export function collectContributions(
   discovery: ProviderScanner,
@@ -186,6 +217,7 @@ export function collectContributions(
       )
     }
     const fragment = callContributor(instance, label)
+    assertContractVersion(fragment, label)
     return {
       label,
       operations: resolveOperations(fragment, label, handlers),

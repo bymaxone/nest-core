@@ -12,7 +12,10 @@
  */
 import { Reflector } from '@nestjs/core'
 
-import { BYMAX_OPENAPI_CONTRIBUTOR_METADATA } from './openapi.contract'
+import {
+  BYMAX_OPENAPI_CONTRACT_VERSION,
+  BYMAX_OPENAPI_CONTRIBUTOR_METADATA
+} from './openapi.contract'
 import type { IOpenApiContributor, OpenApiFragment } from './openapi.contract'
 import { collectContributions, createHandlerIdMap } from './openapi.contribution'
 import type { HandlerIdMap } from './openapi.contribution'
@@ -83,6 +86,7 @@ describe('collectContributions', () => {
    */
   it('resolves handler keys into operation ids', () => {
     const Contributor = contributorClass('AuthOpenApi', {
+      contractVersion: BYMAX_OPENAPI_CONTRACT_VERSION,
       operations: { 'AuthController.login': { security: [] } },
       components: { securitySchemes: { authCookie: { type: 'apiKey' } } }
     })
@@ -107,7 +111,9 @@ describe('collectContributions', () => {
    * say for this configuration must be able to say so without failing.
    */
   it('accepts a fragment with neither member', () => {
-    const Contributor = contributorClass('Quiet', {})
+    const Contributor = contributorClass('Quiet', {
+      contractVersion: BYMAX_OPENAPI_CONTRACT_VERSION
+    })
 
     const [contribution] = collectContributions(
       scannerOf([{ metatype: Contributor, instance: new Contributor() }]),
@@ -279,6 +285,7 @@ describe('collectContributions', () => {
    */
   it('throws when a fragment addresses an unknown handler', () => {
     const Contributor = contributorClass('AuthOpenApi', {
+      contractVersion: BYMAX_OPENAPI_CONTRACT_VERSION,
       operations: { 'AuthController.renamed': {}, 'AuthController.gone': {} }
     })
 
@@ -305,7 +312,10 @@ describe('collectContributions', () => {
    * colon would read as truncation rather than as emptiness.
    */
   it('names an application with no handlers explicitly', () => {
-    const Contributor = contributorClass('AuthOpenApi', { operations: { 'A.b': {} } })
+    const Contributor = contributorClass('AuthOpenApi', {
+      contractVersion: BYMAX_OPENAPI_CONTRACT_VERSION,
+      operations: { 'A.b': {} }
+    })
 
     expect(() =>
       collectContributions(
@@ -317,6 +327,68 @@ describe('collectContributions', () => {
   })
 
   /**
+   * A library can mark a class without importing anything at runtime.
+   *
+   * This is the contract's most consequential property and the reason it can
+   * live beside the merge engine rather than on a subpath of its own: a
+   * contributing library consumes the fragment shapes with `import type`, which
+   * compiles away, and writes the documented literal with its own metadata
+   * call. It ships zero bytes of this package. Pinned here because it is a
+   * promise made to other repositories, not an implementation detail — the
+   * literal is spelled out rather than imported, exactly as a library would.
+   */
+  it('discovers a class marked with the documented literal alone', () => {
+    class LibraryContributor {
+      contributeOpenApi(): OpenApiFragment {
+        return {
+          contractVersion: BYMAX_OPENAPI_CONTRACT_VERSION,
+          components: { securitySchemes: { libScheme: { type: 'apiKey' } } }
+        }
+      }
+    }
+    Reflect.defineMetadata('bymax-one:openapi-contributor', true, LibraryContributor)
+
+    const [contribution] = collectContributions(
+      scannerOf([{ metatype: LibraryContributor, instance: new LibraryContributor() }]),
+      reflector,
+      mapOf({})
+    )
+
+    expect(contribution?.label).toBe('LibraryContributor')
+    expect(contribution?.components).toEqual({ securitySchemes: { libScheme: { type: 'apiKey' } } })
+  })
+
+  /**
+   * A fragment from an unknown contract revision fails, naming both.
+   *
+   * Types cannot catch this: a library and the application installing it each
+   * type-check against their own copy of this package, so a shape mismatch is
+   * invisible until the value arrives at runtime. Naming both revisions turns
+   * an afternoon reading a subtly wrong document into one line of instruction.
+   */
+  it('throws when a fragment declares an unknown contract revision', () => {
+    const Ahead = {
+      Ahead: class {
+        contributeOpenApi(): OpenApiFragment {
+          return { contractVersion: 2 as unknown as 1 }
+        }
+      }
+    }.Ahead
+    Reflect.defineMetadata(BYMAX_OPENAPI_CONTRIBUTOR_METADATA, true, Ahead)
+
+    const build = () =>
+      collectContributions(
+        scannerOf([{ metatype: Ahead, instance: new Ahead() }]),
+        reflector,
+        mapOf({})
+      )
+
+    expect(build).toThrow(/"Ahead" contributed a fragment written against OpenAPI contract/)
+    expect(build).toThrow(/version 2, and this package speaks version 1/)
+    expect(build).toThrow(/the shapes are not interchangeable/i)
+  })
+
+  /**
    * Contributors run in a stable order.
    *
    * Two libraries contributing to the same operation must resolve the same way
@@ -325,8 +397,9 @@ describe('collectContributions', () => {
    * survives a green suite.
    */
   it('orders contributors by class name, not by container order', () => {
-    const Zulu = contributorClass('ZuluOpenApi', {})
-    const Alpha = contributorClass('AlphaOpenApi', {})
+    const version = BYMAX_OPENAPI_CONTRACT_VERSION
+    const Zulu = contributorClass('ZuluOpenApi', { contractVersion: version })
+    const Alpha = contributorClass('AlphaOpenApi', { contractVersion: version })
 
     const collected = collectContributions(
       scannerOf([
