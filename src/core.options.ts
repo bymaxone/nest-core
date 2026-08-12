@@ -126,6 +126,26 @@ export type OperationSecurityMap = Readonly<
 >
 
 /**
+ * Names the operation a route handler produced, in the generated document.
+ *
+ * Matches `@nestjs/swagger`'s own factory signature so a consumer's existing one
+ * can be handed over unchanged. This package installs a factory of its own to
+ * learn which handler produced which operation — a contract a library keys its
+ * contributed fragments against — and delegates the id string to this one when
+ * it is set, so nothing an application already generates is renamed.
+ *
+ * @param controllerKey - The controller class name.
+ * @param methodKey - The handler method name.
+ * @param version - The route's version, when the application versions routes.
+ * @returns The operation id to publish.
+ */
+export type OpenApiOperationIdFactory = (
+  controllerKey: string,
+  methodKey: string,
+  version?: string
+) => string
+
+/**
  * OpenAPI document configuration.
  *
  * The document and its UI are development-only. Enabling this in a production
@@ -190,6 +210,16 @@ export interface OpenApiOptions {
    *   }
    */
   operationSecurity?: OperationSecurityMap
+  /**
+   * Name the operations in the generated document. Default: the format
+   * `@nestjs/swagger` itself produces, `<ControllerKey>_<methodKey>`.
+   *
+   * Set it to control the ids a client generator will use. This package always
+   * installs a factory of its own so it can learn which handler produced which
+   * operation, and delegates to this one when it is set — so supplying it
+   * changes the published ids, and leaving it unset changes nothing.
+   */
+  operationIdFactory?: OpenApiOperationIdFactory
   /**
    * Contribute the schemas this package owns — the error envelope, the health
    * response, and the pagination shapes — to the document's components, and
@@ -332,6 +362,7 @@ export interface ResolvedOpenApiOptions {
   securitySchemes: Readonly<Record<string, OpenApiSecurityScheme>>
   security: readonly OpenApiSecurityRequirement[]
   operationSecurity: OperationSecurityMap
+  operationIdFactory?: OpenApiOperationIdFactory
   includeCoreSchemas: boolean
 }
 
@@ -521,6 +552,11 @@ function resolveOpenApi(raw?: OpenApiOptions): ResolvedOpenApiOptions {
     // otherwise reach into objects the consumer still holds a reference to.
     security: structuredClone(raw?.security ?? []),
     operationSecurity: structuredClone(raw?.operationSecurity ?? {}),
+    // Carried by reference, not cloned: it is a function the consumer owns, and
+    // `structuredClone` cannot copy one at all.
+    ...(raw?.operationIdFactory === undefined
+      ? {}
+      : { operationIdFactory: raw.operationIdFactory }),
     includeCoreSchemas: raw?.includeCoreSchemas ?? true
   }
 }

@@ -11,6 +11,54 @@ heading here.
 
 ## [Unreleased]
 
+### Added
+
+- **A library can describe its own routes in a consumer's document.** A provider
+  marked `@BymaxOpenApiContributor()` returns OpenAPI fragments keyed by handler
+  identity — `'AuthController.login'` — and they are merged onto the operations
+  those handlers produced. It exists because the two obvious alternatives do
+  not work: decorating a library's controllers with `@nestjs/swagger` would load
+  that peer in every application importing the library, and a consumer-side map
+  keyed by path cannot be written by a library mounted through
+  `RouterModule.register`, which does not know its own final paths.
+- **`openapi.operationIdFactory`**, plus the exported `OpenApiOperationIdFactory`
+  type. This package now always installs a factory so it can learn which handler
+  produced which operation, and **delegates the id string** — to this option when
+  set, to the format `@nestjs/swagger` itself produces otherwise. Choosing the id
+  instead would have renamed every operation in every published document and
+  broken any client generated from one; a test compares both documents to keep
+  that true if the peer's format ever changes.
+- **The contract types** `IOpenApiContributor`, `OpenApiFragment`,
+  `OpenApiFragmentObject` and `OpenApiHandlerKey`, exported from `./openapi` so a
+  sibling library can target them at its own compile time.
+- **`BYMAX_OPENAPI_CONTRACT_VERSION`**, and a required `contractVersion` on every
+  fragment. A fragment crosses a boundary between independently released
+  packages, and on that boundary compile-time types protect nothing: each side
+  type-checks against its own installed copy, so only the value travelling at
+  runtime can say which shape it is. A revision this package does not speak fails
+  the build naming both. Required rather than inferred from absence, following
+  the pattern Kubernetes objects use for `apiVersion` — an optional discriminator
+  is unambiguous only while exactly one revision exists, which is precisely when
+  nobody checks it.
+
+### Fixed
+
+- **`DiscoveryModule` is imported when only the document is enabled.** It was
+  imported on the synchronous registration path only when readiness discovery or
+  metrics could scan, so an application enabling nothing but OpenAPI had no
+  scanner — and a library's description of its own routes would have been
+  silently dropped.
+
+### Notes
+
+- Deriving fragments from validation decorators is deliberately **not** in this
+  package: it takes no dependency on any validation library. A library that
+  wants its schemas to track its own decorators generates them in its own build,
+  where that dependency already exists, and commits the result with a test
+  asserting generated matches committed — so drift fails in the repository that
+  caused it. An application's own DTOs need none of this; `@nestjs/swagger`'s CLI
+  plugin already derives them, which is the route a precompiled library lacks.
+
 ## [1.3.2] - 2026-08-11
 
 A consumer audit of the served document found that it described the library's

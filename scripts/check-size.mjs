@@ -33,7 +33,7 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 //   `.` (root)     measured 11.01 KiB -> budget 15 KiB  (1.36x, was 8.15 -> 11)
 //   `./pagination` measured 1.01 KiB -> budget  1.5 KiB (1.48x)
 //   `./health`     measured 0.17 KiB -> budget  0.5 KiB (floor)
-//   `./openapi`    measured 3.67 KiB -> budget  5.0 KiB (1.36x, recalibrated 2026-08-11)
+//   `./openapi`    measured 5.65 KiB -> budget  7.5 KiB (1.33x, recalibrated 2026-08-12)
 //
 // The `./openapi` subpath was recalibrated when document fidelity landed there:
 // the served document now drops the routes of disabled features, applies the
@@ -45,6 +45,13 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 // `normalizeCoreOptions()` at load time and the bundler cannot prove the rest
 // unused. Moving the constants to a leaf module (`route-defaults.ts`) removed
 // 0.64 KiB of code this subpath never runs. What remains is the feature.
+//
+// Recalibrated again on 2026-08-12 when the contributor lane landed: a library
+// can now describe its own routes, which brings the marker, the provider scan,
+// the handler-to-operation map and the fragment merge into this bundle. Checked
+// before moving the number rather than after: the resolver has not leaked back
+// in, and every added symbol belongs to the lane. +1.58 KiB for an extension
+// mechanism is the feature, not drift.
 // The health barrel is types plus one decorator, so its runtime bundle is a few
 // hundred bytes; its budget is a small absolute floor that trips the moment
 // anything substantial leaks into a subpath meant to stay near-empty, rather
@@ -53,7 +60,7 @@ const BUDGETS = [
   { name: '. (root)', path: 'dist/index.mjs', brotli: 15 * 1024 },
   { name: './pagination', path: 'dist/pagination/index.mjs', brotli: 1.5 * 1024 },
   { name: './health', path: 'dist/health/index.mjs', brotli: 0.5 * 1024 },
-  { name: './openapi', path: 'dist/openapi/index.mjs', brotli: 5 * 1024 },
+  { name: './openapi', path: 'dist/openapi/index.mjs', brotli: 7.5 * 1024 },
   { name: './metrics', path: 'dist/metrics/index.mjs', brotli: 0.5 * 1024 }
 ]
 

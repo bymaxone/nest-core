@@ -33,6 +33,8 @@ import type {
 // re-exports them: this is a separate bundle, and reaching into the resolver
 // for two strings inlines the whole of it here. See `route-defaults.ts`.
 import { DEFAULT_HEALTH_PATH, DEFAULT_METRICS_PATH } from '../route-defaults'
+import type { OpenApiFragmentObject } from './openapi.contract'
+import type { ResolvedContribution } from './openapi.contribution'
 import { CORE_PARAMETERS, CORE_SCHEMAS } from './openapi.schemas'
 import type { OpenApiObjectMap } from './openapi.schemas'
 
@@ -147,14 +149,17 @@ function operationsOf(item: unknown): readonly (readonly [string, unknown])[] {
  */
 function mergeResponses(
   existing: Readonly<Record<string, unknown>>,
-  additions: OpenApiObjectMap
+  additions: Readonly<Record<string, unknown>>
 ): Readonly<Record<string, unknown>> {
   // Accumulated in a `Map` rather than written onto an object under a
   // document-supplied key, which is the shape a prototype-pollution analyser
   // flags — and it would be right to: these keys come from a file this package
   // did not write. Converted once at the end.
   const merged = new Map(Object.entries(existing))
-  for (const [status, contributed] of Object.entries(additions)) {
+  for (const [status, value] of Object.entries(additions)) {
+    // Narrowed here rather than in the signature: the additions may come from a
+    // contributor, whose values this package does not model.
+    const contributed = asRecord(value)
     // An absent response narrows to an empty record, which has no content and
     // no description, so it takes the contributed entry whole through the same
     // path as a placeholder — no separate branch for "not there yet".
@@ -417,6 +422,58 @@ function coreResponses(
 }
 
 /**
+ * The fragments contributed for one operation, in contributor order.
+ *
+ * @param operationId - The id the scan assigned to this operation.
+ * @param contributions - Every contribution collected for this document.
+ * @returns The fragments addressing it, earliest contributor first.
+ */
+function fragmentsFor(
+  operationId: unknown,
+  contributions: readonly ResolvedContribution[]
+): readonly OpenApiFragmentObject[] {
+  // Read through `Object.entries` rather than by indexing with a value the
+  // document supplied: the read is safe, but a computed member access is the
+  // shape an analyser cannot tell apart from the bug it resembles. Comparing by
+  // equality also removes the need to guard the type first — an operation with
+  // no id matches no fragment, because no fragment is keyed to `undefined`.
+  return contributions.flatMap((contribution) =>
+    Object.entries(contribution.operations)
+      .filter(([id]) => id === operationId)
+      .map(([, fragment]) => fragment)
+  )
+}
+
+/**
+ * Merge a library's fragment into the operation it addresses.
+ *
+ * The precedence is the one this module already applies everywhere: the
+ * document wins. A library describes what a consumer did not, and a consumer
+ * who decorated their handler outranks the library that shipped it — so a
+ * member the operation already carries is never replaced. Responses go through
+ * the same shape-aware rule as this package's own, so a library can fill in the
+ * peer's placeholder without overwriting a real declaration.
+ *
+ * @param operation - The operation so far.
+ * @param fragment - What a contributor supplied for it.
+ * @returns The operation with the fragment merged beneath it.
+ */
+function mergeFragment(
+  operation: Readonly<Record<string, unknown>>,
+  fragment: OpenApiFragmentObject
+): Readonly<Record<string, unknown>> {
+  // The fragment goes underneath: spreading it first and the operation second
+  // is the whole precedence rule, expressed as one order rather than as a
+  // per-member conditional — and it keeps every write off a computed key.
+  const { responses, ...members } = fragment
+  const merged: Record<string, unknown> = { ...members, ...operation }
+  if (responses !== undefined) {
+    merged['responses'] = mergeResponses(asRecord(operation['responses']), asRecord(responses))
+  }
+  return merged
+}
+
+/**
  * Apply the security requirements and contributed responses to one operation.
  *
  * @param operation - The generated operation.
@@ -430,14 +487,31 @@ function augmentOperation(
   path: string,
   method: string,
   options: ResolvedCoreOptions,
-  routes: OwnRouteIndex
+  routes: OwnRouteIndex,
+  contributions: readonly ResolvedContribution[]
 ): Readonly<Record<string, unknown>> {
-  const result: Record<string, unknown> = { ...operation }
+  // Whether the *generated* operation declared its own requirement — read
+  // before any fragment lands, because a library filling the member in must not
+  // be mistaken for the consumer having decorated their handler.
+  const declaredByDocument = operation['security'] !== undefined
 
-  if (result['security'] === undefined) {
+  let result: Record<string, unknown> = { ...operation }
+  for (const fragment of fragmentsFor(result['operationId'], contributions)) {
+    result = { ...mergeFragment(result, fragment) }
+  }
+
+  // Three sources, in the order the lanes were agreed: the document itself
+  // outranks everyone, then the consumer's override, then the library that
+  // shipped the route, and this package's own policy only where nobody spoke.
+  // The override has to be applied *after* the fragments and still beat them —
+  // reading "already set" as "leave it alone" would let a dependency overrule
+  // the deployment, which inverts the whole precedence.
+  if (!declaredByDocument) {
     const override =
       options.openapi.operationSecurity[operationKey(method, path) as OpenApiOperationKey]
-    const security = override ?? ownRouteSecurity(path, method, options, routes)
+    const describedByLibrary = result['security'] !== undefined
+    const security =
+      override ?? (describedByLibrary ? undefined : ownRouteSecurity(path, method, options, routes))
     if (security !== undefined) {
       result['security'] = security
     }
@@ -587,13 +661,14 @@ function assertOverridesMatch(
 function augmentPaths(
   paths: Readonly<Record<string, unknown>>,
   options: ResolvedCoreOptions,
-  routes: OwnRouteIndex
+  routes: OwnRouteIndex,
+  contributions: readonly ResolvedContribution[]
 ): Readonly<Record<string, unknown>> {
   return Object.fromEntries(
     Object.entries(paths).map(([path, item]) => {
       const augmented = operationsOf(item).map(([method, operation]) => [
         method,
-        augmentOperation(asRecord(operation), path, method, options, routes)
+        augmentOperation(asRecord(operation), path, method, options, routes, contributions)
       ])
       // Spread after the original so the augmented operations replace theirs,
       // while every non-operation member of the path item survives untouched.
@@ -621,6 +696,8 @@ function augmentPaths(
  *   recognize its own routes without them — and must not guess them from the
  *   document, which would mistake a consumer's shared controller prefix for the
  *   application's.
+ * @param contributions - What the libraries in this application contributed,
+ *   already resolved to the operation ids the document uses.
  * @returns The augmented document.
  * @throws Error When `openapi.operationSecurity` addresses an operation the
  *   document does not contain, or when a security requirement names a scheme
@@ -629,15 +706,22 @@ function augmentPaths(
 export function augmentDocument<T extends OpenApiDocumentLike>(
   document: T,
   options: ResolvedCoreOptions,
-  pathPrefixes: readonly string[] = ['']
+  pathPrefixes: readonly string[] = [''],
+  contributions: readonly ResolvedContribution[] = []
 ): AugmentedDocument<T> {
   const { openapi } = options
   const components = asRecord(document.components)
-  const merged: Record<string, unknown> = { ...components }
+  // Accumulated in a `Map`, converted once at the end. Component member names
+  // reach this from contributors, and writing one onto an object is not merely
+  // the shape an analyser flags: `Object.assign` invokes the target's
+  // `__proto__` setter, so a member by that name would replace the prototype
+  // instead of becoming an own component — and inherited entries would then
+  // take part in the scheme validation below. A `Map` key cannot do that.
+  const merged = new Map(Object.entries(components))
 
   if (openapi.includeCoreSchemas) {
-    merged['schemas'] = mergeAbsent(asRecord(components['schemas']), CORE_SCHEMAS)
-    merged['parameters'] = mergeAbsent(asRecord(components['parameters']), CORE_PARAMETERS)
+    merged.set('schemas', mergeAbsent(asRecord(components['schemas']), CORE_SCHEMAS))
+    merged.set('parameters', mergeAbsent(asRecord(components['parameters']), CORE_PARAMETERS))
   }
 
   // Contributed only when the scrape endpoint is actually protected, so the
@@ -653,17 +737,32 @@ export function augmentDocument<T extends OpenApiDocumentLike>(
           }
         }
   assertScrapeSchemeIsOurs(openapi, components, options.metrics.authToken !== undefined)
-  // Everything the served document will define, including whatever the document
-  // already carried — that is what a requirement can legitimately reference, so
-  // it is what the requirements are checked against.
-  const schemes = mergeAbsent(asRecord(components['securitySchemes']), {
+
+  // The consumer's schemes and this package's own land *before* the libraries',
+  // because the precedence is document over consumer over library and
+  // `mergeAbsent` gives the existing side the win. Folding the libraries in
+  // first would have let a dependency's scheme outrank the deployment's — and
+  // let one claim the reserved scrape name behind the check just above.
+  const declaredSchemes = mergeAbsent(asRecord(components['securitySchemes']), {
     ...openapi.securitySchemes,
     ...scrapeScheme
   })
-  if (Object.keys(schemes).length > 0) {
-    merged['securitySchemes'] = schemes
+  if (Object.keys(declaredSchemes).length > 0) {
+    merged.set('securitySchemes', declaredSchemes)
   }
-  assertSchemesDeclared(openapi, schemes)
+
+  // Contributed components land beneath everything above: the document, this
+  // package's catalogue and the consumer's own configuration all keep winning.
+  for (const contribution of contributions) {
+    for (const [member, entries] of Object.entries(contribution.components)) {
+      merged.set(member, mergeAbsent(asRecord(merged.get(member)), entries))
+    }
+  }
+
+  // Validated against everything the served document will define, libraries
+  // included: rejecting a consumer for naming a scheme their own library
+  // supplies would fail on the arrangement this lane exists to enable.
+  assertSchemesDeclared(openapi, asRecord(merged.get('securitySchemes')))
 
   const routes = indexOwnRoutes(options, pathPrefixes)
   const served = withoutDisabledRoutes(asRecord(document.paths), options, routes)
@@ -673,11 +772,14 @@ export function augmentDocument<T extends OpenApiDocumentLike>(
   // without `paths` keeps not having one, and a consumer's own document-level
   // requirement is never replaced — both without the cast that writing through
   // an index signature would have needed.
-  const paths = document.paths === undefined ? {} : { paths: augmentPaths(served, options, routes) }
+  const paths =
+    document.paths === undefined
+      ? {}
+      : { paths: augmentPaths(served, options, routes, contributions) }
   const security =
     openapi.security.length > 0 && document.security === undefined
       ? { security: openapi.security }
       : {}
 
-  return { ...document, components: merged, ...paths, ...security }
+  return { ...document, components: Object.fromEntries(merged), ...paths, ...security }
 }

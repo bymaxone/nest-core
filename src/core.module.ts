@@ -244,10 +244,16 @@ export class BymaxCoreModule extends BymaxCoreModuleBase {
       }
     }
     // `DiscoveryModule` is imported only when a marker-based scan can actually
-    // run — readiness discovery, or metrics contribution — so a configuration
-    // that needs neither registers nothing extra.
+    // run — readiness discovery, metrics contribution, or OpenAPI contribution —
+    // so a configuration that needs none of them registers nothing extra.
+    // The document is the newest of the three and the easiest to forget: an
+    // application that enables nothing but OpenAPI still scans, because a
+    // library it imports may describe its own routes, and without the scanner
+    // that description would be silently dropped.
     const scansProviders =
-      (resolved.health.enabled && resolved.health.autoDiscover) || resolved.metrics.enabled
+      (resolved.health.enabled && resolved.health.autoDiscover) ||
+      resolved.metrics.enabled ||
+      resolved.openapi.enabled
     const imports = scansProviders ? [DiscoveryModule] : []
     return augmentModule(
       super.forRoot(options),

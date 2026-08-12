@@ -2,10 +2,11 @@
  * Integration tests for the `./openapi` public barrel.
  *
  * Layer: integration.
- * Goal: prove the subpath exposes exactly the bootstrap helper and nothing more
- * — the schema catalogue, the merge rules, and the peer loader stay private —
- * and that the helper reached through the barrel is the same contract the
- * feature's own suite exercises.
+ * Goal: prove the subpath exposes exactly the bootstrap helper and the
+ * contributor contract, and nothing more — the schema catalogue, the merge
+ * rules, the discovery scan and the peer loader stay private — and that the
+ * helper reached through the barrel is the same contract the feature's own
+ * suite exercises.
  * Mocks: none; a real Nest application is built by `@nestjs/testing`.
  */
 import type { INestApplication } from '@nestjs/common'
@@ -24,15 +25,28 @@ describe('openapi subpath barrel', () => {
   })
 
   /**
-   * The published surface is exactly one function.
+   * The published surface is exactly the helper and the contract.
    *
    * Everything else in this subpath is an implementation detail, and keeping it
-   * private is what lets the schema catalogue and the merge rules change
-   * without a major release.
+   * private is what lets the schema catalogue, the merge rules and the
+   * contributor scan change without a major release. Asserted as an exact set
+   * rather than a subset: an accidental re-export is a promise this package
+   * then owns forever.
    */
-  it('exports only the bootstrap helper', () => {
-    expect(Object.keys(barrel)).toEqual(['applyBymaxOpenApi'])
+  it('exports only the bootstrap helper and the contributor contract', () => {
+    expect(Object.keys(barrel).sort()).toEqual([
+      'BYMAX_OPENAPI_CONTRACT_VERSION',
+      'BYMAX_OPENAPI_CONTRIBUTOR_METADATA',
+      'BymaxOpenApiContributor',
+      'applyBymaxOpenApi'
+    ])
     expect(typeof applyBymaxOpenApi).toBe('function')
+    expect(typeof barrel.BymaxOpenApiContributor).toBe('function')
+    // Both literals are pinned on their exact value: a library writes them into
+    // its own source rather than importing them at runtime, so a change here is
+    // a change to a contract another repository already copied.
+    expect(barrel.BYMAX_OPENAPI_CONTRIBUTOR_METADATA).toBe('bymax-one:openapi-contributor')
+    expect(barrel.BYMAX_OPENAPI_CONTRACT_VERSION).toBe(1)
   })
 
   /**

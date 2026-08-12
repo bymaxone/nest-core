@@ -19,9 +19,22 @@ import type { INestApplication, LoggerService } from '@nestjs/common'
 import { Test } from '@nestjs/testing'
 import request from 'supertest'
 
+import { DiscoveryService } from '@nestjs/core'
+
 import { BymaxCoreModule } from '../core.module'
 import type { BymaxCoreModuleOptions } from '../core.options'
 import { applyBymaxOpenApi } from './openapi.bootstrap'
+
+/** Every operation id in a document, in document order. */
+function operationIdsOf(document: unknown): readonly string[] {
+  const paths = (document as { paths?: Record<string, Record<string, { operationId?: string }>> })
+    .paths
+  return Object.values(paths ?? {}).flatMap((item) =>
+    Object.values(item)
+      .map((operation) => operation.operationId)
+      .filter((id): id is string => typeof id === 'string')
+  )
+}
 
 /** The context every log line this helper writes must carry. */
 const LOG_CONTEXT = 'BymaxCoreModule'
@@ -299,6 +312,108 @@ describe('applyBymaxOpenApi', () => {
     >
 
     expect(paths).not.toHaveProperty('/api/v1/metrics')
+  })
+
+  /**
+   * An unavailable provider scan degrades to no contributions. Edge case.
+   *
+   * `DiscoveryModule` is imported only when a marker scan can run, and while
+   * enabling the document now imports it, a consumer can still reach this
+   * helper on an application that does not. Refusing to mount a document
+   * because an optional library description could not be collected would be a
+   * poor trade for a feature that is documentation.
+   */
+  it('mounts the document when the provider scan is unavailable', async () => {
+    process.env['NODE_ENV'] = 'test'
+    app = await bootApp({ openapi: { enabled: true } })
+    const realGet = app.get.bind(app)
+    jest.spyOn(app, 'get').mockImplementation((token: unknown, ...rest: unknown[]) => {
+      if (token === DiscoveryService) {
+        throw new Error('not provided')
+      }
+      return (realGet as (...args: unknown[]) => unknown)(token, ...rest)
+    })
+
+    await expect(applyBymaxOpenApi(app)).resolves.toEqual({ mounted: true, path: 'docs' })
+  })
+
+  /**
+   * The published operation ids are the peer's, not ours. Regression guard.
+   *
+   * This package installs an operation-id factory so it can learn which handler
+   * produced which operation, and installing one stops the peer applying its
+   * own default — so the default has to be reproduced here. Getting that wrong
+   * renames every operation in every document a consumer publishes, breaking
+   * any client generated from it. Asserted by building the same application's
+   * document both ways and comparing, so a change in the peer surfaces as a
+   * failure here rather than as a silent rename downstream.
+   */
+  it('publishes the same operation ids the peer would have', async () => {
+    process.env['NODE_ENV'] = 'test'
+    app = await bootApp({ openapi: { enabled: true } })
+    const swagger = await import('@nestjs/swagger')
+    const config = new swagger.DocumentBuilder().setTitle('t').setVersion('1').build()
+    const peerIds = operationIdsOf(swagger.SwaggerModule.createDocument(app, config))
+
+    await applyBymaxOpenApi(app)
+    await app.init()
+    const ourIds = operationIdsOf((await request(app.getHttpServer()).get('/docs-json')).body)
+
+    expect(ourIds).not.toEqual([])
+    expect(ourIds).toEqual(peerIds)
+  })
+
+  /**
+   * A versioned route keeps the version in its published id. Regression guard.
+   *
+   * The peer appends it, so reproducing its format has to append it too — an id
+   * dropping the version would collide between two versions of the same handler
+   * and silently merge them in a generated client. Compared against the peer
+   * rather than against an expected shape, because the shape held a surprise:
+   * the version arrives already carrying its prefix, so the id ends `_v2` and
+   * not `_2`. Asserting what the peer does beats asserting what it seemed to do.
+   */
+  it('keeps the version in the published operation id', async () => {
+    process.env['NODE_ENV'] = 'test'
+    app = await bootApp({ openapi: { enabled: true } })
+    app.enableVersioning({ type: VersioningType.URI, defaultVersion: '2' })
+    const swagger = await import('@nestjs/swagger')
+    const config = new swagger.DocumentBuilder().setTitle('t').setVersion('1').build()
+    const peerIds = operationIdsOf(swagger.SwaggerModule.createDocument(app, config))
+
+    await applyBymaxOpenApi(app)
+    await app.init()
+    const ourIds = operationIdsOf((await request(app.getHttpServer()).get('/docs-json')).body)
+
+    expect(ourIds).not.toEqual([])
+    expect(ourIds.every((id) => id.endsWith('_v2'))).toBe(true)
+    expect(ourIds).toEqual(peerIds)
+  })
+
+  /**
+   * A consumer's own factory is delegated to, not replaced.
+   *
+   * The recording wrapper exists to learn the mapping; choosing the id is still
+   * the consumer's to control, and a wrapper that ignored their factory would
+   * take that away while looking like it had not.
+   */
+  it('delegates the id string to a configured factory', async () => {
+    process.env['NODE_ENV'] = 'test'
+    app = await bootApp({
+      openapi: {
+        enabled: true,
+        operationIdFactory: (controllerKey, methodKey) => `${controllerKey}--${methodKey}`
+      }
+    })
+
+    await applyBymaxOpenApi(app)
+    await app.init()
+    const ids = operationIdsOf((await request(app.getHttpServer()).get('/docs-json')).body)
+
+    expect(ids).not.toEqual([])
+    for (const id of ids) {
+      expect(id).toContain('--')
+    }
   })
 
   /**
