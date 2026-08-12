@@ -5,7 +5,10 @@
  * from the resolved snapshot, never from the raw consumer input.
  * @layer Config
  */
+import { DEFAULT_HEALTH_PATH, DEFAULT_METRICS_PATH } from './route-defaults'
 import { isProductionRuntime } from './runtime.environment'
+
+export { DEFAULT_HEALTH_PATH, DEFAULT_METRICS_PATH } from './route-defaults'
 
 /** Error-envelope exception-filter configuration. */
 export interface EnvelopeOptions {
@@ -78,6 +81,51 @@ export interface OpenApiServerDescriptor {
 export type OpenApiSecurityScheme = Readonly<Record<string, unknown>>
 
 /**
+ * One security requirement: scheme name to the scopes it needs, empty for a
+ * scheme that takes none. An operation's requirements are alternatives — any
+ * one of them satisfies it — so an empty *array* of requirements means the
+ * operation needs no authentication at all, which is how the specification
+ * expresses a public route that overrides a document-level default.
+ */
+export type OpenApiSecurityRequirement = Readonly<Record<string, readonly string[]>>
+
+/** The HTTP methods an OpenAPI path item can carry an operation under. */
+export type OpenApiHttpMethod =
+  'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'HEAD' | 'OPTIONS' | 'TRACE'
+
+/**
+ * Addresses one operation in the generated document, as `"<METHOD> <path>"`.
+ *
+ * This format is a documented contract, not an implementation detail: a sibling
+ * library may ship a plain-data map of its own operations keyed this way, so a
+ * consumer spreads it into {@link OpenApiOptions.operationSecurity} instead of
+ * restating which of that library's routes are public. Import the type to get
+ * that map checked at the library's own compile time.
+ *
+ * The method is uppercase, one space separates the two parts, and the path is
+ * written **exactly as it appears in the generated document**: leading slash,
+ * OpenAPI template braces (`/users/{id}`), no trailing slash, and including any
+ * global prefix the application sets. That last part is the one that surprises:
+ * `@nestjs/swagger` includes `app.setGlobalPrefix('api')` in the documented
+ * paths, so the key is `'POST /api/auth/login'` in an application that sets one.
+ * A library shipping such a map should therefore expose a *function* taking the
+ * prefix rather than a frozen constant — the call site is the only place that
+ * knows it.
+ *
+ * @example 'GET /users/{id}'
+ * @example 'POST /api/auth/login'
+ */
+export type OpenApiOperationKey = `${OpenApiHttpMethod} /${string}`
+
+/**
+ * Per-operation security requirements, keyed by {@link OpenApiOperationKey}.
+ * An empty array marks the operation public, overriding any document default.
+ */
+export type OperationSecurityMap = Readonly<
+  Record<OpenApiOperationKey, readonly OpenApiSecurityRequirement[]>
+>
+
+/**
  * OpenAPI document configuration.
  *
  * The document and its UI are development-only. Enabling this in a production
@@ -106,9 +154,52 @@ export interface OpenApiOptions {
   /** Security schemes added to the document's components. Default: `{}`. */
   securitySchemes?: Readonly<Record<string, OpenApiSecurityScheme>>
   /**
+   * The requirement every operation carries unless it says otherwise, naming
+   * schemes declared in {@link OpenApiOptions.securitySchemes}. Default: `[]`,
+   * which documents nothing and leaves every operation as it was generated.
+   *
+   * Set this when most of the API is authenticated, and mark the exceptions
+   * public through {@link OpenApiOptions.operationSecurity}. An operation that
+   * already declares its own requirement is never overwritten.
+   *
+   * @example [{ cookieAuth: [] }]
+   */
+  security?: readonly OpenApiSecurityRequirement[]
+  /**
+   * Per-operation overrides of {@link OpenApiOptions.security}, keyed by
+   * {@link OpenApiOperationKey}. An empty array marks that operation public.
+   * Default: `{}`.
+   *
+   * A key matching no operation in the generated document is a configuration
+   * error and fails the document build, naming the keys that do exist. Silence
+   * would be worse: a route renamed out from under a stale key would quietly
+   * inherit the document default and be documented as authenticated when it is
+   * not, or the reverse.
+   *
+   * That check runs only when the document is built. With
+   * {@link OpenApiOptions.enabled} false, or in a production runtime where the
+   * feature is forced off, a stale key is not reported — refusing to boot a
+   * service over a documentation setting it never serves would be the wrong
+   * trade. The cost is that the error waits for an environment that has the
+   * document switched on.
+   *
+   * @example
+   *   {
+   *     'POST /auth/login': [],
+   *     'POST /auth/refresh': [{ refreshCookie: [] }]
+   *   }
+   */
+  operationSecurity?: OperationSecurityMap
+  /**
    * Contribute the schemas this package owns — the error envelope, the health
-   * response, and the pagination shapes — to the document's components.
-   * Default: `true`.
+   * response, and the pagination shapes — to the document's components, and
+   * reference them from the operations that return them: the error envelope as
+   * every operation's `default` response, and the health response on the health
+   * endpoints this package registers. Default: `true`.
+   *
+   * The two halves are one switch because they are one decision. Referencing a
+   * schema this package did not contribute would leave a dangling `$ref`, and a
+   * document that resolves nowhere is worse than one that says less.
    */
   includeCoreSchemas?: boolean
 }
@@ -239,6 +330,8 @@ export interface ResolvedOpenApiOptions {
   version: string
   servers: readonly OpenApiServerDescriptor[]
   securitySchemes: Readonly<Record<string, OpenApiSecurityScheme>>
+  security: readonly OpenApiSecurityRequirement[]
+  operationSecurity: OperationSecurityMap
   includeCoreSchemas: boolean
 }
 
@@ -257,22 +350,8 @@ export interface ResolvedCoreOptions {
   telemetry: ResolvedTelemetryOptions
 }
 
-/**
- * Default health route prefix. Exported so the health controller factory can
- * fall back to the same default the options resolver applies, without
- * duplicating the literal.
- */
-export const DEFAULT_HEALTH_PATH = 'health'
-
 /** Default per-indicator timeout in milliseconds. */
 const DEFAULT_INDICATOR_TIMEOUT_MS = 5000
-
-/**
- * Default metrics route. Exported so the async registration path can register
- * the metrics controller at the same default the options resolver applies,
- * without duplicating the literal.
- */
-export const DEFAULT_METRICS_PATH = 'metrics'
 
 /** Default route for the interactive OpenAPI UI. */
 const DEFAULT_OPENAPI_PATH = 'docs'
@@ -437,6 +516,11 @@ function resolveOpenApi(raw?: OpenApiOptions): ResolvedOpenApiOptions {
     // consumer-owned nested objects, and the deep-freeze below would otherwise
     // reach into them.
     securitySchemes: structuredClone(raw?.securitySchemes ?? {}),
+    // Cloned for the same reason as the schemes above: both are consumer-owned
+    // nested structures, and the deep-freeze applied to the snapshot would
+    // otherwise reach into objects the consumer still holds a reference to.
+    security: structuredClone(raw?.security ?? []),
+    operationSecurity: structuredClone(raw?.operationSecurity ?? {}),
     includeCoreSchemas: raw?.includeCoreSchemas ?? true
   }
 }

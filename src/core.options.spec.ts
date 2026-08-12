@@ -39,6 +39,8 @@ describe('normalizeCoreOptions', () => {
         version: '1.0.0',
         servers: [],
         securitySchemes: {},
+        security: [],
+        operationSecurity: {},
         includeCoreSchemas: true
       },
       telemetry: { enabled: false, exposeTraceId: false }
@@ -127,6 +129,8 @@ describe('normalizeCoreOptions', () => {
         version: '1.0.0',
         servers: [],
         securitySchemes: {},
+        security: [],
+        operationSecurity: {},
         includeCoreSchemas: true
       },
       telemetry: { enabled: true, exposeTraceId: true }
@@ -270,6 +274,8 @@ describe('normalizeCoreOptions, openapi block', () => {
         version: '2.4.0',
         servers: [{ url: 'https://api.example.com', description: 'production' }],
         securitySchemes: { bearer: { type: 'http', scheme: 'bearer' } },
+        security: [{ bearer: [] }],
+        operationSecurity: { 'POST /auth/login': [] },
         includeCoreSchemas: false
       }
     })
@@ -284,6 +290,8 @@ describe('normalizeCoreOptions, openapi block', () => {
       version: '2.4.0',
       servers: [{ url: 'https://api.example.com', description: 'production' }],
       securitySchemes: { bearer: { type: 'http', scheme: 'bearer' } },
+      security: [{ bearer: [] }],
+      operationSecurity: { 'POST /auth/login': [] },
       includeCoreSchemas: false
     })
   })

@@ -11,7 +11,7 @@
  * Mocks: none; a real Express Nest application driven with supertest, reached
  * only through the published specifiers.
  */
-import { Controller, Get, Module } from '@nestjs/common'
+import { Controller, Get, Module, VersioningType } from '@nestjs/common'
 import type { INestApplication } from '@nestjs/common'
 import { Test } from '@nestjs/testing'
 import request from 'supertest'
@@ -179,5 +179,228 @@ describe('OpenAPI document, production runtime', () => {
 
     expect(outcome).toEqual({ mounted: false, reason: 'production' })
     expect(ui.status).toBe(404)
+  })
+})
+
+describe('OpenAPI document, deployment fidelity', () => {
+  const originalNodeEnv = process.env['NODE_ENV']
+  let app: INestApplication | undefined
+
+  beforeEach(() => {
+    process.env['NODE_ENV'] = 'development'
+  })
+
+  afterEach(async () => {
+    await app?.close()
+    app = undefined
+    process.env['NODE_ENV'] = originalNodeEnv
+  })
+
+  /** Boot, mount the document, and return the served JSON. */
+  async function servedDocument(options: BymaxCoreModuleOptions): Promise<Record<string, unknown>> {
+    app = await bootApp(options)
+    await applyBymaxOpenApi(app)
+    await app.init()
+    const response = await request(app.getHttpServer()).get('/docs-json')
+    return response.body
+  }
+
+  /**
+   * A disabled feature is absent from the document.
+   *
+   * The runtime answers its route with a 404 envelope, so a document still
+   * listing it would describe something this deployment does not serve. Asserted
+   * against the real scan rather than a synthetic path map, because the point is
+   * that the filter recognizes the routes this package actually registers.
+   */
+  it('omits the route of a feature this deployment disabled', async () => {
+    const document = await servedDocument({
+      openapi: { enabled: true },
+      health: { enabled: true },
+      metrics: { enabled: false }
+    })
+
+    expect(document['paths']).not.toHaveProperty('/metrics')
+    expect(document['paths']).toHaveProperty('/health/live')
+    expect(document['paths']).toHaveProperty('/invoices')
+  })
+
+  /**
+   * Operations reference the schemas the document contributes.
+   *
+   * Before this, every schema shipped orphaned: the catalogue was present and no
+   * operation pointed at any of it, so a generated client had no error type and
+   * no health payload.
+   */
+  it('references the envelope and the health payload from the operations', async () => {
+    const document = await servedDocument({
+      openapi: { enabled: true },
+      health: { enabled: true }
+    })
+    const paths = document['paths'] as Record<string, Record<string, unknown>>
+
+    expect(paths['/invoices']?.['get']).toMatchObject({
+      responses: {
+        default: {
+          content: {
+            'application/json': { schema: { $ref: '#/components/schemas/BymaxErrorEnvelope' } }
+          }
+        }
+      }
+    })
+    expect(paths['/health/live']?.['get']).toMatchObject({
+      responses: {
+        200: {
+          content: {
+            'application/json': { schema: { $ref: '#/components/schemas/BymaxHealthResponse' } }
+          }
+        }
+      }
+    })
+  })
+
+  /**
+   * Security lands where it belongs: default on the document, exceptions marked.
+   *
+   * The health probes are marked public by this package without being asked,
+   * because an orchestrator polls them holding no credential — and an operation
+   * with *absent* security inherits the document default, which would make a
+   * generated client attach credentials to a liveness probe.
+   */
+  it('documents the default requirement and the public exceptions', async () => {
+    const document = await servedDocument({
+      openapi: {
+        enabled: true,
+        securitySchemes: { cookieAuth: { type: 'apiKey', in: 'cookie', name: 'access_token' } },
+        security: [{ cookieAuth: [] }],
+        operationSecurity: { 'GET /invoices': [] }
+      },
+      health: { enabled: true }
+    })
+    const paths = document['paths'] as Record<string, Record<string, unknown>>
+
+    expect(document['security']).toEqual([{ cookieAuth: [] }])
+    expect(paths['/invoices']?.['get']).toMatchObject({ security: [] })
+    expect(paths['/health/live']?.['get']).toMatchObject({ security: [] })
+  })
+
+  /**
+   * A protected scrape endpoint is documented as protected.
+   *
+   * This package knows the answer exactly, since it owns both the route and the
+   * option that protects it, so the document states it without the consumer
+   * restating what they already configured.
+   */
+  it('documents the scrape bearer when the endpoint is protected', async () => {
+    const document = await servedDocument({
+      openapi: { enabled: true },
+      metrics: { enabled: true, authToken: 'scrape-me' }
+    })
+    const paths = document['paths'] as Record<string, Record<string, unknown>>
+
+    expect(paths['/metrics']?.['get']).toMatchObject({ security: [{ BymaxMetricsAuth: [] }] })
+    expect(document['components']).toMatchObject({
+      securitySchemes: { BymaxMetricsAuth: { type: 'http', scheme: 'bearer' } }
+    })
+  })
+
+  /**
+   * The application's real global prefix is used, not one inferred.
+   *
+   * The peer documents paths including `setGlobalPrefix`, so recognizing this
+   * package's own routes depends on knowing it. Only the asynchronous
+   * registration path can show this: it mounts the controller whatever the
+   * options say, so a disabled feature leaves a route in the document that the
+   * filter must find — and it can only find `/api/v2/metrics` if the prefix
+   * came from the application rather than from guessing at the document.
+   */
+  it('recognizes its own routes under the application global prefix', async () => {
+    const moduleRef = await Test.createTestingModule({
+      imports: [
+        BymaxCoreModule.forRootAsync({
+          useFactory: () => ({ openapi: { enabled: true }, metrics: { enabled: false } })
+        }),
+        AppModule
+      ]
+    }).compile()
+    app = moduleRef.createNestApplication()
+    app.setGlobalPrefix('api/v2')
+    await applyBymaxOpenApi(app)
+    await app.init()
+
+    // The UI and the JSON mount at their literal routes: `SwaggerModule.setup`
+    // does not apply the global prefix to them, only the scan does to the paths
+    // it documents. That asymmetry is the whole reason the prefix has to be
+    // asked for rather than read off the route the document is served from.
+    const document = (await request(app.getHttpServer()).get('/docs-json')).body
+    const paths = document['paths'] as Record<string, unknown>
+
+    expect(paths).not.toHaveProperty('/api/v2/metrics')
+    expect(paths).toHaveProperty('/api/v2/invoices')
+  })
+
+  /**
+   * URI versioning shifts the documented paths, and the filter follows.
+   *
+   * `enableVersioning({ type: URI })` inserts a version segment *after* the
+   * global prefix, so this package's scrape endpoint is documented as
+   * `/api/v1/metrics`. Neither the prefix alone nor the document reveals that
+   * segment; it comes from the application's versioning options. Without
+   * reproducing the composition, a disabled feature stays advertised in every
+   * versioned application — the over-listing this whole module exists to remove.
+   */
+  it('recognizes its own routes under a global prefix and a URI version', async () => {
+    const moduleRef = await Test.createTestingModule({
+      imports: [
+        BymaxCoreModule.forRootAsync({
+          useFactory: () => ({
+            openapi: { enabled: true },
+            metrics: { enabled: false },
+            health: { enabled: true }
+          })
+        }),
+        AppModule
+      ]
+    }).compile()
+    app = moduleRef.createNestApplication()
+    app.setGlobalPrefix('api')
+    app.enableVersioning({ type: VersioningType.URI, defaultVersion: '1' })
+    await applyBymaxOpenApi(app)
+    await app.init()
+
+    const document = (await request(app.getHttpServer()).get('/docs-json')).body
+    const paths = document['paths'] as Record<string, Record<string, unknown>>
+
+    expect(paths).not.toHaveProperty('/api/v1/metrics')
+    expect(paths).toHaveProperty('/api/v1/invoices')
+    // The health probe keeps its route and gains what this package knows about
+    // it, which the same recognition drives.
+    expect(paths['/api/v1/health/live']?.['get']).toMatchObject({
+      responses: {
+        200: {
+          content: {
+            'application/json': { schema: { $ref: '#/components/schemas/BymaxHealthResponse' } }
+          }
+        }
+      }
+    })
+  })
+
+  /**
+   * A misaddressed override fails the boot, naming what exists.
+   *
+   * Silence would leave a route documented as authenticated when it is not, or
+   * the reverse. Failing is safe because the document is only ever built outside
+   * production, so this can only stop a developer.
+   */
+  it('refuses an override addressing an operation the document lacks', async () => {
+    app = await bootApp({
+      openapi: {
+        enabled: true,
+        operationSecurity: { 'POST /nope': [] }
+      }
+    })
+
+    await expect(applyBymaxOpenApi(app)).rejects.toThrow(/does not contain: POST \/nope/)
   })
 })

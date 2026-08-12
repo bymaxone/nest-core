@@ -33,7 +33,18 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 //   `.` (root)     measured 11.01 KiB -> budget 15 KiB  (1.36x, was 8.15 -> 11)
 //   `./pagination` measured 1.01 KiB -> budget  1.5 KiB (1.48x)
 //   `./health`     measured 0.17 KiB -> budget  0.5 KiB (floor)
-//   `./openapi`    measured 2.52 KiB -> budget  3.5 KiB (1.39x, added 2026-08-04)
+//   `./openapi`    measured 3.67 KiB -> budget  5.0 KiB (1.36x, recalibrated 2026-08-11)
+//
+// The `./openapi` subpath was recalibrated when document fidelity landed there:
+// the served document now drops the routes of disabled features, applies the
+// security requirements, and references the contributed schemas from the
+// operations that return them. The first measurement after that work was 4.40
+// KiB, and this gate is why it is 3.67: importing two route-default constants
+// from `core.options` had inlined that module's entire resolver — deep-freeze
+// and every `resolve*` — into this bundle, because it evaluates
+// `normalizeCoreOptions()` at load time and the bundler cannot prove the rest
+// unused. Moving the constants to a leaf module (`route-defaults.ts`) removed
+// 0.64 KiB of code this subpath never runs. What remains is the feature.
 // The health barrel is types plus one decorator, so its runtime bundle is a few
 // hundred bytes; its budget is a small absolute floor that trips the moment
 // anything substantial leaks into a subpath meant to stay near-empty, rather
@@ -42,7 +53,7 @@ const BUDGETS = [
   { name: '. (root)', path: 'dist/index.mjs', brotli: 15 * 1024 },
   { name: './pagination', path: 'dist/pagination/index.mjs', brotli: 1.5 * 1024 },
   { name: './health', path: 'dist/health/index.mjs', brotli: 0.5 * 1024 },
-  { name: './openapi', path: 'dist/openapi/index.mjs', brotli: 3.5 * 1024 },
+  { name: './openapi', path: 'dist/openapi/index.mjs', brotli: 5 * 1024 },
   { name: './metrics', path: 'dist/metrics/index.mjs', brotli: 0.5 * 1024 }
 ]
 

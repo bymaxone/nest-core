@@ -14,7 +14,7 @@
  * logger's context, so the context could not be asserted. `NODE_ENV` is set per
  * test and restored.
  */
-import { ConsoleLogger, Logger, Module } from '@nestjs/common'
+import { ConsoleLogger, Logger, Module, VERSION_NEUTRAL, VersioningType } from '@nestjs/common'
 import type { INestApplication, LoggerService } from '@nestjs/common'
 import { Test } from '@nestjs/testing'
 import request from 'supertest'
@@ -203,6 +203,146 @@ describe('applyBymaxOpenApi', () => {
     await expect(applyBymaxOpenApi(app)).rejects.toMatchObject({
       cause: expect.any(Error)
     })
+  })
+
+  /**
+   * Every URI-versioning shape maps to the segments the peer documents.
+   *
+   * Measured against the real scan before being encoded here: a plain default
+   * version documents `/v1/…`, a custom `prefix` replaces the `v`, `prefix:
+   * false` drops it, an array documents the route once per version, and
+   * `VERSION_NEUTRAL` — like every non-URI type — inserts nothing. Asserted
+   * through the served document rather than on a private helper, so the mapping
+   * is pinned to what a consumer actually gets.
+   */
+  it.each([
+    ['a default version', { type: VersioningType.URI, defaultVersion: '1' }, ['/v1/metrics']],
+    [
+      'a custom version prefix',
+      { type: VersioningType.URI, defaultVersion: '2', prefix: 'rev' },
+      ['/rev2/metrics']
+    ],
+    [
+      'no version prefix',
+      { type: VersioningType.URI, defaultVersion: '3', prefix: false },
+      ['/3/metrics']
+    ],
+    [
+      'several default versions',
+      { type: VersioningType.URI, defaultVersion: ['1', '2'] },
+      ['/v1/metrics', '/v2/metrics']
+    ],
+    [
+      'a neutral default version',
+      { type: VersioningType.URI, defaultVersion: VERSION_NEUTRAL },
+      ['/metrics']
+    ],
+    [
+      'header versioning',
+      { type: VersioningType.HEADER, header: 'X-Version', defaultVersion: '1' },
+      ['/metrics']
+    ],
+    // URI versioning with no default documents the routes unsegmented, which
+    // was measured rather than assumed — a segment invented here would leave
+    // the disabled route advertised.
+    ['URI versioning with no default', { type: VersioningType.URI }, ['/metrics']]
+  ])('removes the disabled scrape route under %s', async (_label, versioning, documented) => {
+    process.env['NODE_ENV'] = 'test'
+    const moduleRef = await Test.createTestingModule({
+      imports: [
+        BymaxCoreModule.forRootAsync({
+          useFactory: () => ({ openapi: { enabled: true }, metrics: { enabled: false } })
+        })
+      ]
+    }).compile()
+    app = moduleRef.createNestApplication()
+    app.enableVersioning(versioning as Parameters<typeof app.enableVersioning>[0])
+    await applyBymaxOpenApi(app)
+    await app.init()
+
+    const paths = (await request(app.getHttpServer()).get('/docs-json')).body['paths'] as Record<
+      string,
+      unknown
+    >
+
+    for (const route of documented) {
+      expect(paths).not.toHaveProperty(route)
+    }
+  })
+
+  /**
+   * The prefix and the version segment compose, in that order.
+   *
+   * Measured against the real scan: the version follows the global prefix, so
+   * the scrape endpoint is documented as `/api/v1/metrics`. Joining the two the
+   * wrong way — or not joining them at all — leaves the disabled route
+   * advertised, which is the failure this recognition exists to prevent.
+   */
+  it('removes the disabled scrape route under a prefix and a version together', async () => {
+    process.env['NODE_ENV'] = 'test'
+    const moduleRef = await Test.createTestingModule({
+      imports: [
+        BymaxCoreModule.forRootAsync({
+          useFactory: () => ({ openapi: { enabled: true }, metrics: { enabled: false } })
+        })
+      ]
+    }).compile()
+    app = moduleRef.createNestApplication()
+    app.setGlobalPrefix('api')
+    app.enableVersioning({ type: VersioningType.URI, defaultVersion: '1' })
+    await applyBymaxOpenApi(app)
+    await app.init()
+
+    const paths = (await request(app.getHttpServer()).get('/docs-json')).body['paths'] as Record<
+      string,
+      unknown
+    >
+
+    expect(paths).not.toHaveProperty('/api/v1/metrics')
+  })
+
+  /**
+   * An unreadable global prefix degrades to none. Edge case.
+   *
+   * `ApplicationConfig` is framework-internal rather than a documented
+   * contract, so a future Nest release could stop providing it under that
+   * token. Failing to mount the document over that would be a poor trade: an
+   * application with no prefix — the majority — is unaffected, and the rest
+   * merely stop having this package's own routes recognized. Simulated by
+   * making the lookup throw, which is what an unregistered provider does.
+   */
+  it('mounts the document when the global prefix cannot be read', async () => {
+    process.env['NODE_ENV'] = 'test'
+    // Registered asynchronously on purpose: that path mounts the metrics
+    // controller whatever the options say, so the route is in the document and
+    // the filter has something to find. On the synchronous path a disabled
+    // feature registers nothing, and "the route is absent" would be true no
+    // matter what prefix this package believed in.
+    const moduleRef = await Test.createTestingModule({
+      imports: [
+        BymaxCoreModule.forRootAsync({
+          useFactory: () => ({ openapi: { enabled: true }, metrics: { enabled: false } })
+        })
+      ]
+    }).compile()
+    app = moduleRef.createNestApplication()
+    const realGet = app.get.bind(app)
+    jest.spyOn(app, 'get').mockImplementation((token: unknown, ...rest: unknown[]) => {
+      if (typeof token === 'function' && token.name === 'ApplicationConfig') {
+        throw new Error('not provided')
+      }
+      return (realGet as (...args: unknown[]) => unknown)(token, ...rest)
+    })
+
+    const outcome = await applyBymaxOpenApi(app)
+    await app.init()
+    const document = (await request(app.getHttpServer()).get('/docs-json')).body
+
+    expect(outcome).toEqual({ mounted: true, path: 'docs' })
+    // Degraded to "no prefix", which is what an unreadable one must mean: this
+    // package's own routes are then recognized unprefixed, so a disabled
+    // feature at the default path still leaves the document.
+    expect(document['paths']).not.toHaveProperty('/metrics')
   })
 
   /**
