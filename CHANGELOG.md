@@ -59,9 +59,13 @@ no code change; the two new options are opt-in.
   guards each request, because route metadata is fixed before the async options
   resolve — while the document still advertised it. The filter reads the same
   resolved snapshot the guard reads, so the two cannot drift. `@nestjs/swagger`
-  documents paths including `setGlobalPrefix`, so the comparison needs the
-  prefix — and it is **read from the application** rather than inferred from the
-  document. Inference is the trap: an application whose routes all sit under one
+  documents paths as the application serves them — the global prefix, and under
+  `enableVersioning({ type: URI })` the version segment that follows it, so
+  `/api/v1/metrics` — and both are **read from the application** rather than
+  inferred from the document. Versioning matters as much as the prefix: without
+  it, every versioned application kept advertising the routes of a feature it
+  had switched off, and its health probes lost the payload schema and the public
+  marking this package contributes. Inference is the trap: an application whose routes all sit under one
   controller prefix would have that treated as the global one, and a consumer
   route ending in `/health/live` deleted as though this package owned it. What
   leaves is also the **operation**, not the path item — a method the consumer

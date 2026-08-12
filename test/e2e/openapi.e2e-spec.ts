@@ -11,7 +11,7 @@
  * Mocks: none; a real Express Nest application driven with supertest, reached
  * only through the published specifiers.
  */
-import { Controller, Get, Module } from '@nestjs/common'
+import { Controller, Get, Module, VersioningType } from '@nestjs/common'
 import type { INestApplication } from '@nestjs/common'
 import { Test } from '@nestjs/testing'
 import request from 'supertest'
@@ -337,6 +337,53 @@ describe('OpenAPI document, deployment fidelity', () => {
 
     expect(paths).not.toHaveProperty('/api/v2/metrics')
     expect(paths).toHaveProperty('/api/v2/invoices')
+  })
+
+  /**
+   * URI versioning shifts the documented paths, and the filter follows.
+   *
+   * `enableVersioning({ type: URI })` inserts a version segment *after* the
+   * global prefix, so this package's scrape endpoint is documented as
+   * `/api/v1/metrics`. Neither the prefix alone nor the document reveals that
+   * segment; it comes from the application's versioning options. Without
+   * reproducing the composition, a disabled feature stays advertised in every
+   * versioned application — the over-listing this whole module exists to remove.
+   */
+  it('recognizes its own routes under a global prefix and a URI version', async () => {
+    const moduleRef = await Test.createTestingModule({
+      imports: [
+        BymaxCoreModule.forRootAsync({
+          useFactory: () => ({
+            openapi: { enabled: true },
+            metrics: { enabled: false },
+            health: { enabled: true }
+          })
+        }),
+        AppModule
+      ]
+    }).compile()
+    app = moduleRef.createNestApplication()
+    app.setGlobalPrefix('api')
+    app.enableVersioning({ type: VersioningType.URI, defaultVersion: '1' })
+    await applyBymaxOpenApi(app)
+    await app.init()
+
+    const document = (await request(app.getHttpServer()).get('/docs-json')).body
+    const paths = document['paths'] as Record<string, Record<string, unknown>>
+
+    expect(paths).not.toHaveProperty('/api/v1/metrics')
+    expect(paths).toHaveProperty('/api/v1/invoices')
+    // The health probe keeps its route and gains what this package knows about
+    // it, which the same recognition drives.
+    expect(paths['/api/v1/health/live']?.['get']).toMatchObject({
+      responses: {
+        200: {
+          content: {
+            'application/json': { schema: { $ref: '#/components/schemas/BymaxHealthResponse' } }
+          }
+        }
+      }
+    })
   })
 
   /**

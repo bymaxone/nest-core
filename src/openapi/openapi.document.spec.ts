@@ -294,7 +294,7 @@ describe('augmentDocument — disabled features', () => {
     const result = augmentDocument(
       generated({ '/api/v2/health/live': { get: {} }, '/api/v2/metrics': { get: {} } }),
       options({}, { health: health({ enabled: false }), metrics: metrics({ enabled: true }) }),
-      'api/v2'
+      ['api/v2']
     )
 
     expect(result.paths).not.toHaveProperty('/api/v2/health/live')
@@ -404,7 +404,7 @@ describe('augmentDocument — disabled features', () => {
     const result = augmentDocument(
       generated({ '/api/v2/health/live': { get: {} }, '/api/v2/invoices': { get: {} } }),
       options({}, { health: health({ enabled: false }) }),
-      'api/v2'
+      ['api/v2']
     )
 
     expect(result.paths).toEqual({ '/api/v2/invoices': expect.anything() })
@@ -426,7 +426,7 @@ describe('augmentDocument — disabled features', () => {
         '/api/invoices': { get: {} }
       }),
       options({}, { health: health({ enabled: false }) }),
-      'api'
+      ['api']
     )
 
     expect(result.paths).not.toHaveProperty('/api/health/live')

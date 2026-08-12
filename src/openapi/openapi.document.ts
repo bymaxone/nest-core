@@ -262,13 +262,17 @@ interface OwnRouteIndex {
  * the square of the API's size for an answer that never changes.
  *
  * @param options - The resolved options.
- * @param prefix - The application's global prefix, as the application reports it.
+ * @param prefixes - Every path prefix the application can serve these routes
+ *   under: its global prefix combined with each URI version segment, or a
+ *   single empty string when it uses neither.
  * @returns The recognizer for this document.
  */
-function indexOwnRoutes(options: ResolvedCoreOptions, prefix: string): OwnRouteIndex {
-  const normalized = trimSlashes(prefix)
-  const health = healthRoutes(options).map((suffix) => routePath(normalized, suffix))
-  const metrics = metricsRoutes(options).map((suffix) => routePath(normalized, suffix))
+function indexOwnRoutes(options: ResolvedCoreOptions, prefixes: readonly string[]): OwnRouteIndex {
+  const normalized = prefixes.map(trimSlashes)
+  const expand = (suffixes: readonly string[]): readonly string[] =>
+    normalized.flatMap((prefix) => suffixes.map((suffix) => routePath(prefix, suffix)))
+  const health = expand(healthRoutes(options))
+  const metrics = expand(metricsRoutes(options))
   return {
     isHealth: (path) => health.includes(path),
     isMetrics: (path) => metrics.includes(path)
@@ -611,10 +615,12 @@ function augmentPaths(
  * @param options - The resolved core options, in full: the document describes a
  *   deployment, and which features that deployment serves is not an OpenAPI
  *   setting.
- * @param globalPrefix - The application's global prefix, as it reports it. The
- *   peer documents paths including it, so this package cannot recognize its own
- *   routes without it — and must not guess it from the document, which would
- *   mistake a consumer's shared controller prefix for the application's.
+ * @param pathPrefixes - Every prefix the application serves this package's own
+ *   routes under: its global prefix combined with each URI version segment. The
+ *   peer documents paths as the application serves them, so this package cannot
+ *   recognize its own routes without them — and must not guess them from the
+ *   document, which would mistake a consumer's shared controller prefix for the
+ *   application's.
  * @returns The augmented document.
  * @throws Error When `openapi.operationSecurity` addresses an operation the
  *   document does not contain, or when a security requirement names a scheme
@@ -623,7 +629,7 @@ function augmentPaths(
 export function augmentDocument<T extends OpenApiDocumentLike>(
   document: T,
   options: ResolvedCoreOptions,
-  globalPrefix = ''
+  pathPrefixes: readonly string[] = ['']
 ): AugmentedDocument<T> {
   const { openapi } = options
   const components = asRecord(document.components)
@@ -659,7 +665,7 @@ export function augmentDocument<T extends OpenApiDocumentLike>(
   }
   assertSchemesDeclared(openapi, schemes)
 
-  const routes = indexOwnRoutes(options, globalPrefix)
+  const routes = indexOwnRoutes(options, pathPrefixes)
   const served = withoutDisabledRoutes(asRecord(document.paths), options, routes)
   assertOverridesMatch(served, openapi)
 
