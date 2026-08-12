@@ -17,6 +17,10 @@ export type {
   TelemetryOptions,
   OpenApiOptions,
   OpenApiSecurityScheme,
+  OpenApiSecurityRequirement,
+  OpenApiHttpMethod,
+  OpenApiOperationKey,
+  OperationSecurityMap,
   OpenApiServerDescriptor,
   ResolvedCoreOptions
 } from './core.options'

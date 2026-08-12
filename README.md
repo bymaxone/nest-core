@@ -282,11 +282,93 @@ BymaxCoreModule.forRoot({
 | `version`            | `string`                  | `'1.0.0'`     | Document version, independent of the package version.                          |
 | `servers`            | `{ url, description? }[]` | `[]`          | Servers advertised by the document.                                            |
 | `securitySchemes`    | `Record<string, object>`  | `{}`          | Security schemes copied into the document's components.                        |
-| `includeCoreSchemas` | `boolean`                 | `true`        | Contributes this package's own schemas — envelope, health, pagination.         |
+| `security`           | `SecurityRequirement[]`   | `[]`          | The requirement every operation carries unless it says otherwise.              |
+| `operationSecurity`  | `OperationSecurityMap`    | `{}`          | Per-operation overrides. An empty array marks that operation public.           |
+| `includeCoreSchemas` | `boolean`                 | `true`        | Contributes this package's own schemas and references them from the responses. |
 
 Unlike `health` and `metrics`, this block behaves identically on `forRoot` and
 `forRootAsync`: the document is mounted from the bootstrap helper, after the
 options have resolved, so a custom `path` is honored on both registration paths.
+
+#### Documenting authentication
+
+Set the default on the document and mark the exceptions. `security` names
+schemes declared in `securitySchemes`; `operationSecurity` overrides it for one
+operation, and an **empty array is how the specification says "public"** — which
+matters more than it looks, because an operation with _absent_ security inherits
+the document default, so a generated client would attach credentials to your
+registration endpoint.
+
+```ts
+openapi: {
+  enabled: true,
+  securitySchemes: {
+    cookieAuth: { type: 'apiKey', in: 'cookie', name: 'access_token' },
+    refreshCookie: { type: 'apiKey', in: 'cookie', name: 'refresh_token' }
+  },
+  security: [{ cookieAuth: [] }],
+  operationSecurity: {
+    'POST /auth/login': [],
+    'POST /auth/register': [],
+    'POST /auth/refresh': [{ refreshCookie: [] }]
+  }
+}
+```
+
+An operation that already declares its own requirement — because you decorated
+the handler — is never overwritten, on either path.
+
+#### The operation key is a contract
+
+Keys are `"<METHOD> <path>"`, and the format is documented rather than
+incidental: a sibling library can ship a plain-data map of its own operations
+keyed this way, so you spread it in instead of restating which of its routes are
+public. Import `OperationSecurityMap` to have that map checked at the library's
+own compile time — it is a type-only export, so nothing couples at runtime.
+
+- The method is **uppercase**, separated by exactly one space.
+- The path is written **exactly as it appears in the generated document**:
+  leading slash, OpenAPI template braces (`/users/{id}`), no trailing slash, and
+  **including any global prefix**. `@nestjs/swagger` puts
+  `app.setGlobalPrefix('api')` into the documented paths, so the key becomes
+  `'POST /api/auth/login'` in an application that sets one.
+
+Because of that last point, a library shipping such a map should expose a
+**function taking the prefix**, not a frozen constant — the call site is the only
+place that knows it:
+
+```ts
+// in the library
+export function authOperationSecurity(prefix = ''): OperationSecurityMap { /* … */ }
+
+// in the application
+operationSecurity: { ...authOperationSecurity('api'), ...myOwnOverrides }
+```
+
+A requirement naming a scheme that is not declared **fails the document build**
+too, listing the names that missed and the ones the document defines. A
+requirement is a reference, and a reference to nothing yields a document whose
+security cannot be resolved: a client generator looks the name up, finds
+nothing, and either fails or emits an unauthenticated client.
+
+A key matching no operation **fails the document build**, listing both the keys
+that missed and the operations that exist. Silence would be worse: a route
+renamed out from under a stale key would quietly inherit the document default
+and be documented as authenticated when it is not, or the reverse. Failing is
+safe here in a way it rarely is — the document is only ever built outside
+production, so this can only stop a developer.
+
+That last sentence cuts both ways, and the consequence is worth stating rather
+than discovering. **These checks only run when the document is actually built.**
+With `openapi.enabled` false, or in a production runtime where the feature is
+forced off, nothing validates: a stale key, a renamed route, or a requirement
+naming a scheme you deleted all sit there quietly until someone turns the
+document on. That is deliberate — refusing to boot a production service over a
+documentation setting it never serves would be the wrong trade — but it means
+the errors surface on a developer's machine or in CI, **not** at the moment the
+configuration went wrong. If you gate the document behind an environment flag,
+make sure at least one environment that runs your tests has it on, or these
+checks never fire.
 
 ## 🔑 DI Tokens
 
@@ -627,6 +709,28 @@ conventions are part of the contract:
 - Keep labels bounded. Route templates, never raw paths; status codes, never
   messages. **Never** a tenant, user, or request id — one unbounded label is
   enough to make a scrape endpoint the most expensive route in a service.
+  `tenantId` deserves naming twice: every library in this family is
+  tenant-aware, so it is the first label anyone reaches for and it is unbounded
+  by construction.
+- **Publish the list.** A library that contributes metrics documents them in its
+  own README — name, type, labels. This package deliberately keeps no central
+  catalogue: a list of everyone else's metrics rots the moment a library ships a
+  new one. What it does require is that the list exists somewhere an operator
+  can find it.
+
+**Why these rules live here.** A Prometheus registry is a flat namespace, and
+`prom-client` rejects a duplicate metric name. If two libraries independently
+pick `bymax_operations_total`, the collision surfaces at the **consumer's** boot
+— in an application neither library's CI ever assembles, as a hard failure, in
+front of whoever wired the app. Neither library can test for it. A namespace
+rule is the only thing that prevents it, and it can only be arbitrated by the
+dependency they share, which is this package.
+
+The rules are documentation, not enforcement. This package could inspect the
+registry around each contributor and reject an unprefixed name, but that would
+need a per-contributor prefix on the contract, and it would wrongly reject the
+case that matters most — an **application's own** contributor, which has no
+business being pushed into a `bymax_` namespace.
 
 ## 📘 OpenAPI
 
@@ -683,6 +787,24 @@ Enabling it in production is not an error, it is a no-op with a warning naming
 the option that was ignored, so a single configuration can be shared across
 environments.
 
+### Testing the enabled path under Jest
+
+`applyBymaxOpenApi` loads `@nestjs/swagger` through a dynamic `import()` — that
+is what keeps the peer optional for everyone who never enables the document —
+and Jest's module registry cannot service a dynamic import without a flag:
+
+```jsonc
+// package.json
+"scripts": {
+  "test:e2e": "NODE_OPTIONS=--experimental-vm-modules jest --config jest.e2e.config.ts"
+}
+```
+
+Without it, only the **enabled** case fails, with `dynamic import callback
+invoked without --experimental-vm-modules`. The disabled and production cases
+never reach the loader and pass either way, which is what makes the omission
+confusing when you meet it.
+
 ### What the library contributes
 
 With `includeCoreSchemas` on, the document carries the contracts this package
@@ -703,6 +825,56 @@ that never enable the feature.
 
 A contributed entry never overwrites one the document already has: if you
 document your own `BymaxErrorEnvelope`, yours wins.
+
+Contributing the schemas is only half of it — the operations **reference** them,
+which is what a generated client actually reads:
+
+- every operation gains a `default` response pointing at `BymaxErrorEnvelope`,
+  because every error path in this package answers with that envelope. It is
+  attached as `default` rather than guessed per status code: this package knows
+  what an error looks like and does not know which statuses your handler emits;
+- the health endpoints gain an explicit `200` pointing at `BymaxHealthResponse`,
+  which this package _does_ know precisely, having registered them itself.
+
+`@nestjs/swagger` emits a placeholder response for every handler — a `200` with
+a description and no content — so "already documented" is judged on whether a
+response declares a **shape**: one carrying `content` is yours and is left
+alone, one without it gets filled in while keeping any description you wrote.
+
+Both halves are the same switch. Referencing a schema that was not contributed
+would leave a dangling `$ref`, and a document that resolves nowhere is worse
+than one that says less — so `includeCoreSchemas: false` opts out of both.
+
+### The document describes _this_ deployment
+
+A feature you turned off has its routes removed from the document. With
+`metrics: { enabled: false }` the runtime answers `GET /metrics` with a 404
+envelope — on `forRootAsync` the controller is mounted unconditionally and
+guards each request, because route metadata is fixed before the async options
+resolve — so a document still listing the route would describe something this
+deployment does not serve. The filter reads the same resolved snapshot the
+runtime guard reads, which is what keeps the two from drifting.
+
+Your own routes are safe from it. `@nestjs/swagger` documents paths including
+`app.setGlobalPrefix()`, so the match cannot be on equality — but a bare tail
+match would treat `/tenants/{id}/health/live` as this package's probe and delete
+it from your document. What separates the two is that a global prefix prefixes
+_everything_: a tail match counts only when whatever precedes it also precedes
+every other path in the document. `/api/v2` qualifies; `/tenants/{id}` does not,
+because it does not prefix `/invoices`.
+
+This package also documents the security of the three routes it owns, without
+being asked:
+
+| Route                               | Documented as                                           |
+| ----------------------------------- | ------------------------------------------------------- |
+| `GET /health/live`, `/health/ready` | Public (`security: []`), when a document default exists |
+| `GET /metrics`                      | Bearer-protected **iff** `metrics.authToken` is set     |
+
+The probes are polled by an orchestrator holding no credential, and the scrape
+endpoint is protected exactly when you configured a token — this package owns
+both the route and the option, so you should not have to restate either. Your
+own `operationSecurity` entry still wins.
 
 ## 🧵 Trace correlation
 
@@ -966,21 +1138,22 @@ in the sections above.
 
 ### `.` (root)
 
-| Export                                                                                                                                                                                                           | Kind      | Description                                                            |
-| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- | ---------------------------------------------------------------------- |
-| `BymaxCoreModule`                                                                                                                                                                                                | class     | The dynamic module: `forRoot` and `forRootAsync`.                      |
-| `BymaxCoreModuleOptions`, `EnvelopeOptions`, `TimingOptions`, `HealthOptions`, `MetricsOptions`, `TelemetryOptions`, `OpenApiOptions`, `OpenApiServerDescriptor`, `OpenApiSecurityScheme`, `ResolvedCoreOptions` | types     | The options surface and its resolved shape.                            |
-| `BYMAX_CORE_OPTIONS`, `BYMAX_CORRELATION_PROVIDER`, `BYMAX_TIMING_SINK`, `BYMAX_HEALTH_INDICATORS`, `BYMAX_METRICS_REGISTRY`                                                                                     | tokens    | The DI tokens; see the [token table](#-di-tokens).                     |
-| `ICorrelationIdProvider`                                                                                                                                                                                         | type      | The correlation-provider contract.                                     |
-| `ITraceContextProvider`, `TraceContext`                                                                                                                                                                          | types     | The trace-context contract and the identifiers it resolves.            |
-| `BymaxExceptionFilter`                                                                                                                                                                                           | class     | The envelope exception filter.                                         |
-| `FilterErrorContext`                                                                                                                                                                                             | type      | The neutral request context passed to the filter's observability seam. |
-| `buildErrorEnvelope`                                                                                                                                                                                             | function  | Pure builder assembling an `ErrorEnvelope`.                            |
-| `ErrorEnvelope`, `ErrorDetails`, `BuildErrorEnvelopeInput`                                                                                                                                                       | types     | The envelope contract and its builder input.                           |
-| `TimingInterceptor`                                                                                                                                                                                              | class     | The request-timing interceptor.                                        |
-| `ITimingSink`, `RequestTimingSample`                                                                                                                                                                             | types     | The timing-sink contract and its sample shape.                         |
-| `BYMAX_BAD_GATEWAY` … `BYMAX_VALIDATION_FAILED`                                                                                                                                                                  | constants | The full error-code catalog (see [Error envelope](#-error-envelope)).  |
-| `codeForStatus`                                                                                                                                                                                                  | function  | Derives a catalog code from an HTTP status.                            |
+| Export                                                                                                                                                                                                           | Kind      | Description                                                                        |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- | ---------------------------------------------------------------------------------- |
+| `BymaxCoreModule`                                                                                                                                                                                                | class     | The dynamic module: `forRoot` and `forRootAsync`.                                  |
+| `BymaxCoreModuleOptions`, `EnvelopeOptions`, `TimingOptions`, `HealthOptions`, `MetricsOptions`, `TelemetryOptions`, `OpenApiOptions`, `OpenApiServerDescriptor`, `OpenApiSecurityScheme`, `ResolvedCoreOptions` | types     | The options surface and its resolved shape.                                        |
+| `OpenApiSecurityRequirement`, `OpenApiHttpMethod`, `OpenApiOperationKey`, `OperationSecurityMap`                                                                                                                 | types     | The operation-key contract a sibling library targets to ship its own security map. |
+| `BYMAX_CORE_OPTIONS`, `BYMAX_CORRELATION_PROVIDER`, `BYMAX_TIMING_SINK`, `BYMAX_HEALTH_INDICATORS`, `BYMAX_METRICS_REGISTRY`                                                                                     | tokens    | The DI tokens; see the [token table](#-di-tokens).                                 |
+| `ICorrelationIdProvider`                                                                                                                                                                                         | type      | The correlation-provider contract.                                                 |
+| `ITraceContextProvider`, `TraceContext`                                                                                                                                                                          | types     | The trace-context contract and the identifiers it resolves.                        |
+| `BymaxExceptionFilter`                                                                                                                                                                                           | class     | The envelope exception filter.                                                     |
+| `FilterErrorContext`                                                                                                                                                                                             | type      | The neutral request context passed to the filter's observability seam.             |
+| `buildErrorEnvelope`                                                                                                                                                                                             | function  | Pure builder assembling an `ErrorEnvelope`.                                        |
+| `ErrorEnvelope`, `ErrorDetails`, `BuildErrorEnvelopeInput`                                                                                                                                                       | types     | The envelope contract and its builder input.                                       |
+| `TimingInterceptor`                                                                                                                                                                                              | class     | The request-timing interceptor.                                                    |
+| `ITimingSink`, `RequestTimingSample`                                                                                                                                                                             | types     | The timing-sink contract and its sample shape.                                     |
+| `BYMAX_BAD_GATEWAY` … `BYMAX_VALIDATION_FAILED`                                                                                                                                                                  | constants | The full error-code catalog (see [Error envelope](#-error-envelope)).              |
+| `codeForStatus`                                                                                                                                                                                                  | function  | Derives a catalog code from an HTTP status.                                        |
 
 ### `./pagination`
 

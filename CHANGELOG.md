@@ -11,6 +11,91 @@ heading here.
 
 ## [Unreleased]
 
+## [1.3.2] - 2026-08-11
+
+A consumer audit of the served document found that it described the library's
+promises rather than the deployment: routes of features that were switched off
+were still listed, the contributed schemas were never referenced by any
+operation, and nothing said which operations needed authentication. Everything
+below is additive — no option changes meaning, no existing document loses an
+entry it had.
+
+**Apply to a derived backend:** bump the dependency. The document improves with
+no code change; the two new options are opt-in.
+
+### Added
+
+- **`openapi.security` and `openapi.operationSecurity`.** A document-level
+  default requirement, plus per-operation overrides keyed `"<METHOD> <path>"`.
+  An empty array marks an operation public, which is the specification's own way
+  of overriding the default — and it matters for generated clients, since an
+  operation with _absent_ security inherits the document default and a client
+  would attach credentials to a public registration endpoint.
+- **The operation key is a documented contract**, with `OpenApiOperationKey` and
+  `OperationSecurityMap` exported as types so a sibling library can ship a
+  plain-data map of its own operations and have it checked at its own compile
+  time, with no runtime coupling. The path is written exactly as documented,
+  **including any global prefix** — `@nestjs/swagger` puts `setGlobalPrefix` into
+  the documented paths, so a library shipping such a map should expose a function
+  taking the prefix rather than a frozen constant.
+- **A key addressing no operation fails the document build**, listing both the
+  keys that missed and the operations that exist. A stale key would otherwise
+  leave a route silently documented as authenticated when it is not, or the
+  reverse. Failing is safe here: the document is only ever built outside
+  production.
+- **A requirement naming an undeclared security scheme fails the same way.** A
+  requirement is a reference, and a reference to nothing produces a document
+  whose security cannot be resolved — a client generator looks the name up in
+  `components.securitySchemes`, finds nothing, and either fails or emits an
+  unauthenticated client. Configuring the requirement and forgetting the scheme
+  is one edit apart. A scheme the document itself declares counts as declared,
+  and marking an operation public names no scheme, so it needs none.
+
+### Fixed
+
+- **A disabled feature's routes are no longer documented.** With
+  `metrics: { enabled: false }` the runtime answers `GET /metrics` with a 404
+  envelope — on `forRootAsync` the controller is mounted unconditionally and
+  guards each request, because route metadata is fixed before the async options
+  resolve — while the document still advertised it. The filter reads the same
+  resolved snapshot the guard reads, so the two cannot drift. Matching cannot be
+  on equality, because `@nestjs/swagger` documents paths including
+  `setGlobalPrefix`; it is not a bare tail match either, which would treat a
+  consumer's `/tenants/{id}/health/live` as this package's probe and delete it
+  from their document. A global prefix prefixes _everything_, so a tail match
+  counts only when what precedes it also precedes every other documented path.
+- **The contributed schemas are referenced by the operations that return them.**
+  They shipped orphaned: `components.schemas` carried the envelope, the health
+  response and the pagination shapes while no operation pointed at any of them,
+  so a generated client had no error type at all. Every operation now carries a
+  `default` response referencing `BymaxErrorEnvelope`, and the health endpoints
+  an explicit `200` referencing `BymaxHealthResponse`. Gated by
+  `includeCoreSchemas`, because referencing a schema that was not contributed
+  would leave a dangling `$ref`.
+- **A response is judged by whether it declares a shape.** `@nestjs/swagger`
+  emits a placeholder `200` with a description and no content for every handler,
+  so a plain "existing always wins" rule would never have written a contributed
+  schema. A response carrying `content` is a real declaration and is untouched;
+  one without it is filled in, keeping any description already written.
+- **The library documents the security of its own three routes.** The health
+  probes are marked public — an orchestrator polls them holding no credential —
+  and the scrape endpoint carries a bearer requirement, with its scheme, exactly
+  when `metrics.authToken` is set. The library owns both the routes and the
+  option, so no consumer should have to restate either.
+
+### Documentation
+
+- The metrics naming rules are framed as an adoption guideline for sibling
+  libraries, with the reason the rules live here: a Prometheus registry is a flat
+  namespace, so two libraries picking the same metric name collide at the
+  _consumer's_ boot, in an application neither library's CI ever assembles. A
+  contributing library is asked to publish its own metric list; this package
+  deliberately keeps no central catalogue.
+- `applyBymaxOpenApi` documents that testing its enabled path under Jest needs
+  `NODE_OPTIONS=--experimental-vm-modules`, because the optional peer is reached
+  through a dynamic `import()`. Only the enabled case fails without it, which is
+  what makes the omission confusing.
+
 ## [1.3.1] - 2026-08-11
 
 A patch fixing a defect that existed only in the published artifact: `applyBymaxOpenApi` threw on
@@ -394,9 +479,10 @@ have regressed from. They are kept because the reasoning is worth having.
 [1.0.1]: https://github.com/bymaxone/nest-core/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/bymaxone/nest-core/releases/tag/v1.0.0
 [1.1.1]: https://github.com/bymaxone/nest-core/compare/v1.1.0...v1.1.1
+[1.3.2]: https://github.com/bymaxone/nest-core/compare/v1.3.1...v1.3.2
 [1.3.1]: https://github.com/bymaxone/nest-core/compare/v1.3.0...v1.3.1
 [1.3.0]: https://github.com/bymaxone/nest-core/compare/v1.2.2...v1.3.0
 [1.2.2]: https://github.com/bymaxone/nest-core/compare/v1.2.1...v1.2.2
 [1.2.1]: https://github.com/bymaxone/nest-core/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/bymaxone/nest-core/compare/v1.1.1...v1.2.0
-[Unreleased]: https://github.com/bymaxone/nest-core/compare/v1.3.1...HEAD
+[Unreleased]: https://github.com/bymaxone/nest-core/compare/v1.3.2...HEAD

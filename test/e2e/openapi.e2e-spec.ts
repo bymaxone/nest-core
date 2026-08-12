@@ -181,3 +181,144 @@ describe('OpenAPI document, production runtime', () => {
     expect(ui.status).toBe(404)
   })
 })
+
+describe('OpenAPI document, deployment fidelity', () => {
+  const originalNodeEnv = process.env['NODE_ENV']
+  let app: INestApplication | undefined
+
+  beforeEach(() => {
+    process.env['NODE_ENV'] = 'development'
+  })
+
+  afterEach(async () => {
+    await app?.close()
+    app = undefined
+    process.env['NODE_ENV'] = originalNodeEnv
+  })
+
+  /** Boot, mount the document, and return the served JSON. */
+  async function servedDocument(options: BymaxCoreModuleOptions): Promise<Record<string, unknown>> {
+    app = await bootApp(options)
+    await applyBymaxOpenApi(app)
+    await app.init()
+    const response = await request(app.getHttpServer()).get('/docs-json')
+    return response.body
+  }
+
+  /**
+   * A disabled feature is absent from the document.
+   *
+   * The runtime answers its route with a 404 envelope, so a document still
+   * listing it would describe something this deployment does not serve. Asserted
+   * against the real scan rather than a synthetic path map, because the point is
+   * that the filter recognizes the routes this package actually registers.
+   */
+  it('omits the route of a feature this deployment disabled', async () => {
+    const document = await servedDocument({
+      openapi: { enabled: true },
+      health: { enabled: true },
+      metrics: { enabled: false }
+    })
+
+    expect(document['paths']).not.toHaveProperty('/metrics')
+    expect(document['paths']).toHaveProperty('/health/live')
+    expect(document['paths']).toHaveProperty('/invoices')
+  })
+
+  /**
+   * Operations reference the schemas the document contributes.
+   *
+   * Before this, every schema shipped orphaned: the catalogue was present and no
+   * operation pointed at any of it, so a generated client had no error type and
+   * no health payload.
+   */
+  it('references the envelope and the health payload from the operations', async () => {
+    const document = await servedDocument({
+      openapi: { enabled: true },
+      health: { enabled: true }
+    })
+    const paths = document['paths'] as Record<string, Record<string, unknown>>
+
+    expect(paths['/invoices']?.['get']).toMatchObject({
+      responses: {
+        default: {
+          content: {
+            'application/json': { schema: { $ref: '#/components/schemas/BymaxErrorEnvelope' } }
+          }
+        }
+      }
+    })
+    expect(paths['/health/live']?.['get']).toMatchObject({
+      responses: {
+        200: {
+          content: {
+            'application/json': { schema: { $ref: '#/components/schemas/BymaxHealthResponse' } }
+          }
+        }
+      }
+    })
+  })
+
+  /**
+   * Security lands where it belongs: default on the document, exceptions marked.
+   *
+   * The health probes are marked public by this package without being asked,
+   * because an orchestrator polls them holding no credential — and an operation
+   * with *absent* security inherits the document default, which would make a
+   * generated client attach credentials to a liveness probe.
+   */
+  it('documents the default requirement and the public exceptions', async () => {
+    const document = await servedDocument({
+      openapi: {
+        enabled: true,
+        securitySchemes: { cookieAuth: { type: 'apiKey', in: 'cookie', name: 'access_token' } },
+        security: [{ cookieAuth: [] }],
+        operationSecurity: { 'GET /invoices': [] }
+      },
+      health: { enabled: true }
+    })
+    const paths = document['paths'] as Record<string, Record<string, unknown>>
+
+    expect(document['security']).toEqual([{ cookieAuth: [] }])
+    expect(paths['/invoices']?.['get']).toMatchObject({ security: [] })
+    expect(paths['/health/live']?.['get']).toMatchObject({ security: [] })
+  })
+
+  /**
+   * A protected scrape endpoint is documented as protected.
+   *
+   * This package knows the answer exactly, since it owns both the route and the
+   * option that protects it, so the document states it without the consumer
+   * restating what they already configured.
+   */
+  it('documents the scrape bearer when the endpoint is protected', async () => {
+    const document = await servedDocument({
+      openapi: { enabled: true },
+      metrics: { enabled: true, authToken: 'scrape-me' }
+    })
+    const paths = document['paths'] as Record<string, Record<string, unknown>>
+
+    expect(paths['/metrics']?.['get']).toMatchObject({ security: [{ BymaxMetricsAuth: [] }] })
+    expect(document['components']).toMatchObject({
+      securitySchemes: { BymaxMetricsAuth: { type: 'http', scheme: 'bearer' } }
+    })
+  })
+
+  /**
+   * A misaddressed override fails the boot, naming what exists.
+   *
+   * Silence would leave a route documented as authenticated when it is not, or
+   * the reverse. Failing is safe because the document is only ever built outside
+   * production, so this can only stop a developer.
+   */
+  it('refuses an override addressing an operation the document lacks', async () => {
+    app = await bootApp({
+      openapi: {
+        enabled: true,
+        operationSecurity: { 'POST /nope': [] }
+      }
+    })
+
+    await expect(applyBymaxOpenApi(app)).rejects.toThrow(/does not contain: POST \/nope/)
+  })
+})

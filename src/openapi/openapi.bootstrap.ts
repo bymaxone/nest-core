@@ -98,10 +98,20 @@ function buildConfig(
  * It is safe to call unconditionally: with the feature disabled, or in
  * production, it mounts nothing, loads no optional peer, and returns why.
  *
+ * Testing this under Jest needs one flag. `@nestjs/swagger` is loaded through a
+ * dynamic `import()`, which is what keeps the peer optional for everyone who
+ * never enables the document — and Jest's module registry cannot service a
+ * dynamic import without `NODE_OPTIONS=--experimental-vm-modules`. Without it,
+ * only the *enabled* path fails, with `dynamic import callback invoked without
+ * --experimental-vm-modules`; the disabled and production paths never reach the
+ * loader and pass either way, which is what makes the omission confusing.
+ *
  * @param app - The created Nest application, not yet listening.
  * @returns What happened: mounted, or skipped with a reason.
- * @throws Error When `BymaxCoreModule` is not registered, or when the feature is
- *   enabled and the optional peer `@nestjs/swagger` is not installed.
+ * @throws Error When `BymaxCoreModule` is not registered, when the feature is
+ *   enabled and the optional peer `@nestjs/swagger` is not installed, or when
+ *   `openapi.operationSecurity` addresses an operation the generated document
+ *   does not contain.
  * @example
  *   const app = await NestFactory.create(AppModule)
  *   await applyBymaxOpenApi(app)
@@ -109,7 +119,8 @@ function buildConfig(
  */
 export async function applyBymaxOpenApi(app: INestApplication): Promise<OpenApiMountOutcome> {
   const logger = new Logger('BymaxCoreModule')
-  const options = resolveCoreOptions(app).openapi
+  const resolved = resolveCoreOptions(app)
+  const options = resolved.openapi
 
   if (isProductionRuntime()) {
     // Warn only when the operator actually asked for the document: an
@@ -129,7 +140,7 @@ export async function applyBymaxOpenApi(app: INestApplication): Promise<OpenApiM
 
   const swagger = await loadSwagger()
   const config = buildConfig(new swagger.DocumentBuilder(), options)
-  const document = augmentDocument(swagger.SwaggerModule.createDocument(app, config), options)
+  const document = augmentDocument(swagger.SwaggerModule.createDocument(app, config), resolved)
   swagger.SwaggerModule.setup(options.path, app, document, {
     jsonDocumentUrl: options.jsonPath
   })
