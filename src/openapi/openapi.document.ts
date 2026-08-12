@@ -225,7 +225,13 @@ function createRouteMatcher(
     // prefix, and every documented path begins with a slash, so the test below
     // is vacuously true exactly when it should be.
     const prefix = documentedPath.slice(0, documentedPath.length - suffix.length - 1)
-    return documented.every((other) => other.startsWith(`${prefix}/`))
+    // The prefix itself counts as being under the prefix. An application with a
+    // global prefix and a controller at its root documents `/api` beside
+    // `/api/health/live`, and `'/api'.startsWith('/api/')` is false — without
+    // this clause that one root operation would reject the match and leave a
+    // disabled feature advertised, which is the whole defect being fixed. The
+    // empty-prefix case cannot reach it: no documented path is the empty string.
+    return documented.every((other) => other.startsWith(`${prefix}/`) || other === prefix)
   }
 }
 
@@ -505,7 +511,7 @@ function assertOverridesMatch(
     `[BymaxCoreModule] openapi.operationSecurity addresses ${unmatched.length} operation(s) that ` +
       `the document does not contain: ${unmatched.join(', ')}. Keys are "<METHOD> <path>" with the ` +
       'path exactly as documented, including any global prefix. The document contains: ' +
-      `${documented.join(', ')}.`
+      `${documented.length === 0 ? '(none)' : documented.join(', ')}.`
   )
 }
 

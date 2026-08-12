@@ -387,6 +387,31 @@ describe('augmentDocument — disabled features', () => {
   })
 
   /**
+   * An operation at the prefix root does not defeat the match. Regression guard.
+   *
+   * An application with a global prefix and a controller at its root documents
+   * `/api` itself beside `/api/health/live`, and `'/api'.startsWith('/api/')` is
+   * false. A prefix test written only as "starts with the prefix and a slash"
+   * therefore rejects the match on that one path and leaves a disabled feature
+   * advertised — the very over-listing this filter exists to remove, in a
+   * configuration that is not exotic.
+   */
+  it('removes its own route when a path sits at the prefix root', () => {
+    const result = augmentDocument(
+      generated({
+        '/api': { get: {} },
+        '/api/health/live': { get: {} },
+        '/api/invoices': { get: {} }
+      }),
+      options({}, { health: health({ enabled: false }) })
+    )
+
+    expect(result.paths).not.toHaveProperty('/api/health/live')
+    expect(result.paths).toHaveProperty('/api')
+    expect(result.paths).toHaveProperty('/api/invoices')
+  })
+
+  /**
    * A disabled feature at a custom path drops the default route too.
    *
    * The route set holds both candidates, and only the one actually documented
@@ -664,6 +689,19 @@ describe('augmentDocument — security', () => {
       )
 
     expect(build).not.toThrow()
+  })
+
+  /**
+   * An empty document says so, rather than trailing off.
+   *
+   * Both checks in this module report what exists; when nothing does, they must
+   * say that in the same words, or the reader is left wondering whether the
+   * message was truncated.
+   */
+  it('names the empty document explicitly', () => {
+    expect(() =>
+      augmentDocument(generated({}), options({ operationSecurity: { 'GET /x': [] } }))
+    ).toThrow(/The document contains: \(none\)\./)
   })
 
   /**

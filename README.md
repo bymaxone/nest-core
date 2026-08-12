@@ -358,6 +358,14 @@ and be documented as authenticated when it is not, or the reverse. Failing is
 safe here in a way it rarely is — the document is only ever built outside
 production, so this can only stop a developer.
 
+One consequence for conditionally-registered routes: the map is static wiring
+while a route may not be. If an operation belongs to a feature you register per
+environment — your own conditional module, or a library feature toggled off
+somewhere — a key naming it fails the boot in whichever docs-enabled environment
+lacks that route. That is the intended loud behavior, so build the map the same
+way you build the modules: assemble it per feature and spread the fragments in,
+rather than writing one flat literal that outlives the routes it names.
+
 That last sentence cuts both ways, and the consequence is worth stating rather
 than discovering. **These checks only run when the document is actually built.**
 With `openapi.enabled` false, or in a production runtime where the feature is
