@@ -18,6 +18,7 @@
  */
 import { Logger } from '@nestjs/common'
 import type { INestApplication } from '@nestjs/common'
+import { ApplicationConfig } from '@nestjs/core'
 import type * as Swagger from '@nestjs/swagger'
 
 import type { ResolvedCoreOptions, ResolvedOpenApiOptions } from '../core.options'
@@ -62,6 +63,34 @@ function resolveCoreOptions(app: INestApplication): ResolvedCoreOptions {
     return app.get<ResolvedCoreOptions>(BYMAX_CORE_OPTIONS)
   } catch (cause) {
     throw new Error(OPTIONS_UNRESOLVED_MESSAGE, { cause })
+  }
+}
+
+/**
+ * Read the application's global prefix, or an empty string when it has none.
+ *
+ * The peer writes documented paths *including* the prefix, so this package
+ * cannot recognize the routes it registered itself without knowing it. Asking
+ * the application beats inferring it from the document: an application whose
+ * routes all sit under one controller prefix would have that inferred as the
+ * global one, and a consumer route that happened to look like this package's
+ * would be treated as ours.
+ *
+ * Resolved defensively. `ApplicationConfig` is framework-internal rather than a
+ * documented contract, so a future Nest release could stop providing it under
+ * that token — and failing to mount a document over that would be a poor trade.
+ * An unresolvable prefix degrades to none, which is correct for the majority of
+ * applications and merely leaves this package's own routes unrecognized for the
+ * rest.
+ *
+ * @param app - The initialized Nest application.
+ * @returns The global prefix, without surrounding slashes, or an empty string.
+ */
+function readGlobalPrefix(app: INestApplication): string {
+  try {
+    return app.get(ApplicationConfig).getGlobalPrefix()
+  } catch {
+    return ''
   }
 }
 
@@ -140,7 +169,11 @@ export async function applyBymaxOpenApi(app: INestApplication): Promise<OpenApiM
 
   const swagger = await loadSwagger()
   const config = buildConfig(new swagger.DocumentBuilder(), options)
-  const document = augmentDocument(swagger.SwaggerModule.createDocument(app, config), resolved)
+  const document = augmentDocument(
+    swagger.SwaggerModule.createDocument(app, config),
+    resolved,
+    readGlobalPrefix(app)
+  )
   swagger.SwaggerModule.setup(options.path, app, document, {
     jsonDocumentUrl: options.jsonPath
   })

@@ -58,12 +58,32 @@ no code change; the two new options are opt-in.
   envelope — on `forRootAsync` the controller is mounted unconditionally and
   guards each request, because route metadata is fixed before the async options
   resolve — while the document still advertised it. The filter reads the same
-  resolved snapshot the guard reads, so the two cannot drift. Matching cannot be
-  on equality, because `@nestjs/swagger` documents paths including
-  `setGlobalPrefix`; it is not a bare tail match either, which would treat a
-  consumer's `/tenants/{id}/health/live` as this package's probe and delete it
-  from their document. A global prefix prefixes _everything_, so a tail match
-  counts only when what precedes it also precedes every other documented path.
+  resolved snapshot the guard reads, so the two cannot drift. `@nestjs/swagger`
+  documents paths including `setGlobalPrefix`, so the comparison needs the
+  prefix — and it is **read from the application** rather than inferred from the
+  document. Inference is the trap: an application whose routes all sit under one
+  controller prefix would have that treated as the global one, and a consumer
+  route ending in `/health/live` deleted as though this package owned it. What
+  leaves is also the **operation**, not the path item — a method the consumer
+  mounted on the same path survives, and the path disappears only once nothing
+  is left under it.
+- **The automatic security policy is stated for `GET` alone.** These controllers
+  expose no other method, so a consumer's `POST` on the same path is theirs and
+  no longer inherits a requirement written for ours.
+- **The envelope response follows the envelope feature.** With
+  `envelope.enabled` off, errors are shaped by Nest or by the consumer's own
+  handler, so documenting this package's envelope described a body the
+  deployment never sends. The health response is a separate feature and is
+  unaffected.
+- **A response written as a bare `$ref` is a declaration.** It carries no
+  `content`, so the placeholder rule would have overwritten it — discarding the
+  reference and leaving `$ref` beside sibling keys, which is not a valid
+  response object.
+- **`BymaxMetricsAuth` is reserved while a scrape token is configured.** The
+  name was silently overwritten or silently lost depending on where the other
+  definition came from, and the losing case left the scrape operation pointing
+  at a scheme that is not the bearer token the runtime checks. It now fails the
+  document build with the collision named.
 - **The contributed schemas are referenced by the operations that return them.**
   They shipped orphaned: `components.schemas` carried the envelope, the health
   response and the pagination shapes while no operation pointed at any of them,

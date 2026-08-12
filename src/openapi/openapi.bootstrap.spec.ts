@@ -206,6 +206,50 @@ describe('applyBymaxOpenApi', () => {
   })
 
   /**
+   * An unreadable global prefix degrades to none. Edge case.
+   *
+   * `ApplicationConfig` is framework-internal rather than a documented
+   * contract, so a future Nest release could stop providing it under that
+   * token. Failing to mount the document over that would be a poor trade: an
+   * application with no prefix — the majority — is unaffected, and the rest
+   * merely stop having this package's own routes recognized. Simulated by
+   * making the lookup throw, which is what an unregistered provider does.
+   */
+  it('mounts the document when the global prefix cannot be read', async () => {
+    process.env['NODE_ENV'] = 'test'
+    // Registered asynchronously on purpose: that path mounts the metrics
+    // controller whatever the options say, so the route is in the document and
+    // the filter has something to find. On the synchronous path a disabled
+    // feature registers nothing, and "the route is absent" would be true no
+    // matter what prefix this package believed in.
+    const moduleRef = await Test.createTestingModule({
+      imports: [
+        BymaxCoreModule.forRootAsync({
+          useFactory: () => ({ openapi: { enabled: true }, metrics: { enabled: false } })
+        })
+      ]
+    }).compile()
+    app = moduleRef.createNestApplication()
+    const realGet = app.get.bind(app)
+    jest.spyOn(app, 'get').mockImplementation((token: unknown, ...rest: unknown[]) => {
+      if (typeof token === 'function' && token.name === 'ApplicationConfig') {
+        throw new Error('not provided')
+      }
+      return (realGet as (...args: unknown[]) => unknown)(token, ...rest)
+    })
+
+    const outcome = await applyBymaxOpenApi(app)
+    await app.init()
+    const document = (await request(app.getHttpServer()).get('/docs-json')).body
+
+    expect(outcome).toEqual({ mounted: true, path: 'docs' })
+    // Degraded to "no prefix", which is what an unreadable one must mean: this
+    // package's own routes are then recognized unprefixed, so a disabled
+    // feature at the default path still leaves the document.
+    expect(document['paths']).not.toHaveProperty('/metrics')
+  })
+
+  /**
    * The consumer's metadata and the package's schemas reach the served JSON.
    *
    * Title, version and servers are configuration, not decoration: they must

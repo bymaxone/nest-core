@@ -136,7 +136,8 @@ function operationsOf(item: unknown): readonly (readonly [string, unknown])[] {
  * `content` — so an operation is never actually missing its success status and
  * a contributed schema would never be written. A response with no `content`
  * describes no shape, so filling that in is additive rather than destructive;
- * one that does carry content is a real declaration and is left untouched. A
+ * one that does carry content — or is a bare `$ref`, which references a shape
+ * declared elsewhere — is a real declaration and is left untouched. A
  * non-empty description the document already had survives either way, since
  * that is the part a consumer can have authored.
  *
@@ -158,7 +159,11 @@ function mergeResponses(
     // no description, so it takes the contributed entry whole through the same
     // path as a placeholder — no separate branch for "not there yet".
     const current = asRecord(merged.get(status))
-    if (current['content'] === undefined) {
+    // `$ref` counts as declaring a shape even though it carries no `content`: a
+    // response can legally be nothing but a reference, and filling one in would
+    // both discard the reference and leave a `$ref` beside sibling keys, which
+    // is not a valid response object.
+    if (current['content'] === undefined && current['$ref'] === undefined) {
       const described =
         current['description'] === undefined || current['description'] === ''
           ? contributed['description']
@@ -188,55 +193,28 @@ function trimSlashes(segment: string): string {
 }
 
 /**
- * Build the test for "is this documented path a route this package registered".
+ * The path `@nestjs/swagger` documents for a route this package registered.
  *
- * Equality is not enough, because `@nestjs/swagger` documents paths *including*
- * the application's global prefix: an application calling
- * `setGlobalPrefix('api')` documents this package's health probe as
- * `/api/health/live`, and a package that only recognized `/health/live` would
- * stop recognizing its own routes the moment a consumer set a prefix.
+ * The peer writes paths *including* the application's global prefix, so an
+ * application calling `setGlobalPrefix('api/v2')` documents this package's
+ * health probe as `/api/v2/health/live`. The prefix is read from the running
+ * application and handed to this module as data, which is what lets the
+ * comparison be exact.
  *
- * A bare tail match is too much. `/tenants/{id}/health/live` is a consumer's own
- * route, and treating it as this package's would delete it from their document
- * when the health feature is off — losing their content to fix ours, silently,
- * which is worse than the over-listing this whole module exists to correct.
+ * Inferring the prefix from the document instead — "the segment shared by every
+ * path" — is the tempting shortcut and it is wrong: an application whose routes
+ * all sit under `/tenants/{id}` would have that inferred as its prefix, and a
+ * consumer's own `/tenants/{id}/health/live` would be deleted from their
+ * document as though this package owned it. Guessing loses consumer content to
+ * fix ours. Asking does not.
  *
- * What separates the two is that a global prefix prefixes **everything**. So a
- * tail match is accepted only when whatever precedes the suffix also precedes
- * every other path in the document: `/api/v2` qualifies, `/tenants/{id}` does
- * not, because it does not prefix `/invoices`. The one case this cannot resolve
- * is a document whose *only* path is the consumer's look-alike route, where
- * their prefix is vacuously shared; a single-route application whose sole route
- * ends in `/health/live` and which disables health is a shape worth naming here
- * rather than defending against.
- *
- * @param paths - The document's path map, before anything is removed.
- * @returns A predicate over a documented path and a registered route suffix.
+ * @param prefix - The application's global prefix, without surrounding slashes.
+ * @param suffix - The route this package registered, without leading slash.
+ * @returns The path the document is expected to carry.
  */
-function createRouteMatcher(
-  paths: Readonly<Record<string, unknown>>
-): (documentedPath: string, suffix: string) => boolean {
-  const documented = Object.keys(paths)
-  return (documentedPath: string, suffix: string): boolean => {
-    if (!documentedPath.endsWith(`/${suffix}`)) {
-      return false
-    }
-    // The unprefixed case needs no branch of its own: it leaves an empty
-    // prefix, and every documented path begins with a slash, so the test below
-    // is vacuously true exactly when it should be.
-    const prefix = documentedPath.slice(0, documentedPath.length - suffix.length - 1)
-    // The prefix itself counts as being under the prefix. An application with a
-    // global prefix and a controller at its root documents `/api` beside
-    // `/api/health/live`, and `'/api'.startsWith('/api/')` is false — without
-    // this clause that one root operation would reject the match and leave a
-    // disabled feature advertised, which is the whole defect being fixed. The
-    // empty-prefix case cannot reach it: no documented path is the empty string.
-    return documented.every((other) => other.startsWith(`${prefix}/`) || other === prefix)
-  }
+function routePath(prefix: string, suffix: string): string {
+  return prefix === '' ? `/${suffix}` : `/${prefix}/${suffix}`
 }
-
-/** Decides whether a documented path is one of this package's own routes. */
-type RouteMatcher = ReturnType<typeof createRouteMatcher>
 
 /**
  * The health routes this package may have registered.
@@ -283,20 +261,17 @@ interface OwnRouteIndex {
  * rebuilding them inside a loop over every operation is work proportional to
  * the square of the API's size for an answer that never changes.
  *
- * @param paths - The document's path map, before anything is removed.
  * @param options - The resolved options.
+ * @param prefix - The application's global prefix, as the application reports it.
  * @returns The recognizer for this document.
  */
-function indexOwnRoutes(
-  paths: Readonly<Record<string, unknown>>,
-  options: ResolvedCoreOptions
-): OwnRouteIndex {
-  const matches: RouteMatcher = createRouteMatcher(paths)
-  const health = healthRoutes(options)
-  const metrics = metricsRoutes(options)
+function indexOwnRoutes(options: ResolvedCoreOptions, prefix: string): OwnRouteIndex {
+  const normalized = trimSlashes(prefix)
+  const health = healthRoutes(options).map((suffix) => routePath(normalized, suffix))
+  const metrics = metricsRoutes(options).map((suffix) => routePath(normalized, suffix))
   return {
-    isHealth: (path) => health.some((suffix) => matches(path, suffix)),
-    isMetrics: (path) => metrics.some((suffix) => matches(path, suffix))
+    isHealth: (path) => health.includes(path),
+    isMetrics: (path) => metrics.includes(path)
   }
 }
 
@@ -310,8 +285,16 @@ function indexOwnRoutes(
  * not serve. The decision is read from the same resolved snapshot the guard
  * reads, which is what keeps the two from drifting.
  *
+ * What leaves is the **operation**, not the path item. The controllers this
+ * package registers own the `GET` alone, so an application that mounted another
+ * method on the same path keeps it — and keeps whatever else the item carries,
+ * such as a shared `parameters` list. The path itself is dropped only once
+ * nothing is left to document under it, since an item with no operations
+ * describes nothing.
+ *
  * @param paths - The document's path map.
  * @param options - The resolved options.
+ * @param routes - The recognizer for this package's own routes.
  * @returns The path map without the disabled features' routes.
  */
 function withoutDisabledRoutes(
@@ -323,7 +306,17 @@ function withoutDisabledRoutes(
     (!options.health.enabled && routes.isHealth(path)) ||
     (!options.metrics.enabled && routes.isMetrics(path))
 
-  return Object.fromEntries(Object.entries(paths).filter(([path]) => !disabled(path)))
+  const kept = Object.entries(paths).map(([path, item]) => {
+    if (!disabled(path)) {
+      return [path, item] as const
+    }
+    const remaining = Object.fromEntries(
+      Object.entries(asRecord(item)).filter(([key]) => key !== 'get')
+    )
+    return [path, operationsOf(remaining).length === 0 ? undefined : remaining] as const
+  })
+
+  return Object.fromEntries(kept.filter(([, item]) => item !== undefined))
 }
 
 /**
@@ -340,14 +333,23 @@ function withoutDisabledRoutes(
  * That is worth documenting whether or not a default exists.
  *
  * @param path - The documented path.
+ * @param method - The operation's lowercase method key.
  * @param options - The resolved options.
+ * @param routes - The recognizer for this package's own routes.
  * @returns The requirement to write, or `undefined` to leave the operation be.
  */
 function ownRouteSecurity(
   path: string,
+  method: string,
   options: ResolvedCoreOptions,
   routes: OwnRouteIndex
 ): readonly OpenApiSecurityRequirement[] | undefined {
+  // The controllers this package registers expose GET and nothing else, so a
+  // consumer who adds another method under the same path owns that operation
+  // and must not inherit a policy stated for ours.
+  if (method !== 'get') {
+    return undefined
+  }
   if (options.metrics.authToken !== undefined && routes.isMetrics(path)) {
     return [{ [METRICS_SCHEME_NAME]: [] }]
   }
@@ -381,9 +383,18 @@ function operationKey(method: string, path: string): string {
  * @param options - The resolved options.
  * @returns The responses to merge, keyed by status.
  */
-function coreResponses(path: string, routes: OwnRouteIndex): OpenApiObjectMap {
-  const responses: Record<string, Readonly<Record<string, unknown>>> = {
-    default: {
+function coreResponses(
+  path: string,
+  options: ResolvedCoreOptions,
+  routes: OwnRouteIndex
+): OpenApiObjectMap {
+  const responses: Record<string, Readonly<Record<string, unknown>>> = {}
+  // Only while the filter that produces the envelope is actually installed.
+  // With it off, errors are shaped by Nest or by the consumer's own handler,
+  // and documenting this package's envelope would describe a body the
+  // deployment never sends.
+  if (options.envelope.enabled) {
+    responses['default'] = {
       description: 'Error envelope returned by every failing request.',
       content: {
         'application/json': { schema: { $ref: `#/components/schemas/${ERROR_ENVELOPE_SCHEMA}` } }
@@ -422,14 +433,17 @@ function augmentOperation(
   if (result['security'] === undefined) {
     const override =
       options.openapi.operationSecurity[operationKey(method, path) as OpenApiOperationKey]
-    const security = override ?? ownRouteSecurity(path, options, routes)
+    const security = override ?? ownRouteSecurity(path, method, options, routes)
     if (security !== undefined) {
       result['security'] = security
     }
   }
 
   if (options.openapi.includeCoreSchemas) {
-    result['responses'] = mergeResponses(asRecord(result['responses']), coreResponses(path, routes))
+    result['responses'] = mergeResponses(
+      asRecord(result['responses']),
+      coreResponses(path, options, routes)
+    )
   }
 
   return result
@@ -467,6 +481,50 @@ function assertSchemesDeclared(
     `[BymaxCoreModule] openapi security names ${missing.length} scheme(s) that the document does ` +
       `not define: ${missing.join(', ')}. Declare them in openapi.securitySchemes, or drop the ` +
       `requirement. The document defines: ${declared.length === 0 ? '(none)' : declared.join(', ')}.`
+  )
+}
+
+/**
+ * Reject a foreign definition of the scheme this package contributes.
+ *
+ * `BymaxMetricsAuth` is this package's name, and the scrape operation is
+ * documented as requiring it. If something else defines that name — a consumer
+ * option, or a scheme the peer generated from a decorator — the merge rules
+ * make one of them win silently, and the losing case is the dangerous one: the
+ * operation would keep pointing at a scheme that is no longer the bearer token
+ * the runtime actually checks, telling a client to authenticate a way that does
+ * not work. Naming the collision is the only honest outcome, and the name is
+ * distinctive enough that a collision is a mistake rather than a coincidence.
+ *
+ * @param openapi - The resolved OpenAPI options.
+ * @param components - The components the generated document already carries.
+ * @param contributes - Whether this package will contribute the scheme at all.
+ * @throws Error When the reserved name is already defined by someone else.
+ */
+function assertScrapeSchemeIsOurs(
+  openapi: ResolvedOpenApiOptions,
+  components: Readonly<Record<string, unknown>>,
+  contributes: boolean
+): void {
+  if (!contributes) {
+    return
+  }
+  // Membership read through `Object.keys` rather than by indexing with the
+  // constant: the reads are safe, but a computed member access is the shape an
+  // analyser cannot tell apart from the prototype-pollution bug it resembles.
+  const declaredByConsumer = Object.keys(openapi.securitySchemes).includes(METRICS_SCHEME_NAME)
+  const declaredByDocument = Object.keys(asRecord(components['securitySchemes'])).includes(
+    METRICS_SCHEME_NAME
+  )
+  if (!declaredByConsumer && !declaredByDocument) {
+    return
+  }
+
+  throw new Error(
+    `[BymaxCoreModule] the security scheme "${METRICS_SCHEME_NAME}" is reserved: this package ` +
+      'contributes it to document the bearer token the scrape endpoint checks, and it is already ' +
+      `defined ${declaredByConsumer ? 'in openapi.securitySchemes' : 'by the generated document'}. ` +
+      'Rename yours, or unset metrics.authToken if the endpoint is not protected.'
   )
 }
 
@@ -553,6 +611,10 @@ function augmentPaths(
  * @param options - The resolved core options, in full: the document describes a
  *   deployment, and which features that deployment serves is not an OpenAPI
  *   setting.
+ * @param globalPrefix - The application's global prefix, as it reports it. The
+ *   peer documents paths including it, so this package cannot recognize its own
+ *   routes without it — and must not guess it from the document, which would
+ *   mistake a consumer's shared controller prefix for the application's.
  * @returns The augmented document.
  * @throws Error When `openapi.operationSecurity` addresses an operation the
  *   document does not contain, or when a security requirement names a scheme
@@ -560,7 +622,8 @@ function augmentPaths(
  */
 export function augmentDocument<T extends OpenApiDocumentLike>(
   document: T,
-  options: ResolvedCoreOptions
+  options: ResolvedCoreOptions,
+  globalPrefix = ''
 ): AugmentedDocument<T> {
   const { openapi } = options
   const components = asRecord(document.components)
@@ -583,6 +646,7 @@ export function augmentDocument<T extends OpenApiDocumentLike>(
             description: 'Bearer token required by the metrics scrape endpoint.'
           }
         }
+  assertScrapeSchemeIsOurs(openapi, components, options.metrics.authToken !== undefined)
   // Everything the served document will define, including whatever the document
   // already carried — that is what a requirement can legitimately reference, so
   // it is what the requirements are checked against.
@@ -595,7 +659,7 @@ export function augmentDocument<T extends OpenApiDocumentLike>(
   }
   assertSchemesDeclared(openapi, schemes)
 
-  const routes = indexOwnRoutes(asRecord(document.paths), options)
+  const routes = indexOwnRoutes(options, globalPrefix)
   const served = withoutDisabledRoutes(asRecord(document.paths), options, routes)
   assertOverridesMatch(served, openapi)
 

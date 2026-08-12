@@ -293,7 +293,8 @@ describe('augmentDocument — disabled features', () => {
   it('drops prefixed routes too', () => {
     const result = augmentDocument(
       generated({ '/api/v2/health/live': { get: {} }, '/api/v2/metrics': { get: {} } }),
-      options({}, { health: health({ enabled: false }), metrics: metrics({ enabled: true }) })
+      options({}, { health: health({ enabled: false }), metrics: metrics({ enabled: true }) }),
+      'api/v2'
     )
 
     expect(result.paths).not.toHaveProperty('/api/v2/health/live')
@@ -372,15 +373,38 @@ describe('augmentDocument — disabled features', () => {
   })
 
   /**
-   * A real global prefix is still recognized.
+   * A shared controller prefix is not the application's prefix. Regression guard.
    *
-   * The other half of the same rule: `/api/v2` prefixes every path in the
-   * document, so the route under it is this package's and does go.
+   * Inferring the prefix from the document — "the segment every path shares" —
+   * is the tempting shortcut, and an application whose routes all sit under
+   * `/tenants/{id}` would have that inferred as its global prefix. The
+   * consumer's own probe would then be deleted as though this package owned it.
+   * The prefix is asked for, not guessed, so this document has none.
    */
-  it('removes its own route under a prefix shared by every path', () => {
+  it('does not mistake a shared controller prefix for the global one', () => {
+    const result = augmentDocument(
+      generated({
+        '/tenants/{id}/health/live': { get: {} },
+        '/tenants/{id}/invoices': { get: {} }
+      }),
+      options({}, { health: health({ enabled: false }) })
+    )
+
+    expect(result.paths).toHaveProperty('/tenants/{id}/health/live')
+    expect(result.paths).toHaveProperty('/tenants/{id}/invoices')
+  })
+
+  /**
+   * The real global prefix is recognized when the application reports it.
+   *
+   * The other half: told the prefix is `api/v2`, the probe under it is this
+   * package's and does go, while the consumer's route beside it stays.
+   */
+  it('removes its own route under the reported global prefix', () => {
     const result = augmentDocument(
       generated({ '/api/v2/health/live': { get: {} }, '/api/v2/invoices': { get: {} } }),
-      options({}, { health: health({ enabled: false }) })
+      options({}, { health: health({ enabled: false }) }),
+      'api/v2'
     )
 
     expect(result.paths).toEqual({ '/api/v2/invoices': expect.anything() })
@@ -390,11 +414,9 @@ describe('augmentDocument — disabled features', () => {
    * An operation at the prefix root does not defeat the match. Regression guard.
    *
    * An application with a global prefix and a controller at its root documents
-   * `/api` itself beside `/api/health/live`, and `'/api'.startsWith('/api/')` is
-   * false. A prefix test written only as "starts with the prefix and a slash"
-   * therefore rejects the match on that one path and leaves a disabled feature
-   * advertised — the very over-listing this filter exists to remove, in a
-   * configuration that is not exotic.
+   * `/api` itself beside `/api/health/live`. Nothing about that operation may
+   * affect whether the probe beside it is recognized — under an inferred prefix
+   * it did, which left a disabled feature advertised.
    */
   it('removes its own route when a path sits at the prefix root', () => {
     const result = augmentDocument(
@@ -403,12 +425,47 @@ describe('augmentDocument — disabled features', () => {
         '/api/health/live': { get: {} },
         '/api/invoices': { get: {} }
       }),
-      options({}, { health: health({ enabled: false }) })
+      options({}, { health: health({ enabled: false }) }),
+      'api'
     )
 
     expect(result.paths).not.toHaveProperty('/api/health/live')
     expect(result.paths).toHaveProperty('/api')
     expect(result.paths).toHaveProperty('/api/invoices')
+  })
+
+  /**
+   * Only this package's operation leaves, not the consumer's. Regression guard.
+   *
+   * The controllers registered here own the `GET` alone. An application that
+   * mounted another method on the same path owns that operation, and dropping
+   * the whole path item to remove ours would take a live route out of their
+   * document — the same class of loss as deleting a look-alike path.
+   */
+  it('removes only its own operation from a shared path item', () => {
+    const parameters = [{ name: 'tenant', in: 'header' }]
+
+    const result = augmentDocument(
+      generated({ '/metrics': { get: {}, post: { summary: 'consumer push' }, parameters } }),
+      options()
+    )
+    const item = (result.paths as Record<string, Record<string, unknown>>)['/metrics']
+
+    expect(item).not.toHaveProperty('get')
+    expect(item).toHaveProperty('post')
+    expect(item?.['parameters']).toBe(parameters)
+  })
+
+  /**
+   * The path goes once nothing is left under it.
+   *
+   * An item with no operations documents nothing, so keeping the key would
+   * leave an empty shell where a route used to be.
+   */
+  it('drops the path when its last operation was its own', () => {
+    const result = augmentDocument(generated({ '/metrics': { get: {} } }), options())
+
+    expect(result.paths).toEqual({})
   })
 
   /**
@@ -751,6 +808,82 @@ describe('augmentDocument — security', () => {
   })
 
   /**
+   * The automatic policy covers this package's method and no other.
+   *
+   * The controllers registered here expose `GET` alone, so a consumer who
+   * mounts another method under the same path owns that operation — marking it
+   * public, or bearer-protected, would state a policy for a route this package
+   * knows nothing about.
+   */
+  it('applies its own-route policy to GET only', () => {
+    const result = augmentDocument(
+      generated({
+        '/health/live': { get: {}, post: {} },
+        '/metrics': { get: {}, post: {} }
+      }),
+      options(
+        { security: [{ cookieAuth: [] }], securitySchemes: SCHEMES },
+        { metrics: metrics({ enabled: true, authToken: 'secret' }) }
+      )
+    )
+
+    expect(operation(result, '/health/live')['security']).toEqual([])
+    expect(operation(result, '/health/live', 'post')).not.toHaveProperty('security')
+    expect(operation(result, '/metrics')['security']).toEqual([{ BymaxMetricsAuth: [] }])
+    expect(operation(result, '/metrics', 'post')).not.toHaveProperty('security')
+  })
+
+  /**
+   * The reserved scheme name is not silently shared.
+   *
+   * This package documents the scrape operation as requiring
+   * `BymaxMetricsAuth`. If something else defines that name, one definition
+   * wins silently and the operation may end up pointing at a scheme that is not
+   * the bearer token the runtime checks — telling a client to authenticate a
+   * way that does not work.
+   */
+  it('throws when the consumer options define the reserved scrape scheme', () => {
+    const mine = { BymaxMetricsAuth: { type: 'apiKey', in: 'header', name: 'X-Scrape' } }
+
+    expect(() =>
+      augmentDocument(
+        generated({ '/metrics': { get: {} } }),
+        options(
+          { securitySchemes: mine },
+          { metrics: metrics({ enabled: true, authToken: 'secret' }) }
+        )
+      )
+    ).toThrow(
+      /is reserved: this package contributes it to document the bearer token.*in openapi\.securitySchemes\. Rename yours, or unset metrics\.authToken/s
+    )
+  })
+
+  it('throws when the generated document defines the reserved scrape scheme', () => {
+    const mine = { BymaxMetricsAuth: { type: 'apiKey', in: 'header', name: 'X-Scrape' } }
+
+    expect(() =>
+      augmentDocument(
+        { ...generated({ '/metrics': { get: {} } }), components: { securitySchemes: mine } },
+        options({}, { metrics: metrics({ enabled: true, authToken: 'secret' }) })
+      )
+    ).toThrow(/"BymaxMetricsAuth" is reserved.*by the generated document/s)
+  })
+
+  /**
+   * The reserved name is free while this package contributes nothing.
+   *
+   * Without a scrape token there is no scheme to collide with, so a consumer
+   * who happens to use the name is left alone.
+   */
+  it('allows the reserved name when no scrape token is configured', () => {
+    const mine = { BymaxMetricsAuth: { type: 'apiKey', in: 'header', name: 'X-Scrape' } }
+
+    expect(() =>
+      augmentDocument(generated({ '/x': { get: {} } }), options({ securitySchemes: mine }))
+    ).not.toThrow()
+  })
+
+  /**
    * With no document default, the probes are left alone.
    *
    * An explicit "requires nothing" is noise in a document where nothing
@@ -874,6 +1007,49 @@ describe('augmentDocument — responses', () => {
     const responses = operation(result, '/invoices')['responses'] as Record<string, unknown>
 
     expect(responses['default']).toBe(mine)
+  })
+
+  /**
+   * A response that is only a reference is a declaration too.
+   *
+   * A response object may legally be nothing but `$ref`. It carries no
+   * `content`, so a rule keyed on content alone would overwrite it — discarding
+   * the reference and leaving `$ref` beside sibling keys, which is not a valid
+   * response object.
+   */
+  it('keeps a response that is a bare reference', () => {
+    const mine = { $ref: '#/components/responses/MyError' }
+
+    const result = augmentDocument(
+      generated({ '/invoices': { get: { responses: { default: mine } } } }),
+      options()
+    )
+    const responses = operation(result, '/invoices')['responses'] as Record<string, unknown>
+
+    expect(responses['default']).toBe(mine)
+  })
+
+  /**
+   * The envelope is documented only while the filter that produces it is on.
+   *
+   * With `envelope.enabled` false the runtime shapes errors through Nest or the
+   * consumer's own handler, so documenting this package's envelope would
+   * describe a body the deployment never sends. The health payload is a
+   * different feature and is unaffected.
+   */
+  it('documents the envelope only while the envelope feature is enabled', () => {
+    const base = normalizeCoreOptions()
+    const off: ResolvedCoreOptions = {
+      ...base,
+      envelope: { ...base.envelope, enabled: false },
+      health: { ...base.health, enabled: true }
+    }
+
+    const result = augmentDocument(generated({ ...OWN_ROUTES }), off)
+    const invoices = operation(result, '/health/ready')['responses'] as Record<string, unknown>
+
+    expect(invoices).not.toHaveProperty('default')
+    expect(invoices).toHaveProperty('200')
   })
 
   /**

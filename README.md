@@ -840,14 +840,17 @@ which is what a generated client actually reads:
 - every operation gains a `default` response pointing at `BymaxErrorEnvelope`,
   because every error path in this package answers with that envelope. It is
   attached as `default` rather than guessed per status code: this package knows
-  what an error looks like and does not know which statuses your handler emits;
+  what an error looks like and does not know which statuses your handler emits.
+  It follows the feature: with `envelope.enabled` off, errors are shaped by Nest
+  or by your own handler, so nothing is documented;
 - the health endpoints gain an explicit `200` pointing at `BymaxHealthResponse`,
   which this package _does_ know precisely, having registered them itself.
 
 `@nestjs/swagger` emits a placeholder response for every handler — a `200` with
 a description and no content — so "already documented" is judged on whether a
-response declares a **shape**: one carrying `content` is yours and is left
-alone, one without it gets filled in while keeping any description you wrote.
+response declares a **shape**: one carrying `content` — or written as a bare
+`$ref`, which points at a shape declared elsewhere — is yours and is left alone,
+one without either gets filled in while keeping any description you wrote.
 
 Both halves are the same switch. Referencing a schema that was not contributed
 would leave a dangling `$ref`, and a document that resolves nowhere is worse

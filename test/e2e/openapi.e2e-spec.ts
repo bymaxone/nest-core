@@ -305,6 +305,41 @@ describe('OpenAPI document, deployment fidelity', () => {
   })
 
   /**
+   * The application's real global prefix is used, not one inferred.
+   *
+   * The peer documents paths including `setGlobalPrefix`, so recognizing this
+   * package's own routes depends on knowing it. Only the asynchronous
+   * registration path can show this: it mounts the controller whatever the
+   * options say, so a disabled feature leaves a route in the document that the
+   * filter must find — and it can only find `/api/v2/metrics` if the prefix
+   * came from the application rather than from guessing at the document.
+   */
+  it('recognizes its own routes under the application global prefix', async () => {
+    const moduleRef = await Test.createTestingModule({
+      imports: [
+        BymaxCoreModule.forRootAsync({
+          useFactory: () => ({ openapi: { enabled: true }, metrics: { enabled: false } })
+        }),
+        AppModule
+      ]
+    }).compile()
+    app = moduleRef.createNestApplication()
+    app.setGlobalPrefix('api/v2')
+    await applyBymaxOpenApi(app)
+    await app.init()
+
+    // The UI and the JSON mount at their literal routes: `SwaggerModule.setup`
+    // does not apply the global prefix to them, only the scan does to the paths
+    // it documents. That asymmetry is the whole reason the prefix has to be
+    // asked for rather than read off the route the document is served from.
+    const document = (await request(app.getHttpServer()).get('/docs-json')).body
+    const paths = document['paths'] as Record<string, unknown>
+
+    expect(paths).not.toHaveProperty('/api/v2/metrics')
+    expect(paths).toHaveProperty('/api/v2/invoices')
+  })
+
+  /**
    * A misaddressed override fails the boot, naming what exists.
    *
    * Silence would leave a route documented as authenticated when it is not, or
