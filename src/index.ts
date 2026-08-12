@@ -20,6 +20,7 @@ export type {
   OpenApiSecurityRequirement,
   OpenApiHttpMethod,
   OpenApiOperationKey,
+  OpenApiOperationIdFactory,
   OperationSecurityMap,
   OpenApiServerDescriptor,
   ResolvedCoreOptions

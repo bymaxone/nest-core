@@ -297,6 +297,23 @@ describe('normalizeCoreOptions, openapi block', () => {
   })
 
   /**
+   * A supplied operation-id factory survives resolution by reference.
+   *
+   * Every other option is deep-cloned so the frozen snapshot cannot reach into
+   * a consumer's object; a function cannot be cloned at all, and carrying it by
+   * reference is the only way it reaches the document scan. Asserted on
+   * identity because a copy would silently stop being the consumer's factory.
+   */
+  it('carries an operation-id factory through by reference', () => {
+    const factory = (controllerKey: string, methodKey: string): string =>
+      `${controllerKey}-${methodKey}`
+
+    const resolved = normalizeCoreOptions({ openapi: { operationIdFactory: factory } })
+
+    expect(resolved.openapi.operationIdFactory).toBe(factory)
+  })
+
+  /**
    * Production overrides the consumer's request.
    *
    * The first of the two production guards: asking for the document in

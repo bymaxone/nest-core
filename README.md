@@ -272,19 +272,20 @@ BymaxCoreModule.forRoot({
 
 ### `openapi`
 
-| Option               | Type                      | Default       | Description                                                                    |
-| -------------------- | ------------------------- | ------------- | ------------------------------------------------------------------------------ |
-| `enabled`            | `boolean`                 | `false`       | Builds and serves the document. Ignored in production, where it is always off. |
-| `path`               | `string`                  | `'docs'`      | Route serving the interactive UI.                                              |
-| `jsonPath`           | `string`                  | `'docs-json'` | Route serving the raw JSON document.                                           |
-| `title`              | `string`                  | `'API'`       | Document title.                                                                |
-| `description`        | `string`                  | `''`          | Document description.                                                          |
-| `version`            | `string`                  | `'1.0.0'`     | Document version, independent of the package version.                          |
-| `servers`            | `{ url, description? }[]` | `[]`          | Servers advertised by the document.                                            |
-| `securitySchemes`    | `Record<string, object>`  | `{}`          | Security schemes copied into the document's components.                        |
-| `security`           | `SecurityRequirement[]`   | `[]`          | The requirement every operation carries unless it says otherwise.              |
-| `operationSecurity`  | `OperationSecurityMap`    | `{}`          | Per-operation overrides. An empty array marks that operation public.           |
-| `includeCoreSchemas` | `boolean`                 | `true`        | Contributes this package's own schemas and references them from the responses. |
+| Option               | Type                                       | Default       | Description                                                                         |
+| -------------------- | ------------------------------------------ | ------------- | ----------------------------------------------------------------------------------- |
+| `enabled`            | `boolean`                                  | `false`       | Builds and serves the document. Ignored in production, where it is always off.      |
+| `path`               | `string`                                   | `'docs'`      | Route serving the interactive UI.                                                   |
+| `jsonPath`           | `string`                                   | `'docs-json'` | Route serving the raw JSON document.                                                |
+| `title`              | `string`                                   | `'API'`       | Document title.                                                                     |
+| `description`        | `string`                                   | `''`          | Document description.                                                               |
+| `version`            | `string`                                   | `'1.0.0'`     | Document version, independent of the package version.                               |
+| `servers`            | `{ url, description? }[]`                  | `[]`          | Servers advertised by the document.                                                 |
+| `securitySchemes`    | `Record<string, object>`                   | `{}`          | Security schemes copied into the document's components.                             |
+| `security`           | `SecurityRequirement[]`                    | `[]`          | The requirement every operation carries unless it says otherwise.                   |
+| `operationSecurity`  | `OperationSecurityMap`                     | `{}`          | Per-operation overrides. An empty array marks that operation public.                |
+| `operationIdFactory` | `(controller, method, version?) => string` | peer default  | Names the operations. Leave unset and nothing an existing client generated changes. |
+| `includeCoreSchemas` | `boolean`                                  | `true`        | Contributes this package's own schemas and references them from the responses.      |
 
 Unlike `health` and `metrics`, this block behaves identically on `forRoot` and
 `forRootAsync`: the document is mounted from the bootstrap helper, after the
@@ -856,6 +857,82 @@ Both halves are the same switch. Referencing a schema that was not contributed
 would leave a dangling `$ref`, and a document that resolves nowhere is worse
 than one that says less — so `includeCoreSchemas: false` opts out of both.
 
+### A library can describe its own routes
+
+A library that ships controllers cannot document them itself. Decorating them
+with `@nestjs/swagger` would load that peer in every application importing the
+library, including the ones that never build a document — and a consumer-side
+map keyed by path does not work either, because a library mounted through
+`RouterModule.register` does not know its own final paths: the same route is
+`/auth/login` in one deployment and `/api/v2/identity/login` in another, from one
+build.
+
+So a library marks a provider and returns fragments keyed by **handler
+identity**, which survives every prefix, version and mount point:
+
+```ts
+import { BymaxOpenApiContributor } from '@bymax-one/nest-core/openapi'
+import type { IOpenApiContributor, OpenApiFragment } from '@bymax-one/nest-core/openapi'
+
+@BymaxOpenApiContributor()
+@Injectable()
+export class AuthOpenApi implements IOpenApiContributor {
+  constructor(private readonly options: ResolvedAuthOptions) {}
+
+  contributeOpenApi(): OpenApiFragment {
+    return {
+      components: {
+        securitySchemes: {
+          // Derived from resolved options — which is why this cannot be a
+          // static map a consumer writes by hand.
+          authCookie: { type: 'apiKey', in: 'cookie', name: this.options.cookies.accessTokenName }
+        }
+      },
+      operations: {
+        'AuthController.login': { security: [] },
+        'AuthController.refresh': { security: [{ refreshCookie: [] }] }
+      }
+    }
+  }
+}
+```
+
+Nothing is wired by the application: enabling the document runs the scan, and a
+library that is never imported contributes nothing.
+
+#### What the merge guarantees
+
+| Rule                  | Behavior                                                                                                                                                                     |
+| --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Marked, not shaped    | Only providers carrying the marker are called. A class that merely exposes `contributeOpenApi` is never touched.                                                             |
+| Called once           | While the document is built, after options resolve — so a contributor may derive its contribution from its own configuration.                                                |
+| Stable order          | Contributors run sorted by class name, so two libraries describing the same operation resolve the same way on every boot.                                                    |
+| Data, not mutation    | A contributor returns fragments; this package decides what to write. That is what makes precedence enforceable.                                                              |
+| Named failures        | A marked class that cannot contribute, one that throws, or a fragment addressing a handler the application does not have all fail the document build naming the contributor. |
+| Off with the document | With `openapi.enabled` false, no contributor runs.                                                                                                                           |
+
+**Precedence, weakest first:** what this package infers about its own routes,
+then what a library contributed, then what the consumer configured, and above
+all of them whatever the operation already declared — a decorated handler is the
+consumer speaking directly and is never overwritten. So a deployment can always
+overrule a dependency's description of its own routes through
+`operationSecurity`.
+
+**Operation ids are untouched.** This package installs an operation-id factory
+to learn which handler produced which operation, and delegates the id string —
+to `openapi.operationIdFactory` when you set one, to the format `@nestjs/swagger`
+itself produces otherwise. A client generated from your document before adopting
+this keeps working after.
+
+**Deriving the fragments is the library's business, not this package's.** A
+library that wants its schemas to track its own validation decorators should
+generate them in its own build or test suite, where that dependency already
+exists, and commit the result — with a test asserting generated matches
+committed, so drift fails in the repository that caused it. This package takes
+no dependency on any validation library and merges what it is given. An
+application's own DTOs need none of this: `@nestjs/swagger`'s CLI plugin already
+derives them, which is a route a precompiled library does not have.
+
 ### The document describes _this_ deployment
 
 A feature you turned off has its routes removed from the document. With
@@ -1154,6 +1231,7 @@ in the sections above.
 | `BymaxCoreModule`                                                                                                                                                                                                | class     | The dynamic module: `forRoot` and `forRootAsync`.                                  |
 | `BymaxCoreModuleOptions`, `EnvelopeOptions`, `TimingOptions`, `HealthOptions`, `MetricsOptions`, `TelemetryOptions`, `OpenApiOptions`, `OpenApiServerDescriptor`, `OpenApiSecurityScheme`, `ResolvedCoreOptions` | types     | The options surface and its resolved shape.                                        |
 | `OpenApiSecurityRequirement`, `OpenApiHttpMethod`, `OpenApiOperationKey`, `OperationSecurityMap`                                                                                                                 | types     | The operation-key contract a sibling library targets to ship its own security map. |
+| `OpenApiOperationIdFactory`                                                                                                                                                                                      | type      | Names the operations in the generated document.                                    |
 | `BYMAX_CORE_OPTIONS`, `BYMAX_CORRELATION_PROVIDER`, `BYMAX_TIMING_SINK`, `BYMAX_HEALTH_INDICATORS`, `BYMAX_METRICS_REGISTRY`                                                                                     | tokens    | The DI tokens; see the [token table](#-di-tokens).                                 |
 | `ICorrelationIdProvider`                                                                                                                                                                                         | type      | The correlation-provider contract.                                                 |
 | `ITraceContextProvider`, `TraceContext`                                                                                                                                                                          | types     | The trace-context contract and the identifiers it resolves.                        |
@@ -1197,11 +1275,13 @@ in the sections above.
 
 ### `./openapi`
 
-| Export                | Kind     | Description                                                       |
-| --------------------- | -------- | ----------------------------------------------------------------- |
-| `applyBymaxOpenApi`   | function | Builds and mounts the document; call it before `app.listen()`.    |
-| `OpenApiMountOutcome` | type     | What the helper did: mounted at a path, or skipped with a reason. |
-| `OpenApiSkipReason`   | type     | Why it was skipped: `'disabled'` or `'production'`.               |
+| Export                                                                                 | Kind                | Description                                                                    |
+| -------------------------------------------------------------------------------------- | ------------------- | ------------------------------------------------------------------------------ |
+| `applyBymaxOpenApi`                                                                    | function            | Builds and mounts the document; call it before `app.listen()`.                 |
+| `OpenApiMountOutcome`                                                                  | type                | What the helper did: mounted at a path, or skipped with a reason.              |
+| `OpenApiSkipReason`                                                                    | type                | Why it was skipped: `'disabled'` or `'production'`.                            |
+| `BymaxOpenApiContributor`, `BYMAX_OPENAPI_CONTRIBUTOR_METADATA`                        | decorator, constant | Marks a provider as describing its own routes, and the metadata key behind it. |
+| `IOpenApiContributor`, `OpenApiFragment`, `OpenApiFragmentObject`, `OpenApiHandlerKey` | types               | The contributor contract and the shape of what it returns.                     |
 
 ## 🧩 Compatibility
 

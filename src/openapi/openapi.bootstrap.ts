@@ -18,12 +18,14 @@
  */
 import { Logger, VERSION_NEUTRAL, VersioningType } from '@nestjs/common'
 import type { INestApplication, VersioningOptions } from '@nestjs/common'
-import { ApplicationConfig } from '@nestjs/core'
+import { ApplicationConfig, DiscoveryService, Reflector } from '@nestjs/core'
 import type * as Swagger from '@nestjs/swagger'
 
 import type { ResolvedCoreOptions, ResolvedOpenApiOptions } from '../core.options'
 import { BYMAX_CORE_OPTIONS } from '../core.tokens'
 import { isProductionRuntime } from '../runtime.environment'
+import { collectContributions, createHandlerIdMap } from './openapi.contribution'
+import type { HandlerIdMap, ResolvedContribution } from './openapi.contribution'
 import { augmentDocument } from './openapi.document'
 import { loadSwagger } from './openapi.loader'
 
@@ -146,6 +148,87 @@ function readPathPrefixes(app: INestApplication): readonly string[] {
 }
 
 /**
+ * The operation-id factory this package installs, which records the mapping and
+ * delegates the string.
+ *
+ * Choosing the id here would rename every operation in every document a
+ * consumer already publishes — the peer's own format is
+ * `<ControllerKey>_<methodKey>`, plus `_<version>` when versioned, and anything
+ * generating a client from that document depends on it. So the factory records
+ * what it is asked about and then produces exactly the id that would have been
+ * produced anyway: the consumer's own factory when they configured one, the
+ * peer's format otherwise. The contract a library keys against is the handler
+ * identity, never the id string.
+ *
+ * @param handlers - The map to record into.
+ * @param configured - The consumer's own factory, when they supplied one.
+ * @returns A factory to hand to the peer's document scan.
+ */
+function recordingOperationIdFactory(
+  handlers: HandlerIdMap,
+  configured: Swagger.OperationIdFactory | undefined
+): Swagger.OperationIdFactory {
+  return (controllerKey: string, methodKey: string, version?: string): string => {
+    const id =
+      configured === undefined
+        ? defaultOperationId(controllerKey, methodKey, version)
+        : configured(controllerKey, methodKey, version)
+    handlers.record(controllerKey, methodKey, id)
+    return id
+  }
+}
+
+/**
+ * Reproduce the peer's own operation-id format.
+ *
+ * Installing a factory means the peer stops applying its default, so the
+ * default has to be restated here. Read from `@nestjs/swagger`'s explorer rather
+ * than guessed, and asserted by a test against a document built without a
+ * factory, so a change in the peer surfaces as a failure rather than as renamed
+ * operations in every consumer's document.
+ *
+ * @param controllerKey - The controller class name.
+ * @param methodKey - The handler method name.
+ * @param version - The route's version, when the application versions routes.
+ * @returns The id the peer would have produced.
+ */
+function defaultOperationId(controllerKey: string, methodKey: string, version?: string): string {
+  return version === undefined
+    ? `${controllerKey}_${methodKey}`
+    : `${controllerKey}_${methodKey}_${version}`
+}
+
+/**
+ * Collect what the libraries in this application contribute to the document.
+ *
+ * Returns nothing when the provider scan is unavailable. `DiscoveryModule` is
+ * imported by `BymaxCoreModule` only when a marker scan can run, so an
+ * application on `forRoot` that enables nothing but the document has no scanner
+ * — and failing to mount over a library's optional description would be a poor
+ * trade for a feature that is documentation.
+ *
+ * @param app - The initialized Nest application.
+ * @param handlers - The handler-to-id map filled during the scan.
+ * @returns One entry per contributor, or none when discovery is unavailable.
+ * @throws Error When a contributor is marked but unusable, throws, or addresses
+ *   a handler the application does not have.
+ */
+function readContributions(
+  app: INestApplication,
+  handlers: HandlerIdMap
+): readonly ResolvedContribution[] {
+  let discovery: DiscoveryService
+  let reflector: Reflector
+  try {
+    discovery = app.get(DiscoveryService)
+    reflector = app.get(Reflector)
+  } catch {
+    return []
+  }
+  return collectContributions(discovery, reflector, handlers)
+}
+
+/**
  * Assemble the document's static metadata from the resolved options.
  *
  * @param builder - A fresh builder from the lazily loaded peer.
@@ -220,10 +303,17 @@ export async function applyBymaxOpenApi(app: INestApplication): Promise<OpenApiM
 
   const swagger = await loadSwagger()
   const config = buildConfig(new swagger.DocumentBuilder(), options)
+  // The map is filled by the scan below, which calls the factory once per
+  // operation, so it is complete before any contributor is asked for fragments.
+  const handlers = createHandlerIdMap()
+  const generated = swagger.SwaggerModule.createDocument(app, config, {
+    operationIdFactory: recordingOperationIdFactory(handlers, options.operationIdFactory)
+  })
   const document = augmentDocument(
-    swagger.SwaggerModule.createDocument(app, config),
+    generated,
     resolved,
-    readPathPrefixes(app)
+    readPathPrefixes(app),
+    readContributions(app, handlers)
   )
   swagger.SwaggerModule.setup(options.path, app, document, {
     jsonDocumentUrl: options.jsonPath
