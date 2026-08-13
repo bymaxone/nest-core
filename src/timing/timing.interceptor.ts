@@ -30,7 +30,7 @@ import { extractRequestInfo } from './request-info.accessor'
 import { BYMAX_TIMING_CLOCK, DEFAULT_MONOTONIC_CLOCK } from './timing.clock'
 import type { MonotonicClock } from './timing.clock'
 import type { ITimingSink } from './timing.interfaces'
-import { buildTimingSample } from './timing.sample'
+import { buildTimingSample, readTraceContext } from './timing.sample'
 import type { ITraceContextProvider } from '../telemetry/trace-context'
 import { NoopTraceContextProvider } from '../telemetry/trace-context'
 
@@ -154,7 +154,7 @@ export class TimingInterceptor implements NestInterceptor {
       statusCode,
       durationMs: this.clock.now() - start,
       threshold: this.options.timing.slowRequestThresholdMs,
-      traceContext: this.traceContext
+      trace: readTraceContext(this.traceContext)
     })
     try {
       this.sink.record(sample)

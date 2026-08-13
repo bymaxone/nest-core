@@ -284,18 +284,15 @@ describe('BymaxTimingMiddleware', () => {
   })
 
   /**
-   * The close listener runs in the request's async context.
+   * A span opened UPSTREAM survives an aborted request.
    *
-   * Node warns that a listener "may be run in a different execution context
-   * than the one that was active when `eventEmitter.on()` was called", and that
-   * is not hypothetical here: on an aborted request `'close'` is emitted from
-   * the socket, whose async resource predates this request, so an unbound
-   * listener reads whatever store that resource carries — nothing — and the
-   * trace lookup silently returns no identifiers. Firing `close` from outside
-   * the store reproduces exactly that, and the binding is what makes the lookup
-   * still resolve the request's own context.
+   * This is the auto-instrumented HTTP server: the context exists before this
+   * middleware runs, so the bound capture holds it. On an aborted request
+   * `'close'` is emitted from the socket — an async resource that predates the
+   * request — so the live context holds nothing and only the capture answers.
+   * Firing `close` from outside the store reproduces exactly that.
    */
-  it('resolves the request async context even when close fires outside it', () => {
+  it('resolves an upstream span when close fires outside the request context', () => {
     const storage = new AsyncLocalStorage<TraceContext>()
     const sink = recordingSink()
     const middleware = buildMiddleware({
@@ -310,6 +307,62 @@ describe('BymaxTimingMiddleware', () => {
     response.close()
 
     expect(sink.samples[0]).toMatchObject({ traceId: 'trace-1', spanId: 'span-1' })
+  })
+
+  /**
+   * A span opened DOWNSTREAM is still read on a completed request.
+   *
+   * Consumer instrumentation registered as Nest middleware runs *after* this
+   * one, so its span does not exist when `use()` captures a context. Reading
+   * only the captured context would therefore drop the identifiers for every
+   * such consumer — a regression against the interceptor this replaced, which
+   * ran after all middleware and saw those spans. The live read at emit time is
+   * what covers it, and this asserts the two-context order rather than the
+   * capture alone.
+   */
+  it('resolves a downstream span from the live context at emit time', () => {
+    const storage = new AsyncLocalStorage<TraceContext>()
+    const sink = recordingSink()
+    const middleware = buildMiddleware({
+      sink,
+      traceContext: { getTraceContext: (): TraceContext | undefined => storage.getStore() }
+    })
+    const response = fakeResponse(200)
+
+    // No store yet: the span is opened only after this middleware has run.
+    middleware.use(matchedRequest('GET', '/probe'), response, () => undefined)
+    storage.run({ traceId: 'trace-2', spanId: 'span-2' }, () => {
+      response.close()
+    })
+
+    expect(sink.samples[0]).toMatchObject({ traceId: 'trace-2', spanId: 'span-2' })
+  })
+
+  /**
+   * The live context wins when both hold a span.
+   *
+   * A request can be inside an upstream span and a narrower downstream one at
+   * the same time. The sample should carry the innermost span active when the
+   * request ended, which is what an operator reading the trace expects to join
+   * on — not the outer one that merely happened to be capturable earlier.
+   */
+  it('prefers the live span over the captured one', () => {
+    const storage = new AsyncLocalStorage<TraceContext>()
+    const sink = recordingSink()
+    const middleware = buildMiddleware({
+      sink,
+      traceContext: { getTraceContext: (): TraceContext | undefined => storage.getStore() }
+    })
+    const response = fakeResponse(200)
+
+    storage.run({ traceId: 'outer', spanId: 'outer-span' }, () => {
+      middleware.use(matchedRequest('GET', '/probe'), response, () => undefined)
+    })
+    storage.run({ traceId: 'inner', spanId: 'inner-span' }, () => {
+      response.close()
+    })
+
+    expect(sink.samples[0]).toMatchObject({ traceId: 'inner', spanId: 'inner-span' })
   })
 
   /**

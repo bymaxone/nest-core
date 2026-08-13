@@ -28,11 +28,15 @@ heading here.
 - **The root path is recorded.** The middleware is mounted at `'/'` rather than
   through a wildcard pattern. The unbraced `'*splat'` skips the root outright,
   and the braced `'{*splat}'` that Nest 11's migration guide prescribes stops
-  matching the _prefixed_ root once an application calls `setGlobalPrefix`
-  (nest#14520) — which production applications almost always do. Both were
-  measured; the mount matched every path in both configurations. One limit
-  remains and is documented: module middleware is scoped to the global prefix,
-  so a request outside it entirely reaches no middleware.
+  matching the _prefixed_ root once an application calls `setGlobalPrefix` —
+  which production applications almost always do. That was reported as
+  nest#14520 and fixed by nest#14522, whose regression test covers Fastify;
+  measured on `@nestjs/core` 11.1.28 with the Express adapter, the prefixed root
+  still reaches no middleware while the route itself answers `200`. Both
+  patterns were measured against the mount, which matched every path in both
+  configurations. One limit remains and is documented: module middleware is
+  scoped to the global prefix, so a request outside it entirely reaches no
+  middleware.
 - **Unmatched requests record a bounded label.** A request that matched no route
   is recorded as `<unmatched>` (exported as `UNMATCHED_ROUTE`), never the
   requested path. The previous raw-URL fallback would have let anyone mint one

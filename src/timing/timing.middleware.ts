@@ -24,18 +24,28 @@
  * double-counted and nothing is missed; `writableFinished` distinguishes the
  * two for anyone who later wants them labelled apart.
  *
- * The listener is wrapped in `AsyncResource.bind`, and that is not ceremony.
- * Node's own documentation warns that "event listeners triggered by an
+ * Resolving the trace identifiers takes two contexts, not one, because neither
+ * alone covers the cases. Node warns that "event listeners triggered by an
  * `EventEmitter` may be run in a different execution context than the one that
- * was active when `eventEmitter.on()` was called", and illustrates it with this
- * exact case. Unbound, the trace lookup happens to work on the normal path —
- * the response ends inside the request's context, so the emit inherits it — and
- * returns nothing on the aborted one, where `'close'` comes from the socket,
- * whose async resource predates the request. Measured: unbound, the store is
- * present on a completed request and `undefined` on an aborted one; bound, it
- * is present on both. That failure has the same shape as the one this file
- * fixes — silent, and only on the traffic that matters — so it is closed here
- * rather than left as a footnote.
+ * was active when `eventEmitter.on()` was called", and `'close'` is its own
+ * example. Measured against a registered `AsyncLocalStorageContextManager`, with
+ * the span opened either before this middleware (an auto-instrumented HTTP
+ * server) or after it (instrumentation registered as Nest middleware, which is
+ * downstream of this one):
+ *
+ * | span opened  | request  | live read at emit | `AsyncResource.bind` |
+ * | ------------ | -------- | ----------------- | -------------------- |
+ * | upstream     | normal   | resolves          | resolves             |
+ * | upstream     | aborted  | —                 | resolves             |
+ * | downstream   | normal   | resolves          | —                    |
+ * | downstream   | aborted  | —                 | —                    |
+ *
+ * So the live read is tried first and the captured context is the fallback:
+ * binding alone would have dropped the identifiers for every consumer whose
+ * instrumentation is Nest middleware, which the interceptor this replaced did
+ * see, and reading live alone would drop them on every aborted request. The
+ * bottom row is genuinely unreachable — that span never existed in any context
+ * this middleware can hold — and costs the optional trace fields only.
  * @layer Middleware
  */
 import { AsyncResource } from 'node:async_hooks'
@@ -51,8 +61,8 @@ import type { RequestShape } from './request-info.accessor'
 import { BYMAX_TIMING_CLOCK, DEFAULT_MONOTONIC_CLOCK } from './timing.clock'
 import type { MonotonicClock } from './timing.clock'
 import type { ITimingSink } from './timing.interfaces'
-import { buildTimingSample } from './timing.sample'
-import type { ITraceContextProvider } from '../telemetry/trace-context'
+import { buildTimingSample, readTraceContext } from './timing.sample'
+import type { ITraceContextProvider, TraceContext } from '../telemetry/trace-context'
 import { NoopTraceContextProvider } from '../telemetry/trace-context'
 
 /** The part of a response this middleware reads and listens on. */
@@ -111,9 +121,9 @@ export class BymaxTimingMiddleware implements NestMiddleware {
    * the connection closes it is populated — including for a request a guard
    * rejected, since matching happens before guards run.
    *
-   * The listener carries this request's execution context with it, so the trace
-   * lookup inside resolves the same span it would have during the request. See
-   * this file's header for what happens without that on an aborted request.
+   * The trace lookup is tried in the live context first and in this moment's
+   * captured context second; see this file's header for the measurements that
+   * decided that order.
    *
    * @param request - The framework request object.
    * @param response - The framework response object.
@@ -121,12 +131,25 @@ export class BymaxTimingMiddleware implements NestMiddleware {
    */
   use(request: RequestShape, response: ResponseShape, next: () => void): void {
     const start = this.clock.now()
-    response.on(
-      'close',
-      AsyncResource.bind(() => {
-        this.record(request, response, start)
-      })
-    )
+    // Bound to *this* moment's context, and called only if the live read below
+    // comes up empty. Instrumentation that opened its span before this
+    // middleware — what an auto-instrumented HTTP server does — is already in
+    // the captured context, which is the only thing that still resolves once
+    // the connection is aborted.
+    const readCapturedTrace = AsyncResource.bind(() => readTraceContext(this.traceContext))
+    // Deliberately NOT bound: the live context at emit time is the only one
+    // holding a span that instrumentation opened *after* this middleware, and
+    // consumer instrumentation registered as Nest middleware is downstream of
+    // this one. Binding here would have been a regression against the
+    // interceptor, which ran after all middleware and saw those spans.
+    response.on('close', () => {
+      this.record(
+        request,
+        response,
+        start,
+        readTraceContext(this.traceContext) ?? readCapturedTrace()
+      )
+    })
     next()
   }
 
@@ -136,8 +159,15 @@ export class BymaxTimingMiddleware implements NestMiddleware {
    * @param request - The framework request object.
    * @param response - The framework response object.
    * @param start - Monotonic timestamp captured before the chain ran.
+   * @param trace - The span identifiers already resolved by the caller, which
+   *   owns the choice of which context to read them from.
    */
-  private record(request: RequestShape, response: ResponseShape, start: number): void {
+  private record(
+    request: RequestShape,
+    response: ResponseShape,
+    start: number,
+    trace: TraceContext | undefined
+  ): void {
     const { method, route } = readRequestInfo(request)
     const sample = buildTimingSample({
       method,
@@ -145,7 +175,7 @@ export class BymaxTimingMiddleware implements NestMiddleware {
       statusCode: response.statusCode ?? 0,
       durationMs: this.clock.now() - start,
       threshold: this.options.timing.slowRequestThresholdMs,
-      traceContext: this.traceContext
+      trace
     })
     try {
       this.sink.record(sample)

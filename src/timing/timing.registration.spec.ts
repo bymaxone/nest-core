@@ -200,10 +200,13 @@ describe('BymaxCoreModule.forRoot, timing registration', () => {
      *
      * `setGlobalPrefix` scopes module middleware to the prefix, and the
      * wildcard Nest's migration guide prescribes stops matching the prefixed
-     * root there while continuing to match everything below it — nest#14520.
-     * Production applications almost always set a prefix, so the case the bug
-     * hides is the ordinary one, and only a request to the prefixed root can
-     * distinguish the pattern that survives it from the one that does not.
+     * root there while continuing to match everything below it. nest#14520
+     * reported that and nest#14522 fixed it for Fastify, which is where its
+     * regression test lives; measured on `@nestjs/core` 11.1.28 with Express,
+     * the prefixed root still reaches no middleware. Production applications
+     * almost always set a prefix, so the case this hides is the ordinary one,
+     * and only a request to the prefixed root can distinguish the mount that
+     * survives it from the patterns that do not.
      */
     it('records the prefixed root when the application sets a global prefix', async () => {
       const sink = recordingSink()

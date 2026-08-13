@@ -497,9 +497,12 @@ your dashboards, without any change in traffic.
 > middleware is scoped to the global prefix, so with `setGlobalPrefix('api')` a
 > request to `/nope` — outside the prefix entirely — reaches no middleware and
 > is not recorded. Requests to `/api/nope` are recorded normally, under
-> `<unmatched>`. If you need the ones outside the prefix too, apply the exported
-> `BymaxTimingMiddleware` yourself with `app.use()` **instead of** enabling
-> `timing` in the module, so only one recorder is active.
+> `<unmatched>`, so a scan that probes below your prefix is still visible; only
+> one that probes above it is not. Covering that too is not supported yet: the
+> module has no way to register the recorder outside its own scope, and
+> `BymaxTimingMiddleware` is only provided when `timing` is enabled — at which
+> point the module already applies it, so resolving and re-registering it would
+> double-count. If you need it, open an issue rather than wiring it by hand.
 
 Bind your own sink by providing `BYMAX_TIMING_SINK` from your own module, the
 same override pattern shown below for the correlation provider. This applies on

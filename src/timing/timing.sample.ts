@@ -23,32 +23,46 @@ export interface TimingSampleInput {
   durationMs: number
   /** Configured slow-request threshold, absent when the consumer set none. */
   threshold: number | undefined
-  /** Reads the active span's identifiers. */
-  traceContext: ITraceContextProvider
+  /** The already-resolved span identifiers, absent when none resolved. */
+  trace: TraceContext | undefined
+}
+
+/**
+ * Read the active span's identifiers, tolerating a provider that throws.
+ *
+ * The lookup is guarded on its own rather than folded into the caller's guard
+ * around the sink. A failed lookup must cost the optional trace fields and
+ * nothing else: dropping the whole sample would let a broken tracer silently
+ * stop the request counter, which is a worse outcome than the missing
+ * identifiers it was meant to tolerate — and, since that counter is what makes
+ * an attack visible, a tracer bug would take the security signal down with it.
+ *
+ * Separate from {@link buildTimingSample} because *when* the lookup happens is
+ * the caller's problem, and the two callers answer it differently: the
+ * interceptor runs inside the request's context and reads once, while the
+ * middleware records from an event and has to try two contexts.
+ *
+ * @param traceContext - Reads the active span's identifiers.
+ * @returns The identifiers, or `undefined` when none resolved or the lookup threw.
+ */
+export function readTraceContext(traceContext: ITraceContextProvider): TraceContext | undefined {
+  try {
+    return traceContext.getTraceContext()
+  } catch {
+    // The provider contract says it never throws; this guarantee does not
+    // depend on that being true.
+    return undefined
+  }
 }
 
 /**
  * Assemble one sample.
  *
- * The trace lookup is guarded on its own rather than folded into the caller's
- * guard around the sink. A failed lookup must cost the optional trace fields
- * and nothing else: dropping the whole sample would let a broken tracer
- * silently stop the request counter, which is a worse outcome than the missing
- * identifiers it was meant to tolerate — and, since that counter is what makes
- * an attack visible, a tracer bug would take the security signal down with it.
- *
  * @param input - The measured request.
  * @returns The sample to hand to a sink.
  */
 export function buildTimingSample(input: TimingSampleInput): RequestTimingSample {
-  const { method, route, statusCode, durationMs, threshold, traceContext } = input
-  let trace: TraceContext | undefined
-  try {
-    trace = traceContext.getTraceContext()
-  } catch {
-    // The provider contract says it never throws; this guarantee does not
-    // depend on that being true.
-  }
+  const { method, route, statusCode, durationMs, threshold, trace } = input
   return {
     method,
     route,

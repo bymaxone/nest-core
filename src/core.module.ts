@@ -239,7 +239,10 @@ export class BymaxCoreModule extends BymaxCoreModuleBase implements NestModule {
    * - `'{*splat}'` is what Nest 11's migration guide prescribes for "all
    *   routes", and it does match the root — until the application calls
    *   `setGlobalPrefix`, after which the prefixed root (`/api`) stops matching
-   *   while everything below it still does. That is nest#14520.
+   *   while everything below it still does. nest#14520 reported this and
+   *   nest#14522 fixed it, but that fix landed with a Fastify regression test
+   *   only; measured on `@nestjs/core` 11.1.28 with the Express adapter, the
+   *   prefixed root still reaches no middleware while resolving to `200`.
    * - `'/'` matched every path in both configurations, being an ordinary mount
    *   rather than a pattern: whatever prefix it is scoped to, it matches
    *   everything beneath.
@@ -251,7 +254,8 @@ export class BymaxCoreModule extends BymaxCoreModuleBase implements NestModule {
    * One limit stays and is documented in the README: Nest scopes module
    * middleware to the global prefix, so with `setGlobalPrefix('api')` a request
    * to `/nope` — outside the prefix entirely — reaches no middleware and is not
-   * recorded. No `forRoutes` argument changes that.
+   * recorded, while `/api/nope` is. No `forRoutes` argument changes that, and
+   * nothing this module can register reaches outside its own scope.
    *
    * @param consumer - Nest's middleware consumer.
    */
