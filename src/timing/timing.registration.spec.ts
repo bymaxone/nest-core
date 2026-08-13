@@ -16,12 +16,14 @@
  * real Express Nest app drive the end-to-end assertions.
  */
 import { Controller, Get, Global, Module } from '@nestjs/common'
-import type { DynamicModule, INestApplication, Provider } from '@nestjs/common'
+import type { DynamicModule, INestApplication, MiddlewareConsumer, Provider } from '@nestjs/common'
 import { APP_INTERCEPTOR } from '@nestjs/core'
+import type { HttpAdapterHost } from '@nestjs/core'
 import { Test } from '@nestjs/testing'
 import request from 'supertest'
 
 import { BymaxCoreModule } from '../core.module'
+import { normalizeCoreOptions } from '../core.options'
 import { DEFAULT_METRICS_PATH } from '../core.options'
 import { BYMAX_TIMING_SINK } from '../core.tokens'
 import { UNMATCHED_ROUTE } from './request-info.accessor'
@@ -267,6 +269,108 @@ describe('BymaxCoreModule.forRoot, timing registration', () => {
 
       await request(app.getHttpServer()).get('/probe/ok').expect(200, { ok: true })
     })
+  })
+})
+
+describe('BymaxCoreModule.configure, route pattern per adapter', () => {
+  /** Capture what `configure` applies and where. */
+  function fakeConsumer(): { applied: unknown[]; routes: unknown[] } & MiddlewareConsumer {
+    const applied: unknown[] = []
+    const routes: unknown[] = []
+    const consumer = {
+      applied,
+      routes,
+      apply: (...middleware: unknown[]) => {
+        applied.push(...middleware)
+        return {
+          forRoutes: (...patterns: unknown[]) => {
+            routes.push(...patterns)
+            return consumer
+          }
+        }
+      }
+    }
+    return consumer as never
+  }
+
+  /** An adapter host reporting the given adapter type, or none at all. */
+  function hostFor(type: string | undefined): HttpAdapterHost | undefined {
+    if (type === undefined) {
+      return undefined
+    }
+    return {
+      httpAdapter: {
+        getType: (): string => type,
+        getInstance: (): unknown => ({ addHook: () => undefined })
+      }
+    } as never
+  }
+
+  /**
+   * Each adapter is mounted the only way that reaches all of its routes.
+   *
+   * Neither pattern works on both, which is why the adapter is consulted at
+   * all: on Express `'/'` is a mount that covers everything beneath the global
+   * prefix while `'{*splat}'` skips the prefixed root, and on Fastify the same
+   * `'/'` is an exact match that reaches almost nothing. Getting this backwards
+   * loses requests silently, which is the defect class the middleware exists to
+   * close, so the mapping is pinned rather than left to the end-to-end suites.
+   */
+  it.each([
+    ['express', '/'],
+    ['fastify', '{*splat}'],
+    ['some-other-adapter', '/']
+  ])('mounts on %s with %p', (type, pattern) => {
+    const module = new BymaxCoreModule(
+      normalizeCoreOptions({ timing: { enabled: true } }),
+      hostFor(type)
+    )
+    const consumer = fakeConsumer()
+
+    module.configure(consumer)
+
+    expect(consumer.applied).toEqual([BymaxTimingMiddleware])
+    expect(consumer.routes).toEqual([pattern])
+  })
+
+  /**
+   * No adapter resolves to the Express mount rather than to a crash.
+   *
+   * `HttpAdapterHost` is injected optionally, so a module built without an
+   * application around it must still configure — and the non-Fastify pattern is
+   * the safe default, since the Fastify one is the one that needs a bridge to
+   * work at all.
+   */
+  it('mounts with no adapter bound', () => {
+    const module = new BymaxCoreModule(
+      normalizeCoreOptions({ timing: { enabled: true } }),
+      undefined
+    )
+    const consumer = fakeConsumer()
+
+    module.configure(consumer)
+
+    expect(consumer.routes).toEqual(['/'])
+  })
+
+  /**
+   * Disabled timing applies nothing at all.
+   *
+   * The gate lives here because the async path cannot express it in the
+   * provider list; if it leaked, an application that switched timing off would
+   * still pay for a recorder on every request.
+   */
+  it('applies nothing when timing is disabled', () => {
+    const module = new BymaxCoreModule(
+      normalizeCoreOptions({ timing: { enabled: false } }),
+      hostFor('express')
+    )
+    const consumer = fakeConsumer()
+
+    module.configure(consumer)
+
+    expect(consumer.applied).toEqual([])
+    expect(consumer.routes).toEqual([])
   })
 })
 

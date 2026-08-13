@@ -25,8 +25,8 @@ heading here.
   error graph. All six cases are now counted, and the sample is emitted on the
   response's `'close'` event rather than `'finish'`, so a client that hangs up
   mid-request — what a scanner does — is counted too.
-- **The root path is recorded.** The middleware is mounted at `'/'` rather than
-  through a wildcard pattern. The unbraced `'*splat'` skips the root outright,
+- **The root path is recorded.** On Express the middleware is mounted at `'/'`
+  rather than through a wildcard pattern. The unbraced `'*splat'` skips the root outright,
   and the braced `'{*splat}'` that Nest 11's migration guide prescribes stops
   matching the _prefixed_ root once an application calls `setGlobalPrefix` —
   which production applications almost always do. That was reported as
@@ -34,9 +34,21 @@ heading here.
   measured on `@nestjs/core` 11.1.28 with the Express adapter, the prefixed root
   still reaches no middleware while the route itself answers `200`. Both
   patterns were measured against the mount, which matched every path in both
-  configurations. One limit remains and is documented: module middleware is
-  scoped to the global prefix, so a request outside it entirely reaches no
-  middleware.
+  configurations. Fastify needs the opposite choice — see the next entry. One
+  limit remains and is documented: module middleware is scoped to the global
+  prefix, so a request outside it entirely reaches no middleware.
+- **Fastify records the same labels as Express**, which the documented support
+  for both platforms had been promising without any test behind it. Nest runs
+  middleware on Fastify through `@fastify/middie`, whose `runMiddie` calls
+  `run(req.raw, reply.raw, next)` and copies only `id`, `hostname`, `protocol`,
+  `ip`, `ips`, `log`, `query` and `body` onto that raw request — never
+  `routeOptions`. The recorder therefore saw no route metadata at all and would
+  have labelled every Fastify request `<unmatched>`, destroying the per-route
+  breakdown and making a scan indistinguishable from ordinary traffic. Worse,
+  `forRoutes('/')` is a mount on Express but an **exact match** on Fastify, so
+  most requests produced no sample whatsoever. The module now selects the mount
+  per adapter and registers an `onRequest` hook on Fastify that carries the
+  resolved template to the recorder. Covered by a new Fastify end-to-end suite.
 - **Unmatched requests record a bounded label.** A request that matched no route
   is recorded as `<unmatched>` (exported as `UNMATCHED_ROUTE`), never the
   requested path. The previous raw-URL fallback would have let anyone mint one

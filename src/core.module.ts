@@ -8,7 +8,7 @@
  * disabled or path-mismatched resolved configuration at request time.
  * @layer Module
  */
-import { ConfigurableModuleBuilder, Inject, Module } from '@nestjs/common'
+import { ConfigurableModuleBuilder, Inject, Module, Optional } from '@nestjs/common'
 import type {
   DynamicModule,
   ExceptionFilter,
@@ -39,6 +39,8 @@ import {
   buildMetricsTimingSinkProvider
 } from './metrics/metrics.providers'
 import { selectAsyncExceptionFilter } from './passthrough.providers'
+import { bridgeFastifyRouteMetadata } from './timing/fastify-route.bridge'
+import type { HttpAdapterShape } from './timing/fastify-route.bridge'
 import { BymaxTimingMiddleware } from './timing/timing.middleware'
 
 /** Non-option extras accepted by `forRoot` / `forRootAsync`. */
@@ -212,7 +214,15 @@ export class BymaxCoreModule extends BymaxCoreModuleBase implements NestModule {
    * @param options - The resolved snapshot, read to decide whether the timing
    *   middleware is applied at all.
    */
-  constructor(@Inject(BYMAX_CORE_OPTIONS) private readonly resolved: ResolvedCoreOptions) {
+  constructor(
+    @Inject(BYMAX_CORE_OPTIONS) private readonly resolved: ResolvedCoreOptions,
+    // Injected by explicit token, never by parameter type: this package is
+    // bundled with tsup, which strips `emitDecoratorMetadata`, so type-based
+    // DI resolves to `undefined` in the published build. `@Optional()` because
+    // a module compiled without an application — as a unit test does — has no
+    // adapter to resolve, and the bridge treats its absence as "not Fastify".
+    @Optional() @Inject(HttpAdapterHost) private readonly adapterHost?: HttpAdapterHost
+  ) {
     super()
   }
 
@@ -231,25 +241,36 @@ export class BymaxCoreModule extends BymaxCoreModuleBase implements NestModule {
    * middleware is the sole recorder now, since a second one would count every
    * matched request twice.
    *
-   * The pattern is a mount at `'/'`, chosen by measurement over the two
-   * wildcards that look more idiomatic:
+   * There is no single pattern that covers both adapters, which is the whole
+   * reason this reads the adapter first. Measured, requesting the root, a
+   * parameterised route, a nested path and an unmatched path, with and without
+   * `setGlobalPrefix('api')`:
    *
-   * - `'*splat'`, unbraced, requires at least one segment and silently skips
-   *   the root. Five requests, four samples, the missing one being `/`.
-   * - `'{*splat}'` is what Nest 11's migration guide prescribes for "all
-   *   routes", and it does match the root — until the application calls
-   *   `setGlobalPrefix`, after which the prefixed root (`/api`) stops matching
-   *   while everything below it still does. nest#14520 reported this and
-   *   nest#14522 fixed it, but that fix landed with a Fastify regression test
-   *   only; measured on `@nestjs/core` 11.1.28 with the Express adapter, the
-   *   prefixed root still reaches no middleware while resolving to `200`.
-   * - `'/'` matched every path in both configurations, being an ordinary mount
-   *   rather than a pattern: whatever prefix it is scoped to, it matches
-   *   everything beneath.
+   * | `forRoutes(...)` | Express          | Fastify              |
+   * | ---------------- | ---------------- | -------------------- |
+   * | `'*splat'`       | skips the root   | —                    |
+   * | `'{*splat}'`     | skips `/api`     | every path           |
+   * | `'/'`            | every path       | matches `/` only     |
+   *
+   * On Express `'/'` is a mount and matches everything beneath whatever prefix
+   * it is scoped to, while `'{*splat}'` — the form Nest 11's migration guide
+   * prescribes for "all routes" — stops matching the prefixed root once an
+   * application calls `setGlobalPrefix`. That was reported as nest#14520 and
+   * fixed by nest#14522, whose regression test covers Fastify; on
+   * `@nestjs/core` 11.1.28 with the Express adapter the prefixed root still
+   * reaches no middleware while resolving to `200`.
+   *
+   * On Fastify the same `'/'` is an exact match rather than a mount — one of
+   * three requests reached the middleware — so the wildcard is the only form
+   * that works there.
    *
    * A recorder that quietly omits one route is the same class of defect this
-   * middleware exists to fix, so the form that omits none wins over the form
-   * that reads best.
+   * middleware exists to fix, so each adapter gets the form that omits none.
+   *
+   * Fastify also needs {@link bridgeFastifyRouteMetadata}, because middie hands
+   * middleware the raw request, which carries no route metadata at all; see
+   * that file for why the label would otherwise be `<unmatched>` for every
+   * request.
    *
    * One limit stays and is documented in the README: Nest scopes module
    * middleware to the global prefix, so with `setGlobalPrefix('api')` a request
@@ -263,8 +284,9 @@ export class BymaxCoreModule extends BymaxCoreModuleBase implements NestModule {
     if (!this.resolved.timing.enabled) {
       return
     }
-    // Stryker disable next-line StringLiteral: equivalent — Nest normalizes a middleware mount path, so `''` and `'/'` produce the same mount. Measured on both an unprefixed application and one calling `setGlobalPrefix('api')`: identical hit sets across the root, a parameterised route, a nested path, an unmatched path and a query string. The literal stays `'/'` because a mount at the root is what this expresses; `''` only works by normalising into it.
-    consumer.apply(BymaxTimingMiddleware).forRoutes('/')
+    const adapter = this.adapterHost?.httpAdapter as HttpAdapterShape | undefined
+    const onFastify = bridgeFastifyRouteMetadata(adapter)
+    consumer.apply(BymaxTimingMiddleware).forRoutes(onFastify ? '{*splat}' : '/')
   }
 
   /**

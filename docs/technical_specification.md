@@ -646,7 +646,7 @@ Every `it()` carries a block comment stating the scenario and the rule it protec
 ## 14. Known Limitations
 
 1. **HTTP-first.** The exception filter and request timing target HTTP execution contexts. GraphQL and RPC contexts are pass-through in the initial release; dedicated mappers may arrive in a later minor.
-2. **Express and Fastify.** Both official NestJS platforms are supported through framework-agnostic accessors; anything beyond `path`, `method`, and status handling is out of scope.
+2. **Express and Fastify.** Both official NestJS platforms are supported through framework-agnostic accessors, and both are covered end to end; anything beyond `path`, `method`, and status handling is out of scope. The two are not symmetric underneath, and the module absorbs the difference: Nest runs middleware on Fastify through `@fastify/middie`, which invokes it with the raw `IncomingMessage` carrying no route metadata, so an `onRequest` hook carries the resolved template across; and `forRoutes('/')` is a mount on Express but an exact match on Fastify, so the mount is selected from `httpAdapter.getType()`.
 3. **No metric persistence.** The metrics endpoint exposes the in-process registry; aggregation across replicas is the scraper's job.
 4. **Cursor payload discipline.** Cursors are opaque but not encrypted or signed. They must never contain sensitive data; they encode ordering keys only.
 5. **Readiness is not a dependency graph.** Indicators run flat and concurrently; there is no cascading or dependency ordering between checks.

@@ -493,6 +493,12 @@ Node unless something settled another one. No sentinel status is introduced:
 that would change the value of `status_code="200"` series that already exist in
 your dashboards, without any change in traffic.
 
+**Express and Fastify behave identically here**, and that is asserted end to
+end on both. It needs saying because the two platforms disagree underneath: Nest
+runs middleware on Fastify through `@fastify/middie`, which hands it the raw
+`IncomingMessage` carrying no route metadata, and `forRoutes('/')` is a mount on
+Express but an exact match on Fastify. The module resolves both for you.
+
 > **One gap remains, and it is Nest's scoping rule, not a setting.** Module
 > middleware is scoped to the global prefix, so with `setGlobalPrefix('api')` a
 > request to `/nope` — outside the prefix entirely — reaches no middleware and
