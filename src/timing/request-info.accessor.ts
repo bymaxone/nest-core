@@ -9,6 +9,21 @@
  * label taken from the URL would mint one time series per probe — turning the
  * scrape endpoint into the most expensive route in the service and the metric
  * into the outage. Every unmatched request therefore shares one label.
+ *
+ * Dropping the raw-URL fallback bought a **second** guarantee that is worth
+ * stating because it was a side effect rather than the intent, and anyone
+ * weighing the fallback again would otherwise only re-weigh the cardinality
+ * argument. The recorder is middleware mounted at `'/'`, and Express gives
+ * mounted middleware a `req.url` relative to its mount point: under
+ * `setGlobalPrefix('api')` a request to `/api` arrives as `/`, so a path read
+ * there reports somewhere the caller never asked for. Nothing in this file
+ * reads `req.url` any more — the only `.url` left is Fastify's
+ * `routeOptions.url`, which is a template, not a path — so that class of bug
+ * has nowhere to land. Reintroducing a path-derived label brings both problems
+ * back, not just the cardinality one. If a raw path is ever genuinely needed,
+ * the correct read is `req.originalUrl ?? req.url`: `originalUrl` is Express's
+ * and carries the mount prefix, and the `??` covers an adapter that supplies
+ * only `url`, where no mount trimmed it in the first place.
  * @layer Utility
  */
 import type { ExecutionContext } from '@nestjs/common'
