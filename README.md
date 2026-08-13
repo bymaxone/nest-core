@@ -1114,7 +1114,7 @@ identically.
     │           │               │               │           │
  envelope/    timing/        health/       pagination/   metrics/
     │           │               │               │           │
-APP_FILTER  APP_INTERCEPTOR  liveness +    pure functions  Prometheus
+APP_FILTER  middleware       liveness +    pure functions  Prometheus
     │           │            readiness     on their own    scrape route
     │           │               │           subpath        (opt-in)
     ▼           ▼               ▼               │             │
@@ -1203,6 +1203,26 @@ A slow indicator is converted to `down` by the aggregator rather than hanging th
 and its `timedOutAfterMs` stays in the response either way, because that number is one this
 library chose rather than text an indicator produced.
 
+### A metric an attack cannot be seen in is not a control
+
+Request timing is counted as a security signal, not a performance one. A
+credential-stuffing run is a flood of `401`s, a privilege probe a flood of
+`403`s, route enumeration a flood of `404`s, and a rate limiter doing its job a
+flood of `429`s. None of those reaches a handler, so a recorder placed after the
+guards sees none of them — and an operator watching a flat error graph concludes
+nothing is happening. The recorder is middleware for that reason, and every
+closed request is counted whatever ended it.
+
+### A route label is attacker-controlled input
+
+The label on a timing sample comes from the matched route **template**, and a
+request that matched nothing is recorded under the single constant
+`UNMATCHED_ROUTE` (`<unmatched>`) rather than the path that was asked for.
+Following the path would let anyone mint one Prometheus time series per probe:
+a scan would grow the registry without bound, make the scrape endpoint the most
+expensive route in the service, and end as an out-of-memory kill. The bound is
+why the unmatched case is a fixed string and not a fallback to the URL.
+
 ### Cursors are opaque, not secret
 
 `encodeCursor` produces a token a client can round-trip; it is not encrypted and not
@@ -1234,6 +1254,8 @@ most likely to be exposed.
 | Health output       | The response names which indicator is down and nothing more; the reason goes to the logger. `exposeIndicatorErrors` (default `false`) puts it back in the response for debugging |
 | Slow indicators     | Converted to `down` by the aggregator, so a probe cannot hang on one                                                                                                             |
 | Correlation         | Resolved through `BYMAX_CORRELATION_PROVIDER` — the app decides where the id comes from                                                                                          |
+| Request accounting  | Every closed request is counted, including the ones a guard rejected (`401`/`403`/`429`) and the ones that matched no route (`404`), so an attack in progress moves the graph    |
+| Route labels        | Taken from the matched template; an unmatched request records the constant `<unmatched>`, never the requested path, so a scan cannot grow the metric registry without bound      |
 | Pagination cursors  | Opaque, not authenticated; treated as client-supplied input on the way back in                                                                                                   |
 | Metrics             | Opt-in; `prom-client` never imported while it is off                                                                                                                             |
 | OpenAPI             | Opt-in and development-only; refused in production by two independent guards, `@nestjs/swagger` never imported while it is off                                                   |
@@ -1252,13 +1274,13 @@ most likely to be exposed.
 ## 🧱 Tech Stack
 
 - **Runtime:** Node.js 24+
-- **Framework:** NestJS 11 (`ConfigurableModuleBuilder`, `APP_FILTER`, `APP_INTERCEPTOR`)
+- **Framework:** NestJS 11 (`ConfigurableModuleBuilder`, `APP_FILTER`, `NestModule.configure`)
 - **Peers:** `@nestjs/common ^11`, `@nestjs/core ^11`, `rxjs ^7`, `reflect-metadata ^0.2`
 - **Optional peers:** `prom-client ^15` when metrics are enabled, `@nestjs/swagger ^11` when
   OpenAPI is enabled, `@opentelemetry/api ^1.9` when trace correlation is enabled — none is
   imported while its feature is off
 - **Build:** tsup — ESM + CJS per subpath, with `.d.ts` _and_ `.d.cts` declarations
-- **Tests:** Jest (unit + e2e over a real Nest application) + Stryker (mutation)
+- **Tests:** Jest (unit + e2e over real Nest applications, Express **and** Fastify) + Stryker (mutation)
 - **TypeScript:** 5.x strict (`noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`), zero `any`
 
 ---
@@ -1273,9 +1295,11 @@ installs it, so the suite is held to a bar beyond "the tests pass".
   `break: 95`; every killable survivor was killed by a strengthened test, with no production
   change, and the nine equivalents that no test can kill each carry their reason on the line
   they apply to ([report](./docs/mutation_testing_results.md))
-- ✅ **End-to-end against a real application** — the filter, the middleware, the health and
-  metrics routes, the served OpenAPI document, discovered indicators, contributed metrics and
-  trace correlation are all exercised through a booted Nest app, not against mocks of it
+- ✅ **End-to-end against real applications, on both platforms** — the filter, the middleware,
+  the health and metrics routes, the served OpenAPI document, discovered indicators,
+  contributed metrics and trace correlation are all exercised through a booted Nest app, not
+  against mocks of it. Timing is asserted on **Express and Fastify**, because the two differ
+  underneath in ways that make a passing Express suite say nothing about Fastify
 - ✅ **Published-artifact gates** — `check:exports` resolves the types the way each module
   system does, `check:runtime` loads every subpath from the packed tarball in ESM and
   CommonJS, and `check:published` compiles this README's snippets against `dist/`
@@ -1287,7 +1311,7 @@ installs it, so the suite is held to a bar beyond "the tests pass".
 ```bash
 pnpm test          # unit suite
 pnpm test:cov      # unit suite with the 100% coverage gate
-pnpm test:e2e      # end-to-end against a real Nest application
+pnpm test:e2e      # end-to-end against real Nest applications (Express and Fastify)
 pnpm mutation      # Stryker mutation testing (break: 95)
 pnpm typecheck     # tsc strict check
 pnpm lint          # ESLint
@@ -1365,10 +1389,14 @@ in the sections above.
 
 - Node.js `>= 24`
 - NestJS `^11`
-- Express and Fastify, through framework-agnostic accessors for path, method,
-  and status. GraphQL and RPC execution contexts are out of scope for the
-  error envelope and the request timing in this release; both pass errors
-  and requests through untouched.
+- Express and Fastify, both covered end to end. The accessors are
+  framework-agnostic for path, method and status, and the module absorbs the
+  two places the platforms genuinely differ: the route mount, and the fact that
+  Nest runs middleware on Fastify through `@fastify/middie`, which strips the
+  route metadata off the object the middleware receives.
+- GraphQL and RPC execution contexts are out of scope for the error envelope and
+  the request timing in this release; both pass errors and requests through
+  untouched.
 
 ## 🤝 Contributing
 

@@ -225,3 +225,35 @@ them:
 
 Both were verified by running them, not by reading them: with the directives in place the run
 reports zero survivors, where before it reported nine.
+
+## Re-run — 2026-08-13 (timing recorder moved to middleware)
+
+| Metric                    | Value           |
+| ------------------------- | --------------- |
+| **Mutation score**        | **100.00 %**    |
+| Killed                    | 1125            |
+| Timed out (counts killed) | 10              |
+| Survived                  | 0               |
+| Compile-error (excluded)  | 633             |
+| Ignored by directive      | 26              |
+| Break threshold           | 95 % -> PASS    |
+| High target               | 99 % -> reached |
+
+Cold run (`pnpm mutation:full`, incremental cache removed), covering the move of the request
+recorder from `APP_INTERCEPTOR` to `BymaxTimingMiddleware`, the Fastify route bridge and the
+two-context trace lookup. The mutant count roughly doubled because the new code is branch-dense
+— adapter selection, hook registration, the live-vs-captured trace fallback — and every one of
+them is killed by a test rather than silenced.
+
+The set of documented equivalents did **not** grow: still the same nine argued above. Two
+mutants surfaced during this work and neither became a tenth:
+
+- **`forRoutes('/')` → `forRoutes('')`** was briefly disabled as equivalent, with the
+  measurement in the directive's reason. It stopped being equivalent once the mount became
+  adapter-dependent, so the directive was removed and both literals are now killed by the
+  per-adapter registration tests.
+- **`typeof instance === 'object'`** in the Fastify bridge survived as a redundant clause in
+  front of a `typeof … === 'function'` check. Rather than suppress it, the guard was reduced to
+  the one condition that matters — which also stopped it rejecting a _callable_ instance, the
+  shape Express uses for its own app object, so the simplification fixed a latent narrowing bug
+  as well as the mutant.

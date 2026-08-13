@@ -76,7 +76,7 @@ Without a shared foundation, every service reimplements the same bootstrap layer
 
 ### 2.1 NestJS Dynamic Module Pattern
 
-`@bymax-one/nest-core` is a global dynamic module (`isGlobal: true` by default) built on `ConfigurableModuleBuilder`. The app imports it once in `AppModule`; the enabled features attach themselves to the request pipeline via `APP_FILTER` and `APP_INTERCEPTOR`, and the health and metrics controllers register conditionally.
+`@bymax-one/nest-core` is a global dynamic module (`isGlobal: true` by default) built on `ConfigurableModuleBuilder`. The app imports it once in `AppModule`; the enabled features attach themselves to the request pipeline via `APP_FILTER` and, for request timing, a middleware applied in `NestModule.configure`, and the health and metrics controllers register conditionally.
 
 ```
 ┌────────────────────────────────────────────────────────────────┐
@@ -154,8 +154,11 @@ Nest runs middleware, then guards, then interceptors, then pipes, then the handl
     │   ├── error-codes.ts          # BYMAX_* catalog
     │   └── correlation.interfaces.ts
     ├── timing/
-    │   ├── timing.interceptor.ts
-    │   ├── timing.middleware.ts
+    │   ├── timing.middleware.ts    # the recorder, applied to every route
+    │   ├── timing.interceptor.ts   # deprecated, superseded by the middleware
+    │   ├── timing.sample.ts        # sample builder shared by both
+    │   ├── request-info.accessor.ts # method + bounded route label
+    │   ├── fastify-route.bridge.ts # carries the template past @fastify/middie
     │   └── timing.interfaces.ts    # ITimingSink, RequestTimingSample
     ├── pagination/
     │   ├── index.ts                # barrel for the "./pagination" subpath
