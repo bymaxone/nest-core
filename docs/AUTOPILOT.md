@@ -11,7 +11,7 @@
 - **Default branch**: main
 - **Product summary**: Zero-dependency NestJS 11 foundation library published as
   `@bymax-one/nest-core`: dynamic module (`forRoot`/`forRootAsync`) providing an
-  error-envelope exception filter, a request-timing interceptor with pluggable
+  error-envelope exception filter, request-timing middleware with a pluggable
   sink, framework-neutral pagination helpers (`./pagination` subpath), health
   endpoints with a pluggable indicator contract (`./health` subpath), and an
   optional Prometheus metrics endpoint behind a lazily loaded `prom-client`

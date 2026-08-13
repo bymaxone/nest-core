@@ -3,13 +3,14 @@
  *
  * Layer: unit.
  * Goal: prove the accessor reads the Express route template (composed with
- * `baseUrl`), the Fastify route template, and falls back to the query-stripped
- * URL path when neither framework attached route metadata.
+ * `baseUrl`), the Fastify route template, and reports the fixed unmatched-route
+ * label when neither framework attached route metadata; pin that label's exact
+ * value, which is a contract an alert rule matches on.
  * Mocks: a hand-built `ExecutionContext` exposing only `switchToHttp().getRequest()`.
  */
 import type { ExecutionContext } from '@nestjs/common'
 
-import { extractRequestInfo } from './request-info.accessor'
+import { extractRequestInfo, readRequestInfo, UNMATCHED_ROUTE } from './request-info.accessor'
 
 /** Build a minimal `ExecutionContext` exposing the given request object. */
 function contextFor(request: object): ExecutionContext {
@@ -48,55 +49,52 @@ describe('extractRequestInfo', () => {
   })
 
   /**
-   * Fastify route template.
+   * A request that matched no route gets the bounded label. Regression guard.
    *
-   * Fastify reports its template through `routeOptions.url`; the accessor
-   * must read it when no Express `route` object is present.
+   * This is the security-relevant case and it is the reason the old fallback
+   * had to go. Requests matching no route are what a scanner produces, each at
+   * a different path, so labelling them by URL would mint one time series per
+   * probe — the metric becoming the outage. Every unmatched request now shares
+   * one label, whatever it asked for.
    */
-  it('reads the Fastify route template from routeOptions.url', () => {
-    const info = extractRequestInfo(
-      contextFor({ method: 'GET', routeOptions: { url: '/invoices/:id' } })
-    )
+  it.each([
+    ['a scanner probe', '/admin/.env'],
+    ['a query string', '/wp-login.php?redirect=/'],
+    ['nothing at all', undefined]
+  ])('labels an unmatched request from %s as the unmatched route', (_label, url) => {
+    const info = readRequestInfo({ method: 'GET', ...(url === undefined ? {} : { url }) })
 
-    expect(info).toEqual({ method: 'GET', route: '/invoices/:id' })
+    expect(info.route).toBe(UNMATCHED_ROUTE)
+    expect(info.method).toBe('GET')
   })
 
   /**
-   * No-template fallback with a query string.
+   * A request carrying no method at all. Edge case.
    *
-   * A request that never matched a route (for example, one rejected before
-   * routing) carries no template at all; the accessor falls back to the URL
-   * path with the query string stripped.
+   * Nothing enforces the shape of an object handed to this reader, and an empty
+   * string is a label a sink can carry rather than an exception at the moment a
+   * request ends.
    */
-  it('falls back to the query-stripped originalUrl when no template exists', () => {
-    const info = extractRequestInfo(
-      contextFor({ method: 'GET', originalUrl: '/unknown/path?x=1&y=2' })
-    )
-
-    expect(info).toEqual({ method: 'GET', route: '/unknown/path' })
+  it('returns an empty method when the request reports none', () => {
+    expect(readRequestInfo({})).toEqual({ method: '', route: UNMATCHED_ROUTE })
   })
+})
 
+describe('UNMATCHED_ROUTE', () => {
   /**
-   * No-template fallback using `url` when `originalUrl` is absent.
+   * The label is a non-empty literal, asserted on its exact value.
    *
-   * Some adapters only expose `url`; the fallback chain must still resolve to
-   * a usable path, and a URL without a query string must pass through as-is.
+   * It is what a dashboard filters on and what an alert rule matching a scan is
+   * written against, so it belongs to the contract and cannot drift silently.
+   * The emptiness check is not redundant with the equality one: Prometheus
+   * documents that "labels with an empty label value are considered equivalent
+   * to labels that do not exist", so an empty value would not read as a
+   * suspicious route — it would read as a sample with no route at all, and the
+   * 404 flood this label exists to make visible would disappear into whatever a
+   * dashboard shows for missing data.
    */
-  it('falls back to url when originalUrl is absent and there is no query string', () => {
-    const info = extractRequestInfo(contextFor({ method: 'DELETE', url: '/plain/path' }))
-
-    expect(info).toEqual({ method: 'DELETE', route: '/plain/path' })
-  })
-
-  /**
-   * Fully bare request.
-   *
-   * When method, originalUrl, and url are all absent, the accessor must still
-   * return a defined shape (empty strings) instead of throwing.
-   */
-  it('returns empty strings when the request carries no method or URL at all', () => {
-    const info = extractRequestInfo(contextFor({}))
-
-    expect(info).toEqual({ method: '', route: '' })
+  it('is the exact non-empty label a dashboard filters on', () => {
+    expect(UNMATCHED_ROUTE).toBe('<unmatched>')
+    expect(UNMATCHED_ROUTE.length).toBeGreaterThan(0)
   })
 })

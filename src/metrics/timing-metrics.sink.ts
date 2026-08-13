@@ -119,12 +119,12 @@ export class TimingMetricsSink implements ITimingSink {
   }
 
   /**
-   * Record one completed request: increment the counter once and observe the
+   * Record one closed request: increment the counter once and observe the
    * duration in seconds, both under the bounded label set. Any failure is
    * swallowed so a metrics backend problem can never break the request being
    * observed.
    *
-   * @param sample - The timing sample for a completed request.
+   * @param sample - The timing sample for a closed request, however it ended.
    */
   record(sample: RequestTimingSample): void {
     const labels: Record<HttpMetricLabel, string> = {

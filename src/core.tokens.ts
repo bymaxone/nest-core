@@ -57,7 +57,7 @@ export const BYMAX_CORRELATION_PROVIDER: unique symbol = Symbol.for(
 )
 
 /**
- * Provide the `ITimingSink` that receives one sample per completed request.
+ * Provide the `ITimingSink` that receives one sample per closed request.
  * Defaults to a no-op sink.
  */
 export const BYMAX_TIMING_SINK: unique symbol = Symbol.for('@bymax-one/nest-core:timing-sink')

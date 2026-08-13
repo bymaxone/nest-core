@@ -32,7 +32,7 @@
 
 ### 1.1 What it is
 
-`@bymax-one/nest-core` is the application foundation kit for NestJS 11 services. It packages the cross-cutting concerns that every production HTTP service repeats: a global exception filter with a stable JSON error envelope, a request timing interceptor, offset and cursor pagination primitives, liveness and readiness health endpoints, and an optional Prometheus metrics endpoint.
+`@bymax-one/nest-core` is the application foundation kit for NestJS 11 services. It packages the cross-cutting concerns that every production HTTP service repeats: a global exception filter with a stable JSON error envelope, request timing, offset and cursor pagination primitives, liveness and readiness health endpoints, and an optional Prometheus metrics endpoint.
 
 Each concern is an opt-in feature behind a single dynamic module. A disabled feature registers zero providers: it consumes neither memory nor space in the NestJS container.
 
@@ -76,7 +76,7 @@ Without a shared foundation, every service reimplements the same bootstrap layer
 
 ### 2.1 NestJS Dynamic Module Pattern
 
-`@bymax-one/nest-core` is a global dynamic module (`isGlobal: true` by default) built on `ConfigurableModuleBuilder`. The app imports it once in `AppModule`; the enabled features attach themselves to the request pipeline via `APP_FILTER` and `APP_INTERCEPTOR`, and the health and metrics controllers register conditionally.
+`@bymax-one/nest-core` is a global dynamic module (`isGlobal: true` by default) built on `ConfigurableModuleBuilder`. The app imports it once in `AppModule`; the enabled features attach themselves to the request pipeline via `APP_FILTER` and, for request timing, a middleware applied in `NestModule.configure`, and the health and metrics controllers register conditionally.
 
 ```
 ┌────────────────────────────────────────────────────────────────┐
@@ -89,7 +89,7 @@ Without a shared foundation, every service reimplements the same bootstrap layer
 │  │                        │                                 │  │
 │  │                ICorrelationIdProvider (token)            │  │
 │  │                                                          │  │
-│  │  APP_INTERCEPTOR ──► TimingInterceptor ──► ITimingSink   │  │
+│  │  middleware ──► BymaxTimingMiddleware ──► ITimingSink    │  │
 │  │                                      │                   │  │
 │  │                                      └──► metrics bridge │  │
 │  │                                                          │  │
@@ -106,18 +106,18 @@ Without a shared foundation, every service reimplements the same bootstrap layer
 | Feature  | Default  | When enabled registers                            | When disabled                 |
 | -------- | -------- | ------------------------------------------------- | ----------------------------- |
 | Envelope | enabled  | `APP_FILTER` bound to `BymaxExceptionFilter`      | nothing                       |
-| Timing   | enabled  | `APP_INTERCEPTOR` bound to `TimingInterceptor`    | nothing                       |
+| Timing   | enabled  | `BymaxTimingMiddleware` applied to every route    | nothing                       |
 | Health   | enabled  | `HealthController` + aggregation service          | no controller, no route       |
 | Metrics  | disabled | `MetricsController` + lazy `prom-client` registry | no controller, no peer needed |
 
 Registration rules follow the established `@bymax-one` module pattern:
 
 - **Sync path (`forRoot`).** Options are known at module-definition time, so disabled features are simply omitted from the providers and controllers arrays.
-- **Async path (`forRootAsync`).** Resolved options are not known when the module definition is built, so the `APP_FILTER` and `APP_INTERCEPTOR` slots are always registered and gate themselves inside a factory: the real implementation when the feature is enabled, a transparent pass-through otherwise. Controllers that cannot be registered conditionally on the async path throw a descriptive configuration error if reached while disabled, and the recommended pattern for fully dynamic setups is documented in the README.
+- **Async path (`forRootAsync`).** Resolved options are not known when the module definition is built, so the `APP_FILTER` slot is always registered and gates itself inside a factory: the real implementation when the feature is enabled, a transparent pass-through otherwise. Timing needs no such slot: the middleware provider is registered unconditionally and `configure()` reads the already-resolved options to decide whether to apply it. Controllers that cannot be registered conditionally on the async path throw a descriptive configuration error if reached while disabled, and the recommended pattern for fully dynamic setups is documented in the README.
 
 ### 2.3 Request Pipeline Placement
 
-The timing interceptor wraps the full handler execution, so the recorded duration includes guards, pipes, the handler, and serialization. The exception filter is registered as the outermost filter and formats every error that escapes the handler, including errors thrown by other filters and by the framework itself.
+Nest runs middleware, then guards, then interceptors, then pipes, then the handler. The recorder is middleware because everything after that point is skippable: a request a guard rejects never reaches an interceptor, and a request matching no route never reaches a controller, so an interceptor-based recorder is blind to `401`, `403`, `429` and `404` — the exact statuses that describe an attack in progress. As middleware it also measures guard time and the time spent in any middleware registered after it, which an interceptor could not see. Pipe and handler time were already covered: an interceptor wraps `next.handle()`, and pipes run inside that. The exception filter is registered as the outermost filter and formats every error that escapes the handler, including errors thrown by other filters and by the framework itself.
 
 ---
 
@@ -154,7 +154,11 @@ The timing interceptor wraps the full handler execution, so the recorded duratio
     │   ├── error-codes.ts          # BYMAX_* catalog
     │   └── correlation.interfaces.ts
     ├── timing/
-    │   ├── timing.interceptor.ts
+    │   ├── timing.middleware.ts    # the recorder, applied to every route
+    │   ├── timing.interceptor.ts   # deprecated, superseded by the middleware
+    │   ├── timing.sample.ts        # sample builder shared by both
+    │   ├── request-info.accessor.ts # method + bounded route label
+    │   ├── fastify-route.bridge.ts # carries the template past @fastify/middie
     │   └── timing.interfaces.ts    # ITimingSink, RequestTimingSample
     ├── pagination/
     │   ├── index.ts                # barrel for the "./pagination" subpath
@@ -174,7 +178,7 @@ The timing interceptor wraps the full handler execution, so the recorded duratio
 
 | Subpath        | Content                                                                                                                  |
 | -------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| `.`            | `BymaxCoreModule`, exception filter, timing interceptor, tokens, interfaces, error codes                                 |
+| `.`            | `BymaxCoreModule`, exception filter, timing middleware, tokens, interfaces, error codes                                  |
 | `./pagination` | Offset and cursor DTOs, result builders, cursor codec                                                                    |
 | `./health`     | `IHealthIndicator`, `HealthIndicatorResult`, health response types, `@BymaxHealthIndicator()`                            |
 | `./metrics`    | `IMetricsContributor`, `MetricsRegistry`, `@BymaxMetricsContributor()` — the only subpath whose types name `prom-client` |
@@ -200,7 +204,7 @@ export interface BymaxCoreModuleOptions {
     exposeInternals?: boolean
   }
 
-  /** Request timing interceptor. Default: enabled. */
+  /** Request timing middleware. Default: enabled. */
   timing?: {
     enabled?: boolean
     /** Samples above this threshold are flagged as slow. Optional. */
@@ -338,7 +342,7 @@ The filter resolves `BYMAX_CORRELATION_PROVIDER` and stamps the result into the 
 
 ### 6.1 Behavior
 
-The interceptor captures a monotonic start time before the handler chain runs and records a sample when the response completes or errors:
+The middleware captures a monotonic start time before the rest of the chain runs and records a sample when the connection closes — `'close'` rather than `'finish'`, so a client that hangs up mid-response is counted rather than dropped:
 
 ```typescript
 export interface RequestTimingSample {
@@ -350,15 +354,17 @@ export interface RequestTimingSample {
 }
 
 export interface ITimingSink {
-  /** Receives one sample per completed request. Must never throw. */
+  /** Receives one sample per closed request, however it ended. Must never throw. */
   record(sample: RequestTimingSample): void
 }
 ```
 
 Design decisions:
 
-- The route template is used instead of the raw URL to keep cardinality bounded for downstream metric sinks.
-- The sink contract is fire-and-forget. A sink that throws is caught and silenced by the interceptor; timing must never break a request.
+- The route template is used instead of the raw URL to keep cardinality bounded for downstream metric sinks. A request that matched no route records the fixed `UNMATCHED_ROUTE` label (`<unmatched>`): the raw path is attacker-controlled, and following it would let a scanner mint one time series per probe.
+- One sample per request, and exactly one. The middleware replaced `TimingInterceptor` as the recorder rather than joining it, because two recorders double every rate an alert is tuned against — a silent failure worse than the under-counting being fixed.
+- The trace lookup reads the live context at emit time first and falls back to a context captured with `AsyncResource.bind` when the live one holds nothing. Neither alone is enough, measured against a registered `AsyncLocalStorageContextManager`: the live read resolves a span opened by instrumentation registered as Nest middleware — which runs _after_ this middleware — but resolves nothing on an aborted request, where `'close'` is emitted from a socket whose async resource predates the request; the captured context is the mirror image, resolving an upstream span on both paths and a downstream one on neither. The `'close'` listener itself is therefore deliberately **not** bound; only the fallback reader is.
+- The sink contract is fire-and-forget. A sink that throws is caught and silenced by the middleware; timing must never break a request.
 - The default sink is a no-op. Documented example implementations: forwarding to a structured logger, and the built-in metrics bridge (§9.3).
 
 ---
@@ -642,8 +648,8 @@ Every `it()` carries a block comment stating the scenario and the rule it protec
 
 ## 14. Known Limitations
 
-1. **HTTP-first.** The exception filter and timing interceptor target HTTP execution contexts. GraphQL and RPC contexts are pass-through in the initial release; dedicated mappers may arrive in a later minor.
-2. **Express and Fastify.** Both official NestJS platforms are supported through framework-agnostic accessors; anything beyond `path`, `method`, and status handling is out of scope.
+1. **HTTP-first.** The exception filter and request timing target HTTP execution contexts. GraphQL and RPC contexts are pass-through in the initial release; dedicated mappers may arrive in a later minor.
+2. **Express and Fastify.** Both official NestJS platforms are supported through framework-agnostic accessors, and both are covered end to end; anything beyond `path`, `method`, and status handling is out of scope. The two are not symmetric underneath, and the module absorbs the difference: Nest runs middleware on Fastify through `@fastify/middie`, which invokes it with the raw `IncomingMessage` carrying no route metadata, so an `onRequest` hook carries the resolved template across; and `forRoutes('/')` is a mount on Express but an exact match on Fastify, so the mount is selected from `httpAdapter.getType()`.
 3. **No metric persistence.** The metrics endpoint exposes the in-process registry; aggregation across replicas is the scraper's job.
 4. **Cursor payload discipline.** Cursors are opaque but not encrypted or signed. They must never contain sensitive data; they encode ordering keys only.
 5. **Readiness is not a dependency graph.** Indicators run flat and concurrently; there is no cascading or dependency ordering between checks.
@@ -710,7 +716,7 @@ High-level build order (each stage lands fully tested before the next starts):
 
 1. **Scaffolding**: package skeleton, tsup subpaths, jest configs, CI, repository standard files.
 2. **Error envelope**: filter, envelope builder, code catalog, correlation contract.
-3. **Request timing**: interceptor, sink contract, slow-request flagging.
+3. **Request timing**: middleware, sink contract, slow-request flagging.
 4. **Pagination**: offset and cursor primitives with the codec.
 5. **Health**: indicator contract, aggregation service, controller.
 6. **Metrics**: lazy registry, endpoint, timing bridge.
