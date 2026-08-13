@@ -11,7 +11,7 @@
 import type { RequestTimingSample } from './timing.interfaces'
 import type { ITraceContextProvider, TraceContext } from '../telemetry/trace-context'
 
-/** Everything needed to describe one completed request. */
+/** Everything needed to describe one closed request, however it ended. */
 export interface TimingSampleInput {
   /** HTTP method of the request. */
   method: string

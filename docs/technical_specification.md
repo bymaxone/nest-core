@@ -117,7 +117,7 @@ Registration rules follow the established `@bymax-one` module pattern:
 
 ### 2.3 Request Pipeline Placement
 
-Nest runs middleware, then guards, then interceptors, then pipes, then the handler. The recorder is middleware because everything after that point is skippable: a request a guard rejects never reaches an interceptor, and a request matching no route never reaches a controller, so an interceptor-based recorder is blind to `401`, `403`, `429` and `404` — the exact statuses that describe an attack in progress. As middleware it also measures guard and pipe time, which an interceptor could not see. The exception filter is registered as the outermost filter and formats every error that escapes the handler, including errors thrown by other filters and by the framework itself.
+Nest runs middleware, then guards, then interceptors, then pipes, then the handler. The recorder is middleware because everything after that point is skippable: a request a guard rejects never reaches an interceptor, and a request matching no route never reaches a controller, so an interceptor-based recorder is blind to `401`, `403`, `429` and `404` — the exact statuses that describe an attack in progress. As middleware it also measures guard time and the time spent in any middleware registered after it, which an interceptor could not see. Pipe and handler time were already covered: an interceptor wraps `next.handle()`, and pipes run inside that. The exception filter is registered as the outermost filter and formats every error that escapes the handler, including errors thrown by other filters and by the framework itself.
 
 ---
 
@@ -360,7 +360,7 @@ Design decisions:
 
 - The route template is used instead of the raw URL to keep cardinality bounded for downstream metric sinks. A request that matched no route records the fixed `UNMATCHED_ROUTE` label (`<unmatched>`): the raw path is attacker-controlled, and following it would let a scanner mint one time series per probe.
 - One sample per request, and exactly one. The middleware replaced `TimingInterceptor` as the recorder rather than joining it, because two recorders double every rate an alert is tuned against — a silent failure worse than the under-counting being fixed.
-- The `'close'` listener is wrapped in `AsyncResource.bind`, so the trace lookup resolves the request's own context. Unbound it works on the normal path and silently resolves nothing on the aborted one, where the event is emitted from a socket whose async resource predates the request.
+- The trace lookup reads the live context at emit time first and falls back to a context captured with `AsyncResource.bind` when the live one holds nothing. Neither alone is enough, measured against a registered `AsyncLocalStorageContextManager`: the live read resolves a span opened by instrumentation registered as Nest middleware — which runs _after_ this middleware — but resolves nothing on an aborted request, where `'close'` is emitted from a socket whose async resource predates the request; the captured context is the mirror image, resolving an upstream span on both paths and a downstream one on neither. The `'close'` listener itself is therefore deliberately **not** bound; only the fallback reader is.
 - The sink contract is fire-and-forget. A sink that throws is caught and silenced by the middleware; timing must never break a request.
 - The default sink is a no-op. Documented example implementations: forwarding to a structured logger, and the built-in metrics bridge (§9.3).
 

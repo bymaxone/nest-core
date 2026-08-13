@@ -75,7 +75,7 @@ never loads its peer, which the release gate asserts against the packed tarball.
 
 ### ⏱️ Observability
 
-- ✅ **Request timing** — one sample per completed request, handed to the sink you register;
+- ✅ **Request timing** — one sample per closed request, rejections included, handed to the sink you register;
   the library stores nothing itself
 - ✅ **Slow-request flag** — samples above `slowRequestThresholdMs` are marked, so a sink can
   branch without re-deriving the threshold

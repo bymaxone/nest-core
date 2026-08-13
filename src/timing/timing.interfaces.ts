@@ -1,7 +1,9 @@
 /**
- * @fileoverview Request-timing contracts. The timing interceptor emits one
- * {@link RequestTimingSample} per completed request to the bound
- * {@link ITimingSink}. The default sink is a no-op; consumers plug in a logger
+ * @fileoverview Request-timing contracts. `BymaxTimingMiddleware` emits one
+ * {@link RequestTimingSample} per **closed** request to the bound
+ * {@link ITimingSink} — every request the server finished with, including the
+ * ones a guard rejected, the ones that matched no route, and the ones a client
+ * abandoned mid-flight. The default sink is a no-op; consumers plug in a logger
  * bridge or the metrics bridge through the `BYMAX_TIMING_SINK` token.
  * @layer Contract
  */
@@ -33,12 +35,16 @@ export interface RequestTimingSample {
 
 /**
  * Receive request-timing samples. Implementations must never throw: a sink
- * failure is caught and silenced by the interceptor so timing never breaks a
+ * failure is caught and silenced by the recorder so timing never breaks a
  * request.
  */
 export interface ITimingSink {
   /**
-   * Record one sample for a completed request.
+   * Record one sample for a closed request, however it ended.
+   *
+   * Called once per request the server closed — not only the ones a handler
+   * answered. A rejection issued by a guard, a request matching no route, and a
+   * client that hung up mid-response all arrive here.
    *
    * @param sample - The timing sample to record.
    */
