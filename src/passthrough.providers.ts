@@ -1,31 +1,20 @@
 /**
  * @fileoverview Transparent pipeline building blocks for the async registration
  * path. `forRootAsync` cannot know the resolved options at module-definition
- * time, so the `APP_FILTER` and `APP_INTERCEPTOR` slots are always registered
- * and resolve a real implementation when a feature is enabled or one of these
- * pass-throughs otherwise. Each pass-through is intentionally indistinguishable
- * from the feature's absence: the filter defers to Nest's default handling, the
- * interceptor forwards the stream untouched.
+ * time, so the `APP_FILTER` slot is always registered and resolves the real
+ * filter when the envelope feature is enabled or the pass-through otherwise,
+ * which is intentionally indistinguishable from the feature's absence: it
+ * defers to Nest's default handling.
  * @layer Provider
  */
 import { Catch, NotFoundException } from '@nestjs/common'
-import type {
-  ArgumentsHost,
-  CallHandler,
-  ExceptionFilter,
-  ExecutionContext,
-  NestInterceptor
-} from '@nestjs/common'
+import type { ArgumentsHost, ExceptionFilter } from '@nestjs/common'
 import type { HttpAdapterHost } from '@nestjs/core'
 import { BaseExceptionFilter } from '@nestjs/core'
-import type { Observable } from 'rxjs'
 
 import type { ResolvedCoreOptions } from './core.options'
 import type { ICorrelationIdProvider } from './envelope/correlation.interfaces'
 import { BymaxExceptionFilter } from './envelope/exception.filter'
-import type { MonotonicClock } from './timing/timing.clock'
-import { TimingInterceptor } from './timing/timing.interceptor'
-import type { ITimingSink } from './timing/timing.interfaces'
 
 /**
  * Exception filter that reproduces Nest's default error handling, used on the
@@ -52,24 +41,6 @@ export class PassThroughExceptionFilter implements ExceptionFilter {
   catch(exception: unknown, host: ArgumentsHost): void {
     this.delegate ??= new BaseExceptionFilter(this.adapterHost.httpAdapter)
     this.delegate.catch(exception, host)
-  }
-}
-
-/**
- * Interceptor that forwards the handler stream without touching it, used on the
- * async path as the transparent stand-in when the timing feature is disabled.
- * It adds no observable behavior and no measurable per-request work.
- */
-export class PassThroughInterceptor implements NestInterceptor {
-  /**
-   * Forward the request to the next handler unchanged.
-   *
-   * @param _context - The execution context; unused by a transparent forwarder.
-   * @param next - The next handler in the chain.
-   * @returns The downstream response stream, unmodified.
-   */
-  intercept(_context: ExecutionContext, next: CallHandler): Observable<unknown> {
-    return next.handle()
   }
 }
 
@@ -131,26 +102,4 @@ export function selectAsyncExceptionFilter(
   return options.envelope.enabled
     ? new BymaxExceptionFilter(options, correlation, adapterHost)
     : new PassThroughExceptionFilter(adapterHost)
-}
-
-/**
- * Select the timing interceptor for the async path from the resolved options:
- * the real {@link TimingInterceptor} when the timing feature is enabled, the
- * transparent {@link PassThroughInterceptor} otherwise. The slot is always
- * registered on the async path because options resolve after the module is
- * defined, so the choice is made here at runtime.
- *
- * @param options - The resolved options snapshot (gates the timing feature).
- * @param sink - The bound timing sink; only used when timing is enabled.
- * @param clock - The bound monotonic clock seam; only used when timing is enabled.
- * @returns The real timing interceptor when enabled, else a transparent pass-through.
- */
-export function selectAsyncTimingInterceptor(
-  options: ResolvedCoreOptions,
-  sink: ITimingSink,
-  clock: MonotonicClock
-): NestInterceptor {
-  return options.timing.enabled
-    ? new TimingInterceptor(options, sink, clock)
-    : new PassThroughInterceptor()
 }

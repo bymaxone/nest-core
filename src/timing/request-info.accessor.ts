@@ -1,19 +1,38 @@
 /**
  * @fileoverview Neutral request-info accessor for request timing. Reads the
- * HTTP method and the route template from the current execution context
- * without assuming Express or Fastify, so `RequestTimingSample.route` always
- * carries a bounded-cardinality label instead of the raw URL.
+ * HTTP method and the route template off a request without assuming Express or
+ * Fastify, so `RequestTimingSample.route` always carries a bounded-cardinality
+ * label instead of the raw URL.
+ *
+ * The bound is a security property, not a tidiness one. Requests that match no
+ * route are exactly the ones a scanner produces, each at a different path, so a
+ * label taken from the URL would mint one time series per probe — turning the
+ * scrape endpoint into the most expensive route in the service and the metric
+ * into the outage. Every unmatched request therefore shares one label.
  * @layer Utility
  */
 import type { ExecutionContext } from '@nestjs/common'
+
+/**
+ * The route label carried by every request that matched no route.
+ *
+ * A single constant rather than the request's own path, and exported rather
+ * than inlined: it is the value an alert rule matches on to see a scan, so it
+ * belongs to the contract and must not drift from what this package writes.
+ * Reading `route="<unmatched>"` in a dashboard says what happened; an empty
+ * label — which Prometheus treats as equivalent to no label at all — reads as
+ * missing data and gets scrolled past, which for a signal whose purpose is to
+ * be noticed is the same as not emitting it.
+ */
+export const UNMATCHED_ROUTE = '<unmatched>'
 
 /** HTTP method and route template extracted from the current request. */
 export interface RequestInfo {
   /** HTTP method, for example `"GET"`. Empty when the adapter reports none. */
   method: string
   /**
-   * Route template, for example `"/invoices/:id"`, or the URL path (query
-   * string stripped) when no template is registered for the request.
+   * Route template, for example `"/invoices/:id"`, or {@link UNMATCHED_ROUTE}
+   * when the request matched no route at all.
    */
   route: string
 }
@@ -29,26 +48,13 @@ interface FastifyRouteShape {
   routeOptions?: { url?: string }
 }
 
-/** Structural shape shared by both frameworks for method and raw URL. */
+/** Structural shape shared by both frameworks for the method. */
 interface RawRequestShape {
   method?: string
-  url?: string
-  originalUrl?: string
 }
 
 /** The combined structural shape read off the request object. */
 type RequestShape = ExpressRouteShape & FastifyRouteShape & RawRequestShape
-
-/**
- * Strip the query string from a raw URL, keeping only the path segment.
- *
- * @param rawUrl - The request URL, with or without a query string.
- * @returns The path segment alone.
- */
-function stripQueryString(rawUrl: string): string {
-  const queryIndex = rawUrl.indexOf('?')
-  return queryIndex === -1 ? rawUrl : rawUrl.slice(0, queryIndex)
-}
 
 /**
  * Read the Express route template: `req.baseUrl` (when the router is mounted
@@ -74,24 +80,36 @@ function readFastifyTemplate(request: FastifyRouteShape): string | undefined {
 }
 
 /**
- * Extract the neutral method and route template for the current HTTP request.
+ * Extract the neutral method and route template from a request object.
  *
  * The route template, not the raw URL, is the contract this package carries
- * downstream to metric sinks: `"/invoices/:id"` is one bounded label
- * regardless of how many distinct invoice ids are requested, while the raw URL
- * would mint one label per id and blow up cardinality. Express exposes the
- * template through `req.route.path` (composed with `req.baseUrl` for mounted
- * routers); Fastify exposes it through `req.routeOptions.url`. When neither is
- * present, for example a request that never matched a route, the URL path
- * (query string stripped) is used as a documented fallback so a timing sample
- * is still produced.
+ * downstream to metric sinks: `"/invoices/:id"` is one bounded label regardless
+ * of how many distinct invoice ids are requested. Express exposes the template
+ * through `req.route.path` (composed with `req.baseUrl` for mounted routers);
+ * Fastify exposes it through `req.routeOptions.url`. Both are already resolved
+ * by the time a guard rejects a request, because the router matches before
+ * guards run.
+ *
+ * When neither is present the request matched no route, and the label becomes
+ * {@link UNMATCHED_ROUTE} rather than the path — see this file's header for why
+ * that substitution would be the more expensive bug.
+ *
+ * @param request - The framework request object, read structurally.
+ * @returns The HTTP method and route template.
+ */
+export function readRequestInfo(request: RequestShape): RequestInfo {
+  const template = readExpressTemplate(request) ?? readFastifyTemplate(request)
+  return { method: request.method ?? '', route: template ?? UNMATCHED_ROUTE }
+}
+
+/**
+ * Extract the neutral method and route template for the current HTTP request.
  *
  * @param context - The execution context of the current request.
  * @returns The HTTP method and route template.
  */
 export function extractRequestInfo(context: ExecutionContext): RequestInfo {
-  const request = context.switchToHttp().getRequest<RequestShape>()
-  const template = readExpressTemplate(request) ?? readFastifyTemplate(request)
-  const rawUrl = request.originalUrl ?? request.url ?? ''
-  return { method: request.method ?? '', route: template ?? stripQueryString(rawUrl) }
+  return readRequestInfo(context.switchToHttp().getRequest<RequestShape>())
 }
+
+export type { RequestShape }

@@ -53,6 +53,10 @@ export type {
 
 export { TimingInterceptor } from './timing/timing.interceptor'
 
+export { BymaxTimingMiddleware } from './timing/timing.middleware'
+
+export { UNMATCHED_ROUTE } from './timing/request-info.accessor'
+
 export type { ITimingSink, RequestTimingSample } from './timing/timing.interfaces'
 
 export {

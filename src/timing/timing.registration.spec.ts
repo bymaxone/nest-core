@@ -3,17 +3,15 @@
  * `BymaxCoreModule` paths.
  *
  * Layer: unit / integration.
- * Goal: prove the sync path omits the `APP_INTERCEPTOR` provider when timing
- * is disabled and binds it to the real `TimingInterceptor` when enabled (both
- * at the provider-definition level and end to end through a live request);
- * prove the always-on async slot's factory selects the transparent
- * pass-through when timing is disabled and the real `TimingInterceptor` when
- * enabled.
+ * Goal: prove the sync path provides `BymaxTimingMiddleware` exactly when
+ * timing is enabled and no interceptor at all, both at the provider-definition
+ * level and end to end through a live request; prove the async path, which must
+ * provide the middleware unconditionally, gates it in `configure` instead.
  * Mocks: a spy `ITimingSink`, registered through a small `@Global()` sibling
  * module providing `BYMAX_TIMING_SINK`, the real consumer-override mechanism
  * documented in the technical specification (§4.3): `BymaxCoreModule` binds
  * no local default for this token when the metrics bridge is not registered,
- * so the sibling module's binding reaches `TimingInterceptor` directly, with
+ * so the sibling module's binding reaches the middleware directly, with
  * no test-only override utility involved. A minimal probe controller and a
  * real Express Nest app drive the end-to-end assertions.
  */
@@ -23,12 +21,11 @@ import { APP_INTERCEPTOR } from '@nestjs/core'
 import { Test } from '@nestjs/testing'
 import request from 'supertest'
 
-import { normalizeCoreOptions } from '../core.options'
 import { BymaxCoreModule } from '../core.module'
+import { DEFAULT_METRICS_PATH } from '../core.options'
 import { BYMAX_TIMING_SINK } from '../core.tokens'
-import { PassThroughInterceptor, selectAsyncTimingInterceptor } from '../passthrough.providers'
-import { DEFAULT_MONOTONIC_CLOCK } from './timing.clock'
-import { TimingInterceptor } from './timing.interceptor'
+import { UNMATCHED_ROUTE } from './request-info.accessor'
+import { BymaxTimingMiddleware } from './timing.middleware'
 import type { ITimingSink, RequestTimingSample } from './timing.interfaces'
 
 /** Extract the injection token of a provider regardless of its shape. */
@@ -68,11 +65,20 @@ function sinkModule(sink: ITimingSink): DynamicModule {
   return { module: SinkModule }
 }
 
-/** Minimal controller whose route proves whether a sample was recorded. */
+/** Minimal controller whose routes prove whether a sample was recorded. */
 @Controller('probe')
 class ProbeController {
   @Get('ok')
   ok(): { ok: boolean } {
+    return { ok: true }
+  }
+}
+
+/** Serves the application root, the one path a naive wildcard fails to match. */
+@Controller()
+class RootController {
+  @Get()
+  root(): { ok: boolean } {
     return { ok: true }
   }
 }
@@ -82,26 +88,37 @@ describe('BymaxCoreModule.forRoot, timing registration', () => {
    * Disabled timing registers nothing.
    *
    * The sync path knows options at definition time, so a disabled timing
-   * feature must not contribute an `APP_INTERCEPTOR` provider at all.
+   * feature contributes no provider at all — neither the interceptor slot the
+   * recorder used to occupy nor the middleware that replaced it. Registering
+   * the middleware anyway would be invisible at runtime, since `configure`
+   * would decline to apply it, which is exactly why it is asserted here: a
+   * disabled feature that still constructs a provider is dead weight nothing
+   * else would catch.
    */
-  it('registers no APP_INTERCEPTOR provider when timing is disabled', () => {
+  it('registers neither an interceptor nor the middleware when timing is disabled', () => {
     const def: DynamicModule = BymaxCoreModule.forRoot({ timing: { enabled: false } })
-    const tokens = (def.providers ?? []).map(tokenOf)
+    const providers = def.providers ?? []
 
-    expect(tokens).not.toContain(APP_INTERCEPTOR)
+    expect(providers.map(tokenOf)).not.toContain(APP_INTERCEPTOR)
+    expect(providers).not.toContain(BymaxTimingMiddleware)
   })
 
   /**
-   * Enabled timing registers the real interceptor class.
+   * Enabled timing registers the middleware, not an interceptor.
    *
-   * The sync path must append the `APP_INTERCEPTOR` provider bound to
-   * `TimingInterceptor` via `useClass` exactly when timing is enabled.
+   * The recorder moved out of the interceptor slot because guards run before
+   * interceptors, so every rejection a guard issues — unauthenticated,
+   * forbidden, throttled — was invisible to it. The middleware is registered as
+   * a plain provider and applied through `configure`; asserting on the absence
+   * of `APP_INTERCEPTOR` matters as much as its presence, because two recorders
+   * would count every matched request twice.
    */
-  it('binds APP_INTERCEPTOR to TimingInterceptor when timing is enabled', () => {
+  it('registers the timing middleware and no interceptor when timing is enabled', () => {
     const def: DynamicModule = BymaxCoreModule.forRoot({ timing: { enabled: true } })
-    const provider = providerFor(def.providers ?? [], APP_INTERCEPTOR)
+    const providers = def.providers ?? []
 
-    expect(provider).toMatchObject({ useClass: TimingInterceptor })
+    expect(providers).toContain(BymaxTimingMiddleware)
+    expect(providerFor(providers, APP_INTERCEPTOR)).toBeUndefined()
   })
 
   describe('end to end', () => {
@@ -116,7 +133,7 @@ describe('BymaxCoreModule.forRoot, timing registration', () => {
      * Enabled timing delivers a sample for a real request.
      *
      * Booting a full app proves the sync-path DI wiring resolves (options,
-     * sink, and clock all inject cleanly) and that the bound interceptor is
+     * sink, and clock all inject cleanly) and that the applied middleware is
      * genuinely active, not merely present in the provider list.
      */
     it('delivers exactly one sample to the sink for a real request', async () => {
@@ -137,8 +154,8 @@ describe('BymaxCoreModule.forRoot, timing registration', () => {
     /**
      * Disabled timing never touches the sink.
      *
-     * With the feature disabled, the sync path registers no interceptor at
-     * all, so a real request must leave the sink untouched.
+     * With the feature disabled, the sync path registers no recorder at all,
+     * so a real request must leave the sink untouched.
      */
     it('never calls the sink for a real request when timing is disabled', async () => {
       const sink = recordingSink()
@@ -155,13 +172,87 @@ describe('BymaxCoreModule.forRoot, timing registration', () => {
     })
 
     /**
+     * The root path is recorded like any other.
+     *
+     * Nest 11's migration guide prescribes the braced `'{*splat}'` for "all
+     * routes" precisely because the unbraced form requires at least one
+     * segment and skips `/`. The two patterns are indistinguishable on every
+     * other path, so nothing but a request to the root can tell them apart —
+     * and an application whose root is a real endpoint would have had it
+     * missing from its metrics with no error anywhere to explain why.
+     */
+    it('records a request to the application root', async () => {
+      const sink = recordingSink()
+      const moduleRef = await Test.createTestingModule({
+        imports: [BymaxCoreModule.forRoot({ timing: { enabled: true } }), sinkModule(sink)],
+        controllers: [RootController]
+      }).compile()
+      app = moduleRef.createNestApplication()
+      await app.init()
+
+      await request(app.getHttpServer()).get('/').expect(200, { ok: true })
+
+      expect(sink.samples).toEqual([expect.objectContaining({ route: '/', statusCode: 200 })])
+    })
+
+    /**
+     * The root is still recorded once the application takes a global prefix.
+     *
+     * `setGlobalPrefix` scopes module middleware to the prefix, and the
+     * wildcard Nest's migration guide prescribes stops matching the prefixed
+     * root there while continuing to match everything below it — nest#14520.
+     * Production applications almost always set a prefix, so the case the bug
+     * hides is the ordinary one, and only a request to the prefixed root can
+     * distinguish the pattern that survives it from the one that does not.
+     */
+    it('records the prefixed root when the application sets a global prefix', async () => {
+      const sink = recordingSink()
+      const moduleRef = await Test.createTestingModule({
+        imports: [BymaxCoreModule.forRoot({ timing: { enabled: true } }), sinkModule(sink)],
+        controllers: [RootController]
+      }).compile()
+      app = moduleRef.createNestApplication()
+      app.setGlobalPrefix('api')
+      await app.init()
+
+      await request(app.getHttpServer()).get('/api').expect(200, { ok: true })
+
+      expect(sink.samples).toEqual([expect.objectContaining({ route: '/api', statusCode: 200 })])
+    })
+
+    /**
+     * A request matching no route is recorded, under a bounded label.
+     *
+     * This is the case the middleware is applied to every route to reach: no
+     * controller runs, so nothing downstream of the router can observe it, and
+     * a scan shows up as a flood of these. The label must be the fixed
+     * `<unmatched>` and never the requested path, which the caller chooses and
+     * could use to mint one time series per probe.
+     */
+    it('records an unmatched request under the unmatched-route label', async () => {
+      const sink = recordingSink()
+      const moduleRef = await Test.createTestingModule({
+        imports: [BymaxCoreModule.forRoot({ timing: { enabled: true } }), sinkModule(sink)],
+        controllers: [ProbeController]
+      }).compile()
+      app = moduleRef.createNestApplication()
+      await app.init()
+
+      await request(app.getHttpServer()).get('/.env').expect(404)
+
+      expect(sink.samples).toEqual([
+        expect.objectContaining({ route: UNMATCHED_ROUTE, statusCode: 404 })
+      ])
+    })
+
+    /**
      * No sink bound anywhere.
      *
      * `BymaxCoreModule` binds no local default for `BYMAX_TIMING_SINK` when
      * the metrics bridge is not registered; with no consumer override present
-     * either, `TimingInterceptor`'s `@Optional()` injection must resolve
+     * either, the middleware's `@Optional()` injection must resolve
      * `undefined` and fall back to a no-op sink, so a real request still
-     * completes normally instead of failing to resolve the interceptor.
+     * completes normally instead of failing to resolve the middleware.
      */
     it('completes a real request when no sink is bound anywhere', async () => {
       const moduleRef = await Test.createTestingModule({
@@ -176,35 +267,70 @@ describe('BymaxCoreModule.forRoot, timing registration', () => {
   })
 })
 
-describe('selectAsyncTimingInterceptor, the async slot factory', () => {
-  /**
-   * Disabled timing resolves the transparent pass-through.
-   *
-   * The always-on async slot's factory must produce the
-   * {@link PassThroughInterceptor} product when the resolved options disable
-   * the timing feature.
-   */
-  it('resolves the pass-through interceptor when timing is disabled', () => {
-    const options = normalizeCoreOptions({ timing: { enabled: false } })
-    const sink = recordingSink()
+describe('BymaxCoreModule.forRootAsync, timing registration', () => {
+  let app: INestApplication | undefined
 
-    const product = selectAsyncTimingInterceptor(options, sink, DEFAULT_MONOTONIC_CLOCK)
-
-    expect(product).toBeInstanceOf(PassThroughInterceptor)
+  afterEach(async () => {
+    await app?.close()
+    app = undefined
   })
 
   /**
-   * Enabled timing resolves the real interceptor.
+   * Boot an async-registered app whose factory resolves the given options, hit
+   * the probe route, and return the exposition text.
    *
-   * The factory must produce a `TimingInterceptor` wired to the injected sink
-   * and clock when the resolved options enable the timing feature.
+   * The assertions read `/metrics` rather than a spy sink because the async
+   * path always binds its own `BYMAX_TIMING_SINK` — the metrics bridge — inside
+   * `BymaxCoreModule`, which takes precedence over a sibling module's binding
+   * for the module's own consumers. Reading the exposition therefore observes
+   * the wiring the async path actually has, end to end, instead of a seam
+   * substituted for the test.
    */
-  it('resolves TimingInterceptor when timing is enabled', () => {
-    const options = normalizeCoreOptions({ timing: { enabled: true } })
-    const sink = recordingSink()
+  async function scrapeAfterProbe(enabled: boolean): Promise<string> {
+    const moduleRef = await Test.createTestingModule({
+      imports: [
+        BymaxCoreModule.forRootAsync({
+          useFactory: () => ({ timing: { enabled }, metrics: { enabled: true } })
+        })
+      ],
+      controllers: [ProbeController]
+    }).compile()
+    app = moduleRef.createNestApplication()
+    await app.init()
 
-    const product = selectAsyncTimingInterceptor(options, sink, DEFAULT_MONOTONIC_CLOCK)
+    await request(app.getHttpServer()).get('/probe/ok').expect(200, { ok: true })
+    const scrape = await request(app.getHttpServer()).get(`/${DEFAULT_METRICS_PATH}`).expect(200)
+    return scrape.text
+  }
 
-    expect(product).toBeInstanceOf(TimingInterceptor)
+  /**
+   * The async path records too.
+   *
+   * The middleware is provided unconditionally here — the resolved options do
+   * not exist when the module is defined — so the gate lives entirely in
+   * `configure`, which runs after the consumer's factory. The counter must read
+   * exactly `1` for the probe: the same "exactly one" the sync path proves,
+   * because a second recorder on either path would double every rate an
+   * operator alerts on.
+   */
+  it('counts the request once when the factory enables timing', async () => {
+    const exposition = await scrapeAfterProbe(true)
+
+    expect(exposition).toMatch(/^http_requests_total\{[^}]*route="\/probe\/ok"[^}]*\} 1$/m)
+  })
+
+  /**
+   * A disabled feature stays silent on the async path.
+   *
+   * The provider is registered regardless, so nothing but `configure`'s gate
+   * stops it from running; this asserts that gate rather than the registration
+   * that cannot express it. Metrics stay enabled, so the endpoint answers and
+   * the absence of the series is the disabled feature rather than a dead
+   * endpoint.
+   */
+  it('counts nothing when the factory disables timing', async () => {
+    const exposition = await scrapeAfterProbe(false)
+
+    expect(exposition).not.toMatch(/^http_requests_total\{/m)
   })
 })

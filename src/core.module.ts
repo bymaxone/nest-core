@@ -3,20 +3,21 @@
  * Built on `ConfigurableModuleBuilder`; the `isGlobal` extra maps to
  * `DynamicModule.global` via `setExtras`. The synchronous `forRoot` path knows
  * the options at definition time and omits disabled features from the providers
- * and controllers arrays; the asynchronous `forRootAsync` path registers
- * always-on pipeline slots and a health controller that self-guards against a
+ * and controllers arrays; the asynchronous `forRootAsync` path registers an
+ * always-on pipeline slot and a health controller that self-guards against a
  * disabled or path-mismatched resolved configuration at request time.
  * @layer Module
  */
-import { ConfigurableModuleBuilder, Module } from '@nestjs/common'
+import { ConfigurableModuleBuilder, Inject, Module } from '@nestjs/common'
 import type {
   DynamicModule,
   ExceptionFilter,
-  NestInterceptor,
+  MiddlewareConsumer,
+  NestModule,
   Provider,
   Type
 } from '@nestjs/common'
-import { APP_FILTER, APP_INTERCEPTOR, DiscoveryModule, HttpAdapterHost } from '@nestjs/core'
+import { APP_FILTER, DiscoveryModule, HttpAdapterHost } from '@nestjs/core'
 
 import { DEFAULT_HEALTH_PATH, DEFAULT_METRICS_PATH, normalizeCoreOptions } from './core.options'
 import type { BymaxCoreModuleOptions, ResolvedCoreOptions } from './core.options'
@@ -37,11 +38,8 @@ import {
   buildMetricsRegistryProvider,
   buildMetricsTimingSinkProvider
 } from './metrics/metrics.providers'
-import { selectAsyncExceptionFilter, selectAsyncTimingInterceptor } from './passthrough.providers'
-import { BYMAX_TIMING_CLOCK } from './timing/timing.clock'
-import type { MonotonicClock } from './timing/timing.clock'
-import { TimingInterceptor } from './timing/timing.interceptor'
-import type { ITimingSink } from './timing/timing.interfaces'
+import { selectAsyncExceptionFilter } from './passthrough.providers'
+import { BymaxTimingMiddleware } from './timing/timing.middleware'
 
 /** Non-option extras accepted by `forRoot` / `forRootAsync`. */
 export interface BymaxCoreModuleExtras {
@@ -76,15 +74,16 @@ export const {
  * Build the feature providers registered on the synchronous path. Disabled
  * features contribute nothing, so a fully-disabled configuration yields an
  * empty array. The envelope filter registers as the outermost `APP_FILTER`
- * only when the envelope feature is enabled; the timing interceptor registers
- * as `APP_INTERCEPTOR` only when the timing feature is enabled; `HealthService`
- * is registered only when the health feature is enabled, matching its
- * controller counterpart in {@link buildControllers}. The metrics registry
- * provider is added only when metrics are enabled, so a disabled configuration
- * never loads `prom-client`; the metrics timing-sink bridge is added only when
- * timing and metrics are both enabled, so HTTP samples feed the default HTTP
- * metrics (otherwise `TimingInterceptor` falls back to its own in-code no-op,
- * or to a consumer's own `BYMAX_TIMING_SINK` binding, when one is enabled).
+ * only when the envelope feature is enabled; the timing middleware is provided
+ * only when the timing feature is enabled, and `configure` applies it under the
+ * same condition; `HealthService` is registered only when the health feature is
+ * enabled, matching its controller counterpart in {@link buildControllers}. The
+ * metrics registry provider is added only when metrics are enabled, so a
+ * disabled configuration never loads `prom-client`; the metrics timing-sink
+ * bridge is added only when timing and metrics are both enabled, so HTTP
+ * samples feed the default HTTP metrics (otherwise the middleware falls back to
+ * its own in-code no-op, or to a consumer's own `BYMAX_TIMING_SINK` binding,
+ * when one is enabled).
  *
  * @param resolved - The resolved options snapshot the gate reads.
  * @returns The conditionally-registered feature providers.
@@ -95,7 +94,7 @@ function buildSyncProviders(resolved: ResolvedCoreOptions): Provider[] {
     providers.push({ provide: APP_FILTER, useClass: BymaxExceptionFilter })
   }
   if (resolved.timing.enabled) {
-    providers.push({ provide: APP_INTERCEPTOR, useClass: TimingInterceptor })
+    providers.push(BymaxTimingMiddleware)
   }
   if (resolved.health.enabled) {
     providers.push(HealthService)
@@ -145,7 +144,12 @@ function buildControllers(resolved: ResolvedCoreOptions): Type[] {
  * hands the possibly-`undefined` result to {@link selectAsyncExceptionFilter},
  * which forwards it to `BymaxExceptionFilter`'s own no-op fallback.
  *
- * @returns The `APP_FILTER` and `APP_INTERCEPTOR` slot providers.
+ * Timing needs no slot here. Its recorder is middleware, and `configure` reads
+ * the already-resolved options to decide whether to apply it, so the runtime
+ * gate a pass-through interceptor existed to provide has somewhere better to
+ * live on this path.
+ *
+ * @returns The `APP_FILTER` slot provider.
  */
 function buildAsyncSlots(): Provider[] {
   return [
@@ -161,15 +165,6 @@ function buildAsyncSlots(): Provider[] {
         { token: BYMAX_CORRELATION_PROVIDER, optional: true },
         HttpAdapterHost
       ]
-    },
-    {
-      provide: APP_INTERCEPTOR,
-      useFactory: (
-        options: ResolvedCoreOptions,
-        sink: ITimingSink,
-        clock: MonotonicClock
-      ): NestInterceptor => selectAsyncTimingInterceptor(options, sink, clock),
-      inject: [BYMAX_CORE_OPTIONS, BYMAX_TIMING_SINK, BYMAX_TIMING_CLOCK]
     }
   ]
 }
@@ -212,7 +207,62 @@ export function augmentModule(
  * `BymaxCoreModule`, the application foundation module for NestJS 11.
  */
 @Module({})
-export class BymaxCoreModule extends BymaxCoreModuleBase {
+export class BymaxCoreModule extends BymaxCoreModuleBase implements NestModule {
+  /**
+   * @param options - The resolved snapshot, read to decide whether the timing
+   *   middleware is applied at all.
+   */
+  constructor(@Inject(BYMAX_CORE_OPTIONS) private readonly resolved: ResolvedCoreOptions) {
+    super()
+  }
+
+  /**
+   * Apply the request-timing middleware to every route.
+   *
+   * Middleware rather than the interceptor this replaced, because guards run
+   * before interceptors: a request rejected by an authentication, authorization
+   * or throttling guard never reached the interceptor, and one matching no
+   * route never reached a controller at all. A deployment could therefore be
+   * under a credential-stuffing run — a flood of 401s — with a flat error
+   * graph, which is why this is a security fix rather than a metrics
+   * improvement.
+   *
+   * Applied on both registration paths, and only when timing is enabled: the
+   * middleware is the sole recorder now, since a second one would count every
+   * matched request twice.
+   *
+   * The pattern is a mount at `'/'`, chosen by measurement over the two
+   * wildcards that look more idiomatic:
+   *
+   * - `'*splat'`, unbraced, requires at least one segment and silently skips
+   *   the root. Five requests, four samples, the missing one being `/`.
+   * - `'{*splat}'` is what Nest 11's migration guide prescribes for "all
+   *   routes", and it does match the root — until the application calls
+   *   `setGlobalPrefix`, after which the prefixed root (`/api`) stops matching
+   *   while everything below it still does. That is nest#14520.
+   * - `'/'` matched every path in both configurations, being an ordinary mount
+   *   rather than a pattern: whatever prefix it is scoped to, it matches
+   *   everything beneath.
+   *
+   * A recorder that quietly omits one route is the same class of defect this
+   * middleware exists to fix, so the form that omits none wins over the form
+   * that reads best.
+   *
+   * One limit stays and is documented in the README: Nest scopes module
+   * middleware to the global prefix, so with `setGlobalPrefix('api')` a request
+   * to `/nope` — outside the prefix entirely — reaches no middleware and is not
+   * recorded. No `forRoutes` argument changes that.
+   *
+   * @param consumer - Nest's middleware consumer.
+   */
+  configure(consumer: MiddlewareConsumer): void {
+    if (!this.resolved.timing.enabled) {
+      return
+    }
+    // Stryker disable next-line StringLiteral: equivalent — Nest normalizes a middleware mount path, so `''` and `'/'` produce the same mount. Measured on both an unprefixed application and one calling `setGlobalPrefix('api')`: identical hit sets across the root, a parameterised route, a nested path, an unmatched path and a query string. The literal stays `'/'` because a mount at the root is what this expresses; `''` only works by normalising into it.
+    consumer.apply(BymaxTimingMiddleware).forRoutes('/')
+  }
+
   /**
    * Register the module synchronously. Options are known now, so disabled
    * features are omitted from the providers and controllers arrays and the
@@ -294,6 +344,11 @@ export class BymaxCoreModule extends BymaxCoreModuleBase {
       },
       ...buildDefaultProviders(),
       ...buildAsyncSlots(),
+      // Registered unconditionally, applied conditionally: the class must be
+      // resolvable before `configure` can apply it, and whether timing is
+      // enabled is unknown until the consumer's factory has run. An unapplied
+      // middleware provider costs one construction and observes nothing.
+      BymaxTimingMiddleware,
       HealthService,
       buildMetricsRegistryProvider(),
       buildMetricsTimingSinkProvider(),

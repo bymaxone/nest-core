@@ -11,8 +11,66 @@ heading here.
 
 ## [Unreleased]
 
+### Security
+
+- **Requests rejected before a handler are now counted.** The recorder moved
+  from `APP_INTERCEPTOR` to middleware (`BymaxTimingMiddleware`), applied to
+  every route when `timing.enabled` is `true`. Nest runs middleware, then
+  guards, then interceptors: a request a guard rejects never reached
+  `intercept()`, and a request matching no route never reached a controller.
+  Measured on a real application, three requests — a handler success, a guard
+  rejection and an unknown path — produced exactly **one** sample. `401`, `403`,
+  `429` and `404` were all invisible, which is to say a deployment could be under
+  a credential-stuffing run, a privilege probe or route enumeration with a flat
+  error graph. All six cases are now counted, and the sample is emitted on the
+  response's `'close'` event rather than `'finish'`, so a client that hangs up
+  mid-request — what a scanner does — is counted too.
+- **The root path is recorded.** The middleware is mounted at `'/'` rather than
+  through a wildcard pattern. The unbraced `'*splat'` skips the root outright,
+  and the braced `'{*splat}'` that Nest 11's migration guide prescribes stops
+  matching the _prefixed_ root once an application calls `setGlobalPrefix`
+  (nest#14520) — which production applications almost always do. Both were
+  measured; the mount matched every path in both configurations. One limit
+  remains and is documented: module middleware is scoped to the global prefix,
+  so a request outside it entirely reaches no middleware.
+- **Unmatched requests record a bounded label.** A request that matched no route
+  is recorded as `<unmatched>` (exported as `UNMATCHED_ROUTE`), never the
+  requested path. The previous raw-URL fallback would have let anyone mint one
+  Prometheus time series per probe, so counting scanner traffic under it would
+  have turned this fix into a memory-exhaustion vector.
+
+### Changed
+
+- **`ITimingSink` implementations now receive more samples**, including requests
+  that never reached a handler. Sinks that assumed "one sample per completed
+  request" should expect "one sample per closed request". The built-in metrics
+  bridge needs no change; a dashboard filtering on `2xx` sees its numbers
+  unchanged and its error rates become correct.
+- **No status is relabelled**, and that is deliberate. A client that hangs up
+  mid-handler was already counted — destroying the socket does not cancel the
+  JavaScript already running, so the handler finished and the interceptor
+  recorded an ordinary `200` — and it still is, once, under the same `200`.
+  Introducing a sentinel status for aborts would rewrite the value of
+  `status_code="200"` series that already exist in every deployment, moving
+  error-rate panels with no change in traffic. Whether an abort deserves its own
+  status is a separate decision from whether the request is counted at all, and
+  this release makes only the second one.
+- **The timing recorder is registered once, not twice.** The middleware
+  **replaced** the interceptor rather than joining it — two recorders would
+  double every rate an alert threshold is tuned against, which is a quieter
+  failure than the one being fixed.
+
+### Deprecated
+
+- **`TimingInterceptor`** is superseded by `BymaxTimingMiddleware` and is no
+  longer registered by `BymaxCoreModule`. It stays exported so an application
+  that wired it by hand keeps compiling; registering it alongside the middleware
+  records a second sample for every request that reaches a handler.
+
 ### Added
 
+- **`BymaxTimingMiddleware` and `UNMATCHED_ROUTE`** are exported from the package
+  root.
 - **A library can describe its own routes in a consumer's document.** A provider
   marked `@BymaxOpenApiContributor()` returns OpenAPI fragments keyed by handler
   identity — `'AuthController.login'` — and they are merged onto the operations

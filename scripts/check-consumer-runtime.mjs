@@ -70,6 +70,8 @@ const SUBPATHS = {
     'BymaxCoreModule',
     'BymaxExceptionFilter',
     'TimingInterceptor',
+    'BymaxTimingMiddleware',
+    'UNMATCHED_ROUTE',
     'buildErrorEnvelope',
     'codeForStatus',
     'BYMAX_CORE_OPTIONS',

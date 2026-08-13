@@ -8,6 +8,14 @@
  * bound `ITimingSink`. The sink contract is fire-and-forget: any exception it
  * throws is caught and silenced here, so request timing can never break a
  * request or alter the response an error path propagates.
+ *
+ * Superseded as the module's recorder by {@link BymaxTimingMiddleware}. That
+ * same "guards run before interceptors" is why: a request a guard rejects never
+ * reaches `intercept()`, so authentication failures, authorization failures and
+ * throttled requests were never counted at all. Nothing registers this class
+ * any more; it remains exported so an application that wired it by hand keeps
+ * compiling, and registering it alongside the middleware double-counts every
+ * request that does reach a handler.
  * @layer Interceptor
  */
 import { HttpException, Inject, Injectable, Optional } from '@nestjs/common'
@@ -21,8 +29,9 @@ import { NoopTimingSink } from '../defaults.providers'
 import { extractRequestInfo } from './request-info.accessor'
 import { BYMAX_TIMING_CLOCK, DEFAULT_MONOTONIC_CLOCK } from './timing.clock'
 import type { MonotonicClock } from './timing.clock'
-import type { ITimingSink, RequestTimingSample } from './timing.interfaces'
-import type { ITraceContextProvider, TraceContext } from '../telemetry/trace-context'
+import type { ITimingSink } from './timing.interfaces'
+import { buildTimingSample } from './timing.sample'
+import type { ITraceContextProvider } from '../telemetry/trace-context'
 import { NoopTraceContextProvider } from '../telemetry/trace-context'
 
 /** Status recorded when a response completes without an explicit status code. */
@@ -37,10 +46,15 @@ interface ResponseStatusShape {
 }
 
 /**
- * Request-timing interceptor. Registered as the `APP_INTERCEPTOR` when the
- * timing feature is enabled, on both the sync and async registration paths.
- * Non-HTTP execution contexts (GraphQL, RPC) pass through untouched: this
- * feature is HTTP-first, matching the exception filter's documented scope.
+ * Request-timing interceptor. No longer registered by `BymaxCoreModule`, which
+ * records through {@link BymaxTimingMiddleware} instead so that requests ended
+ * by a guard or by no route matching are counted too. Non-HTTP execution
+ * contexts (GraphQL, RPC) pass through untouched: this feature is HTTP-first,
+ * matching the exception filter's documented scope.
+ *
+ * @deprecated Since 1.4.0, superseded by `BymaxTimingMiddleware`, which the
+ *   module registers automatically. Registering this interceptor as well
+ *   records a second sample for every request that reaches a handler.
  */
 @Injectable()
 export class TimingInterceptor implements NestInterceptor {
@@ -124,9 +138,9 @@ export class TimingInterceptor implements NestInterceptor {
   }
 
   /**
-   * Build the sample, compute the slow flag, and deliver it to the sink inside
-   * a try/catch that silences any failure: a throwing sink must never affect
-   * the request it is observing.
+   * Build the sample and deliver it to the sink inside a try/catch that
+   * silences any failure: a throwing sink must never affect the request it is
+   * observing.
    *
    * @param method - HTTP method of the request.
    * @param route - Route template of the request.
@@ -134,31 +148,16 @@ export class TimingInterceptor implements NestInterceptor {
    * @param start - Monotonic start timestamp captured before the handler ran.
    */
   private recordSample(method: string, route: string, statusCode: number, start: number): void {
-    const durationMs = this.clock.now() - start
-    const threshold = this.options.timing.slowRequestThresholdMs
-    const slow = threshold !== undefined && durationMs > threshold
-    // Two guards, not one: a failed trace lookup must cost the optional trace
-    // fields and nothing else. Folding it into the sink's guard would drop the
-    // whole sample, so a broken tracer would silently stop the request counter
-    // — a worse outcome than the missing ids it was meant to tolerate.
-    let trace: TraceContext | undefined
+    const sample = buildTimingSample({
+      method,
+      route,
+      statusCode,
+      durationMs: this.clock.now() - start,
+      threshold: this.options.timing.slowRequestThresholdMs,
+      traceContext: this.traceContext
+    })
     try {
-      trace = this.traceContext.getTraceContext()
-    } catch {
-      // The provider contract says it never throws; this interceptor's guarantee
-      // does not depend on that being true.
-    }
-    try {
-      this.sink.record({
-        method,
-        route,
-        statusCode,
-        durationMs,
-        slow,
-        // Spread rather than assigned: an absent trace must leave the keys off
-        // the sample entirely, so a sink cannot mistake `undefined` for an id.
-        ...(trace !== undefined ? { traceId: trace.traceId, spanId: trace.spanId } : {})
-      })
+      this.sink.record(sample)
     } catch {
       // Fire-and-forget contract: a throwing sink must never break the request
       // it is observing, so its failure is caught and silenced here.
