@@ -11,6 +11,23 @@ heading here.
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-08-13
+
+HTTP metrics were blind to every request that did not reach a handler. Nest runs
+**middleware → guards → interceptors → pipes → handler**, and the recorder was an
+interceptor, so authentication failures, authorization failures, throttled
+requests and unknown paths were never counted. Measured on a running
+application, three requests — a handler success, a guard rejection, an unknown
+path — produced **one** sample. A deployment could be under a credential-stuffing
+run, a privilege probe or route enumeration with a flat error graph, which makes
+this a security fix rather than an observability improvement.
+
+**Apply to a derived backend:** bump the dependency. No code change is needed.
+Expect new `401`/`403`/`429` series on routes that already existed, a new
+`route="<unmatched>"` series for `404`s, and a **lower success rate** — the
+denominator finally includes the rejections. Existing `status_code="200"` series
+keep their values.
+
 ### Security
 
 - **Requests rejected before a handler are now counted.** The recorder moved
@@ -133,7 +150,7 @@ heading here.
   caused it. An application's own DTOs need none of this; `@nestjs/swagger`'s CLI
   plugin already derives them, which is the route a precompiled library lacks.
 
-## [1.3.2] - 2026-08-11
+## [1.3.2] - 2026-08-12
 
 A consumer audit of the served document found that it described the library's
 promises rather than the deployment: routes of features that were switched off
@@ -631,4 +648,5 @@ have regressed from. They are kept because the reasoning is worth having.
 [1.2.2]: https://github.com/bymaxone/nest-core/compare/v1.2.1...v1.2.2
 [1.2.1]: https://github.com/bymaxone/nest-core/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/bymaxone/nest-core/compare/v1.1.1...v1.2.0
-[Unreleased]: https://github.com/bymaxone/nest-core/compare/v1.3.2...HEAD
+[1.4.0]: https://github.com/bymaxone/nest-core/compare/v1.3.2...v1.4.0
+[Unreleased]: https://github.com/bymaxone/nest-core/compare/v1.4.0...HEAD
