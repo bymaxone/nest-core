@@ -442,9 +442,11 @@ remembers to look:
 it('still requires a credential everywhere it should', () => {
   const document = buildYourDocument()
 
-  // Load-bearing: every operation that states nothing inherits this. Deleting
-  // it is the edit this whole section is about, and it is a one-line diff.
-  expect(document.security).toBeDefined()
+  // Assert the default you expect, not merely that one exists. `[]` is a
+  // defined value that requires nothing, so a "toBeDefined" check passes for
+  // a default that degraded to empty — which is the regression this test is
+  // here to catch, wearing the shape of a pass.
+  expect(document.security).toEqual([{ cookieAuth: [] }])
 
   // An explicit `[]` is how an operation says "public". The set of operations
   // saying it should be the set you meant — no more, no fewer.
