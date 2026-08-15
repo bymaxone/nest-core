@@ -20,7 +20,8 @@
  * deployment: a feature the consumer turned off has its routes removed, since
  * the runtime answers 404 for them, and the routes this package registers
  * itself carry the security they actually require, which this package knows
- * without being told.
+ * without being told. Which paths those are is answered by `openapi.routes`,
+ * so the recognition rules are stated once for every reader of them.
  * @layer Service
  */
 import type {
@@ -29,12 +30,10 @@ import type {
   ResolvedCoreOptions,
   ResolvedOpenApiOptions
 } from '../core.options'
-// Imported from the leaf module rather than from `core.options`, which
-// re-exports them: this is a separate bundle, and reaching into the resolver
-// for two strings inlines the whole of it here. See `route-defaults.ts`.
-import { DEFAULT_HEALTH_PATH, DEFAULT_METRICS_PATH } from '../route-defaults'
 import type { OpenApiFragmentObject } from './openapi.contract'
 import type { ResolvedContribution } from './openapi.contribution'
+import { indexOwnRoutes, isOwnRoute } from './openapi.routes'
+import type { OwnRouteIndex } from './openapi.routes'
 import { CORE_PARAMETERS, CORE_SCHEMAS } from './openapi.schemas'
 import type { OpenApiObjectMap } from './openapi.schemas'
 
@@ -177,111 +176,6 @@ function mergeResponses(
     }
   }
   return Object.fromEntries(merged)
-}
-
-/**
- * Strip the slashes around a configured route segment, so a consumer who wrote
- * `'/health'` and one who wrote `'health'` produce the same match.
- *
- * @param segment - The configured route.
- * @returns The segment without leading or trailing slashes.
- */
-function trimSlashes(segment: string): string {
-  // Split-and-rejoin rather than a pair of anchored regexes: it drops empty
-  // segments wherever they occur, so a doubled slash inside the path collapses
-  // too, and every part of the transformation is observable from a test — an
-  // anchored `/^\/+/` cannot be distinguished from `/^\/*/` by any input.
-  return segment
-    .split('/')
-    .filter((part) => part !== '')
-    .join('/')
-}
-
-/**
- * The path `@nestjs/swagger` documents for a route this package registered.
- *
- * The peer writes paths *including* the application's global prefix, so an
- * application calling `setGlobalPrefix('api/v2')` documents this package's
- * health probe as `/api/v2/health/live`. The prefix is read from the running
- * application and handed to this module as data, which is what lets the
- * comparison be exact.
- *
- * Inferring the prefix from the document instead — "the segment shared by every
- * path" — is the tempting shortcut and it is wrong: an application whose routes
- * all sit under `/tenants/{id}` would have that inferred as its prefix, and a
- * consumer's own `/tenants/{id}/health/live` would be deleted from their
- * document as though this package owned it. Guessing loses consumer content to
- * fix ours. Asking does not.
- *
- * @param prefix - The application's global prefix, without surrounding slashes.
- * @param suffix - The route this package registered, without leading slash.
- * @returns The path the document is expected to carry.
- */
-function routePath(prefix: string, suffix: string): string {
-  return prefix === '' ? `/${suffix}` : `/${prefix}/${suffix}`
-}
-
-/**
- * The health routes this package may have registered.
- *
- * Both the configured path and the default are considered, because the two
- * registration paths differ: `forRoot` mounts the controller at the configured
- * path, while `forRootAsync` must fix route metadata before the async options
- * resolve and therefore always mounts at the default. Only one of the two ever
- * appears in a given document; matching both means this module does not need to
- * know which registration path the consumer used.
- *
- * @param options - The resolved options.
- * @returns The route suffixes, without leading slashes.
- */
-function healthRoutes(options: ResolvedCoreOptions): readonly string[] {
-  const bases = new Set([trimSlashes(options.health.path), DEFAULT_HEALTH_PATH])
-  return [...bases].flatMap((base) => [`${base}/live`, `${base}/ready`])
-}
-
-/**
- * The metrics routes this package may have registered. See {@link healthRoutes}
- * for why both the configured and the default path are considered.
- *
- * @param options - The resolved options.
- * @returns The route suffixes, without leading slashes.
- */
-function metricsRoutes(options: ResolvedCoreOptions): readonly string[] {
-  return [...new Set([trimSlashes(options.metrics.path), DEFAULT_METRICS_PATH])]
-}
-
-/** Recognizes the routes this package registered, in one document. */
-interface OwnRouteIndex {
-  /** Whether the path is one of this package's health probes. */
-  isHealth(path: string): boolean
-  /** Whether the path is this package's scrape endpoint. */
-  isMetrics(path: string): boolean
-}
-
-/**
- * Index this package's own routes against one document.
- *
- * Built once and passed down rather than recomputed per path: the route lists
- * and the prefix test both depend only on the document and the options, and
- * rebuilding them inside a loop over every operation is work proportional to
- * the square of the API's size for an answer that never changes.
- *
- * @param options - The resolved options.
- * @param prefixes - Every path prefix the application can serve these routes
- *   under: its global prefix combined with each URI version segment, or a
- *   single empty string when it uses neither.
- * @returns The recognizer for this document.
- */
-function indexOwnRoutes(options: ResolvedCoreOptions, prefixes: readonly string[]): OwnRouteIndex {
-  const normalized = prefixes.map(trimSlashes)
-  const expand = (suffixes: readonly string[]): readonly string[] =>
-    normalized.flatMap((prefix) => suffixes.map((suffix) => routePath(prefix, suffix)))
-  const health = expand(healthRoutes(options))
-  const metrics = expand(metricsRoutes(options))
-  return {
-    isHealth: (path) => health.includes(path),
-    isMetrics: (path) => metrics.includes(path)
-  }
 }
 
 /**
@@ -525,6 +419,103 @@ function augmentOperation(
   }
 
   return result
+}
+
+/** One operation the consumer owns, addressed and read. */
+interface ConsumerOperation {
+  /** The `"<METHOD> <path>"` key addressing it. */
+  readonly key: string
+  /** The operation object itself. */
+  readonly operation: Readonly<Record<string, unknown>>
+}
+
+/**
+ * Every operation in the document except the ones this package registered.
+ *
+ * The exclusion runs on both sides of {@link unsecuredOperations}: this
+ * package's own routes must neither be reported nor be the evidence that
+ * somebody described a security posture. A health probe carrying no requirement
+ * is the correct description of a route an orchestrator polls without a
+ * credential, and the scrape endpoint carries one exactly when a token is
+ * configured — neither says anything about what the consumer's routes were
+ * meant to require.
+ *
+ * @param paths - The served document's path map.
+ * @param routes - The recognizer for this package's own routes.
+ * @returns The consumer's operations, in document order.
+ */
+function consumerOperations(
+  paths: Readonly<Record<string, unknown>>,
+  routes: OwnRouteIndex
+): readonly ConsumerOperation[] {
+  return Object.entries(paths).flatMap(([path, item]) =>
+    operationsOf(item)
+      .filter(([method]) => !isOwnRoute(path, method, routes))
+      .map(([method, operation]) => ({
+        key: operationKey(method, path),
+        operation: asRecord(operation)
+      }))
+  )
+}
+
+/**
+ * The consumer's operations that the served document says require nothing at
+ * all — no requirement of their own, none contributed, no override, and no
+ * document-level default to inherit.
+ *
+ * That combination has exactly one meaning to a client generator: send no
+ * credentials. It is almost never what a backend with guards intends, and
+ * nothing else in this module can catch it — {@link assertSchemesDeclared} is
+ * satisfied precisely because there are no requirements left to dangle, and the
+ * runtime still answers `401`, so a status-code probe finds nothing either. The
+ * one edit that produces it is deleting a document-level `security` default
+ * alongside the per-operation entries a library has taken over describing.
+ *
+ * Two conditions keep this quiet where the silence is correct. A document-level
+ * member answers for every operation that states nothing, so its presence ends
+ * the question — including the explicit empty array, which is a consumer
+ * declaring the whole API public rather than omitting to say anything. And an
+ * application where *no* operation states a requirement never described a
+ * posture at all: that is a genuinely public API, and a warning it earns on
+ * every boot forever is the one that teaches people to skip warnings. What is
+ * reported is therefore always an operation left bare beside operations that
+ * are not.
+ *
+ * The known gap follows from that second condition, and it is the honest limit
+ * of the check: a document with nothing explicit anywhere is indistinguishable
+ * from an API that is public on purpose, so a consumer who deletes *every*
+ * requirement at once is not warned. Deleting the document default while a
+ * library still describes its own routes — the case this exists for — is.
+ *
+ * Reported rather than thrown, and computed here rather than logged here: an
+ * all-public API is a legitimate configuration, and this module stays data in,
+ * data out so the rule is testable without a Nest application.
+ *
+ * @param document - The document that will be served, after augmentation.
+ * @param options - The resolved core options.
+ * @param pathPrefixes - Every prefix this package's own routes can appear
+ *   under, as {@link augmentDocument} takes them.
+ * @returns The operation keys, in document order, or none when the document
+ *   carries a default, describes no requirement anywhere, or leaves nothing
+ *   bare.
+ */
+export function unsecuredOperations(
+  document: OpenApiDocumentLike,
+  options: ResolvedCoreOptions,
+  pathPrefixes: readonly string[] = ['']
+): readonly string[] {
+  if (document.security !== undefined) {
+    return []
+  }
+
+  const routes = indexOwnRoutes(options, pathPrefixes)
+  const candidates = consumerOperations(asRecord(document.paths), routes)
+  if (!candidates.some(({ operation }) => operation['security'] !== undefined)) {
+    return []
+  }
+  return candidates
+    .filter(({ operation }) => operation['security'] === undefined)
+    .map(({ key }) => key)
 }
 
 /**
