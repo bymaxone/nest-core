@@ -6,7 +6,7 @@
  * @layer Config
  */
 import { DEFAULT_HEALTH_PATH, DEFAULT_METRICS_PATH } from './route-defaults'
-import { isProductionRuntime } from './runtime.environment'
+import { isProductionRuntime, runtimeEnvironmentName } from './runtime.environment'
 
 export { DEFAULT_HEALTH_PATH, DEFAULT_METRICS_PATH } from './route-defaults'
 
@@ -300,6 +300,28 @@ export interface BymaxCoreModuleOptions {
   openapi?: OpenApiOptions
   /** Trace correlation. Default: disabled. */
   telemetry?: TelemetryOptions
+  /**
+   * The environment this deployment is running in, for the features that must
+   * never exist outside development — today, the OpenAPI document and its UI.
+   *
+   * **`NODE_ENV` always wins.** This is consulted only when the process
+   * declares nothing: `NODE_ENV` unset, or set to whitespace. It cannot make a
+   * runtime that identified itself as production serve the document, and no
+   * value here overrides one there.
+   *
+   * Set it when your application validates its own environment variable — an
+   * `APP_ENV` your config schema parses — and does not also set `NODE_ENV`.
+   * Without it, that deployment is classified as production because absence was
+   * the only evidence available, and the document is refused in an environment
+   * that never asked for the refusal.
+   *
+   * Recognized non-production values are `development` and `test`, compared
+   * case-insensitively and ignoring surrounding whitespace. Anything else,
+   * including an unrecognized name, is production.
+   *
+   * @example 'development'
+   */
+  environment?: string
 }
 
 /** Fully-resolved envelope options. */
@@ -368,9 +390,9 @@ export interface ResolvedOpenApiOptions {
 
 /**
  * The effective, defaults-applied configuration exposed under
- * `BYMAX_CORE_OPTIONS`. Fields with a documented default are always present;
- * the only optional field is `timing.slowRequestThresholdMs`, which has no
- * default and is absent unless the consumer sets it.
+ * `BYMAX_CORE_OPTIONS`. Fields with a documented default are always present.
+ * Two fields have no default and are absent unless the consumer supplies them:
+ * `timing.slowRequestThresholdMs`, and `environment`.
  */
 export interface ResolvedCoreOptions {
   envelope: ResolvedEnvelopeOptions
@@ -379,6 +401,12 @@ export interface ResolvedCoreOptions {
   metrics: ResolvedMetricsOptions
   openapi: ResolvedOpenApiOptions
   telemetry: ResolvedTelemetryOptions
+  /**
+   * The environment the application declared, carried through so the bootstrap
+   * helper classifies the runtime from the same two inputs the resolver did.
+   * Absent when the application declared none.
+   */
+  environment?: string
 }
 
 /** Default per-indicator timeout in milliseconds. */
@@ -529,11 +557,16 @@ function cloneServers(
  * bootstrap helper, which never trusts this one.
  *
  * @param raw - The consumer OpenAPI block, if any.
+ * @param declaredEnvironment - The environment the application declared, used
+ *   only where `NODE_ENV` declares nothing. See `runtimeEnvironmentName`.
  * @returns The fully-populated OpenAPI options.
  */
-function resolveOpenApi(raw?: OpenApiOptions): ResolvedOpenApiOptions {
+function resolveOpenApi(
+  raw: OpenApiOptions | undefined,
+  declaredEnvironment?: string
+): ResolvedOpenApiOptions {
   const requested = raw?.enabled ?? false
-  const production = isProductionRuntime()
+  const production = isProductionRuntime(runtimeEnvironmentName(declaredEnvironment))
   return {
     enabled: requested && !production,
     suppressedInProduction: requested && production,
@@ -588,8 +621,12 @@ export function normalizeCoreOptions(raw?: BymaxCoreModuleOptions): ResolvedCore
     timing: resolveTiming(raw?.timing),
     health: resolveHealth(raw?.health),
     metrics: resolveMetrics(raw?.metrics),
-    openapi: resolveOpenApi(raw?.openapi),
-    telemetry: resolveTelemetry(raw?.telemetry)
+    openapi: resolveOpenApi(raw?.openapi, raw?.environment),
+    telemetry: resolveTelemetry(raw?.telemetry),
+    // Spread rather than assigned so an application that declared nothing has
+    // no `environment` member at all, matching every other optional member on
+    // this snapshot under `exactOptionalPropertyTypes`.
+    ...(raw?.environment === undefined ? {} : { environment: raw.environment })
   })
 }
 

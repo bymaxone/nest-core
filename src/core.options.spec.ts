@@ -345,6 +345,74 @@ describe('normalizeCoreOptions, openapi block', () => {
   })
 
   /**
+   * A declared environment answers where the process declared nothing.
+   *
+   * The case the option exists for: an application that validates its own
+   * `APP_ENV` and never sets `NODE_ENV` was classified as production because
+   * absence was the only evidence, and earned a refusal it never asked for.
+   */
+  it('resolves the feature on from a declared environment when NODE_ENV is unset', () => {
+    delete process.env['NODE_ENV']
+
+    const resolved = normalizeCoreOptions({
+      openapi: { enabled: true },
+      environment: 'development'
+    })
+
+    expect(resolved.openapi.enabled).toBe(true)
+    expect(resolved.openapi.suppressedInProduction).toBe(false)
+    expect(resolved.environment).toBe('development')
+  })
+
+  /**
+   * A declared environment cannot overrule a process that named its own.
+   *
+   * The property that keeps the option from being an override: with
+   * `NODE_ENV=production` set, no configured value serves the document. If this
+   * reverses, a single line of options publishes an internal API surface in a
+   * deployment that already identified itself.
+   */
+  it('keeps the feature suppressed when NODE_ENV names production', () => {
+    process.env['NODE_ENV'] = 'production'
+
+    const resolved = normalizeCoreOptions({
+      openapi: { enabled: true },
+      environment: 'development'
+    })
+
+    expect(resolved.openapi.enabled).toBe(false)
+    expect(resolved.openapi.suppressedInProduction).toBe(true)
+  })
+
+  /**
+   * An unrecognized declared environment is production, like any other.
+   *
+   * The declaration enters the same fail-closed classification as `NODE_ENV`;
+   * it is a second source for the value, never a second set of rules.
+   */
+  it('treats an unrecognized declared environment as production', () => {
+    delete process.env['NODE_ENV']
+
+    const resolved = normalizeCoreOptions({ openapi: { enabled: true }, environment: 'staging' })
+
+    expect(resolved.openapi.enabled).toBe(false)
+    expect(resolved.openapi.suppressedInProduction).toBe(true)
+  })
+
+  /**
+   * Declaring nothing leaves no member on the snapshot.
+   *
+   * `exactOptionalPropertyTypes` is on, and every other optional member of the
+   * resolved snapshot is absent rather than explicitly undefined; a member
+   * present with an undefined value would be a shape no other option produces.
+   */
+  it('carries no environment member when none was declared', () => {
+    const resolved = normalizeCoreOptions({ openapi: { enabled: true } })
+
+    expect(resolved).not.toHaveProperty('environment')
+  })
+
+  /**
    * Silence when nothing was asked for.
    *
    * A consumer who never enabled the feature must not be marked as suppressed

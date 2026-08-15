@@ -11,9 +11,19 @@
  *
  * This helper is also the second of the two independent production guards. The
  * options resolver has already forced the feature off in a production runtime;
- * this function checks again on its own rather than trusting that snapshot,
- * because the snapshot is a value a consumer can bind themselves. Two layers,
- * neither relying on the other, and no override.
+ * this function classifies the runtime again on its own rather than trusting
+ * that snapshot's verdict, because the snapshot is a value a consumer can bind
+ * themselves. Two layers, neither relying on the other's conclusion.
+ *
+ * Both layers classify from the same two inputs: `NODE_ENV`, and the
+ * environment the application declared through `environment`. `NODE_ENV` wins
+ * whenever it says anything, so **no configured value can make a runtime that
+ * identified itself as production serve the document**. The declaration is read
+ * only where the process declares nothing, which was previously guessed as
+ * production — a guess that refused the document to any deployment validating
+ * its own environment variable instead. The narrowing is deliberate and worth
+ * naming: in that one ambiguous case, the snapshot the consumer bound does
+ * decide the answer, because there is nothing else to decide it with.
  * @layer Bootstrap
  */
 import { Logger, VERSION_NEUTRAL, VersioningType } from '@nestjs/common'
@@ -23,7 +33,7 @@ import type * as Swagger from '@nestjs/swagger'
 
 import type { ResolvedCoreOptions, ResolvedOpenApiOptions } from '../core.options'
 import { BYMAX_CORE_OPTIONS } from '../core.tokens'
-import { isProductionRuntime } from '../runtime.environment'
+import { isProductionRuntime, runtimeEnvironmentName } from '../runtime.environment'
 import { collectContributions, createHandlerIdMap } from './openapi.contribution'
 import type { HandlerIdMap, ResolvedContribution } from './openapi.contribution'
 import { augmentDocument, unsecuredOperations } from './openapi.document'
@@ -328,7 +338,7 @@ export async function applyBymaxOpenApi(app: INestApplication): Promise<OpenApiM
   const resolved = resolveCoreOptions(app)
   const options = resolved.openapi
 
-  if (isProductionRuntime()) {
+  if (isProductionRuntime(runtimeEnvironmentName(resolved.environment))) {
     // Warn only when the operator actually asked for the document: an
     // application that never enabled it should boot silently.
     if (options.suppressedInProduction || options.enabled) {
