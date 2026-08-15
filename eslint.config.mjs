@@ -22,7 +22,12 @@ export default [
   // strict bar as the published package.
   {
     files: ['src/**/*.ts', 'test/e2e/fixture/**/*.ts'],
-    ignores: ['**/*.spec.ts', '**/*.test.ts'],
+    // `__tests__/` holds scaffolding shared between spec files — fixtures and
+    // builders, never production code. Both Jest coverage configs and the
+    // Stryker `mutate` list already exclude it; this is the one config that had
+    // not been told, and without it a helper reading a document by key trips
+    // the object-injection rule that specs are not held to.
+    ignores: ['**/*.spec.ts', '**/*.test.ts', '**/__tests__/**'],
     languageOptions: {
       parser: tsParser,
       parserOptions: {
@@ -212,10 +217,10 @@ export default [
   },
 
   // Test files, Jest + Node globals, relaxed rules. Covers unit specs
-  // (`**/*.spec.ts`) and e2e specs (`**/*.e2e-spec.ts`, run under
-  // jest.e2e.config.ts from test/e2e/).
+  // (`**/*.spec.ts`), e2e specs (`**/*.e2e-spec.ts`, run under
+  // jest.e2e.config.ts from test/e2e/), and the fixtures they share.
   {
-    files: ['**/*.spec.ts', '**/*.test.ts', '**/*.e2e-spec.ts'],
+    files: ['**/*.spec.ts', '**/*.test.ts', '**/*.e2e-spec.ts', '**/__tests__/**/*.ts'],
     languageOptions: {
       parser: tsParser,
       parserOptions: {
