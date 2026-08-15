@@ -11,6 +11,19 @@ heading here.
 
 ## [Unreleased]
 
+## [1.5.1] - 2026-08-15
+
+Documentation only; no source change. The 1.5.0 warning's known-limit note told
+readers that no tool could catch the one shape the warning cannot report, and
+that rendering the document twice was therefore the only check. That is true
+only of something reading the rendered document alone — a consumer's own suite
+knows the intent and can assert it on every commit — so the note was arguing
+against the better practice.
+
+**Apply to a derived backend:** nothing to change in code. Read the revised
+"Documenting authentication" section and write the assertion it now shows; it
+costs one test and replaces a manual step nobody remembers to run.
+
 ### Documentation
 
 - **The credential-free warning's known limit no longer argues against the
@@ -722,4 +735,5 @@ have regressed from. They are kept because the reasoning is worth having.
 [1.2.0]: https://github.com/bymaxone/nest-core/compare/v1.1.1...v1.2.0
 [1.4.0]: https://github.com/bymaxone/nest-core/compare/v1.3.2...v1.4.0
 [1.5.0]: https://github.com/bymaxone/nest-core/compare/v1.4.0...v1.5.0
-[Unreleased]: https://github.com/bymaxone/nest-core/compare/v1.5.0...HEAD
+[1.5.1]: https://github.com/bymaxone/nest-core/compare/v1.5.0...v1.5.1
+[Unreleased]: https://github.com/bymaxone/nest-core/compare/v1.5.1...HEAD
