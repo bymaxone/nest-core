@@ -375,6 +375,16 @@ describe('augmentDocument — security', () => {
     )
   })
 
+  /**
+   * The collision is refused whichever side defined the reserved name.
+   *
+   * The sibling test covers a consumer declaring it through options; this one
+   * covers the peer generating it from a decorator, which is the harder case to
+   * notice because nothing in the consumer's configuration mentions the name.
+   * Both must fail, and the error must say which side it found — otherwise the
+   * merge silently picks a winner and the scrape operation ends up pointing at
+   * a scheme that is not the bearer token the runtime actually checks.
+   */
   it('throws when the generated document defines the reserved scrape scheme', () => {
     const mine = { BymaxMetricsAuth: { type: 'apiKey', in: 'header', name: 'X-Scrape' } }
 

@@ -204,6 +204,14 @@ describe('augmentDocument — responses', () => {
     expect(result.components).not.toHaveProperty('schemas')
   })
 
+  /**
+   * With the catalogue off, no `responses` member is written at all.
+   *
+   * The sibling test proves no `$ref` survives; this one proves the member is
+   * absent rather than present and empty. An operation carrying `responses: {}`
+   * documents nothing while looking as though it documents something, and a
+   * merge that wrote the member unconditionally would produce exactly that.
+   */
   it('adds no responses when includeCoreSchemas is false', () => {
     const result = augmentDocument(
       generated({ '/invoices': { get: {} } }),
