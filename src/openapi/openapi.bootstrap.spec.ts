@@ -14,8 +14,17 @@
  * logger's context, so the context could not be asserted. `NODE_ENV` is set per
  * test and restored.
  */
-import { ConsoleLogger, Logger, Module, VERSION_NEUTRAL, VersioningType } from '@nestjs/common'
-import type { INestApplication, LoggerService } from '@nestjs/common'
+import {
+  ConsoleLogger,
+  Controller,
+  Get,
+  Logger,
+  Module,
+  Post,
+  VERSION_NEUTRAL,
+  VersioningType
+} from '@nestjs/common'
+import type { INestApplication, LoggerService, Type } from '@nestjs/common'
 import { Test } from '@nestjs/testing'
 import request from 'supertest'
 
@@ -44,6 +53,14 @@ const PRODUCTION_WARNING =
   'openapi.enabled was requested but the OpenAPI document is never served in production. ' +
   'Set NODE_ENV to "development" or "test" to serve it.'
 
+/** The exact warning emitted for a single operation left requiring nothing. */
+const UNSECURED_WARNING =
+  'a client generated from the OpenAPI document will send no credentials to 1 operation(s): ' +
+  'GET /examples. They state no security requirement, the document declares no default, and ' +
+  'other operations in it do state one — so this is more often a missing openapi.security ' +
+  'default than a public API. Set openapi.security, or state the intent per operation with an ' +
+  'explicit [] in openapi.operationSecurity.'
+
 /** The exact guidance thrown when the core options cannot be resolved. */
 const UNRESOLVED_GUIDANCE =
   '[BymaxCoreModule] applyBymaxOpenApi could not resolve BYMAX_CORE_OPTIONS from the application. ' +
@@ -53,6 +70,56 @@ const UNRESOLVED_GUIDANCE =
 /** A module registering nothing at all, used to prove the unresolved-options path. */
 @Module({})
 class BareModule {}
+
+/** A consumer's controller: one route described, one left as generated. */
+@Controller()
+class ExampleController {
+  /** Stands in for a handler a consumer marks public. */
+  @Post('auth/login')
+  login(): string {
+    return 'ok'
+  }
+
+  /** Stands in for the guarded route that loses its requirement. */
+  @Get('examples')
+  list(): string {
+    return 'ok'
+  }
+}
+
+/**
+ * A controller exposing `count` bare GET routes.
+ *
+ * Built in a loop rather than as a dozen near-identical methods: the count is
+ * the only thing that matters to the report's elision, and a dozen copies of
+ * the same handler is duplication a reader has to diff to be sure of.
+ *
+ * @param count - How many routes to expose, as `/bulk/r0` … `/bulk/r<count-1>`.
+ * @returns The controller class, ready to register.
+ */
+function bulkController(count: number): Type<unknown> {
+  class BulkController {}
+  for (let index = 0; index < count; index += 1) {
+    const handler = (): string => 'ok'
+    // Named explicitly: `@nestjs/swagger` reads the *function's* name as the
+    // handler key, not the property it is defined under, and an arrow taken
+    // from a `value:` member is named "value" — so every route would answer to
+    // `BulkController.value` and collide, measured rather than assumed.
+    Object.defineProperty(handler, 'name', { value: `route${index}` })
+    const descriptor: TypedPropertyDescriptor<() => string> = {
+      value: handler,
+      writable: true,
+      configurable: true,
+      // Nest's metadata scanner walks the prototype's own members; a
+      // non-enumerable one is not a route it can find.
+      enumerable: true
+    }
+    Object.defineProperty(BulkController.prototype, `route${index}`, descriptor)
+    Get(`r${index}`)(BulkController.prototype, `route${index}`, descriptor)
+  }
+  Controller('bulk')(BulkController)
+  return BulkController
+}
 
 /** Captures what Nest's logger received, message and context alike. */
 const logged: LoggerService = {
@@ -68,9 +135,13 @@ const logged: LoggerService = {
  * uninitialized: the helper under test must run before initialization, which is
  * exactly what a real bootstrap does between `NestFactory.create` and `listen`.
  */
-async function bootApp(options: BymaxCoreModuleOptions): Promise<INestApplication> {
+async function bootApp(
+  options: BymaxCoreModuleOptions,
+  controllers: readonly Type<unknown>[] = []
+): Promise<INestApplication> {
   const moduleRef = await Test.createTestingModule({
-    imports: [BymaxCoreModule.forRoot(options)]
+    imports: [BymaxCoreModule.forRoot(options)],
+    controllers: [...controllers]
   }).compile()
   const app = moduleRef.createNestApplication()
   // Installed here, not in `beforeEach`: creating the application applies its own
@@ -492,5 +563,101 @@ describe('applyBymaxOpenApi', () => {
     ])
     expect(response.body.components.schemas).toHaveProperty('BymaxErrorEnvelope')
     expect(response.body.components.securitySchemes).toHaveProperty('bearer')
+  })
+
+  /**
+   * An operation left requiring nothing is named on the way up.
+   *
+   * The regression this guards is silent by construction: the document
+   * validates, no requirement dangles, the runtime still answers 401, and a
+   * consumer's own document test can stay green if it asserts only the
+   * operations it enumerated. The boot log is the one surface that can speak,
+   * and it must name the operation — a warning that only says "something is
+   * wrong" costs more attention than it saves.
+   */
+  it('warns about an operation that requires nothing beside one that does', async () => {
+    process.env['NODE_ENV'] = 'test'
+    app = await bootApp(
+      {
+        openapi: {
+          enabled: true,
+          securitySchemes: { cookieAuth: { type: 'apiKey', in: 'cookie', name: 'access_token' } },
+          operationSecurity: { 'POST /auth/login': [] }
+        }
+      },
+      [ExampleController]
+    )
+
+    await applyBymaxOpenApi(app)
+
+    // Asserted whole rather than by fragment: every clause is load-bearing —
+    // the consequence leads, the third clause states the trigger so the line
+    // explains why it is speaking at all, and the last names both ways out.
+    expect(logged.warn).toHaveBeenCalledWith(UNSECURED_WARNING, LOG_CONTEXT)
+  })
+
+  /**
+   * An application that describes no requirement anywhere boots quietly.
+   *
+   * This is the genuinely public API, and it decides whether the warning
+   * survives contact with real deployments: fired here, the line appears on
+   * every boot forever and teaches people to skip warnings — including the one
+   * above, which is the whole point of having it.
+   */
+  it('stays silent when no operation describes a requirement', async () => {
+    process.env['NODE_ENV'] = 'test'
+    app = await bootApp({ openapi: { enabled: true } }, [ExampleController])
+
+    await applyBymaxOpenApi(app)
+
+    expect(logged.warn).not.toHaveBeenCalled()
+  })
+
+  /**
+   * A long report is cut short and says how much it cut.
+   *
+   * Unlike the errors in the merge module, which stop the boot and are read
+   * once, this line scrolls past beside everything else a boot prints: the
+   * version that names two hundred operations is the version nobody reads. The
+   * count that follows is what keeps the truncation honest.
+   */
+  it('names at most ten operations and counts the rest', async () => {
+    process.env['NODE_ENV'] = 'test'
+    // Twelve routes, one of them described: eleven are left bare, so ten are
+    // named and the report has exactly one to elide.
+    app = await bootApp({ openapi: { enabled: true, operationSecurity: { 'GET /bulk/r0': [] } } }, [
+      bulkController(12)
+    ])
+
+    await applyBymaxOpenApi(app)
+
+    const [message] = (logged.warn as jest.Mock).mock.calls[0] as [string]
+    expect(message).toContain('will send no credentials to 11 operation(s)')
+    expect(message).toContain('GET /bulk/r1, GET /bulk/r2')
+    expect(message).toContain('GET /bulk/r10, and 1 more.')
+    expect(message).not.toContain('GET /bulk/r11,')
+  })
+
+  /**
+   * A report that fits says nothing about a remainder.
+   *
+   * The boundary the cap turns on: at exactly the limit there is nothing left
+   * over, and a line ending "and 0 more" reads as a bug in the tool rather than
+   * as a report about the document — which is how a reader learns to distrust
+   * the number that matters.
+   */
+  it('adds no remainder when the report fits exactly', async () => {
+    process.env['NODE_ENV'] = 'test'
+    // Eleven routes, one described: exactly ten are left bare, which is the cap.
+    app = await bootApp({ openapi: { enabled: true, operationSecurity: { 'GET /bulk/r0': [] } } }, [
+      bulkController(11)
+    ])
+
+    await applyBymaxOpenApi(app)
+
+    const [message] = (logged.warn as jest.Mock).mock.calls[0] as [string]
+    expect(message).toContain('will send no credentials to 10 operation(s)')
+    expect(message).toContain('GET /bulk/r10. They state no security requirement')
+    expect(message).not.toContain(', and 0 more')
   })
 })

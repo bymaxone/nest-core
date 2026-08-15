@@ -26,7 +26,7 @@ import { BYMAX_CORE_OPTIONS } from '../core.tokens'
 import { isProductionRuntime } from '../runtime.environment'
 import { collectContributions, createHandlerIdMap } from './openapi.contribution'
 import type { HandlerIdMap, ResolvedContribution } from './openapi.contribution'
-import { augmentDocument } from './openapi.document'
+import { augmentDocument, unsecuredOperations } from './openapi.document'
 import { loadSwagger } from './openapi.loader'
 
 /** Why the document was not mounted. */
@@ -45,6 +45,17 @@ export interface OpenApiMountOutcome {
   /** The route the UI was mounted at. Present only when `mounted` is `true`. */
   path?: string
 }
+
+/**
+ * How many operations the unsecured-operation warning names before eliding the
+ * rest into a count.
+ *
+ * The errors in the merge module list everything they found, and this
+ * deliberately does not: an error stops the boot and is read once, while this
+ * line scrolls past in a boot log beside everything else, and the version that
+ * prints two hundred operation keys is the one an operator learns to skip.
+ */
+const MAX_WARNED_OPERATIONS = 10
 
 /** Shown when the core options cannot be resolved from the application. */
 const OPTIONS_UNRESOLVED_MESSAGE =
@@ -230,6 +241,37 @@ function readContributions(
 }
 
 /**
+ * Report the operations the served document leaves requiring nothing at all.
+ *
+ * Warned rather than thrown: an API that is public on purpose is a legitimate
+ * configuration, and failing a build over one would be worse than the silence
+ * this replaces. Silence is what makes the case worth reporting — the document
+ * still validates, every requirement in it still resolves, and the runtime still
+ * answers `401`, so no other check in the build can speak about it.
+ *
+ * @param logger - The logger this helper writes through.
+ * @param keys - The affected operation keys, empty when there is nothing to say.
+ */
+function warnUnsecuredOperations(logger: Logger, keys: readonly string[]): void {
+  if (keys.length === 0) {
+    return
+  }
+  const elided = keys.length - MAX_WARNED_OPERATIONS
+  const listed = keys.slice(0, MAX_WARNED_OPERATIONS).join(', ')
+  // Consequence first, cause second: the sentence that makes someone act is
+  // what a client generated from this document will do, and a line read while
+  // scrolling past a boot log is read from the front.
+  logger.warn(
+    `a client generated from the OpenAPI document will send no credentials to ${keys.length} ` +
+      `operation(s): ${listed}${elided > 0 ? `, and ${elided} more` : ''}. They state no security ` +
+      'requirement, the document declares no default, and other operations in it do state one — ' +
+      'so this is more often a missing openapi.security default than a public API. Set ' +
+      'openapi.security, or state the intent per operation with an explicit [] in ' +
+      'openapi.operationSecurity.'
+  )
+}
+
+/**
  * Assemble the document's static metadata from the resolved options.
  *
  * @param builder - A fresh builder from the lazily loaded peer.
@@ -310,12 +352,12 @@ export async function applyBymaxOpenApi(app: INestApplication): Promise<OpenApiM
   const generated = swagger.SwaggerModule.createDocument(app, config, {
     operationIdFactory: recordingOperationIdFactory(handlers, options.operationIdFactory)
   })
-  const document = augmentDocument(
-    generated,
-    resolved,
-    readPathPrefixes(app),
-    readContributions(app, handlers)
-  )
+  // Read once and shared: recognizing this package's own routes needs the same
+  // prefixes the merge does, and asking the application twice would let the two
+  // answers differ for no reason.
+  const prefixes = readPathPrefixes(app)
+  const document = augmentDocument(generated, resolved, prefixes, readContributions(app, handlers))
+  warnUnsecuredOperations(logger, unsecuredOperations(document, resolved, prefixes))
   swagger.SwaggerModule.setup(options.path, app, document, {
     jsonDocumentUrl: options.jsonPath
   })

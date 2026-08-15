@@ -11,6 +11,31 @@ heading here.
 
 ## [Unreleased]
 
+### Added
+
+- **The document build warns when an operation ends up requiring no credential
+  at all.** Deleting a document-level `security` default — typically alongside
+  the per-operation entries a library has taken over describing — leaves every
+  route the backend itself owns with no requirement from any source. Nothing
+  catches it today: the document is valid, no requirement dangles so
+  `assertSchemesDeclared` is satisfied, the runtime still answers `401` so a
+  status-code probe finds nothing, and a consumer's document test stays green if
+  it asserts only the operations it enumerated. The only observable change is
+  that a client generated from the document sends no credentials.
+  `applyBymaxOpenApi` now emits one warning per build naming the affected
+  operations, capped at ten with a count of the rest.
+
+  It warns and never throws — an API that is public on purpose is legitimate —
+  and the trigger is narrow so the line stays worth reading: only when the
+  document declares no top-level `security`, **and** at least one other
+  operation does state a requirement, **and** the operation is not one of the
+  three this package registers. An explicit `[]` — from `operationSecurity`, a
+  decorator, or a library's fragment — states the intent and stops the report.
+  The known limit is documented rather than closed: a document with nothing
+  explicit anywhere is indistinguishable from an API that is public on purpose,
+  so removing _every_ requirement at once is not warned. Render the document
+  with and without your libraries and diff the operations you mount.
+
 ## [1.4.0] - 2026-08-13
 
 HTTP metrics were blind to every request that did not reach a handler. Nest runs

@@ -379,6 +379,56 @@ configuration went wrong. If you gate the document behind an environment flag,
 make sure at least one environment that runs your tests has it on, or these
 checks never fire.
 
+#### When an operation ends up requiring nothing
+
+The checks above catch a requirement that points at nothing. The opposite
+mistake — an operation that ends up pointing at _no requirement at all_ — breaks
+nothing, and that is what makes it dangerous. It is a valid document. No name
+dangles. The runtime still answers `401`. A document test that asserts only the
+operations you enumerated stays green. The only thing that changed is that a
+client generated from the document now sends no credentials.
+
+The edit that produces it is ordinary: a library starts describing its own
+routes, its adoption note tells you to delete the entries you had written for
+them, and the document-level `security` default is sitting in the same options
+block and goes with them. Every route _you_ own then reads as public.
+
+So the document build says so, once, naming the operations:
+
+```
+[BymaxCoreModule] a client generated from the OpenAPI document will send no
+credentials to 2 operation(s): GET /examples, POST /orders. They state no
+security requirement, the document declares no default, and other operations in
+it do state one — so this is more often a missing openapi.security default than
+a public API. Set openapi.security, or state the intent per operation with an
+explicit [] in openapi.operationSecurity.
+```
+
+It is a **warning, not a failure**: an API that is public on purpose is a
+legitimate configuration, and failing a boot over one would be worse than the
+silence it replaces. The trigger is deliberately narrow, so the line stays worth
+reading:
+
+| Condition                                               | Why                                                                                                                    |
+| ------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| The document declares no top-level `security`           | With a default present, a bare operation inherits it. An explicit `security: []` counts as an answer, not an omission. |
+| At least one other operation _does_ state a requirement | Somebody described a posture on purpose, so the bare ones beside it are an omission rather than a public API.          |
+| The operation is not one of this package's own          | A health probe carrying nothing is the correct description of a route an orchestrator polls without a credential.      |
+
+The escape hatch is to say what you mean, in the document's own vocabulary
+rather than by silencing output: `operationSecurity: { 'GET /examples': [] }`
+marks the operation public, and it stops being reported. A library can do the
+same for its own routes by contributing `security: []` in its fragment.
+
+**And there is one shape nothing can warn you about, so the diff is the only
+check that covers it.** If you remove _every_ requirement at once — no library
+describing anything, no decorator, no override, no document default — what
+remains is indistinguishable from the document of an API that is public on
+purpose. Both are a set of operations that ask for nothing. No tool can separate
+the two without also shouting at every genuinely public API, which is how a
+warning earns the right to be ignored. Render the document twice and compare; it
+is the one step that does not depend on somebody having anticipated your case.
+
 ## 🔑 DI Tokens
 
 Every token is a `Symbol`. `BYMAX_CORRELATION_PROVIDER` and
