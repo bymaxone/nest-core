@@ -11,6 +11,35 @@ heading here.
 
 ## [Unreleased]
 
+### Added
+
+- **`environment`, for applications that validate their own environment
+  variable.** The production guard read `NODE_ENV` and nothing else, and treated
+  an unset variable as production. An application that parses an `APP_ENV`
+  through its config schema and never sets `NODE_ENV` was therefore classified
+  as production on evidence it never gave — the OpenAPI document was refused in
+  a development deployment, with no way to answer back. Two independent
+  consumers reported the same split between the library's view of the
+  environment and their own validated one.
+
+  A top-level `environment` option is now consulted **where the process declares
+  nothing**: `NODE_ENV` unset, or set to whitespace. `NODE_ENV` wins whenever it
+  says anything at all, so no configured value can make a runtime that named
+  itself production serve the document — asserted in both guards rather than in
+  one. The declaration enters the same fail-closed classification, so an
+  unrecognized name is production like any other: this is a second source for
+  the value, never a second set of rules.
+
+  The narrowing is stated rather than buried. Both guards previously classified
+  from the process alone; now, in the single case where the process says
+  nothing, the snapshot a consumer bound decides the answer, because there is
+  nothing else to decide it with. Replacing a guess with a declaration is not an
+  override, but it is a real change to what the second guard depends on.
+
+  **Apply to a derived backend:** nothing to change. The option is optional and
+  every existing classification is unchanged — a deployment that sets `NODE_ENV`
+  behaves exactly as before.
+
 ## [1.5.1] - 2026-08-15
 
 Documentation only; no source change. The 1.5.0 warning's known-limit note told

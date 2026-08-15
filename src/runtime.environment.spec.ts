@@ -4,11 +4,13 @@
  * Layer: unit.
  * Goal: prove the classification is fail-closed — only an environment that
  * positively declares itself `development` or `test` is non-production, and
- * everything else, including an unset or unrecognized value, is production.
+ * everything else, including an unset or unrecognized value, is production —
+ * and that composing the two sources never lets a declared value overrule a
+ * process that named its own environment.
  * Mocks: none; the default-argument path reads `process.env`, which is set and
  * restored per test.
  */
-import { isProductionRuntime } from './runtime.environment'
+import { isProductionRuntime, runtimeEnvironmentName } from './runtime.environment'
 
 describe('isProductionRuntime', () => {
   const originalNodeEnv = process.env['NODE_ENV']
@@ -90,5 +92,97 @@ describe('isProductionRuntime', () => {
     delete process.env['NODE_ENV']
 
     expect(isProductionRuntime()).toBe(true)
+  })
+})
+
+describe('runtimeEnvironmentName', () => {
+  const originalNodeEnv = process.env['NODE_ENV']
+
+  afterEach(() => {
+    // Restored explicitly: `restoreMocks` does not reach process.env.
+    process.env['NODE_ENV'] = originalNodeEnv
+  })
+
+  /**
+   * The process wins whenever it says anything.
+   *
+   * The property the whole composition exists to preserve: no configured value
+   * may make a runtime that identified itself as production serve a document.
+   * If this reverses, a snapshot a consumer bound decides the answer in a
+   * deployment that already answered.
+   */
+  it('ignores the declared value when NODE_ENV names an environment', () => {
+    process.env['NODE_ENV'] = 'production'
+
+    expect(runtimeEnvironmentName('development')).toBe('production')
+    expect(isProductionRuntime(runtimeEnvironmentName('development'))).toBe(true)
+  })
+
+  /**
+   * The process wins even when both agree it is not production.
+   *
+   * Asserted separately from the case above so the rule is pinned as "the
+   * process is read", not "production is sticky" — a composition that returned
+   * the declared value here would pass a production-only test and still be
+   * wrong.
+   */
+  it('returns NODE_ENV rather than the declaration when both are set', () => {
+    process.env['NODE_ENV'] = 'test'
+
+    expect(runtimeEnvironmentName('development')).toBe('test')
+  })
+
+  /**
+   * An unset NODE_ENV is where the declaration is consulted.
+   *
+   * The case the option exists for: an application that validates its own
+   * environment variable and never sets `NODE_ENV` was previously classified
+   * as production, because absence was the only evidence available.
+   */
+  it('uses the declared value when NODE_ENV is not set', () => {
+    delete process.env['NODE_ENV']
+
+    expect(runtimeEnvironmentName('development')).toBe('development')
+    expect(isProductionRuntime(runtimeEnvironmentName('development'))).toBe(false)
+  })
+
+  /**
+   * A variable that exists without declaring anything is the same as absent.
+   *
+   * `NODE_ENV=` in a shell exports an empty string, and whitespace survives a
+   * container manifest. Neither names an environment, so neither should be
+   * allowed to suppress a declaration that does.
+   */
+  it.each([[''], ['   '], ['\t']])('uses the declared value when NODE_ENV is %j', (blank) => {
+    process.env['NODE_ENV'] = blank
+
+    expect(runtimeEnvironmentName('development')).toBe('development')
+  })
+
+  /**
+   * Neither source naming an environment keeps the fail-closed default.
+   *
+   * Absence of evidence still resolves to production; the option adds a way to
+   * answer, not a permissive default for applications that answer nothing.
+   */
+  it('names no environment when neither source does', () => {
+    delete process.env['NODE_ENV']
+
+    expect(runtimeEnvironmentName()).toBeUndefined()
+    expect(isProductionRuntime(runtimeEnvironmentName())).toBe(true)
+  })
+
+  /**
+   * A blank NODE_ENV with no declaration is still production.
+   *
+   * The two "says nothing" shapes compose: an empty variable falls through to
+   * an absent declaration, and the result must not become non-production by
+   * passing through the fallback.
+   */
+  it('reports production when NODE_ENV is blank and nothing is declared', () => {
+    process.env['NODE_ENV'] = ''
+
+    expect(runtimeEnvironmentName()).toBeUndefined()
+    expect(isProductionRuntime(runtimeEnvironmentName())).toBe(true)
   })
 })

@@ -165,6 +165,41 @@ describe('applyBymaxOpenApi', () => {
   })
 
   /**
+   * The second guard reads the declaration too, where the process is silent.
+   *
+   * Both layers must classify from the same two inputs. If only the resolver
+   * learned about `environment`, the snapshot would say the feature is on and
+   * this helper would refuse anyway — the option would be inert for the one
+   * feature it exists to unblock, which is the failure a consumer would report
+   * as "it does nothing".
+   */
+  it('mounts the document from a declared environment when NODE_ENV is unset', async () => {
+    delete process.env['NODE_ENV']
+    app = await bootApp({ openapi: { enabled: true }, environment: 'development' })
+
+    const outcome = await applyBymaxOpenApi(app)
+
+    expect(outcome).toEqual({ mounted: true, path: 'docs' })
+  })
+
+  /**
+   * A declared environment cannot make this helper serve the document in a
+   * runtime that named itself production.
+   *
+   * The guard's remaining absolute: `NODE_ENV` wins whenever it says anything.
+   * Asserted here as well as on the resolver because the whole point of two
+   * layers is that neither is trusted to have done it.
+   */
+  it('refuses to mount when NODE_ENV names production, whatever was declared', async () => {
+    process.env['NODE_ENV'] = 'production'
+    app = await bootApp({ openapi: { enabled: true }, environment: 'development' })
+
+    const outcome = await applyBymaxOpenApi(app)
+
+    expect(outcome).toEqual({ mounted: false, reason: 'production' })
+  })
+
+  /**
    * The happy path: enabled outside production.
    *
    * The document and its UI must mount at the resolved route, and the helper

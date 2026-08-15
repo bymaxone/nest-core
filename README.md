@@ -202,6 +202,20 @@ BymaxCoreModule.forRoot({ isGlobal: false })
 Every block is optional; an omitted block, or an omitted field within it,
 falls back to the documented default. Pass only what you want to change.
 
+### `environment`
+
+The one top-level option rather than a block, because it describes the
+deployment rather than a feature.
+
+| Option        | Type     | Default | Description                                                                           |
+| ------------- | -------- | ------- | ------------------------------------------------------------------------------------- |
+| `environment` | `string` | unset   | The environment this deployment runs in, read only where `NODE_ENV` declares nothing. |
+
+Set it when your application validates its own environment variable and does not
+also set `NODE_ENV`. `NODE_ENV` wins whenever it says anything, so this can never
+serve the OpenAPI document in a runtime that named itself production. Full rules
+and the classification table: [Production is a closed door](#production-is-a-closed-door).
+
 ### `envelope`
 
 | Option            | Type      | Default | Description                                                                                    |
@@ -959,15 +973,60 @@ can emit it once and never branch:
 ### Production is a closed door
 
 `NODE_ENV` decides, and the decision is fail-closed: only `development` and
-`test` are non-production. Any other value — including an unset variable —
-is production, and in production the document is never built and never mounted,
-whatever the configuration says. The guard runs twice, independently: the option
-resolver forces the feature off, and the bootstrap helper refuses again without
-trusting that resolution. There is no override.
+`test` are non-production. Any other value is production, and in production the
+document is never built and never mounted, whatever the configuration says. The
+guard runs twice, independently: the option resolver forces the feature off, and
+the bootstrap helper classifies the runtime again without trusting that
+resolution.
+
+**`NODE_ENV` cannot be overridden.** With it set to anything, no option serves
+the document in a runtime it named production.
 
 Enabling it in production is not an error, it is a no-op with a warning naming
 the option that was ignored, so a single configuration can be shared across
 environments.
+
+#### When your application validates its own environment variable
+
+Plenty of applications parse an `APP_ENV` through a config schema and never set
+`NODE_ENV` at all. Those deployments used to be classified as production —
+absence was the only evidence available — so the document was refused in an
+environment that never asked for the refusal, with no way to answer back.
+
+Declare the environment and it is used **where the process declares nothing**:
+
+```typescript
+BymaxCoreModule.forRootAsync({
+  inject: [ConfigService],
+  useFactory: (config: ConfigService) => ({
+    // Your validated value, not a second copy of NODE_ENV.
+    environment: config.get('APP_ENV'),
+    openapi: { enabled: true }
+  })
+})
+```
+
+| `NODE_ENV`      | `environment` | Classified as  |
+| --------------- | ------------- | -------------- |
+| `production`    | `development` | **production** |
+| `development`   | (anything)    | development    |
+| unset, or blank | `development` | development    |
+| unset, or blank | `staging`     | **production** |
+| unset, or blank | unset         | **production** |
+
+Two properties are worth reading off that table. A declaration never overrules a
+process that named its own environment — the first row is the one that matters,
+and it is asserted in both guards rather than in one. And the declaration enters
+the same fail-closed classification, so an unrecognized name is production like
+any other; this is a second **source** for the value, never a second set of
+rules.
+
+The narrowing is deliberate and worth naming rather than burying: in the one
+case where the process declares nothing, the configuration a consumer bound does
+decide the answer, because there is nothing else to decide it with. Replacing a
+guess with a declaration is not the same as allowing an override — but it is a
+real change to what the second guard depends on, and you should know it before
+relying on either.
 
 ### Testing the enabled path under Jest
 
