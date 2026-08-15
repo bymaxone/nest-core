@@ -11,6 +11,19 @@ heading here.
 
 ## [Unreleased]
 
+## [1.5.2] - 2026-08-15
+
+The production guard read `NODE_ENV` and nothing else, and treated an unset
+variable as production. An application that validates its own `APP_ENV` and
+never sets `NODE_ENV` was therefore classified as production on evidence it
+never gave — the OpenAPI document was refused in a development deployment, with
+no way to answer back. Two independent consumers reported the same split.
+
+**Apply to a derived backend:** nothing to change. A deployment that sets
+`NODE_ENV` behaves exactly as before. If yours validates its own variable
+instead, pass it as `environment` and the document is served where that variable
+says `development` or `test`.
+
 ### Added
 
 - **`environment`, for applications that validate their own environment
@@ -765,4 +778,5 @@ have regressed from. They are kept because the reasoning is worth having.
 [1.4.0]: https://github.com/bymaxone/nest-core/compare/v1.3.2...v1.4.0
 [1.5.0]: https://github.com/bymaxone/nest-core/compare/v1.4.0...v1.5.0
 [1.5.1]: https://github.com/bymaxone/nest-core/compare/v1.5.0...v1.5.1
-[Unreleased]: https://github.com/bymaxone/nest-core/compare/v1.5.1...HEAD
+[1.5.2]: https://github.com/bymaxone/nest-core/compare/v1.5.1...v1.5.2
+[Unreleased]: https://github.com/bymaxone/nest-core/compare/v1.5.2...HEAD
