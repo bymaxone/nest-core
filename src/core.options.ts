@@ -390,9 +390,9 @@ export interface ResolvedOpenApiOptions {
 
 /**
  * The effective, defaults-applied configuration exposed under
- * `BYMAX_CORE_OPTIONS`. Fields with a documented default are always present;
- * the only optional field is `timing.slowRequestThresholdMs`, which has no
- * default and is absent unless the consumer sets it.
+ * `BYMAX_CORE_OPTIONS`. Fields with a documented default are always present.
+ * Two fields have no default and are absent unless the consumer supplies them:
+ * `timing.slowRequestThresholdMs`, and `environment`.
  */
 export interface ResolvedCoreOptions {
   envelope: ResolvedEnvelopeOptions

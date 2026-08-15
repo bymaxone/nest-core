@@ -1418,9 +1418,11 @@ guard you would apply to any internal endpoint, or keep it off the public listen
 A published document is a map of every route, parameter and error shape an application has —
 useful to a developer, and just as useful to anyone probing the service. So unlike the metrics
 endpoint, it is not left to a guard: it is refused outright whenever the runtime is not
-positively `development` or `test`, in two independent layers, with no option to override.
-An unset `NODE_ENV` counts as production, because the deployment nobody configured is the one
-most likely to be exposed.
+positively `development` or `test`, in two independent layers. **`NODE_ENV` cannot be
+overridden** — with it set to anything, no option serves the document in a runtime it named
+production. A runtime that declares nothing is classified from the application's own
+[`environment`](#environment) when it supplied one, and counts as production otherwise, because
+the deployment nobody configured is the one most likely to be exposed.
 
 ---
 
