@@ -420,14 +420,84 @@ rather than by silencing output: `operationSecurity: { 'GET /examples': [] }`
 marks the operation public, and it stops being reported. A library can do the
 same for its own routes by contributing `security: []` in its fragment.
 
-**And there is one shape nothing can warn you about, so the diff is the only
-check that covers it.** If you remove _every_ requirement at once — no library
-describing anything, no decorator, no override, no document default — what
-remains is indistinguishable from the document of an API that is public on
-purpose. Both are a set of operations that ask for nothing. No tool can separate
-the two without also shouting at every genuinely public API, which is how a
-warning earns the right to be ignored. Render the document twice and compare; it
-is the one step that does not depend on somebody having anticipated your case.
+**There is one shape this warning cannot report.** If you remove _every_
+requirement at once — no library describing anything, no decorator, no override,
+no document default — the second condition above is never met: nothing states a
+requirement, so there are no bare operations sitting _beside_ described ones.
+That follows from the trigger and therefore holds in every version; it is not a
+gap a later release closes, and a reader who expects one is exactly the reader
+who stops checking.
+
+The limit belongs to **anything reading only the rendered document**. Such a
+document is indistinguishable from that of an API which is public on purpose —
+both are a set of operations asking for nothing — and this package cannot tell
+them apart without also warning at every genuinely public API, which is how a
+warning earns the right to be ignored.
+
+**Your own suite has no such handicap, because you know which one you are.**
+Assert it, and the check runs on every commit rather than when somebody
+remembers to look:
+
+```ts
+it('still requires a credential everywhere it should', () => {
+  const document = buildYourDocument()
+
+  // Assert the default you expect, not merely that one exists. `[]` is a
+  // defined value that requires nothing, so a "toBeDefined" check passes for
+  // a default that degraded to empty — which is the regression this test is
+  // here to catch, wearing the shape of a pass.
+  expect(document.security).toEqual([{ cookieAuth: [] }])
+
+  // An explicit `[]` is how an operation says "public". The set of operations
+  // saying it should be the set you meant — no more, no fewer.
+  expect(publicOperationsOf(document)).toEqual(['POST /auth/login'])
+})
+```
+
+Render-and-diff keeps a narrower job, and it is a good one: when you are
+_changing_ something — adopting a library that describes its own routes, moving
+a default — render with and without the change and compare the operations you
+mount. It shows you what moved without your having to predict it. Then turn what
+it showed you into an assertion, so the next change is caught rather than
+inspected.
+
+#### A contributed scheme's presence is part of the contributor's configuration
+
+A library contributes security schemes, and **which** ones it contributes can
+depend on how you configured it. Any of them, gated on any of its inputs, and
+often on more than one — the scheme you have in mind may be the absent one, and
+the setting you are thinking of may not be the only gate. The names are stable;
+their presence is not.
+
+That has one consequence worth stating as a rule, because getting it wrong
+produces a failure at either end of the loudness scale:
+
+> Derive a document-level default from **the same configuration the contributor
+> reads**, never from the scheme names, and never from what the document
+> happened to contain before you adopted the library.
+
+Writing the name as a literal is correct only for the configuration you wrote it
+against. Under a configuration that declares that scheme plus another, the
+default still resolves but describes one of two credentials the route accepts —
+**quietly incomplete**. Under one that declares it not at all, the name resolves
+to nothing and the document build **fails** with the undeclared-scheme error
+above. Guarding on whether the scheme exists is the tempting fix and it is the
+wrong one: it clears the case that already announced itself and ships the one
+that does not.
+
+Note what a document-level default does not let you _say_. Its entries are
+**alternatives** — any one of them satisfies an operation — and they apply to
+every operation that states nothing. So a backend whose routes sit behind **two
+different credential families** can certainly list both, and nothing rejects it:
+the result is a document asserting that _either_ credential works for _every_
+inheriting route. That is not an incomplete document, it is a false one, and it
+is false in the permissive direction — it tells a client that a credential the
+route will reject is one the route accepts.
+
+Give the majority family the default and the minority explicit
+`operationSecurity` entries. Those outrank the default, and an operation
+carrying one is never named by the warning above, because it states a
+requirement.
 
 ## 🔑 DI Tokens
 

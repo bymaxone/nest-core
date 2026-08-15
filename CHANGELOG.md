@@ -11,6 +11,38 @@ heading here.
 
 ## [Unreleased]
 
+### Documentation
+
+- **The credential-free warning's known limit no longer argues against the
+  practice that covers it.** The README said no tool could distinguish a
+  document that lost its requirements from one that never had any, and that
+  rendering the document twice was therefore the only check. The first half is
+  true only of something reading the rendered document alone; a consumer's own
+  suite knows which of the two it is and can assert it on every commit. Saying
+  otherwise did not merely overstate a limit — it told readers that the standing
+  check they should write does not exist. The section now attributes the limit
+  correctly, states why the warning cannot fire on that shape (it follows from
+  the trigger, in every version), gives the assertion as the practice, and
+  leaves render-and-diff the narrower job it is genuinely good at: seeing what
+  moved when you change something, so you can turn it into an assertion.
+
+- **A contributed scheme's presence is documented as part of the contributor's
+  configuration.** Which security schemes a library contributes can depend on
+  how that library is configured — the names are stable, their presence is not.
+  A document-level default must therefore be derived from the same configuration
+  the contributor reads. A literal is correct only for the configuration it was
+  written against: elsewhere it either resolves while describing one of two
+  credentials a route accepts (quietly incomplete) or names a scheme nobody
+  declares (a failed document build). Guarding on whether the scheme exists
+  clears the loud case and ships the quiet one.
+
+- **What a document-level default does not let you say** is now stated. Its
+  entries are alternatives applied to every operation that says nothing, so a
+  backend with two credential families _can_ list both and nothing rejects it —
+  the result asserts that either credential works for every inheriting route,
+  which is false in the permissive direction. The minority family belongs in
+  `openapi.operationSecurity`, which outranks the default.
+
 ## [1.5.0] - 2026-08-15
 
 An OpenAPI document could stop requiring credentials without anything saying
