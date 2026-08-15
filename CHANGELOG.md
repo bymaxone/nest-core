@@ -11,6 +11,21 @@ heading here.
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-08-15
+
+An OpenAPI document could stop requiring credentials without anything saying
+so. Deleting a document-level `security` default — typically alongside the
+per-operation entries a library has taken over describing — leaves every route
+the backend itself owns with no requirement from any source, and the document
+stays valid, no requirement dangles, and the runtime still answers `401`. The
+only observable change is that a client generated from the document stops
+sending credentials.
+
+**Apply to a derived backend:** bump the dependency. No code change is needed.
+If the boot log now names operations, they are the ones a generated client will
+call without credentials — set `openapi.security`, or mark each public with an
+explicit `[]` in `openapi.operationSecurity`.
+
 ### Added
 
 - **The document build warns when an operation ends up requiring no credential
@@ -674,4 +689,5 @@ have regressed from. They are kept because the reasoning is worth having.
 [1.2.1]: https://github.com/bymaxone/nest-core/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/bymaxone/nest-core/compare/v1.1.1...v1.2.0
 [1.4.0]: https://github.com/bymaxone/nest-core/compare/v1.3.2...v1.4.0
-[Unreleased]: https://github.com/bymaxone/nest-core/compare/v1.4.0...HEAD
+[1.5.0]: https://github.com/bymaxone/nest-core/compare/v1.4.0...v1.5.0
+[Unreleased]: https://github.com/bymaxone/nest-core/compare/v1.5.0...HEAD
