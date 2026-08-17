@@ -599,9 +599,20 @@ the failure the `500` exists to surface. By the time the filter sees the error,
 the body that caused it is gone.
 
 **So body-shape limits are the application's floor, not the filter's.** Cap
-nesting depth where you still hold the raw body — in your bootstrap, alongside
-the size limit — and the request is rejected as the `400` it is, instead of
+nesting depth and the request is rejected as the `400` it is, instead of
 becoming a `5xx` that pollutes your error rate and writes a stack per request.
+
+**Position it after the framework's body parser and before validation** — that
+window is the only place the body exists in a form you can measure and nothing
+has walked it yet. Earlier there is nothing to inspect; later the overflow has
+already happened, which is the failure you are trying to prevent. In practice
+that means registering it in your bootstrap next to the other request-level
+guards, after the parser rather than merely "somewhere early".
+
+A depth ceiling well above anything a legitimate payload nests and well below
+what exhausts the stack leaves a wide margin: one consumer runs `32`, against
+the ~2000 levels that overflow. Walk the parsed body iteratively — a recursive
+depth check on a hostile payload overflows the stack it was written to protect.
 
 ## ⏱️ Request Timing
 

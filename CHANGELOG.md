@@ -26,6 +26,16 @@ heading here.
   `200` with the full Prometheus body, while the served document said
   `security: [{ bymaxAuthAccessCookie: [] }]`.
 
+  **One half of the fix is covered by unit tests only, and that is worth saying
+  rather than leaving it to look field-verified.** The reported symptom reaches
+  a deployment through `openapi.security`, and that path was measured. Review
+  then found the same hole on the other path — a document that arrives carrying
+  its own default, whose `openapi.security` is therefore empty — and it is fixed
+  by reading the effective default from the document that will be served. No
+  real deployment is known to reach that state today, so nothing outside this
+  repository's tests exercises it. The health probes carried the same defect on
+  that path and are fixed by the same change.
+
   This is the more dangerous of the two ways to describe a route wrongly, and
   the opposite of what 1.5.0 fixed. Documenting a **guarded** route as open
   fails loudly — a generated client omits the credential and gets a `401`.
