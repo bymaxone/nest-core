@@ -423,6 +423,46 @@ describe('augmentDocument — security', () => {
   })
 
   /**
+   * An unprotected scrape endpoint says so, rather than inheriting.
+   *
+   * With no token configured the endpoint answers anyone — the documented
+   * "protected at the edge" arrangement. Letting it inherit a document default
+   * would describe an open endpoint as requiring a credential, which is the
+   * worse of the two mistakes: documenting a guarded route as open fails loudly
+   * at the first client that omits the credential, while documenting an open
+   * route as guarded fails nowhere and hands the wrong answer to whoever opened
+   * the document to ask what is exposed.
+   */
+  it('marks an unprotected scrape endpoint public under a document default', () => {
+    const result = augmentDocument(
+      generated({ ...OWN_ROUTES }),
+      options(
+        { security: [{ cookieAuth: [] }], securitySchemes: SCHEMES },
+        { metrics: metrics({ enabled: true }) }
+      )
+    )
+
+    expect(operation(result, '/metrics')['security']).toEqual([])
+    expect(operation(result, '/health/live')['security']).toEqual([])
+  })
+
+  /**
+   * Without a document default there is nothing to inherit, so nothing is said.
+   *
+   * The explicit `[]` exists to override a default. In a document that declares
+   * none, writing it would be noise on every own route — the same rule the
+   * health probes already follow, now applied to the scrape endpoint too.
+   */
+  it('leaves an unprotected scrape endpoint unmarked when no default exists', () => {
+    const result = augmentDocument(
+      generated({ ...OWN_ROUTES }),
+      options({}, { metrics: metrics({ enabled: true }) })
+    )
+
+    expect(operation(result, '/metrics')).not.toHaveProperty('security')
+  })
+
+  /**
    * A protected scrape endpoint is documented as protected, with its scheme.
    *
    * This package knows the answer exactly — the endpoint is protected when, and

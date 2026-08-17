@@ -21,6 +21,22 @@ export interface PaginationLimitOptions {
   defaultLimit?: number
   /** Hard cap applied to the page size. Default `100`. */
   maxLimit?: number
+  /**
+   * Hard cap applied to the repository offset the query drives,
+   * `(page - 1) * limit`. Absent by default, which bounds nothing beyond
+   * arithmetic safety.
+   *
+   * `maxLimit` bounds how many rows a request reads; this bounds how far in it
+   * starts, which is the half that costs on an offset-paginated database — a
+   * `SELECT … OFFSET 20000000000` is a twenty-byte request that scans a table.
+   * Set it wherever the page index reaches SQL and the dataset has a knowable
+   * ceiling. There is deliberately no default: legitimate deep paging exists,
+   * and a silent cap would change the rows a working query returns.
+   *
+   * `0` is meaningful and means "the first page only". Any other value that is
+   * not a non-negative safe integer is read as absent.
+   */
+  maxOffset?: number
 }
 
 /**
@@ -73,6 +89,38 @@ export function coercePositiveInt(value: unknown, fallback: number): number {
  */
 export function clampPageToLimit(page: number, limit: number): number {
   return Math.min(page, Math.floor(Number.MAX_SAFE_INTEGER / limit) + 1)
+}
+
+/**
+ * Cap a page index so the offset it drives stays within a configured ceiling.
+ *
+ * Separate from {@link clampPageToLimit}, which is an arithmetic guard: that one
+ * keeps `(page - 1) * limit` an exact integer and bounds nothing a database
+ * would feel. This one is the resource bound, and it is the counterpart to
+ * `maxLimit` — a request already cannot read more than `maxLimit` rows, and with
+ * this set it cannot start further in than `maxOffset` either.
+ *
+ * The highest page whose offset fits is `floor(maxOffset / limit) + 1`: its
+ * offset is `floor(maxOffset / limit) * limit`, which is `<= maxOffset` by
+ * construction. Clamping rather than rejecting matches how `maxLimit` already
+ * behaves — the resolved values are reported back in the page meta, so a caller
+ * that cares can compare what it asked for against what it got.
+ *
+ * @param page - A positive, safe-integer page index.
+ * @param limit - The resolved page size, always `>= 1`.
+ * @param maxOffset - The configured ceiling, or `undefined` to bound nothing.
+ *   Read as absent unless it is a non-negative safe integer; `0` is honoured and
+ *   pins every query to the first page.
+ * @returns `page` capped so `(page - 1) * limit` stays within `maxOffset`.
+ */
+export function clampPageToOffset(page: number, limit: number, maxOffset?: number): number {
+  // Validated rather than coerced: every other option here has a documented
+  // fallback, and this one has none — absent is a distinct, meaningful state,
+  // so a malformed value must resolve to it rather than to some invented cap.
+  if (typeof maxOffset !== 'number' || !Number.isSafeInteger(maxOffset) || maxOffset < 0) {
+    return page
+  }
+  return Math.min(page, Math.floor(maxOffset / limit) + 1)
 }
 
 /**

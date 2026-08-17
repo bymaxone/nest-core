@@ -157,6 +157,85 @@ describe('normalizePageQuery', () => {
   })
 })
 
+describe('normalizePageQuery — maxOffset', () => {
+  /**
+   * The bound `maxLimit` never provided: how far in a request may start.
+   *
+   * `maxLimit` caps how many rows a request reads; nothing capped the offset it
+   * reads them from. A twenty-byte query asking for page 1e9 drives
+   * `OFFSET 19999999980`, which an in-memory repository shrugs off and an
+   * offset-paginated database pays for in full.
+   */
+  it('caps the page so the offset it drives stays within maxOffset', () => {
+    const result = normalizePageQuery({ page: 1e9, limit: 20 }, { maxOffset: 10_000 })
+
+    expect(result).toEqual({ page: 501, limit: 20 })
+    expect((result.page - 1) * result.limit).toBe(10_000)
+  })
+
+  /**
+   * The ceiling is inclusive, and the page below it is untouched.
+   *
+   * Asserted as a pair so the boundary is pinned from both sides: an off-by-one
+   * in either direction moves one of these and not the other.
+   */
+  it('admits the highest page that fits and leaves smaller pages alone', () => {
+    expect(normalizePageQuery({ page: 501, limit: 20 }, { maxOffset: 10_000 }).page).toBe(501)
+    expect(normalizePageQuery({ page: 3, limit: 20 }, { maxOffset: 10_000 }).page).toBe(3)
+  })
+
+  /**
+   * A ceiling that does not divide evenly still never exceeds itself.
+   *
+   * The highest admissible page is `floor(maxOffset / limit) + 1`, so with a
+   * limit that leaves a remainder the resolved offset lands below the ceiling
+   * rather than on it. Rounding the other way would step over the bound.
+   */
+  it('stays under a ceiling the limit does not divide', () => {
+    const result = normalizePageQuery({ page: 1e9, limit: 30 }, { maxOffset: 1000 })
+
+    expect((result.page - 1) * result.limit).toBeLessThanOrEqual(1000)
+    expect(result.page).toBe(34)
+  })
+
+  /**
+   * Absent by default, because a silent cap would change working queries.
+   *
+   * Deep paging is legitimate, and every consumer on the previous version is
+   * relying on the unbounded behaviour. The option had to be opt-in or the
+   * release would have been breaking without saying so.
+   */
+  it('bounds nothing when maxOffset is not configured', () => {
+    expect(normalizePageQuery({ page: 1e9, limit: 20 })).toEqual({ page: 1e9, limit: 20 })
+  })
+
+  /**
+   * Zero is a bound, not a missing value.
+   *
+   * `maxOffset: 0` means "the first page only", which is a real policy for a
+   * search endpoint. Coercing it through the positive-integer helper the other
+   * options use would have silently turned it into "no bound at all" — the
+   * exact inversion of what the caller asked for.
+   */
+  it('pins every query to the first page when maxOffset is zero', () => {
+    expect(normalizePageQuery({ page: 1e9, limit: 20 }, { maxOffset: 0 }).page).toBe(1)
+  })
+
+  /**
+   * A malformed ceiling resolves to absent, never to an invented one.
+   *
+   * Every other option here has a documented fallback; this one has none, so a
+   * value that cannot be a ceiling must leave the query unbounded rather than
+   * make one up.
+   */
+  it.each([[-5], [1.5], [Number.NaN], [Number.POSITIVE_INFINITY], ['100' as unknown as number]])(
+    'ignores a maxOffset of %p',
+    (maxOffset) => {
+      expect(normalizePageQuery({ page: 1e9, limit: 20 }, { maxOffset }).page).toBe(1e9)
+    }
+  )
+})
+
 describe('buildPageResult', () => {
   /**
    * Standard multi-page count.

@@ -256,7 +256,16 @@ function ownRouteSecurity(
   if (options.metrics.authToken !== undefined && routes.isMetrics(path)) {
     return [{ [METRICS_SCHEME_NAME]: [] }]
   }
-  if (options.openapi.security.length > 0 && routes.isHealth(path)) {
+  // Both remaining own routes are public, and both must say so rather than
+  // inherit. The scrape endpoint reaches here only when no token is configured,
+  // which is the documented "protected at the edge" arrangement: the process
+  // itself answers anyone. Letting it inherit a document default would describe
+  // an open endpoint as requiring a credential — and that is the worse
+  // direction of the two. Documenting a guarded route as open fails loudly, at
+  // the first generated client that omits the credential and gets a 401.
+  // Documenting an open route as guarded fails nowhere: the wrong answer goes
+  // to whoever opened the document to ask what is exposed.
+  if (options.openapi.security.length > 0 && (routes.isHealth(path) || routes.isMetrics(path))) {
     return []
   }
   return undefined

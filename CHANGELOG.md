@@ -11,6 +11,62 @@ heading here.
 
 ## [Unreleased]
 
+### Fixed
+
+- **An unprotected `/metrics` was documented as requiring a credential.** This
+  package writes an explicit `security: []` on its health probes so they do not
+  inherit a document-level default, and did not do the same for the scrape
+  endpoint. With `metrics.authToken` unset — the documented "protected at the
+  edge" arrangement, where the endpoint answers anyone — `GET /metrics` fell
+  through and inherited the default, so a document served by any backend with a
+  default claimed a credential was required for an endpoint serving process
+  metrics to whoever asked.
+
+  Measured on a running derived backend, not reasoned about: no credential →
+  `200` with the full Prometheus body, while the served document said
+  `security: [{ bymaxAuthAccessCookie: [] }]`.
+
+  This is the more dangerous of the two ways to describe a route wrongly, and
+  the opposite of what 1.5.0 fixed. Documenting a **guarded** route as open
+  fails loudly — a generated client omits the credential and gets a `401`.
+  Documenting an **open** route as guarded fails nowhere, and hands the wrong
+  answer to whoever opened the document to ask what is exposed.
+
+### Added
+
+- **`maxOffset`, a bound on how far into a dataset a request may start.**
+  `normalizePageQuery` capped the page size through `maxLimit` and bounded the
+  page index only for arithmetic safety, so `?page=1000000000&limit=20` resolved
+  to `OFFSET 19999999980`. Harmless against an in-memory repository and paid in
+  full by an offset-paginated database: twenty bytes of query for a table scan.
+
+  It is **absent by default and deliberately so** — legitimate deep paging
+  exists, and a silent ceiling would change the rows a working query returns.
+  Set it wherever the page index reaches SQL. `0` is a valid bound meaning "the
+  first page only"; any value that is not a non-negative safe integer reads as
+  absent rather than as an invented cap. Clamping matches how `maxLimit` already
+  behaves, and the resolved values come back in `meta`.
+
+### Documentation
+
+- **What the error filter classifies from, and what it cannot.** An error raised
+  before any handler ran becomes a clean `4xx` because the filter recognizes it
+  by **shape** — `expose: true` with a `4xx` status, the convention Node's body
+  pipeline follows — not by class. An error carrying no such marking is a `500`
+  even when a client caused it: a few kilobytes nested thousands of levels deep
+  overflows the stack during validation and surfaces as `RangeError`, well under
+  any size limit.
+
+  That is deliberate. Mapping `RangeError` to a `4xx` would make the filter
+  infer causation from an error class and would be wrong where it matters most —
+  a genuine stack overflow in application code is a `500` that should page
+  someone. Body-shape limits are the application's floor, applied where the raw
+  body is still in hand.
+
+  **Apply to a derived backend:** cap nesting depth in your bootstrap alongside
+  the size limit, so a hostile body is rejected as the `400` it is instead of
+  becoming a `5xx` that pollutes your error rate and writes a stack per request.
+
 ## [1.5.2] - 2026-08-15
 
 The production guard read `NODE_ENV` and nothing else, and treated an unset

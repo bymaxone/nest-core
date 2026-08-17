@@ -11,6 +11,7 @@ import {
   MINIMUM,
   clampLimit,
   clampPageToLimit,
+  clampPageToOffset,
   coercePositiveInt,
   type PaginationLimitOptions
 } from './internal'
@@ -54,8 +55,10 @@ export interface PageResult<T> {
  * Options are per-call and never retained between calls.
  *
  * @param raw - The untrusted page and limit values from the request.
- * @param options - Per-call `defaultLimit` (default `20`) and `maxLimit`
- *   (default `100`) overrides.
+ * @param options - Per-call `defaultLimit` (default `20`), `maxLimit` (default
+ *   `100`) and `maxOffset` (absent by default) overrides. `maxLimit` bounds how
+ *   many rows a request reads; `maxOffset` bounds how far in it starts, which is
+ *   the half an offset-paginated database pays for.
  * @returns A clamped, safe query ready to hand to a repository.
  */
 export function normalizePageQuery(
@@ -64,7 +67,11 @@ export function normalizePageQuery(
 ): PageQuery {
   const limit = clampLimit(raw.limit, options)
   return {
-    page: clampPageToLimit(coercePositiveInt(raw.page, MINIMUM), limit),
+    page: clampPageToOffset(
+      clampPageToLimit(coercePositiveInt(raw.page, MINIMUM), limit),
+      limit,
+      options?.maxOffset
+    ),
     limit
   }
 }

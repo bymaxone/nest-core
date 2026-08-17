@@ -576,6 +576,33 @@ import { BadRequestException } from '@nestjs/common'
 throw new BadRequestException({ code: 'INVOICE_OVERDUE', message: 'Invoice is overdue' })
 ```
 
+### What the filter classifies from, and what it cannot
+
+An error raised before any handler ran — a malformed JSON body, a payload over
+the size limit — still becomes a clean `4xx` envelope rather than a 500. The
+filter recognizes those by **shape**, not by class: it honours an error that
+marks itself `expose: true` with a `4xx` status, which is the `http-errors`
+convention Node's body pipeline follows. Nothing in the application failed, so
+it is not routed through the unexpected-error seam either.
+
+**An error that carries no such marking is a 500, including when a client
+caused it.** The clearest case is depth: a body of a few kilobytes nested
+thousands of levels deep overflows the stack during validation and surfaces as
+`RangeError: Maximum call stack size exceeded` — well under any size limit, and
+answered `500 BYMAX_INTERNAL_ERROR`.
+
+That is deliberate, and the alternative is worse. Mapping `RangeError` to a
+`4xx` would make the filter infer causation from an error class, and it would be
+wrong exactly where it matters: a genuine stack overflow in your own code is a
+`500` that should page someone, and relabelling it as a client error would hide
+the failure the `500` exists to surface. By the time the filter sees the error,
+the body that caused it is gone.
+
+**So body-shape limits are the application's floor, not the filter's.** Cap
+nesting depth where you still hold the raw body — in your bootstrap, alongside
+the size limit — and the request is rejected as the `400` it is, instead of
+becoming a `5xx` that pollutes your error rate and writes a stack per request.
+
 ## ⏱️ Request Timing
 
 One `RequestTimingSample` is delivered to whatever implements `ITimingSink` for
@@ -689,12 +716,35 @@ export class InvoiceController {
 
   @Get()
   async list(@Query() raw: Record<string, unknown>): Promise<PageResult<Invoice>> {
-    const query = normalizePageQuery(raw, { maxLimit: 50 })
+    const query = normalizePageQuery(raw, { maxLimit: 50, maxOffset: 100_000 })
     const { rows, total } = await this.invoices.findPage(query)
     return buildPageResult(rows, total, query)
   }
 }
 ```
+
+#### Bound the offset, not just the page size
+
+`maxLimit` caps how many rows a request reads. `maxOffset` caps how far in it
+starts — and on an offset-paginated database that is the half that costs:
+
+```
+GET /invoices?page=1000000000&limit=20     →  OFFSET 19999999980
+```
+
+Twenty bytes of query, and Postgres walks the table to reach a page that does
+not exist. The page index has a floor of `1` and an arithmetic guard that keeps
+`(page - 1) * limit` an exact integer, but nothing bounds the product itself
+unless you say so.
+
+`maxOffset` is **absent by default and deliberately so**: legitimate deep paging
+exists, and a silent ceiling would change the rows a working query returns. Set
+it wherever the page index reaches SQL and your dataset has a knowable ceiling.
+`0` is a valid bound and means "the first page only".
+
+Clamping matches how `maxLimit` already behaves — the resolved values come back
+in `meta`, so a caller that cares can compare what it asked for against what it
+got.
 
 ### Cursor pagination
 
@@ -1212,12 +1262,22 @@ being asked:
 | Route                               | Documented as                                           |
 | ----------------------------------- | ------------------------------------------------------- |
 | `GET /health/live`, `/health/ready` | Public (`security: []`), when a document default exists |
-| `GET /metrics`                      | Bearer-protected **iff** `metrics.authToken` is set     |
+| `GET /metrics`, token set           | Bearer-protected                                        |
+| `GET /metrics`, no token            | Public (`security: []`), when a document default exists |
 
 The probes are polled by an orchestrator holding no credential, and the scrape
 endpoint is protected exactly when you configured a token — this package owns
 both the route and the option, so you should not have to restate either. Your
 own `operationSecurity` entry still wins.
+
+The last row matters more than it looks. Without a token the scrape endpoint
+answers anyone, which is the deliberate "protected at the edge" arrangement — and
+an open route must **say** it is open rather than inherit your document default.
+Of the two ways to describe a route wrongly, this is the direction that hides:
+documenting a guarded route as open fails loudly at the first generated client
+that omits the credential and gets a `401`, while documenting an open route as
+guarded fails nowhere at all, and hands the wrong answer to whoever opened the
+document to ask what is exposed.
 
 ## 🧵 Trace correlation
 
