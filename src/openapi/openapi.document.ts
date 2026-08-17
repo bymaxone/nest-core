@@ -36,42 +36,15 @@ import { indexOwnRoutes, isOwnRoute } from './openapi.routes'
 import type { OwnRouteIndex } from './openapi.routes'
 import { CORE_PARAMETERS, CORE_SCHEMAS } from './openapi.schemas'
 import type { OpenApiObjectMap } from './openapi.schemas'
+import { asRecord, operationKey, operationsOf } from './openapi.shape'
+import type { OpenApiDocumentLike } from './openapi.shape'
 
-/**
- * The only structural requirements this module places on a document: it may
- * carry `components` and `paths`, whose types it deliberately does not assume.
- * Staying this loose is what lets the augmentation run against the peer's own
- * `OpenAPIObject` without importing it and without a laundering cast — the
- * peer's interface satisfies this shape, and so does a plain test fixture.
- */
-export interface OpenApiDocumentLike {
-  /** The document's component registry, when it has one. */
-  readonly components?: unknown
-  /** The document's path map, when it has one. */
-  readonly paths?: unknown
-  /** The document-level security requirement, when the consumer declared one. */
-  readonly security?: unknown
-}
+// Re-exported so the public signatures below keep naming a type from the module
+// that declares them, rather than making every caller learn where it moved to.
+export type { OpenApiDocumentLike }
 
 /** A document that has been through {@link augmentDocument}. */
 export type AugmentedDocument<T> = T & { components: Readonly<Record<string, unknown>> }
-
-/**
- * The method keys a path item can carry an operation under, lowercase as the
- * specification writes them and as the peer emits them. Everything else in a
- * path item — `parameters`, `summary`, `$ref` — is not an operation and must be
- * left alone.
- */
-const OPERATION_METHODS: readonly string[] = [
-  'get',
-  'post',
-  'put',
-  'patch',
-  'delete',
-  'head',
-  'options',
-  'trace'
-]
 
 /** The security scheme this package contributes for a protected scrape endpoint. */
 const METRICS_SCHEME_NAME = 'BymaxMetricsAuth'
@@ -81,22 +54,6 @@ const ERROR_ENVELOPE_SCHEMA = 'BymaxErrorEnvelope'
 
 /** Component name of the health payload the health endpoints return. */
 const HEALTH_RESPONSE_SCHEMA = 'BymaxHealthResponse'
-
-/**
- * Narrow a document member to a record. A document produced by the peer always
- * has object-valued `components`, but this function is total anyway: an absent
- * or malformed member yields an empty record, so the merge below can never
- * throw on a shape it did not expect.
- *
- * @param value - The member to narrow.
- * @returns The value as a record, or an empty record when it is not one.
- */
-function asRecord(value: unknown): Readonly<Record<string, unknown>> {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-    return {}
-  }
-  return value as Readonly<Record<string, unknown>>
-}
 
 /**
  * Merge `additions` into `existing`, keeping every entry `existing` already
@@ -111,22 +68,6 @@ function mergeAbsent(
   additions: OpenApiObjectMap
 ): Readonly<Record<string, unknown>> {
   return { ...additions, ...existing }
-}
-
-/**
- * The operations a path item carries, as `[method, operation]` pairs.
- *
- * Read by filtering the item's own entries rather than by looking each method
- * up on it. That is one pass over what is actually there instead of eight
- * lookups, and it keeps every read of a document-supplied object off a computed
- * key — the shape that is indistinguishable, to a reader or an analyser, from
- * the prototype-pollution bug it resembles.
- *
- * @param item - A path item from the document.
- * @returns Its operation entries, in document order.
- */
-function operationsOf(item: unknown): readonly (readonly [string, unknown])[] {
-  return Object.entries(asRecord(item)).filter(([key]) => OPERATION_METHODS.includes(key))
 }
 
 /**
@@ -302,17 +243,6 @@ function ownRouteSecurity(
     return []
   }
   return undefined
-}
-
-/**
- * Build the `"<METHOD> <path>"` key addressing one operation.
- *
- * @param method - The lowercase method key from the path item.
- * @param path - The documented path.
- * @returns The operation key.
- */
-function operationKey(method: string, path: string): string {
-  return `${method.toUpperCase()} ${path}`
 }
 
 /**
