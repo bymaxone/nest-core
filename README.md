@@ -622,10 +622,44 @@ instead. On Fastify the ordering differs again, since Nest middleware runs
 through `@fastify/middie` ahead of body parsing; a `preValidation` hook is the
 place to look, and it is worth measuring rather than assuming.
 
-**Do not take the table above on faith either — probe your own wiring.** Drop a
-one-line middleware at your intended registration point and log
-`typeof req.body`. If it prints `undefined`, your guard is inert, and it will be
-inert quietly, which is the failure mode a security floor can least afford.
+**Registering it in the right place is not enough — the route pattern silently
+skips paths too.** This package hit the same trap with its own timing
+middleware, and the measured behaviour is in `core.module.ts`:
+
+| `forRoutes(...)` | Express        | Fastify          |
+| ---------------- | -------------- | ---------------- |
+| `'*splat'`       | skips the root | —                |
+| `'{*splat}'`     | skips `/api`   | every path       |
+| `'/'`            | every path     | matches `/` only |
+
+So the named-wildcard form every migration guide reaches for leaves `POST /`
+unguarded on Express. A consumer measured exactly that: with `'*path'`, a
+2000-level body to the root returned `404` because the middleware never ran;
+with `'{*path}'`, `400`. If your application mounts nothing at the root, both
+forms answer `4xx` and the status alone cannot tell you which one you have.
+
+**Verify by behaviour, not by wiring — this is the part worth insisting on.**
+Checking where the middleware is registered is what the consumer above did; it
+looked correct, they confirmed it to us, and the guard was inert. Send a body
+nested past your ceiling and require your own rejection:
+
+```ts
+it('refuses a body nested past the ceiling', async () => {
+  const deep = JSON.parse(`${'['.repeat(2000)}${']'.repeat(2000)}`)
+
+  const res = await request(app.getHttpServer()).post('/anything').send({ name: deep })
+
+  // Match your guard's own message, not the status: a validation pipe rejects
+  // this shape with a 400 as well, so a status assertion passes with the floor
+  // removed and proves nothing.
+  expect(res.body.message).toBe('Request body is nested too deeply.')
+})
+```
+
+Use a depth that actually overflows, and assert the guard's own message. A test
+at a depth your DTO validation already rejects passes identically with the guard
+deleted — which is a check that cannot produce a negative result, and the reason
+this defect survived a green suite.
 
 A depth ceiling well above anything a legitimate payload nests and well below
 what exhausts the stack leaves a wide margin: one consumer runs `32`, against
