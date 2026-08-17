@@ -32,8 +32,9 @@ heading here.
   then found the same hole on the other path — a document that arrives carrying
   its own default, whose `openapi.security` is therefore empty — and it is fixed
   by reading the effective default from the document that will be served. No
-  real deployment is known to reach that state today, so nothing outside this
-  repository's tests exercises it. The health probes carried the same defect on
+  consumer known to this project reaches that state today, so the only coverage
+  that can be pointed at is this repository's tests — which is a statement about
+  what is known, not a guarantee that nothing else exercises it. The health probes carried the same defect on
   that path and are fixed by the same change.
 
   This is the more dangerous of the two ways to describe a route wrongly, and

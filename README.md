@@ -602,12 +602,30 @@ the body that caused it is gone.
 nesting depth and the request is rejected as the `400` it is, instead of
 becoming a `5xx` that pollutes your error rate and writes a stack per request.
 
-**Position it after the framework's body parser and before validation** — that
-window is the only place the body exists in a form you can measure and nothing
-has walked it yet. Earlier there is nothing to inspect; later the overflow has
-already happened, which is the failure you are trying to prevent. In practice
-that means registering it in your bootstrap next to the other request-level
-guards, after the parser rather than merely "somewhere early".
+**Position it after the body parser and before validation** — that window is the
+only place the body exists in a form you can measure and nothing has walked it
+yet. Earlier there is nothing to inspect; later the overflow has already
+happened, which is the failure you are trying to prevent.
+
+**Where that window is depends on the adapter, and the obvious answer is wrong
+on Express.** Measured against a real Nest application:
+
+| Registration point                       | `req.body` when it runs |
+| ---------------------------------------- | ----------------------- |
+| `app.use(...)` in `bootstrap.ts`         | **`undefined`**         |
+| Module middleware, `configure(consumer)` | the parsed body         |
+
+Nest registers its own parser during `app.init()`, so a middleware added with
+`app.use()` before that is mounted _ahead_ of it — a depth guard there inspects
+nothing and silently protects nothing. Register it as module middleware
+instead. On Fastify the ordering differs again, since Nest middleware runs
+through `@fastify/middie` ahead of body parsing; a `preValidation` hook is the
+place to look, and it is worth measuring rather than assuming.
+
+**Do not take the table above on faith either — probe your own wiring.** Drop a
+one-line middleware at your intended registration point and log
+`typeof req.body`. If it prints `undefined`, your guard is inert, and it will be
+inert quietly, which is the failure mode a security floor can least afford.
 
 A depth ceiling well above anything a legitimate payload nests and well below
 what exhausts the stack leaves a wide margin: one consumer runs `32`, against
