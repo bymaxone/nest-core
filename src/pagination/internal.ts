@@ -21,22 +21,6 @@ export interface PaginationLimitOptions {
   defaultLimit?: number
   /** Hard cap applied to the page size. Default `100`. */
   maxLimit?: number
-  /**
-   * Hard cap applied to the repository offset the query drives,
-   * `(page - 1) * limit`. Absent by default, which bounds nothing beyond
-   * arithmetic safety.
-   *
-   * `maxLimit` bounds how many rows a request reads; this bounds how far in it
-   * starts, which is the half that costs on an offset-paginated database — a
-   * `SELECT … OFFSET 20000000000` is a twenty-byte request that scans a table.
-   * Set it wherever the page index reaches SQL and the dataset has a knowable
-   * ceiling. There is deliberately no default: legitimate deep paging exists,
-   * and a silent cap would change the rows a working query returns.
-   *
-   * `0` is meaningful and means "the first page only". Any other value that is
-   * not a non-negative safe integer is read as absent.
-   */
-  maxOffset?: number
 }
 
 /**

@@ -423,6 +423,60 @@ describe('augmentDocument — security', () => {
   })
 
   /**
+   * A default the generated document already carried counts as inheritance.
+   *
+   * `augmentDocument` preserves a document-level default rather than replacing
+   * it, so a consumer whose document arrives with one has an empty
+   * `openapi.security` and an inheriting document at the same time. Reading the
+   * configured option alone would leave every own route in that document
+   * inheriting a credential it does not check — which is the bug this whole
+   * branch exists to prevent, surviving in the one shape nobody configured.
+   */
+  it('marks its own routes public against a default the document already had', () => {
+    const result = augmentDocument(
+      { ...generated({ ...OWN_ROUTES }), security: [{ cookieAuth: [] }] },
+      options({ securitySchemes: SCHEMES }, { metrics: metrics({ enabled: true }) })
+    )
+
+    expect(operation(result, '/metrics')['security']).toEqual([])
+    expect(operation(result, '/health/live')['security']).toEqual([])
+  })
+
+  /**
+   * A document-level `[]` requires nothing, so there is nothing to override.
+   *
+   * The explicit marker exists to escape a default that demands a credential.
+   * Writing it against a default that demands none would be noise on every own
+   * route, which is the same reason it is omitted when no default exists at all.
+   */
+  it('stays silent when the document default is an explicit empty array', () => {
+    const result = augmentDocument(
+      { ...generated({ ...OWN_ROUTES }), security: [] },
+      options({}, { metrics: metrics({ enabled: true }) })
+    )
+
+    expect(operation(result, '/metrics')).not.toHaveProperty('security')
+    expect(operation(result, '/health/live')).not.toHaveProperty('security')
+  })
+
+  /**
+   * A malformed document-level member is not a requirement to override.
+   *
+   * The member is typed `unknown` because it arrives from a document this
+   * package did not write. Anything that is not a non-empty array is not a
+   * credential requirement, and claiming to override one would be inventing a
+   * shape rather than reading it.
+   */
+  it('stays silent when the document default is not an array', () => {
+    const result = augmentDocument(
+      { ...generated({ ...OWN_ROUTES }), security: 'cookieAuth' },
+      options({}, { metrics: metrics({ enabled: true }) })
+    )
+
+    expect(operation(result, '/metrics')).not.toHaveProperty('security')
+  })
+
+  /**
    * An unprotected scrape endpoint says so, rather than inheriting.
    *
    * With no token configured the endpoint answers anyone — the documented

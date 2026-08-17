@@ -61,9 +61,37 @@ export interface PageResult<T> {
  *   the half an offset-paginated database pays for.
  * @returns A clamped, safe query ready to hand to a repository.
  */
+/**
+ * Options for {@link normalizePageQuery}: the shared limit bounds, plus the one
+ * that only means anything to offset pagination.
+ *
+ * Declared here rather than beside the shared bounds so it cannot reach the
+ * cursor normalizer, which takes {@link PaginationLimitOptions} and has no
+ * offset to bound. An option that type-checks on a function that ignores it is
+ * worse than a missing one — it reads as configured and does nothing.
+ */
+export interface PageQueryOptions extends PaginationLimitOptions {
+  /**
+   * Hard cap applied to the repository offset the query drives,
+   * `(page - 1) * limit`. Absent by default, which bounds nothing beyond
+   * arithmetic safety.
+   *
+   * `maxLimit` bounds how many rows a request reads; this bounds how far in it
+   * starts, which is the half that costs on an offset-paginated database — a
+   * `SELECT … OFFSET 20000000000` is a twenty-byte request that scans a table.
+   * Set it wherever the page index reaches SQL and the dataset has a knowable
+   * ceiling. There is deliberately no default: legitimate deep paging exists,
+   * and a silent cap would change the rows a working query returns.
+   *
+   * `0` is meaningful and means "the first page only". Any other value that is
+   * not a non-negative safe integer is read as absent.
+   */
+  maxOffset?: number
+}
+
 export function normalizePageQuery(
   raw: { page?: unknown; limit?: unknown },
-  options?: PaginationLimitOptions
+  options?: PageQueryOptions
 ): PageQuery {
   const limit = clampLimit(raw.limit, options)
   return {
