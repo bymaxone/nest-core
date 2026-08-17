@@ -36,42 +36,15 @@ import { indexOwnRoutes, isOwnRoute } from './openapi.routes'
 import type { OwnRouteIndex } from './openapi.routes'
 import { CORE_PARAMETERS, CORE_SCHEMAS } from './openapi.schemas'
 import type { OpenApiObjectMap } from './openapi.schemas'
+import { asRecord, operationKey, operationsOf } from './openapi.shape'
+import type { OpenApiDocumentLike } from './openapi.shape'
 
-/**
- * The only structural requirements this module places on a document: it may
- * carry `components` and `paths`, whose types it deliberately does not assume.
- * Staying this loose is what lets the augmentation run against the peer's own
- * `OpenAPIObject` without importing it and without a laundering cast — the
- * peer's interface satisfies this shape, and so does a plain test fixture.
- */
-export interface OpenApiDocumentLike {
-  /** The document's component registry, when it has one. */
-  readonly components?: unknown
-  /** The document's path map, when it has one. */
-  readonly paths?: unknown
-  /** The document-level security requirement, when the consumer declared one. */
-  readonly security?: unknown
-}
+// Re-exported so the public signatures below keep naming a type from the module
+// that declares them, rather than making every caller learn where it moved to.
+export type { OpenApiDocumentLike }
 
 /** A document that has been through {@link augmentDocument}. */
 export type AugmentedDocument<T> = T & { components: Readonly<Record<string, unknown>> }
-
-/**
- * The method keys a path item can carry an operation under, lowercase as the
- * specification writes them and as the peer emits them. Everything else in a
- * path item — `parameters`, `summary`, `$ref` — is not an operation and must be
- * left alone.
- */
-const OPERATION_METHODS: readonly string[] = [
-  'get',
-  'post',
-  'put',
-  'patch',
-  'delete',
-  'head',
-  'options',
-  'trace'
-]
 
 /** The security scheme this package contributes for a protected scrape endpoint. */
 const METRICS_SCHEME_NAME = 'BymaxMetricsAuth'
@@ -81,22 +54,6 @@ const ERROR_ENVELOPE_SCHEMA = 'BymaxErrorEnvelope'
 
 /** Component name of the health payload the health endpoints return. */
 const HEALTH_RESPONSE_SCHEMA = 'BymaxHealthResponse'
-
-/**
- * Narrow a document member to a record. A document produced by the peer always
- * has object-valued `components`, but this function is total anyway: an absent
- * or malformed member yields an empty record, so the merge below can never
- * throw on a shape it did not expect.
- *
- * @param value - The member to narrow.
- * @returns The value as a record, or an empty record when it is not one.
- */
-function asRecord(value: unknown): Readonly<Record<string, unknown>> {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-    return {}
-  }
-  return value as Readonly<Record<string, unknown>>
-}
 
 /**
  * Merge `additions` into `existing`, keeping every entry `existing` already
@@ -111,22 +68,6 @@ function mergeAbsent(
   additions: OpenApiObjectMap
 ): Readonly<Record<string, unknown>> {
   return { ...additions, ...existing }
-}
-
-/**
- * The operations a path item carries, as `[method, operation]` pairs.
- *
- * Read by filtering the item's own entries rather than by looking each method
- * up on it. That is one pass over what is actually there instead of eight
- * lookups, and it keeps every read of a document-supplied object off a computed
- * key — the shape that is indistinguishable, to a reader or an analyser, from
- * the prototype-pollution bug it resembles.
- *
- * @param item - A path item from the document.
- * @returns Its operation entries, in document order.
- */
-function operationsOf(item: unknown): readonly (readonly [string, unknown])[] {
-  return Object.entries(asRecord(item)).filter(([key]) => OPERATION_METHODS.includes(key))
 }
 
 /**
@@ -223,6 +164,36 @@ function withoutDisabledRoutes(
 }
 
 /**
+ * Whether an operation that states nothing inherits a credential requirement
+ * from the served document.
+ *
+ * Read from the document that will actually be served, not from the configured
+ * option alone. `augmentDocument` preserves a default the generated document
+ * already carried and writes the configured one only when there is none — so a
+ * consumer whose document arrives with its own default has an empty
+ * `openapi.security` and an inheriting document at the same time. Consulting
+ * the option by itself misses exactly that consumer, and leaves this package's
+ * own open routes inheriting a credential they do not check.
+ *
+ * Only a non-empty array counts. An explicit `[]` requires nothing, so an own
+ * route has nothing to override; a malformed member is not a requirement this
+ * package will claim to understand the shape of.
+ *
+ * @param document - The generated document, before augmentation.
+ * @param openapi - The resolved OpenAPI options.
+ * @returns Whether a bare operation ends up requiring a credential.
+ */
+function inheritsRequirement(
+  document: OpenApiDocumentLike,
+  openapi: ResolvedOpenApiOptions
+): boolean {
+  if (document.security === undefined) {
+    return openapi.security.length > 0
+  }
+  return Array.isArray(document.security) && document.security.length > 0
+}
+
+/**
  * The requirement this package documents for its own routes, or `undefined`
  * when it has nothing to say about them.
  *
@@ -239,13 +210,16 @@ function withoutDisabledRoutes(
  * @param method - The operation's lowercase method key.
  * @param options - The resolved options.
  * @param routes - The recognizer for this package's own routes.
+ * @param inherits - Whether a bare operation inherits a credential requirement
+ *   from the served document. See {@link inheritsRequirement}.
  * @returns The requirement to write, or `undefined` to leave the operation be.
  */
 function ownRouteSecurity(
   path: string,
   method: string,
   options: ResolvedCoreOptions,
-  routes: OwnRouteIndex
+  routes: OwnRouteIndex,
+  inherits: boolean
 ): readonly OpenApiSecurityRequirement[] | undefined {
   // The controllers this package registers expose GET and nothing else, so a
   // consumer who adds another method under the same path owns that operation
@@ -256,21 +230,19 @@ function ownRouteSecurity(
   if (options.metrics.authToken !== undefined && routes.isMetrics(path)) {
     return [{ [METRICS_SCHEME_NAME]: [] }]
   }
-  if (options.openapi.security.length > 0 && routes.isHealth(path)) {
+  // Both remaining own routes are public, and both must say so rather than
+  // inherit. The scrape endpoint reaches here only when no token is configured,
+  // which is the documented "protected at the edge" arrangement: the process
+  // itself answers anyone. Letting it inherit a document default would describe
+  // an open endpoint as requiring a credential — and that is the worse
+  // direction of the two. Documenting a guarded route as open fails loudly, at
+  // the first generated client that omits the credential and gets a 401.
+  // Documenting an open route as guarded fails nowhere: the wrong answer goes
+  // to whoever opened the document to ask what is exposed.
+  if (inherits && (routes.isHealth(path) || routes.isMetrics(path))) {
     return []
   }
   return undefined
-}
-
-/**
- * Build the `"<METHOD> <path>"` key addressing one operation.
- *
- * @param method - The lowercase method key from the path item.
- * @param path - The documented path.
- * @returns The operation key.
- */
-function operationKey(method: string, path: string): string {
-  return `${method.toUpperCase()} ${path}`
 }
 
 /**
@@ -382,7 +354,8 @@ function augmentOperation(
   method: string,
   options: ResolvedCoreOptions,
   routes: OwnRouteIndex,
-  contributions: readonly ResolvedContribution[]
+  contributions: readonly ResolvedContribution[],
+  inherits: boolean
 ): Readonly<Record<string, unknown>> {
   // Whether the *generated* operation declared its own requirement — read
   // before any fragment lands, because a library filling the member in must not
@@ -405,7 +378,8 @@ function augmentOperation(
       options.openapi.operationSecurity[operationKey(method, path) as OpenApiOperationKey]
     const describedByLibrary = result['security'] !== undefined
     const security =
-      override ?? (describedByLibrary ? undefined : ownRouteSecurity(path, method, options, routes))
+      override ??
+      (describedByLibrary ? undefined : ownRouteSecurity(path, method, options, routes, inherits))
     if (security !== undefined) {
       result['security'] = security
     }
@@ -653,13 +627,22 @@ function augmentPaths(
   paths: Readonly<Record<string, unknown>>,
   options: ResolvedCoreOptions,
   routes: OwnRouteIndex,
-  contributions: readonly ResolvedContribution[]
+  contributions: readonly ResolvedContribution[],
+  inherits: boolean
 ): Readonly<Record<string, unknown>> {
   return Object.fromEntries(
     Object.entries(paths).map(([path, item]) => {
       const augmented = operationsOf(item).map(([method, operation]) => [
         method,
-        augmentOperation(asRecord(operation), path, method, options, routes, contributions)
+        augmentOperation(
+          asRecord(operation),
+          path,
+          method,
+          options,
+          routes,
+          contributions,
+          inherits
+        )
       ])
       // Spread after the original so the augmented operations replace theirs,
       // while every non-operation member of the path item survives untouched.
@@ -766,7 +749,15 @@ export function augmentDocument<T extends OpenApiDocumentLike>(
   const paths =
     document.paths === undefined
       ? {}
-      : { paths: augmentPaths(served, options, routes, contributions) }
+      : {
+          paths: augmentPaths(
+            served,
+            options,
+            routes,
+            contributions,
+            inheritsRequirement(document, openapi)
+          )
+        }
   const security =
     openapi.security.length > 0 && document.security === undefined
       ? { security: openapi.security }

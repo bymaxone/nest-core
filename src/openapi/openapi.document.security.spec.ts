@@ -423,6 +423,100 @@ describe('augmentDocument — security', () => {
   })
 
   /**
+   * A default the generated document already carried counts as inheritance.
+   *
+   * `augmentDocument` preserves a document-level default rather than replacing
+   * it, so a consumer whose document arrives with one has an empty
+   * `openapi.security` and an inheriting document at the same time. Reading the
+   * configured option alone would leave every own route in that document
+   * inheriting a credential it does not check — which is the bug this whole
+   * branch exists to prevent, surviving in the one shape nobody configured.
+   */
+  it('marks its own routes public against a default the document already had', () => {
+    const result = augmentDocument(
+      { ...generated({ ...OWN_ROUTES }), security: [{ cookieAuth: [] }] },
+      options({ securitySchemes: SCHEMES }, { metrics: metrics({ enabled: true }) })
+    )
+
+    expect(operation(result, '/metrics')['security']).toEqual([])
+    expect(operation(result, '/health/live')['security']).toEqual([])
+  })
+
+  /**
+   * A document-level `[]` requires nothing, so there is nothing to override.
+   *
+   * The explicit marker exists to escape a default that demands a credential.
+   * Writing it against a default that demands none would be noise on every own
+   * route, which is the same reason it is omitted when no default exists at all.
+   */
+  it('stays silent when the document default is an explicit empty array', () => {
+    const result = augmentDocument(
+      { ...generated({ ...OWN_ROUTES }), security: [] },
+      options({}, { metrics: metrics({ enabled: true }) })
+    )
+
+    expect(operation(result, '/metrics')).not.toHaveProperty('security')
+    expect(operation(result, '/health/live')).not.toHaveProperty('security')
+  })
+
+  /**
+   * A malformed document-level member is not a requirement to override.
+   *
+   * The member is typed `unknown` because it arrives from a document this
+   * package did not write. Anything that is not a non-empty array is not a
+   * credential requirement, and claiming to override one would be inventing a
+   * shape rather than reading it.
+   */
+  it('stays silent when the document default is not an array', () => {
+    const result = augmentDocument(
+      { ...generated({ ...OWN_ROUTES }), security: 'cookieAuth' },
+      options({}, { metrics: metrics({ enabled: true }) })
+    )
+
+    expect(operation(result, '/metrics')).not.toHaveProperty('security')
+  })
+
+  /**
+   * An unprotected scrape endpoint says so, rather than inheriting.
+   *
+   * With no token configured the endpoint answers anyone — the documented
+   * "protected at the edge" arrangement. Letting it inherit a document default
+   * would describe an open endpoint as requiring a credential, which is the
+   * worse of the two mistakes: documenting a guarded route as open fails loudly
+   * at the first client that omits the credential, while documenting an open
+   * route as guarded fails nowhere and hands the wrong answer to whoever opened
+   * the document to ask what is exposed.
+   */
+  it('marks an unprotected scrape endpoint public under a document default', () => {
+    const result = augmentDocument(
+      generated({ ...OWN_ROUTES }),
+      options(
+        { security: [{ cookieAuth: [] }], securitySchemes: SCHEMES },
+        { metrics: metrics({ enabled: true }) }
+      )
+    )
+
+    expect(operation(result, '/metrics')['security']).toEqual([])
+    expect(operation(result, '/health/live')['security']).toEqual([])
+  })
+
+  /**
+   * Without a document default there is nothing to inherit, so nothing is said.
+   *
+   * The explicit `[]` exists to override a default. In a document that declares
+   * none, writing it would be noise on every own route — the same rule the
+   * health probes already follow, now applied to the scrape endpoint too.
+   */
+  it('leaves an unprotected scrape endpoint unmarked when no default exists', () => {
+    const result = augmentDocument(
+      generated({ ...OWN_ROUTES }),
+      options({}, { metrics: metrics({ enabled: true }) })
+    )
+
+    expect(operation(result, '/metrics')).not.toHaveProperty('security')
+  })
+
+  /**
    * A protected scrape endpoint is documented as protected, with its scheme.
    *
    * This package knows the answer exactly — the endpoint is protected when, and
