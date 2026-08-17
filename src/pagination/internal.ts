@@ -117,7 +117,14 @@ export function clampPageToOffset(page: number, limit: number, maxOffset?: numbe
   // Validated rather than coerced: every other option here has a documented
   // fallback, and this one has none — absent is a distinct, meaningful state,
   // so a malformed value must resolve to it rather than to some invented cap.
-  if (typeof maxOffset !== 'number' || !Number.isSafeInteger(maxOffset) || maxOffset < 0) {
+  //
+  // `undefined` is tested by identity rather than by `typeof`, which narrows the
+  // type for the comparison below and leaves `Number.isSafeInteger` to reject
+  // everything else a caller can produce: a string from an untyped config, a
+  // fraction, `NaN`, an infinity. A `typeof` guard beside it would be dead
+  // weight — `isSafeInteger` already answers `false` for every non-number, so
+  // the only value the two would disagree about does not exist.
+  if (maxOffset === undefined || !Number.isSafeInteger(maxOffset) || maxOffset < 0) {
     return page
   }
   return Math.min(page, Math.floor(maxOffset / limit) + 1)

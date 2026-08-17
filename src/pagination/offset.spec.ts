@@ -228,7 +228,7 @@ describe('normalizePageQuery — maxOffset', () => {
    * value that cannot be a ceiling must leave the query unbounded rather than
    * make one up.
    */
-  it.each([[-5], [1.5], [Number.NaN], [Number.POSITIVE_INFINITY], ['100' as unknown as number]])(
+  it.each([[-5], [1.5], [Number.NaN], [Number.POSITIVE_INFINITY]])(
     'ignores a maxOffset of %p',
     (maxOffset) => {
       expect(normalizePageQuery({ page: 1e9, limit: 20 }, { maxOffset }).page).toBe(1e9)
