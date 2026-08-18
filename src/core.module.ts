@@ -256,9 +256,12 @@ export class BymaxCoreModule extends BymaxCoreModuleBase implements NestModule {
    * it is scoped to, while `'{*splat}'` — the form Nest 11's migration guide
    * prescribes for "all routes" — stops matching the prefixed root once an
    * application calls `setGlobalPrefix`. That was reported as nest#14520 and
-   * fixed by nest#14522, whose regression test covers Fastify; on
-   * `@nestjs/core` 11.1.28 with the Express adapter the prefixed root still
-   * reaches no middleware while resolving to `200`.
+   * fixed by nest#14522, whose regression test covers Fastify; on the Express
+   * adapter the prefixed root still reaches no middleware while resolving to
+   * `200`. Measured on `@nestjs/core` 11.1.28 and re-measured unchanged on
+   * 11.2.1 — a minor release is exactly where this would plausibly have been
+   * fixed, so the version this was last confirmed against is part of the
+   * claim rather than a footnote to it.
    *
    * On Fastify the same `'/'` is an exact match rather than a mount — one of
    * three requests reached the middleware — so the wildcard is the only form
