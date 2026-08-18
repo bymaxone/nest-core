@@ -11,6 +11,27 @@ heading here.
 
 ## [Unreleased]
 
+## [1.5.3] - 2026-08-18
+
+Three findings from a functional and security audit of a derived backend
+running against real Postgres, Redis and MinIO, plus the corrections that
+review found inside those fixes.
+
+The one that reaches a running deployment: an unprotected `/metrics` was
+documented as **requiring a credential**. The endpoint answers anyone when no
+`metrics.authToken` is set — the documented "protected at the edge"
+arrangement — and it inherited the document-level default instead of declaring
+itself public. That is the opposite of what 1.5.0 fixed and the more dangerous
+direction: documenting a guarded route as open fails loudly at the first
+generated client that omits the credential, while documenting an open route as
+guarded fails nowhere and hands the wrong answer to whoever opened the document
+to ask what is exposed.
+
+**Apply to a derived backend:** bump the dependency. Nothing to change in code.
+If you serve a document and leave the scrape endpoint unprotected, re-render it
+and confirm `/metrics` now carries `security: []`. If your page indexes reach
+SQL, `maxOffset` is now available and is opt-in.
+
 ### Fixed
 
 - **An unprotected `/metrics` was documented as requiring a credential.** This
@@ -71,12 +92,19 @@ heading here.
   That is deliberate. Mapping `RangeError` to a `4xx` would make the filter
   infer causation from an error class and would be wrong where it matters most —
   a genuine stack overflow in application code is a `500` that should page
-  someone. Body-shape limits are the application's floor, applied where the raw
-  body is still in hand.
+  someone. Body-shape limits are the application's floor, applied in the one
+  window where the body exists and nothing has walked it yet.
 
-  **Apply to a derived backend:** cap nesting depth in your bootstrap alongside
-  the size limit, so a hostile body is rejected as the `400` it is instead of
-  becoming a `5xx` that pollutes your error rate and writes a stack per request.
+  **Apply to a derived backend:** cap nesting depth **after the body parser and
+  before validation**, so a hostile body is rejected as the `400` it is instead
+  of becoming a `5xx` that pollutes your error rate and writes a stack per
+  request. On Express that means module middleware, not `app.use()` during
+  bootstrap — measured, a middleware registered there runs ahead of Nest's own
+  parser and sees `req.body` as `undefined`, so the guard inspects nothing and
+  protects nothing while reading as present. Walk the parsed body iteratively; a
+  recursive depth check on a hostile payload overflows the stack it exists to
+  protect. The README carries the per-adapter table and a test that proves the
+  floor by behaviour rather than by where it is registered.
 
 ## [1.5.2] - 2026-08-15
 
@@ -846,4 +874,5 @@ have regressed from. They are kept because the reasoning is worth having.
 [1.5.0]: https://github.com/bymaxone/nest-core/compare/v1.4.0...v1.5.0
 [1.5.1]: https://github.com/bymaxone/nest-core/compare/v1.5.0...v1.5.1
 [1.5.2]: https://github.com/bymaxone/nest-core/compare/v1.5.1...v1.5.2
-[Unreleased]: https://github.com/bymaxone/nest-core/compare/v1.5.2...HEAD
+[1.5.3]: https://github.com/bymaxone/nest-core/compare/v1.5.2...v1.5.3
+[Unreleased]: https://github.com/bymaxone/nest-core/compare/v1.5.3...HEAD
