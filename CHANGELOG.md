@@ -92,12 +92,19 @@ SQL, `maxOffset` is now available and is opt-in.
   That is deliberate. Mapping `RangeError` to a `4xx` would make the filter
   infer causation from an error class and would be wrong where it matters most —
   a genuine stack overflow in application code is a `500` that should page
-  someone. Body-shape limits are the application's floor, applied where the raw
-  body is still in hand.
+  someone. Body-shape limits are the application's floor, applied in the one
+  window where the body exists and nothing has walked it yet.
 
-  **Apply to a derived backend:** cap nesting depth in your bootstrap alongside
-  the size limit, so a hostile body is rejected as the `400` it is instead of
-  becoming a `5xx` that pollutes your error rate and writes a stack per request.
+  **Apply to a derived backend:** cap nesting depth **after the body parser and
+  before validation**, so a hostile body is rejected as the `400` it is instead
+  of becoming a `5xx` that pollutes your error rate and writes a stack per
+  request. On Express that means module middleware, not `app.use()` during
+  bootstrap — measured, a middleware registered there runs ahead of Nest's own
+  parser and sees `req.body` as `undefined`, so the guard inspects nothing and
+  protects nothing while reading as present. Walk the parsed body iteratively; a
+  recursive depth check on a hostile payload overflows the stack it exists to
+  protect. The README carries the per-adapter table and a test that proves the
+  floor by behaviour rather than by where it is registered.
 
 ## [1.5.2] - 2026-08-15
 
