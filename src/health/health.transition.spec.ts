@@ -10,6 +10,8 @@
  * Mocks: hand-built `IHealthIndicator` and `IHealthTransitionSink` stubs
  * (family convention, no test double library), plus spies on Nest's `Logger`.
  */
+import { runInNewContext } from 'node:vm'
+
 import { Logger } from '@nestjs/common'
 
 import { normalizeCoreOptions } from '../core.options'
@@ -79,6 +81,28 @@ const down = (): Promise<HealthIndicatorResult> => Promise.resolve({ status: 'do
  */
 function rejects(message: string): () => Promise<HealthIndicatorResult> {
   return (): Promise<HealthIndicatorResult> => Promise.reject(new Error(message))
+}
+
+/**
+ * Let every pending microtask and immediate settle before asserting.
+ *
+ * @returns A promise resolved after the current macrotask turn.
+ */
+function flushAsync(): Promise<void> {
+  return new Promise((resolve) => {
+    setImmediate(resolve)
+  })
+}
+
+/**
+ * A minimal thenable, shaped like what a userland promise library returns.
+ *
+ * Deliberately not `PromiseLike`: the point of the test that uses it is that a
+ * value carrying a rejection need not be this realm's `Promise`, nor even a
+ * well-typed promise at all, for the language to assimilate it.
+ */
+interface RejectingThenable {
+  then(onFulfilled?: unknown, onRejected?: (reason: unknown) => void): void
 }
 
 /** Behaviour: never settle, so the aggregator's bound is what resolves the check. */
@@ -434,6 +458,79 @@ describe('HealthService readiness transitions', () => {
     expect(result.status).toBe('error')
     expect(warn).toHaveBeenCalledWith(
       'Health transition sink threw and was ignored: log pipeline down'
+    )
+  })
+
+  /**
+   * A sink returning a non-native thenable is contained too.
+   *
+   * A userland promise library's result is a thenable but not an instance of
+   * this realm's `Promise`, so an `instanceof` test would not notice it and its
+   * rejection would escape. Detecting `then` is what the language itself does
+   * when it assimilates a value, so it recognizes every shape that can carry a
+   * deferred failure.
+   */
+  it('contains a sink returning a rejecting thenable', async () => {
+    // Declared as returning a thenable and assigned into a `void`-returning
+    // slot with no cast: that assignment is exactly what the compiler permits,
+    // and therefore exactly what this seam has to survive.
+    const thenableSink: IHealthTransitionSink = {
+      record: (): RejectingThenable => ({
+        then: (_onFulfilled, onRejected): void => {
+          onRejected?.(new Error('userland promise failed'))
+        }
+      })
+    }
+    const service = new HealthService(
+      [new ScriptedIndicator('redis', down)],
+      normalizeCoreOptions(),
+      undefined,
+      undefined,
+      thenableSink
+    )
+
+    await service.checkReadiness()
+    await Promise.resolve()
+
+    expect(warn).toHaveBeenCalledWith(
+      'Health transition sink threw and was ignored: userland promise failed'
+    )
+  })
+
+  /**
+   * A sink returning a promise from another realm is contained too.
+   *
+   * `Promise` is a per-realm binding, so an `async record()` defined in a plugin
+   * loaded through `node:vm` returns a genuine native promise that is not an
+   * instance of this realm's constructor. This is the case that made an
+   * `instanceof` test insufficient rather than merely narrow.
+   *
+   * The reported message goes through `String(reason)` rather than
+   * `reason.message`: the rejection reason is a foreign `Error`, so it fails
+   * this realm's `instanceof Error` as well. That is the summarizer behaving as
+   * documented, and it still yields a bounded, readable line.
+   */
+  it('contains a sink returning a rejected promise from another realm', async () => {
+    const foreignSink: IHealthTransitionSink = {
+      record: (): RejectingThenable =>
+        runInNewContext('Promise.reject(new Error("foreign realm failure"))')
+    }
+    const service = new HealthService(
+      [new ScriptedIndicator('redis', down)],
+      normalizeCoreOptions(),
+      undefined,
+      undefined,
+      foreignSink
+    )
+
+    await service.checkReadiness()
+    // Drained through the macrotask queue rather than one microtask turn:
+    // assimilating a foreign promise schedules a job to call its `then`, so the
+    // rejection surfaces a turn later than a same-realm one would.
+    await flushAsync()
+
+    expect(warn).toHaveBeenCalledWith(
+      'Health transition sink threw and was ignored: Error: foreign realm failure'
     )
   })
 

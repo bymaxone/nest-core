@@ -341,6 +341,13 @@ export class HealthService implements OnApplicationBootstrap {
    * unhandled rejection rather than the contained failure documented on the
    * contract.
    *
+   * Whatever comes back is assimilated with `Promise.resolve`, not tested with
+   * `instanceof Promise`: `Promise` is a per-realm binding, so an `async` sink
+   * defined in another realm returns a native promise that fails `instanceof`
+   * here, and a userland promise library's result is not an instance either.
+   * Assimilation is the language's own thenable test, and it is inert for the
+   * `undefined` an ordinary synchronous sink returns.
+   *
    * @param transition - The event to deliver.
    */
   private emit(transition: HealthTransition): void {
@@ -349,15 +356,9 @@ export class HealthService implements OnApplicationBootstrap {
     }
     try {
       const returned: unknown = this.transitionSink.record(transition)
-      // `instanceof Promise` rather than a thenable check: `async record()` — the
-      // reachable case, and the one the signature invites — always returns a
-      // native promise, and matching on a `then` property would mean narrowing
-      // an `unknown` the declared type says is `void`.
-      if (returned instanceof Promise) {
-        returned.catch((error: unknown) => {
-          this.reportSinkFailure(error)
-        })
-      }
+      Promise.resolve(returned).catch((error: unknown) => {
+        this.reportSinkFailure(error)
+      })
     } catch (error: unknown) {
       this.reportSinkFailure(error)
     }

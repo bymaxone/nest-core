@@ -95,21 +95,24 @@ export function buildTimingSample(input: TimingSampleInput): RequestTimingSample
  * the process down under `--unhandled-rejections=strict` — rather than the
  * contained failure this contract promises.
  *
+ * Whatever comes back is assimilated with `Promise.resolve`, not tested with
+ * `instanceof Promise`. `Promise` is a per-realm binding, so an `async` function
+ * defined in another realm — a plugin loaded through `node:vm` — returns a
+ * native promise that fails `instanceof` here, and a userland promise library's
+ * result is not an instance either. Both are ordinary things for a consumer to
+ * return. Assimilation is the language's own thenable test, so it recognizes
+ * every shape that can carry a rejection, and it is inert for the `undefined`
+ * an ordinary synchronous sink returns.
+ *
  * @param sink - The consumer's sink.
  * @param sample - The sample to deliver.
  */
 export function deliverSample(sink: ITimingSink, sample: RequestTimingSample): void {
   try {
     const returned: unknown = sink.record(sample)
-    // `instanceof Promise` rather than a thenable check: `async record()` — the
-    // reachable case, and the one the signature invites — always returns a
-    // native promise, and matching on a `then` property would mean narrowing an
-    // `unknown` the declared type says is `void`.
-    if (returned instanceof Promise) {
-      returned.catch(() => {
-        // Absorbed for the same reason as the synchronous path below.
-      })
-    }
+    Promise.resolve(returned).catch(() => {
+      // Absorbed for the same reason as the synchronous path below.
+    })
   } catch {
     // Fire-and-forget contract: a throwing sink must never break the request it
     // is observing, so its failure is caught and silenced here.

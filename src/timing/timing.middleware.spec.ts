@@ -251,6 +251,32 @@ describe('BymaxTimingMiddleware', () => {
    * The containment is what lets this test finish — an escaping rejection fails
    * the run itself rather than this assertion.
    */
+  it('swallows a sink returning a rejecting thenable', async () => {
+    // Declared as returning a thenable and assigned into a `void`-returning
+    // slot with no cast: that assignment is what the compiler permits, and a
+    // userland promise library's result is not an instance of this realm's
+    // `Promise`, so an `instanceof` test would not have noticed it at all.
+    const middleware = buildMiddleware({
+      sink: {
+        record: (): { then(f?: unknown, r?: (reason: unknown) => void): void } => ({
+          then: (_onFulfilled, onRejected): void => {
+            onRejected?.(new Error('userland promise failed'))
+          }
+        })
+      }
+    })
+    const response = fakeResponse(200)
+
+    middleware.use(matchedRequest('GET', '/probe'), response, () => undefined)
+
+    expect(() => {
+      response.close()
+    }).not.toThrow()
+    await new Promise((resolve) => {
+      setImmediate(resolve)
+    })
+  })
+
   it('swallows a sink that rejects asynchronously', async () => {
     const middleware = buildMiddleware({
       sink: {
