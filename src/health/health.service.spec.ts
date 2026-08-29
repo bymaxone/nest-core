@@ -251,7 +251,7 @@ describe('HealthService', () => {
     await service.checkReadiness()
 
     expect(warn).toHaveBeenCalledWith(
-      'Health indicator "database" reported down: connection refused'
+      'Health check "database" went down: the indicator rejected: connection refused'
     )
     warn.mockRestore()
   })

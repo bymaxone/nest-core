@@ -239,6 +239,38 @@ describe('BymaxTimingMiddleware', () => {
   })
 
   /**
+   * A sink that rejects asynchronously cannot reach the request either.
+   *
+   * `record` is declared `void`, but TypeScript accepts any return value in a
+   * void-returning position, so `async record()` compiles — and it is what a
+   * consumer writes when the backend it delegates to is async. The rejection
+   * settles after the synchronous guard has exited, so uncontained it is an
+   * unhandled rejection that can take the process down: the observer breaking
+   * what it observes, which is exactly what fire-and-forget rules out.
+   *
+   * The containment is what lets this test finish — an escaping rejection fails
+   * the run itself rather than this assertion.
+   */
+  it('swallows a sink that rejects asynchronously', async () => {
+    const middleware = buildMiddleware({
+      sink: {
+        record: async (): Promise<void> => {
+          throw new Error('sink is down later')
+        }
+      }
+    })
+    const response = fakeResponse(200)
+
+    middleware.use(matchedRequest('GET', '/probe'), response, () => undefined)
+
+    expect(() => {
+      response.close()
+    }).not.toThrow()
+    // Give the rejection the microtask turn it was deferred onto.
+    await Promise.resolve()
+  })
+
+  /**
    * No sink bound anywhere.
    *
    * The token is optional, so the middleware must stand up and run against its

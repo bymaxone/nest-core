@@ -19,3 +19,9 @@ export type {
   HealthResponse,
   IHealthIndicator
 } from './health.interfaces'
+
+export type {
+  HealthTransition,
+  HealthTransitionCause,
+  IHealthTransitionSink
+} from './health.transition'

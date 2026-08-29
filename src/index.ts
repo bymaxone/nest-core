@@ -31,9 +31,16 @@ export {
   BYMAX_CORRELATION_PROVIDER,
   BYMAX_TIMING_SINK,
   BYMAX_HEALTH_INDICATORS,
+  BYMAX_HEALTH_TRANSITION_SINK,
   BYMAX_METRICS_REGISTRY,
   BYMAX_TRACE_CONTEXT
 } from './core.tokens'
+
+export type {
+  HealthTransition,
+  HealthTransitionCause,
+  IHealthTransitionSink
+} from './health/health.transition'
 
 export type { ICorrelationIdProvider } from './envelope/correlation.interfaces'
 

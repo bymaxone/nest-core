@@ -515,9 +515,9 @@ requirement.
 
 ## 🔑 DI Tokens
 
-Every token is a `Symbol`. `BYMAX_CORRELATION_PROVIDER` and
-`BYMAX_HEALTH_INDICATORS` are consumed with `@Optional()` and are not bound by
-the module: provide either from your own module to supply your own
+Every token is a `Symbol`. `BYMAX_CORRELATION_PROVIDER`,
+`BYMAX_HEALTH_INDICATORS` and `BYMAX_HEALTH_TRANSITION_SINK` are consumed with
+`@Optional()` and are not bound by the module: provide either from your own module to supply your own
 implementation, otherwise the internal fallback in the last column applies.
 `BYMAX_TIMING_SINK` and `BYMAX_METRICS_REGISTRY` behave differently on
 `forRootAsync`, where options resolve after the module is defined: there the
@@ -528,14 +528,15 @@ consumer `BYMAX_TIMING_SINK` override is honored on `forRoot` but shadowed on
 [Integration with `@bymax-one/nest-logger`](#-integration-with-bymax-onenest-logger)
 below.
 
-| Token                        | Provides                              | When you do not provide one                                                                                       |
-| ---------------------------- | ------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| `BYMAX_CORE_OPTIONS`         | The resolved `BymaxCoreModuleOptions` | always set by the module                                                                                          |
-| `BYMAX_CORRELATION_PROVIDER` | `ICorrelationIdProvider`              | internal no-op (omits `correlationId`)                                                                            |
-| `BYMAX_TIMING_SINK`          | `ITimingSink`                         | internal no-op, or the metrics bridge when timing and metrics are both enabled                                    |
-| `BYMAX_HEALTH_INDICATORS`    | `IHealthIndicator[]`                  | treated as an empty indicator set                                                                                 |
-| `BYMAX_METRICS_REGISTRY`     | the `prom-client` `Registry`          | bound when metrics are enabled; on `forRootAsync` always registered, guarded-placeholder when off                 |
-| `BYMAX_TRACE_CONTEXT`        | `ITraceContextProvider`               | bound on every path: the OpenTelemetry reader when telemetry is enabled, a no-op that resolves no trace otherwise |
+| Token                          | Provides                              | When you do not provide one                                                                                       |
+| ------------------------------ | ------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `BYMAX_CORE_OPTIONS`           | The resolved `BymaxCoreModuleOptions` | always set by the module                                                                                          |
+| `BYMAX_CORRELATION_PROVIDER`   | `ICorrelationIdProvider`              | internal no-op (omits `correlationId`)                                                                            |
+| `BYMAX_TIMING_SINK`            | `ITimingSink`                         | internal no-op, or the metrics bridge when timing and metrics are both enabled                                    |
+| `BYMAX_HEALTH_INDICATORS`      | `IHealthIndicator[]`                  | treated as an empty indicator set                                                                                 |
+| `BYMAX_HEALTH_TRANSITION_SINK` | `IHealthTransitionSink`               | no sink; readiness transitions go to Nest's logger instead (binding one stands that line down)                    |
+| `BYMAX_METRICS_REGISTRY`       | the `prom-client` `Registry`          | bound when metrics are enabled; on `forRootAsync` always registered, guarded-placeholder when off                 |
+| `BYMAX_TRACE_CONTEXT`          | `ITraceContextProvider`               | bound on every path: the OpenTelemetry reader when telemetry is enabled, a no-op that resolves no trace otherwise |
 
 ## 🚨 Error Envelope
 
@@ -757,6 +758,13 @@ class LoggerTimingSink implements ITimingSink {
 export class ObservabilityModule {}
 ```
 
+A sink that fails cannot reach the request: both a synchronous throw and a
+rejection from an `async record()` are absorbed. Write it `async` if the backend
+behind it is async — the `void` return type accepts it, and the rejection is
+caught. The failure is swallowed rather than logged, unlike a health transition
+sink, because this runs on every request and a systematically failing sink would
+otherwise become a second flood beside the first.
+
 ## 📄 Pagination
 
 Framework-neutral, pure functions on the `./pagination` subpath: no NestJS
@@ -899,6 +907,82 @@ export class HealthIndicatorsModule {}
 A rejecting, throwing, or slow indicator (past `indicatorTimeoutMs`) is
 converted to a `down` entry with a safe, bounded diagnostic detail; it never
 hides the results of the other registered indicators.
+
+### A failing check leaves a record
+
+A readiness failure that nothing records is a `503` an orchestrator acts on with
+an empty log behind it, and diagnosing it means reproducing it. That is easy to
+arrive at without deciding to: probe paths are the highest-volume request a
+backend serves, so they are usually excluded from the HTTP log surface, and a
+well-written indicator returns `{ status: 'down' }` rather than throwing —
+because readiness is typically unauthenticated and a driver's error carries
+hosts, ports and sometimes credentials.
+
+So the aggregator records it. It holds the last state of every check and reports
+each **change** — never once per probe — to its own logger, and to a sink you
+bind:
+
+```typescript
+import { Injectable } from '@nestjs/common'
+import type { HealthTransition, IHealthTransitionSink } from '@bymax-one/nest-core/health'
+
+@Injectable()
+export class HealthTransitionLogger implements IHealthTransitionSink {
+  constructor(private readonly logger: MyStructuredLogger) {}
+
+  record(transition: HealthTransition): void {
+    if (transition.isUp) {
+      this.logger.info('HEALTH_CHECK_RECOVERED', { check: transition.name })
+      return
+    }
+    this.logger.warn('HEALTH_CHECK_DEGRADED', {
+      check: transition.name,
+      cause: transition.cause.kind
+    })
+  }
+}
+```
+
+Bind it under `BYMAX_HEALTH_TRANSITION_SINK` from your own `@Global()` module,
+the same override pattern as the indicator token above.
+
+Binding nothing is supported, and is not the silent case: the transitions reach
+Nest's logger instead, so a readiness failure always leaves a record. **Binding a
+sink stands that line down** — both destinations are usually the same logger, so
+keeping it would put two records of one transition side by side, which is the
+noise this feature exists to remove. Your sink receives the cause as structured
+data, strictly more than the line renders, so what reaches the log after that is
+your decision rather than this package's.
+
+`transition.cause` distinguishes the three ways a check can be down, which the
+`up`/`down` response body cannot:
+
+| `cause.kind`    | Meaning                                            | Carries     |
+| --------------- | -------------------------------------------------- | ----------- |
+| `reported-down` | The indicator answered, and reported it down.      | —           |
+| `rejected`      | The indicator rejected or threw.                   | `message`   |
+| `timed-out`     | The aggregator gave up after `indicatorTimeoutMs`. | `timeoutMs` |
+
+`timed-out` is the one that cannot be observed anywhere else. An indicator the
+aggregator abandoned is never told, so it reports nothing — and a hung
+dependency is the common shape, not a refused one: a database under load, a
+network partition and a paused container all hang, while a refusal comes back
+immediately and would have been reported. That is why the rule lives in the
+aggregator rather than in each backend: the obstacle is information, not effort.
+
+Two details worth knowing before you rely on it. A first observation that is
+**failing** is reported, while a first observation that is healthy is not — a
+process that boots against a dependency already down would otherwise look
+healthy in the log forever, whereas announcing every healthy check would write a
+line per dependency on every boot. And the cause is the one seen **at the
+transition**: a dependency that stays down while its failure mode changes
+underneath keeps the first cause, which is the cost of one line per outage
+instead of one per probe.
+
+The sink is called synchronously on the readiness path, so keep it cheap. A
+throw is caught and logged rather than failing the probe — readiness answering
+`500` because its own logging broke would take a healthy deployment out of
+rotation — but do not use that as flow control.
 
 ### Discovered indicators
 
@@ -1636,7 +1720,8 @@ in the sections above.
 | `BymaxCoreModuleOptions`, `EnvelopeOptions`, `TimingOptions`, `HealthOptions`, `MetricsOptions`, `TelemetryOptions`, `OpenApiOptions`, `OpenApiServerDescriptor`, `OpenApiSecurityScheme`, `ResolvedCoreOptions` | types     | The options surface and its resolved shape.                                        |
 | `OpenApiSecurityRequirement`, `OpenApiHttpMethod`, `OpenApiOperationKey`, `OperationSecurityMap`                                                                                                                 | types     | The operation-key contract a sibling library targets to ship its own security map. |
 | `OpenApiOperationIdFactory`                                                                                                                                                                                      | type      | Names the operations in the generated document.                                    |
-| `BYMAX_CORE_OPTIONS`, `BYMAX_CORRELATION_PROVIDER`, `BYMAX_TIMING_SINK`, `BYMAX_HEALTH_INDICATORS`, `BYMAX_METRICS_REGISTRY`                                                                                     | tokens    | The DI tokens; see the [token table](#-di-tokens).                                 |
+| `BYMAX_CORE_OPTIONS`, `BYMAX_CORRELATION_PROVIDER`, `BYMAX_TIMING_SINK`, `BYMAX_HEALTH_INDICATORS`, `BYMAX_HEALTH_TRANSITION_SINK`, `BYMAX_METRICS_REGISTRY`, `BYMAX_TRACE_CONTEXT`                              | tokens    | The DI tokens; see the [token table](#-di-tokens).                                 |
+| `IHealthTransitionSink`, `HealthTransition`, `HealthTransitionCause`                                                                                                                                             | types     | The readiness-transition contract; also on `./health`.                             |
 | `ICorrelationIdProvider`                                                                                                                                                                                         | type      | The correlation-provider contract.                                                 |
 | `ITraceContextProvider`, `TraceContext`                                                                                                                                                                          | types     | The trace-context contract and the identifiers it resolves.                        |
 | `BymaxExceptionFilter`                                                                                                                                                                                           | class     | The envelope exception filter.                                                     |
@@ -1667,6 +1752,9 @@ in the sections above.
 | `HealthIndicatorResult`           | type     | The outcome of a single indicator check.            |
 | `HealthCheckEntry`                | type     | One named entry in a `HealthResponse.checks` array. |
 | `HealthResponse`                  | type     | The stable liveness and readiness response shape.   |
+| `IHealthTransitionSink`           | type     | Receives one event per change of readiness state.   |
+| `HealthTransition`                | type     | One change of state, for one check.                 |
+| `HealthTransitionCause`           | type     | Why a check went down, as the aggregator sees it.   |
 | `BymaxHealthIndicator`            | function | Class decorator marking a provider as discoverable. |
 | `BYMAX_HEALTH_INDICATOR_METADATA` | constant | The metadata key the marker writes.                 |
 

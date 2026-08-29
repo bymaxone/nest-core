@@ -267,13 +267,15 @@ BymaxCoreModule.forRootAsync({
 
 All tokens are `Symbol`s. String tokens are not used anywhere in the package.
 
-| Token                        | Provides                          | Default binding             |
-| ---------------------------- | --------------------------------- | --------------------------- |
-| `BYMAX_CORE_OPTIONS`         | Resolved `BymaxCoreModuleOptions` | consumer configuration      |
-| `BYMAX_CORRELATION_PROVIDER` | `ICorrelationIdProvider`          | no-op (returns `undefined`) |
-| `BYMAX_TIMING_SINK`          | `ITimingSink`                     | no-op                       |
-| `BYMAX_HEALTH_INDICATORS`    | `IHealthIndicator[]`              | empty array                 |
-| `BYMAX_METRICS_REGISTRY`     | `prom-client` `Registry`          | lazy, only when enabled     |
+| Token                          | Provides                          | Default binding                    |
+| ------------------------------ | --------------------------------- | ---------------------------------- |
+| `BYMAX_CORE_OPTIONS`           | Resolved `BymaxCoreModuleOptions` | consumer configuration             |
+| `BYMAX_CORRELATION_PROVIDER`   | `ICorrelationIdProvider`          | no-op (returns `undefined`)        |
+| `BYMAX_TIMING_SINK`            | `ITimingSink`                     | no-op                              |
+| `BYMAX_HEALTH_INDICATORS`      | `IHealthIndicator[]`              | empty array                        |
+| `BYMAX_HEALTH_TRANSITION_SINK` | `IHealthTransitionSink`           | none; transitions go to the logger |
+| `BYMAX_METRICS_REGISTRY`       | `prom-client` `Registry`          | lazy, only when enabled            |
+| `BYMAX_TRACE_CONTEXT`          | `ITraceContextProvider`           | no-op when telemetry is off        |
 
 Consumers override a default by providing the token in their own module:
 
@@ -354,7 +356,7 @@ export interface RequestTimingSample {
 }
 
 export interface ITimingSink {
-  /** Receives one sample per closed request, however it ended. Must never throw. */
+  /** Receives one sample per closed request, however it ended. Should not fail. */
   record(sample: RequestTimingSample): void
 }
 ```
@@ -364,7 +366,7 @@ Design decisions:
 - The route template is used instead of the raw URL to keep cardinality bounded for downstream metric sinks. A request that matched no route records the fixed `UNMATCHED_ROUTE` label (`<unmatched>`): the raw path is attacker-controlled, and following it would let a scanner mint one time series per probe.
 - One sample per request, and exactly one. The middleware replaced `TimingInterceptor` as the recorder rather than joining it, because two recorders double every rate an alert is tuned against — a silent failure worse than the under-counting being fixed.
 - The trace lookup reads the live context at emit time first and falls back to a context captured with `AsyncResource.bind` when the live one holds nothing. Neither alone is enough, measured against a registered `AsyncLocalStorageContextManager`: the live read resolves a span opened by instrumentation registered as Nest middleware — which runs _after_ this middleware — but resolves nothing on an aborted request, where `'close'` is emitted from a socket whose async resource predates the request; the captured context is the mirror image, resolving an upstream span on both paths and a downstream one on neither. The `'close'` listener itself is therefore deliberately **not** bound; only the fallback reader is.
-- The sink contract is fire-and-forget. A sink that throws is caught and silenced by the middleware; timing must never break a request.
+- The sink contract is fire-and-forget. A failing sink is caught and silenced by the recorder; timing must never break a request. Both ways it can fail are absorbed: a synchronous throw, and a rejection from an `async record()` — which compiles despite the `void` return type, because TypeScript accepts any return value in a void-returning position. An escaping rejection would be unhandled, able to kill the process under `--unhandled-rejections=strict`, which is the observer breaking what it observes. Delivery is one shared implementation rather than one per recorder: the guarantee is worth as much as its least careful copy.
 - The default sink is a no-op. Documented example implementations: forwarding to a structured logger, and the built-in metrics bridge (§9.3).
 
 ---
@@ -507,7 +509,38 @@ export class RedisHealthIndicator implements IHealthIndicator {
 
 The aggregation service runs all indicators concurrently, applies `indicatorTimeoutMs` per indicator, and converts rejections and timeouts into `down` entries with a diagnostic detail. One failing indicator never hides the results of the others.
 
-### 8.3 Why not @nestjs/terminus
+### 8.3 Transition Reporting
+
+The aggregator holds the last state of every check and reports each **change** — never once per probe.
+
+```typescript
+export type HealthTransitionCause =
+  | { readonly kind: 'rejected'; readonly message: string }
+  | { readonly kind: 'reported-down' }
+  | { readonly kind: 'timed-out'; readonly timeoutMs: number }
+
+export type HealthTransition =
+  | { readonly name: string; readonly isUp: true }
+  | { readonly name: string; readonly isUp: false; readonly cause: HealthTransitionCause }
+
+export interface IHealthTransitionSink {
+  record(transition: HealthTransition): void
+}
+```
+
+This exists because a readiness failure can otherwise leave no record an operator reads. Probe paths are the highest-volume request a backend serves, so they are typically excluded from the HTTP log surface, and a well-written indicator returns `{ status: 'down' }` rather than throwing — because readiness is usually unauthenticated and a driver's error carries hosts, ports and sometimes credentials. Of the three ways to be down, only a rejection was ever logged, and that one was logged on every probe.
+
+Three decisions are load-bearing:
+
+1. **The de-duplication rule lives in the aggregator, not in the sink.** A readiness check runs every few seconds, so a line per failing probe buries the one carrying the cause. Leaving the rule to each consumer means every backend re-deriving it slightly differently; a sink that never sees raw outcomes cannot get it wrong.
+2. **`timed-out` is knowledge only the aggregator has.** An indicator it abandoned is never told, so it reports nothing, and a consumer racing its own timer beneath `indicatorTimeoutMs` still never learns the bound that applied. The obstacle for a consumer is information, not effort.
+3. **The first observation is asymmetric.** Failing is reported — a process booting against a dependency already down would otherwise look healthy in the log forever — while healthy is not, since that would write a line per dependency on every boot.
+
+Outcomes are ordered by the probe that started them, not by the one that finished first: readiness is reached concurrently, and a dependency hanging until the bound elapses is exactly what makes an earlier probe finish last. Comparing states alone would report the recovery and then re-report the outage behind it on stale evidence.
+
+Binding a sink stands the aggregator's own logger line down, since both destinations are usually the same logger and two records of one transition is the noise the feature removes.
+
+### 8.4 Why not @nestjs/terminus
 
 Terminus is a capable library, but it brings its own indicator ecosystem and transitive surface. This package keeps the zero-dependency philosophy: the readiness aggregator is a small, fully tested implementation, and the `IHealthIndicator` contract is trivial to implement against any client the application already owns.
 

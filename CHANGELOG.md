@@ -11,6 +11,118 @@ heading here.
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-08-29
+
+A readiness check that fails without rejecting left no record an operator would
+ever read, and one that fails by rejecting left one per probe. Both are the same
+missing seam, and this release adds it: the aggregator now holds the last state
+of every check and reports each **change** — to its own logger, and to an
+optional sink a consumer binds.
+
+**Apply to a derived backend:** nothing is required. Transitions now reach Nest's
+logger on every path, where before only a rejection did. Bind
+`BYMAX_HEALTH_TRANSITION_SINK` to route them into a structured logging surface,
+and read `cause.kind` to tell the three failure shapes apart. If you have written
+a health reporter of your own, delete it — including any wrapper that races a
+timer beneath `health.indicatorTimeoutMs` to recover a verdict, which this seam
+makes unnecessary.
+
+### Added
+
+- **`IHealthTransitionSink`, bound under `BYMAX_HEALTH_TRANSITION_SINK`.**
+  Receives one `HealthTransition` per change of readiness state, per check name —
+  never one per probe. `@Optional()` and unbound by default, like
+  `BYMAX_HEALTH_INDICATORS`, so a consumer's binding is never shadowed by a local
+  one.
+
+  With no sink the aggregator writes the transition to Nest's logger, so a
+  readiness failure is never silent by default; binding one stands that line down
+  in favour of the sink. Both destinations are usually the same logger in a
+  consuming application, and two records of one transition side by side is the
+  noise this feature exists to remove. The sink is handed the cause as structured
+  data, strictly more than the line renders, so what reaches the log after that
+  is the consumer's decision rather than this package's.
+
+  The de-duplication rule lives in the aggregator rather than in the sink, and
+  that is the whole point. A readiness check runs every few seconds, so a line
+  per failing probe turns one outage into thousands of identical records that
+  bury the one carrying the cause; leaving that rule to each consumer means every
+  backend re-deriving it, slightly differently. A sink that never sees raw
+  outcomes cannot get it wrong.
+
+  Overlapping probes are ordered by when they started, not by when they
+  finished. Readiness is not called one at a time — an orchestrator's probe and a
+  load balancer's health check reach it concurrently — and a dependency that
+  hangs until the bound elapses is exactly what makes an earlier probe finish
+  last. Comparing states alone would write such an outage backwards: the later
+  probe reports the recovery, and the earlier one's timeout lands behind it and
+  reports the dependency down again on evidence that is already stale.
+
+  The rule is asymmetric on a first observation, deliberately. A first
+  observation that is **failing** is reported — a process that boots against a
+  dependency already down would otherwise look healthy in the log forever — while
+  a first observation that is healthy is not, since announcing the expected state
+  would write one line per dependency on every boot.
+
+- **`HealthTransitionCause`, distinguishing the three ways a check is down.**
+  `reported-down` (the indicator answered and said so), `rejected` (carrying the
+  summarized message, bounded to 300 characters), and `timed-out` (carrying the
+  `timeoutMs` that elapsed). A discriminated union rather than a string, so a
+  consumer switches exhaustively and the compiler names the arm it has not
+  handled if a future version adds one.
+
+  `timed-out` is the one that exists nowhere else. An indicator this package
+  gave up on is never told, so it reports nothing, and a consumer racing its own
+  timer beneath `indicatorTimeoutMs` still never learns the bound that actually
+  applied. A hung dependency is also the common shape rather than a refused one:
+  a database under load, a network partition and a paused container all hang,
+  while a refusal returns immediately and would have been reported. The obstacle
+  for a consumer is information, not effort — which is the argument for this
+  living in the library at all.
+
+### Fixed
+
+- **An `async` timing sink could take the process down.** `ITimingSink.record`
+  is declared to return `void`, and TypeScript accepts any return value in a
+  void-returning position, so `async record()` compiles — and it is the natural
+  shape when the backend behind the sink is async. Its rejection settled a
+  microtask after the recorder's `try`/`catch` had exited, so instead of the
+  contained failure the contract promises it became an unhandled rejection, able
+  to kill the process under `--unhandled-rejections=strict`. An observer that can
+  break what it observes is the one thing a fire-and-forget contract exists to
+  rule out.
+
+  Both the middleware and the deprecated interceptor were affected, and both now
+  route delivery through one implementation rather than two copies of the same
+  `try`/`catch` — the containment guarantee is worth exactly as much as its least
+  careful copy. Nothing to change in a consumer: a sink that already returned
+  synchronously behaves identically, and an `async` one is now caught.
+
+  Found while reviewing the health transition sink, which had the same hole
+  before release.
+
+### Changed
+
+- **A rejecting indicator is logged once per outage, not once per probe.** The
+  aggregator already wrote a warning for a rejection, on every readiness check
+  for as long as the dependency stayed down: roughly sixty identical lines for a
+  ten-minute outage probed every ten seconds. That line now follows the
+  transition rule like every other path. No API moves; log volume does, and a
+  recovery now writes a line where nothing did before.
+
+  This arrives with the upgrade, not with the binding — a deployment that wires
+  no sink still stops repeating.
+
+  The cost is stated rather than hidden: a dependency that stays down while its
+  failure mode changes underneath keeps the cause observed **at the transition**.
+  That is the trade for one line per outage instead of one per probe.
+
+- **The root bundle's size budget moved from 15 to 17 KiB brotli**, measured
+  14.25 → 15.82. Checked before the number moved: the transition contract is
+  types-only and erases at build time, no module entered the root that was not
+  already there, and the rationale prose was moved into the erased file — this
+  bundle ships its comments — before the budget was touched.
+
 ## [1.5.3] - 2026-08-18
 
 Three findings from a functional and security audit of a derived backend
@@ -875,4 +987,5 @@ have regressed from. They are kept because the reasoning is worth having.
 [1.5.1]: https://github.com/bymaxone/nest-core/compare/v1.5.0...v1.5.1
 [1.5.2]: https://github.com/bymaxone/nest-core/compare/v1.5.1...v1.5.2
 [1.5.3]: https://github.com/bymaxone/nest-core/compare/v1.5.2...v1.5.3
+[1.6.0]: https://github.com/bymaxone/nest-core/compare/v1.5.3...v1.6.0
 [Unreleased]: https://github.com/bymaxone/nest-core/compare/v1.5.3...HEAD

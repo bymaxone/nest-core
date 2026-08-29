@@ -5,8 +5,13 @@
  * failing or slow indicator never hides the results of the others. No
  * dependency on `@nestjs/terminus`: this is a small, fully tested local
  * implementation (a deliberate spec decision, see the technical
- * specification §8.3). Indicators run flat and concurrently, with no
+ * specification §8.4). Indicators run flat and concurrently, with no
  * dependency ordering between checks.
+ *
+ * This is also where a readiness failure becomes a record: the aggregator holds
+ * the last state of every check and reports each *change*, to its own logger and
+ * to an `IHealthTransitionSink` when one is bound. Why that rule belongs here
+ * rather than in each consuming backend is argued in `health.transition.ts`.
  * @layer Service
  */
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common'
@@ -14,10 +19,19 @@ import type { OnApplicationBootstrap } from '@nestjs/common'
 import { DiscoveryService, Reflector } from '@nestjs/core'
 
 import type { ResolvedCoreOptions } from '../core.options'
-import { BYMAX_CORE_OPTIONS, BYMAX_HEALTH_INDICATORS } from '../core.tokens'
+import {
+  BYMAX_CORE_OPTIONS,
+  BYMAX_HEALTH_INDICATORS,
+  BYMAX_HEALTH_TRANSITION_SINK
+} from '../core.tokens'
 import type { ProviderScanner } from '../discovery'
 import { discoverIndicators, mergeIndicators } from './health.discovery'
 import type { HealthCheckEntry, HealthResponse, IHealthIndicator } from './health.interfaces'
+import type {
+  HealthTransition,
+  HealthTransitionCause,
+  IHealthTransitionSink
+} from './health.transition'
 
 /**
  * The surfaced diagnostic message is at most this many characters, including the
@@ -56,26 +70,57 @@ function summarizeRejection(reason: unknown): string {
 }
 
 /**
+ * One indicator's resolved result, paired with why it is down. The cause cannot
+ * be recovered from the entry afterwards: a timeout and a deliberate `down` are
+ * the same entry once `health.exposeIndicatorErrors` is off, its production
+ * setting. A union, so the reporter needs no branch for an impossible state.
+ */
+type IndicatorOutcome =
+  | {
+      /** The entry as the readiness response will carry it. */
+      readonly entry: HealthCheckEntry
+      /** The dependency answered healthy. */
+      readonly isUp: true
+    }
+  | {
+      /** The entry as the readiness response will carry it. */
+      readonly entry: HealthCheckEntry
+      /** The dependency is not reachable. */
+      readonly isUp: false
+      /** Why. Carried in the type so the reporter needs no defensive branch. */
+      readonly cause: HealthTransitionCause
+    }
+
+/**
  * Run one indicator racing a per-indicator timeout. A rejection or a timeout
  * both resolve (never reject) to a `down` entry, and the timeout's timer is
  * always cleared once the race settles, whichever side wins, so no timer
  * ever outlives this call.
  *
+ * Nothing is logged here. Every down path returns its cause instead, and the
+ * caller decides what is worth a line.
+ *
  * @param indicator - The indicator to run.
  * @param timeoutMs - The per-indicator timeout, in milliseconds.
- * @returns The named check entry: the indicator's real result, or a `down`
- *   entry describing the timeout or the summarized rejection reason.
+ * @param exposeErrors - Whether a rejection's message is copied into the served
+ *   entry's `details.error`; it reaches the cause either way.
+ * @returns The named check entry — the indicator's real result, or a `down`
+ *   entry describing the timeout or the summarized rejection reason — and the
+ *   cause behind it.
  */
 async function runIndicator(
   indicator: IHealthIndicator,
   timeoutMs: number,
-  exposeErrors: boolean,
-  logger: Logger
-): Promise<HealthCheckEntry> {
+  exposeErrors: boolean
+): Promise<IndicatorOutcome> {
   let timer: ReturnType<typeof setTimeout> | undefined
-  const timedOut = new Promise<HealthCheckEntry>((resolve) => {
+  const timedOut = new Promise<IndicatorOutcome>((resolve) => {
     timer = setTimeout(() => {
-      resolve({ name: indicator.name, status: 'down', details: { timedOutAfterMs: timeoutMs } })
+      resolve({
+        entry: { name: indicator.name, status: 'down', details: { timedOutAfterMs: timeoutMs } },
+        isUp: false,
+        cause: { kind: 'timed-out', timeoutMs }
+      })
     }, timeoutMs)
   })
   // `Promise.resolve().then(...)` defers the actual `indicator.check()` call
@@ -88,22 +133,46 @@ async function runIndicator(
     .then(() => indicator.check())
     // Spread the result first, then set the name, so a misbehaving indicator
     // that returns its own `name` cannot spoof the declared check name.
-    .then((result) => ({ ...result, name: indicator.name }))
-    .catch((reason: unknown): HealthCheckEntry => {
+    .then((result): IndicatorOutcome => {
+      const entry = { ...result, name: indicator.name }
+      // Anything that is not `up` counts as down, matching how the aggregate
+      // status below reads the same field, so a misbehaving indicator cannot
+      // be down in the response and up in the log.
+      return result.status === 'up'
+        ? { entry, isUp: true }
+        : { entry, isUp: false, cause: { kind: 'reported-down' } }
+    })
+    .catch((reason: unknown): IndicatorOutcome => {
       const message = summarizeRejection(reason)
-      // The message goes to the log unconditionally: readiness is usually
-      // unauthenticated, and an indicator rarely authors its own failure text —
-      // it lets a driver's error propagate, and those carry hosts, ports and
-      // sometimes credentials. The log is where access is already controlled.
-      logger.warn(`Health indicator "${indicator.name}" reported down: ${message}`)
-      return exposeErrors
-        ? { name: indicator.name, status: 'down', details: { error: message } }
-        : { name: indicator.name, status: 'down' }
+      return {
+        entry: exposeErrors
+          ? { name: indicator.name, status: 'down', details: { error: message } }
+          : { name: indicator.name, status: 'down' },
+        isUp: false,
+        cause: { kind: 'rejected', message }
+      }
     })
   try {
     return await Promise.race([checked, timedOut])
   } finally {
     clearTimeout(timer)
+  }
+}
+
+/**
+ * Render a cause as the tail of a log line.
+ *
+ * @param cause - The cause to describe.
+ * @returns A human-readable fragment naming what happened.
+ */
+function describeCause(cause: HealthTransitionCause): string {
+  switch (cause.kind) {
+    case 'rejected':
+      return `the indicator rejected: ${cause.message}`
+    case 'timed-out':
+      return `the indicator did not answer within ${cause.timeoutMs}ms`
+    case 'reported-down':
+      return 'the indicator reported it down'
   }
 }
 
@@ -130,6 +199,25 @@ export class HealthService implements OnApplicationBootstrap {
   private effectiveIndicators: readonly IHealthIndicator[] | undefined
 
   /**
+   * The last state observed per check name, absent until the first observation,
+   * tagged with the probe that observed it. Keyed by name, so one map serves
+   * every check and one dependency can neither trigger nor suppress another's
+   * line. This is the state that makes the difference between a line per change
+   * and a line per probe.
+   */
+  private readonly lastState = new Map<string, { readonly isUp: boolean; readonly seq: number }>()
+
+  /**
+   * Counts readiness probes, so an outcome can be ordered against what is
+   * already recorded. Readiness is not called one at a time: an orchestrator's
+   * probe and a load balancer's health check reach this concurrently, and this
+   * feature's own subject — a dependency that hangs until `indicatorTimeoutMs`
+   * elapses — is exactly what makes an earlier probe finish after a later one.
+   * Comparing states alone would then let the stale observation win.
+   */
+  private probeSequence = 0
+
+  /**
    * @param indicators - Every explicitly registered indicator; empty when none
    *   resolve. Injected with `@Optional()`: `BymaxCoreModule` binds no local
    *   default for this token, so a consumer's own `BYMAX_HEALTH_INDICATORS`
@@ -142,6 +230,9 @@ export class HealthService implements OnApplicationBootstrap {
    *   without it when the feature is off.
    * @param reflector - Nest's metadata reader, used to match the indicator
    *   marker. Optional for the same reason.
+   * @param transitionSink - Receives one event per change of readiness state.
+   *   `@Optional()` and bound to nothing by default, for the same reason as the
+   *   indicator array: a local default here would shadow a consumer's override.
    */
   constructor(
     @Optional()
@@ -152,8 +243,134 @@ export class HealthService implements OnApplicationBootstrap {
     // actually uses: the dependency is "something that lists providers", not the
     // whole discovery service.
     @Optional() @Inject(DiscoveryService) private readonly discovery?: ProviderScanner,
-    @Optional() @Inject(Reflector) private readonly reflector?: Reflector
+    @Optional() @Inject(Reflector) private readonly reflector?: Reflector,
+    @Optional()
+    @Inject(BYMAX_HEALTH_TRANSITION_SINK)
+    private readonly transitionSink?: IHealthTransitionSink
   ) {}
+
+  /**
+   * Report one check's current state, emitting only when it differs from the
+   * last state observed for that name.
+   *
+   * The asymmetry on a first observation is deliberate. A first observation that
+   * is FAILING is a transition: a process that boots against a dependency
+   * already down would otherwise look healthy in the log forever. A first
+   * observation that is HEALTHY is not: that is the expected state, and
+   * announcing it would write one line per dependency on every boot — the noise
+   * the probe-path exclusion exists to keep out.
+   *
+   * A cause is recorded at the transition, so a dependency that stays down while
+   * its failure mode changes underneath keeps the first one. That is the cost of
+   * one line per outage instead of one per probe.
+   *
+   * @param outcome - The indicator's resolved outcome for this probe.
+   * @param seq - The probe that produced it, from {@link probeSequence}.
+   */
+  private reportTransition(outcome: IndicatorOutcome, seq: number): void {
+    const name = outcome.entry.name
+    const previous = this.lastState.get(name)
+    // An outcome no newer than the one already recorded describes a moment that
+    // has since been superseded, so it is dropped rather than reported. Without
+    // this a hung dependency writes the sequence backwards: the later probe
+    // reports the recovery, then the earlier one's timeout lands behind it and
+    // reports the dependency down again.
+    //
+    // `<=` rather than `<` also settles the one case where two outcomes share a
+    // probe: nothing stops a consumer binding two indicators under the same
+    // name — `mergeIndicators` dedupes the discovered set against the explicit
+    // one, not the explicit one against itself — and the first observation of a
+    // name is what the aggregate response reports, so it is what the log follows
+    // too. Names that differ are unaffected: their first outcome finds no
+    // previous entry at all.
+    if (previous !== undefined && seq <= previous.seq) {
+      return
+    }
+    const changed = previous?.isUp !== outcome.isUp
+    // Recorded even when the state is unchanged, so the newest probe to observe
+    // this check is always what a later-arriving outcome is ordered against.
+    this.lastState.set(name, { isUp: outcome.isUp, seq })
+    if (!changed) {
+      return
+    }
+    if (outcome.isUp) {
+      if (previous === undefined) {
+        return
+      }
+      this.describe(`Health check "${name}" recovered`, false)
+      this.emit({ name, isUp: true })
+      return
+    }
+    this.describe(`Health check "${name}" went down: ${describeCause(outcome.cause)}`, true)
+    this.emit({ name, isUp: false, cause: outcome.cause })
+  }
+
+  /**
+   * Write a transition to this package's own logger, unless a sink is bound —
+   * the reasoning for standing down is on `IHealthTransitionSink`.
+   *
+   * Down is a warning, not an error: an unreachable dependency is what readiness
+   * exists to route around, while `error` is what pages someone.
+   *
+   * @param message - The line to write.
+   * @param isDown - Whether it describes a check going down, which sets the level.
+   */
+  private describe(message: string, isDown: boolean): void {
+    if (this.transitionSink !== undefined) {
+      return
+    }
+    if (isDown) {
+      this.logger.warn(message)
+      return
+    }
+    this.logger.log(message)
+  }
+
+  /**
+   * Hand a transition to the consumer's sink, if one is bound. A failure is
+   * contained: readiness answering `500` because its own logging broke would
+   * take a healthy deployment out of rotation over an observability fault.
+   *
+   * Both ways a sink can fail are caught, for the same reason `runIndicator`
+   * defends against an indicator that throws synchronously — a public seam
+   * cannot assume the implementation behind it honors its own signature.
+   * `record` is declared to return `void`, but TypeScript accepts any return
+   * value in a void-returning position, so `async record()` compiles and is the
+   * shape a consumer reaches for when the logger it delegates to is async. Its
+   * rejection lands a microtask after the `try` block has exited, which is an
+   * unhandled rejection rather than the contained failure documented on the
+   * contract.
+   *
+   * @param transition - The event to deliver.
+   */
+  private emit(transition: HealthTransition): void {
+    if (this.transitionSink === undefined) {
+      return
+    }
+    try {
+      const returned: unknown = this.transitionSink.record(transition)
+      // `instanceof Promise` rather than a thenable check: `async record()` — the
+      // reachable case, and the one the signature invites — always returns a
+      // native promise, and matching on a `then` property would mean narrowing
+      // an `unknown` the declared type says is `void`.
+      if (returned instanceof Promise) {
+        returned.catch((error: unknown) => {
+          this.reportSinkFailure(error)
+        })
+      }
+    } catch (error: unknown) {
+      this.reportSinkFailure(error)
+    }
+  }
+
+  /**
+   * Log a sink failure, without letting it reach the probe.
+   *
+   * @param error - Whatever the sink threw or rejected with.
+   */
+  private reportSinkFailure(error: unknown): void {
+    this.logger.warn(`Health transition sink threw and was ignored: ${summarizeRejection(error)}`)
+  }
 
   /**
    * Resolve the readiness set once the whole container is instantiated.
@@ -223,11 +440,19 @@ export class HealthService implements OnApplicationBootstrap {
   async checkReadiness(): Promise<HealthResponse> {
     const timeoutMs = this.options.health.indicatorTimeoutMs
     const exposeErrors = this.options.health.exposeIndicatorErrors
-    const checks = await Promise.all(
-      this.resolveIndicators().map((indicator) =>
-        runIndicator(indicator, timeoutMs, exposeErrors, this.logger)
-      )
+    // Taken before the probes run, so an outcome is ordered by when its probe
+    // started rather than by when it happened to finish.
+    const seq = ++this.probeSequence
+    const outcomes = await Promise.all(
+      this.resolveIndicators().map((indicator) => runIndicator(indicator, timeoutMs, exposeErrors))
     )
+    // After every indicator has settled, not as each one does, so the lines
+    // follow the declared indicator order rather than which dependency answered
+    // first — otherwise two readings of one outage order their logs differently.
+    for (const outcome of outcomes) {
+      this.reportTransition(outcome, seq)
+    }
+    const checks = outcomes.map((outcome) => outcome.entry)
     const status = checks.every((check) => check.status === 'up') ? 'ok' : 'error'
     return { status, checks }
   }

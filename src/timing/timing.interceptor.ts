@@ -30,7 +30,7 @@ import { extractRequestInfo } from './request-info.accessor'
 import { BYMAX_TIMING_CLOCK, DEFAULT_MONOTONIC_CLOCK } from './timing.clock'
 import type { MonotonicClock } from './timing.clock'
 import type { ITimingSink } from './timing.interfaces'
-import { buildTimingSample, readTraceContext } from './timing.sample'
+import { buildTimingSample, deliverSample, readTraceContext } from './timing.sample'
 import type { ITraceContextProvider } from '../telemetry/trace-context'
 import { NoopTraceContextProvider } from '../telemetry/trace-context'
 
@@ -138,9 +138,8 @@ export class TimingInterceptor implements NestInterceptor {
   }
 
   /**
-   * Build the sample and deliver it to the sink inside a try/catch that
-   * silences any failure: a throwing sink must never affect the request it is
-   * observing.
+   * Build the sample and deliver it. `deliverSample` absorbs whatever the sink
+   * does with it: a broken sink must never affect the request it observes.
    *
    * @param method - HTTP method of the request.
    * @param route - Route template of the request.
@@ -156,11 +155,6 @@ export class TimingInterceptor implements NestInterceptor {
       threshold: this.options.timing.slowRequestThresholdMs,
       trace: readTraceContext(this.traceContext)
     })
-    try {
-      this.sink.record(sample)
-    } catch {
-      // Fire-and-forget contract: a throwing sink must never break the request
-      // it is observing, so its failure is caught and silenced here.
-    }
+    deliverSample(this.sink, sample)
   }
 }

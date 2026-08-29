@@ -56,8 +56,32 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 // hundred bytes; its budget is a small absolute floor that trips the moment
 // anything substantial leaks into a subpath meant to stay near-empty, rather
 // than a multiple of a near-zero size.
+//
+// The root was recalibrated again on 2026-08-29, when the readiness transition
+// sink landed: the aggregator now holds the last state of every check, reports
+// each change, orders overlapping probes so a stale outcome cannot overwrite a
+// newer one, and describes the three causes apart. Measured 14.25 -> 15.82 KiB,
+// budget 15 -> 17.
+//
+// Checked before moving the number, not after. The transition contract itself
+// (`health/health.transition.ts`) is types-only, so it erases at build time and
+// costs this bundle nothing; the growth is entirely `health.service.ts`, and no
+// module entered the root that was not already in it. Part of the growth was
+// prose rather than code — this bundle ships its comments, so a docblock is
+// bytes on the wire — and the rationale was moved into the types-only file,
+// which is free, before the budget was touched.
+//
+// The number is 17 rather than 16 for a reason worth writing down, because 16
+// was tried first and was wrong. It left ~180 bytes of headroom, which is not a
+// tight tripwire but a broken one: at that margin the gate fires on an edited
+// comment and cannot distinguish that from a leaked import, so the next person
+// to trip it learns to raise the number rather than to look. A gate that cries
+// wolf is worse than a looser gate that does not. 1.07x is still far tighter
+// than the 1.33x-1.5x the other subpaths carry — this is the bundle every
+// consumer loads — while leaving room for prose to change without a false
+// alarm. A real leak here is kilobytes, not hundreds of bytes.
 const BUDGETS = [
-  { name: '. (root)', path: 'dist/index.mjs', brotli: 15 * 1024 },
+  { name: '. (root)', path: 'dist/index.mjs', brotli: 17 * 1024 },
   { name: './pagination', path: 'dist/pagination/index.mjs', brotli: 1.5 * 1024 },
   { name: './health', path: 'dist/health/index.mjs', brotli: 0.5 * 1024 },
   { name: './openapi', path: 'dist/openapi/index.mjs', brotli: 7.5 * 1024 },

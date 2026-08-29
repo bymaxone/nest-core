@@ -1,6 +1,6 @@
 {
   "name": "@bymax-one/nest-core",
-  "version": "1.5.3",
+  "version": "1.6.0",
   "description": "Zero-dependency NestJS 11 application foundation kit: error-envelope exception filter, request-timing interceptor, pagination helpers, health endpoints with indicator discovery, an optional Prometheus metrics endpoint with a contribution contract, OpenAPI documents in development, and OpenTelemetry trace correlation.",
   "author": "Bymax One <support@bymax.one>",
   "license": "MIT",
