@@ -356,9 +356,24 @@ export class HealthService implements OnApplicationBootstrap {
     }
     try {
       const returned: unknown = this.transitionSink.record(transition)
-      Promise.resolve(returned).catch((error: unknown) => {
-        this.reportSinkFailure(error)
-      })
+      // Guarded on the ordinary case: a sink declared `void` returns
+      // `undefined`, and assimilating that would allocate two promises and queue
+      // a reaction microtask to watch for a rejection that cannot arrive.
+      // Anything else is assimilated, which covers a promise of any realm and a
+      // thenable of any library without having to recognize either.
+      //
+      // The directive below covers both arms because Stryker's granularity is
+      // one mutator per line. Only one of them is equivalent: replacing the
+      // condition with `true` assimilates an `undefined` that resolves inertly.
+      // Replacing it with `false` is a real regression, and the async, thenable
+      // and cross-realm sink tests in `health.transition.spec.ts` fail on it —
+      // so the tests, not the mutant, are what hold that direction.
+      // Stryker disable next-line ConditionalExpression: equivalent in the `true` arm — assimilating an `undefined` resolves inertly, changing allocation and nothing observable; the `false` arm is a real regression held by the async, thenable and cross-realm sink tests rather than by this mutant.
+      if (returned !== undefined) {
+        Promise.resolve(returned).catch((error: unknown) => {
+          this.reportSinkFailure(error)
+        })
+      }
     } catch (error: unknown) {
       this.reportSinkFailure(error)
     }

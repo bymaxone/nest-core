@@ -110,9 +110,27 @@ export function buildTimingSample(input: TimingSampleInput): RequestTimingSample
 export function deliverSample(sink: ITimingSink, sample: RequestTimingSample): void {
   try {
     const returned: unknown = sink.record(sample)
-    Promise.resolve(returned).catch(() => {
-      // Absorbed for the same reason as the synchronous path below.
-    })
+    // Guarded on the ordinary case rather than assimilating unconditionally.
+    // This runs on every closed request, and a sink declared `void` returns
+    // `undefined` — the bundled no-op always does — so assimilating regardless
+    // would allocate two promises and queue a reaction microtask per request to
+    // watch for a rejection that cannot arrive. Anything that is not `undefined`
+    // is assimilated, which covers a promise of any realm and a thenable of any
+    // library without having to recognize either.
+    //
+    // The directive below covers both arms because Stryker's granularity is one
+    // mutator per line. Only one of them is equivalent: replacing the condition
+    // with `true` assimilates an `undefined` that resolves inertly, changing
+    // allocation and nothing observable. Replacing it with `false` is a real
+    // regression, and the async, thenable and cross-realm sink tests in
+    // `timing.middleware.spec.ts` and `timing.interceptor.spec.ts` fail on it —
+    // so the tests, not the mutant, are what hold that direction.
+    // Stryker disable next-line ConditionalExpression: equivalent in the `true` arm — assimilating an `undefined` resolves inertly, changing allocation and nothing observable; the `false` arm is a real regression held by the async, thenable and cross-realm sink tests rather than by this mutant.
+    if (returned !== undefined) {
+      Promise.resolve(returned).catch(() => {
+        // Absorbed for the same reason as the synchronous path below.
+      })
+    }
   } catch {
     // Fire-and-forget contract: a throwing sink must never break the request it
     // is observing, so its failure is caught and silenced here.
