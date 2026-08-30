@@ -535,6 +535,36 @@ describe('HealthService readiness transitions', () => {
   })
 
   /**
+   * A sink failing with a non-string `Error.message` is contained too.
+   *
+   * `message` is writable, so an `Error` can carry a value that reads without
+   * throwing and then throws on every string operation. Summarizing it runs
+   * inside the failure handler, so a throw there escapes the guard it is part
+   * of: on the synchronous path it rejects the readiness probe, and on the
+   * asynchronous one it becomes the unhandled rejection the handler exists to
+   * prevent.
+   */
+  it('contains a sink whose error carries a non-string message', async () => {
+    const brokenSink: IHealthTransitionSink = {
+      record: (): void => {
+        throw Object.assign(new Error(), { message: null })
+      }
+    }
+    const service = new HealthService(
+      [new ScriptedIndicator('redis', down)],
+      normalizeCoreOptions(),
+      undefined,
+      undefined,
+      brokenSink
+    )
+
+    const result = await service.checkReadiness()
+
+    expect(result).toEqual({ status: 'error', checks: [{ name: 'redis', status: 'down' }] })
+    expect(warn).toHaveBeenCalledWith('Health transition sink threw and was ignored: null')
+  })
+
+  /**
    * With no sink bound the transition lines still reach Nest's logger.
    *
    * Binding a sink routes transitions into a structured surface; it is not what

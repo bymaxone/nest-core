@@ -82,6 +82,21 @@ makes unnecessary.
 
 ### Fixed
 
+- **An `Error` whose `message` is not a string broke the readiness aggregation.**
+  `message` is a writable property, so `Object.assign(new Error(), { message:
+null })` is an `Error` that reads without throwing and then throws on every
+  string operation. The summarizer coerced a non-`Error` reason but trusted an
+  `Error`'s own `message`, then measured and truncated it outside that guard.
+
+  It surfaced where the guard was supposed to hold. Summarizing runs inside the
+  rejection-to-`down` conversion, so an indicator rejecting with such an error
+  rejected the whole aggregation: the probe answered `500` instead of `503`, and
+  reported nothing about the dependencies that were healthy — the exact outcome
+  the conversion exists to prevent.
+
+  **This is present in 1.5.3 and earlier**, on the indicator path. The transition
+  sink added in this release reaches the same summarizer, so the fix covers both.
+
 - **An `async` timing sink could take the process down.** `ITimingSink.record`
   is declared to return `void`, and TypeScript accepts any return value in a
   void-returning position, so `async record()` compiles — and it is the natural

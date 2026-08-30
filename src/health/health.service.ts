@@ -56,11 +56,16 @@ const TRUNCATION_ELLIPSIS = '...'
 function summarizeRejection(reason: unknown): string {
   let message: string
   try {
-    message = reason instanceof Error ? reason.message : String(reason)
+    // An `Error`'s `message` is coerced rather than trusted. It is a writable
+    // property, so `Object.assign(new Error(), { message: null })` is an `Error`
+    // whose message is not a string — reading it throws nothing, and every
+    // string operation below then throws instead, outside this guard.
+    message = String(reason instanceof Error ? reason.message : reason)
   } catch {
-    // Coercing an exotic reason (a null-prototype object, a throwing `toString`)
-    // must not throw here: this runs inside the rejection-to-`down` conversion,
-    // and a throw would reject the wrapper and hide every other indicator.
+    // Coercing an exotic reason (a null-prototype object, a throwing `toString`,
+    // a `message` getter that throws) must not throw here: this runs inside the
+    // rejection-to-`down` conversion, and a throw would reject the wrapper and
+    // hide every other indicator.
     message = 'Unknown error'
   }
   if (message.length <= MAX_ERROR_MESSAGE_LENGTH) {
