@@ -71,6 +71,16 @@ export const BYMAX_HEALTH_INDICATORS: unique symbol = Symbol.for(
 )
 
 /**
+ * Provide the `IHealthTransitionSink` that receives one event per change of
+ * readiness state, per check. Nothing is bound by default; with no sink the
+ * aggregator writes its own transition lines to Nest's logger, and binding one
+ * stands that line down in favour of the sink.
+ */
+export const BYMAX_HEALTH_TRANSITION_SINK: unique symbol = Symbol.for(
+  '@bymax-one/nest-core:health-transition-sink'
+)
+
+/**
  * Provide the `prom-client` `Registry` backing the metrics endpoint. Bound
  * lazily and only when the metrics feature is enabled.
  */

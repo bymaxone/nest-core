@@ -5,10 +5,14 @@
  * Extracted so the middleware that records every request and the interceptor
  * that predates it cannot drift: the slow-request rule, the trace lookup and
  * the decision to omit trace fields rather than send `undefined` are one
- * implementation, exercised by both callers' tests.
+ * implementation, exercised by both callers' tests. Delivering the sample lives
+ * here for the same reason: a sink that fails must never reach the request it is
+ * observing, and that guarantee is worth exactly as much as its least careful
+ * copy.
  * @layer Utility
  */
-import type { RequestTimingSample } from './timing.interfaces'
+import { containRejection } from '../contain-rejection'
+import type { ITimingSink, RequestTimingSample } from './timing.interfaces'
 import type { ITraceContextProvider, TraceContext } from '../telemetry/trace-context'
 
 /** Everything needed to describe one closed request, however it ended. */
@@ -72,5 +76,45 @@ export function buildTimingSample(input: TimingSampleInput): RequestTimingSample
     // Spread rather than assigned: an absent trace must leave the keys off the
     // sample entirely, so a sink cannot mistake `undefined` for an id.
     ...(trace !== undefined ? { traceId: trace.traceId, spanId: trace.spanId } : {})
+  }
+}
+
+/**
+ * Hand a sample to the sink, absorbing any failure it produces.
+ *
+ * Fire-and-forget by contract: a sink exists to observe the request, so its
+ * breaking must never break what it observes. The failure is swallowed rather
+ * than logged, unlike the health transition sink — this runs on every request,
+ * so a sink failing systematically would turn one broken logger into a second
+ * flood beside it.
+ *
+ * Both ways a sink can fail are absorbed. `record` is declared to return `void`,
+ * but TypeScript accepts any return value in a void-returning position, so
+ * `async record()` compiles and is the shape a consumer reaches for when the
+ * logger it delegates to is async. Its rejection settles a microtask after the
+ * `try` block has exited, which would be an unhandled rejection — able to take
+ * the process down under `--unhandled-rejections=strict` — rather than the
+ * contained failure this contract promises.
+ *
+ * Whatever comes back is assimilated with `Promise.resolve`, not tested with
+ * `instanceof Promise`. `Promise` is a per-realm binding, so an `async` function
+ * defined in another realm — a plugin loaded through `node:vm` — returns a
+ * native promise that fails `instanceof` here, and a userland promise library's
+ * result is not an instance either. Both are ordinary things for a consumer to
+ * return. Assimilation is the language's own thenable test, so it recognizes
+ * every shape that can carry a rejection, and it is inert for the `undefined`
+ * an ordinary synchronous sink returns.
+ *
+ * @param sink - The consumer's sink.
+ * @param sample - The sample to deliver.
+ */
+export function deliverSample(sink: ITimingSink, sample: RequestTimingSample): void {
+  try {
+    containRejection(sink.record(sample), () => {
+      // Absorbed for the same reason as the synchronous path below.
+    })
+  } catch {
+    // Fire-and-forget contract: a throwing sink must never break the request it
+    // is observing, so its failure is caught and silenced here.
   }
 }

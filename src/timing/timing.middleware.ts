@@ -61,7 +61,7 @@ import type { RequestShape } from './request-info.accessor'
 import { BYMAX_TIMING_CLOCK, DEFAULT_MONOTONIC_CLOCK } from './timing.clock'
 import type { MonotonicClock } from './timing.clock'
 import type { ITimingSink } from './timing.interfaces'
-import { buildTimingSample, readTraceContext } from './timing.sample'
+import { buildTimingSample, deliverSample, readTraceContext } from './timing.sample'
 import type { ITraceContextProvider, TraceContext } from '../telemetry/trace-context'
 import { NoopTraceContextProvider } from '../telemetry/trace-context'
 
@@ -154,7 +154,8 @@ export class BymaxTimingMiddleware implements NestMiddleware {
   }
 
   /**
-   * Build the sample and hand it to the sink, guarding both steps.
+   * Build the sample and deliver it. `deliverSample` absorbs whatever the sink
+   * does with it, so a broken sink never reaches the request it observes.
    *
    * @param request - The framework request object.
    * @param response - The framework response object.
@@ -177,11 +178,6 @@ export class BymaxTimingMiddleware implements NestMiddleware {
       threshold: this.options.timing.slowRequestThresholdMs,
       trace
     })
-    try {
-      this.sink.record(sample)
-    } catch {
-      // Fire-and-forget contract: a throwing sink must never break the request
-      // it is observing, so its failure is caught and silenced here.
-    }
+    deliverSample(this.sink, sample)
   }
 }

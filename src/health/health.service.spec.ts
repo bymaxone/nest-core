@@ -240,6 +240,30 @@ describe('HealthService', () => {
   })
 
   /**
+   * An `Error` whose `message` is not a string cannot break the aggregation.
+   *
+   * `message` is a writable property, so `Object.assign(new Error(), { message:
+   * null })` is an `Error` that reads without throwing and then throws on every
+   * string operation. Summarizing it happens inside the rejection-to-`down`
+   * conversion, so a throw there would reject the wrapper and hide every other
+   * indicator's result — the readiness probe answering `500` instead of `503`,
+   * and reporting nothing about the dependencies that were healthy.
+   */
+  it('converts an indicator rejecting with a non-string message without hiding the others', async () => {
+    const failing = rejectingIndicator('database', Object.assign(new Error(), { message: null }))
+    const healthy = stubIndicator('redis', { status: 'up' })
+    const service = new HealthService([failing, healthy], optionsExposingErrors())
+
+    const result = await service.checkReadiness()
+
+    expect(result.status).toBe('error')
+    expect(result.checks).toEqual([
+      { name: 'database', status: 'down', details: { error: 'null' } },
+      { name: 'redis', status: 'up' }
+    ])
+  })
+
+  /**
    * The reason is not discarded — it is written to Nest's logger, so an operator
    * keeps the diagnostic that the response no longer carries.
    */
@@ -251,7 +275,7 @@ describe('HealthService', () => {
     await service.checkReadiness()
 
     expect(warn).toHaveBeenCalledWith(
-      'Health indicator "database" reported down: connection refused'
+      'Health check "database" went down: the indicator rejected: connection refused'
     )
     warn.mockRestore()
   })

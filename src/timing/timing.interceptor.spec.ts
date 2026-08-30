@@ -296,6 +296,38 @@ describe('TimingInterceptor, sink safety', () => {
   })
 
   /**
+   * A sink that rejects asynchronously is silenced too.
+   *
+   * `record` is declared to return `void`, but TypeScript accepts any return
+   * value in a void-returning position, so `async record()` compiles — and it is
+   * what a consumer writes when the backend it delegates to is async. Its
+   * rejection settles a microtask after the synchronous guard has exited, so
+   * without an explicit catch it is an unhandled rejection, which under
+   * `--unhandled-rejections=strict` takes the process down: an observer killing
+   * the thing it observes, which is the failure this contract exists to prevent.
+   *
+   * The containment is what lets this test finish at all — an escaping rejection
+   * fails the run itself rather than this assertion.
+   */
+  it('silences a sink that rejects asynchronously', (done) => {
+    const rejectingSink: ITimingSink = {
+      record: async (): Promise<void> => {
+        throw new Error('sink exploded later')
+      }
+    }
+    const interceptor = buildInterceptor({ sink: rejectingSink })
+    const handler = handlerReturning(() => of('ok'))
+
+    interceptor.intercept(contextFor({}), handler).subscribe({
+      next: (value) => expect(value).toBe('ok'),
+      complete: () => {
+        // Give the rejection the microtask turn it was deferred onto.
+        void Promise.resolve().then(() => done())
+      }
+    })
+  })
+
+  /**
    * A throwing sink is silenced on the error path.
    *
    * The original error must still reach the subscriber unaffected, even

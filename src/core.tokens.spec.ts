@@ -13,6 +13,7 @@ import {
   BYMAX_CORE_OPTIONS,
   BYMAX_CORRELATION_PROVIDER,
   BYMAX_HEALTH_INDICATORS,
+  BYMAX_HEALTH_TRANSITION_SINK,
   BYMAX_METRICS_REGISTRY,
   BYMAX_TIMING_SINK,
   BYMAX_TRACE_CONTEXT
@@ -24,6 +25,7 @@ describe('core DI tokens', () => {
     [BYMAX_CORRELATION_PROVIDER, '@bymax-one/nest-core:correlation-provider'],
     [BYMAX_TIMING_SINK, '@bymax-one/nest-core:timing-sink'],
     [BYMAX_HEALTH_INDICATORS, '@bymax-one/nest-core:health-indicators'],
+    [BYMAX_HEALTH_TRANSITION_SINK, '@bymax-one/nest-core:health-transition-sink'],
     [BYMAX_METRICS_REGISTRY, '@bymax-one/nest-core:metrics-registry'],
     [BYMAX_TRACE_CONTEXT, '@bymax-one/nest-core:trace-context']
   ]

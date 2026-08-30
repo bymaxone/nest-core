@@ -34,9 +34,16 @@ export interface RequestTimingSample {
 }
 
 /**
- * Receive request-timing samples. Implementations must never throw: a sink
- * failure is caught and silenced by the recorder so timing never breaks a
- * request.
+ * Receive request-timing samples. Implementations should not fail, and a failure
+ * is absorbed by the recorder either way so timing never breaks a request.
+ *
+ * Both ways an implementation can fail are absorbed: a synchronous throw, and a
+ * rejection from an `async record()` — which compiles despite the `void` return
+ * type, because TypeScript accepts any return value in a void-returning
+ * position, and is the natural shape when the backend behind the sink is async.
+ * The failure is swallowed rather than logged, unlike `IHealthTransitionSink`:
+ * this runs on every request, so a sink failing systematically would turn one
+ * broken backend into a second flood beside it.
  */
 export interface ITimingSink {
   /**
