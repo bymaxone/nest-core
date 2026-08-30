@@ -565,6 +565,38 @@ describe('HealthService readiness transitions', () => {
   })
 
   /**
+   * A sink returning a plain value is not treated as a failure, nor assimilated.
+   *
+   * `record: (t) => list.push(t)` compiles against a `void` signature and
+   * returns a number, which is the concise shape a consumer reaches for. A guard
+   * that keyed on "not `undefined`" would assimilate it — allocating to watch
+   * for a rejection a number cannot carry — and one that inspected it carelessly
+   * would throw on the primitive and report the sink as broken.
+   */
+  it.each([
+    ['a number', (): number => 1],
+    ['null', (): null => null],
+    ['a string', (): string => 'ok'],
+    ['an object without then', (): Record<string, unknown> => ({ ok: true })]
+  ])('accepts a sink returning %s without reporting a failure', async (_label, returns) => {
+    const service = new HealthService(
+      [new ScriptedIndicator('redis', down)],
+      normalizeCoreOptions(),
+      undefined,
+      undefined,
+      { record: returns }
+    )
+
+    const result = await service.checkReadiness()
+    await flushAsync()
+
+    expect(result.status).toBe('error')
+    expect(warn).not.toHaveBeenCalledWith(
+      expect.stringContaining('Health transition sink threw and was ignored')
+    )
+  })
+
+  /**
    * With no sink bound the transition lines still reach Nest's logger.
    *
    * Binding a sink routes transitions into a structured surface; it is not what
