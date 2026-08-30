@@ -31,7 +31,12 @@
  * reaction.
  *
  * @param returned - The value a `void`-declared sink method returned.
- * @param onFailure - Receives the rejection reason, if one ever arrives.
+ * @param onFailure - Receives the rejection reason, if one ever arrives. It
+ *   **must not throw**: it runs as a rejection handler, so its own failure would
+ *   become an unhandled rejection — the exact thing this function exists to
+ *   prevent, replaced by an identical one of its own. Both callers satisfy this
+ *   by absorbing whatever they report to; a third must do the same rather than
+ *   rely on a guard here, which could not be reached to be tested.
  */
 export function containRejection(returned: unknown, onFailure: (error: unknown) => void): void {
   // Cast to probe one property of an `unknown`; optional chaining absorbs

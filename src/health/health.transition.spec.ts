@@ -597,6 +597,64 @@ describe('HealthService readiness transitions', () => {
   })
 
   /**
+   * A logger that throws cannot take the probe out of rotation.
+   *
+   * Nest's logger is replaceable, so what the aggregator calls is application
+   * code, and it can fail for the very reason a transition is being reported —
+   * the sink and the logger sharing a backend that is down. This is the plainest
+   * configuration of all: no sink bound, so the logger is the only reporting
+   * path, and an uncontained throw there rejects readiness outright.
+   */
+  it('answers the probe when the logger itself throws', async () => {
+    warn.mockImplementation(() => {
+      throw new Error('log transport down')
+    })
+    const service = new HealthService(
+      [new ScriptedIndicator('redis', down)],
+      normalizeCoreOptions()
+    )
+
+    const result = await service.checkReadiness()
+
+    expect(result).toEqual({ status: 'error', checks: [{ name: 'redis', status: 'down' }] })
+    expect(warn).toHaveBeenCalled()
+  })
+
+  /**
+   * A logger that throws while reporting a sink failure is absorbed too.
+   *
+   * This is the correlated failure: the sink broke, and the fallback that exists
+   * to record that also breaks. Synchronously it would reject the probe; from
+   * the asynchronous handler it would become an unhandled rejection, replacing
+   * the one `containRejection` exists to contain with an identical one.
+   */
+  it.each([
+    [
+      'synchronously',
+      (): void => {
+        throw new Error('sink down')
+      }
+    ],
+    ['asynchronously', async (): Promise<void> => Promise.reject(new Error('sink down'))]
+  ])('absorbs a logger that throws while reporting a sink failing %s', async (_label, record) => {
+    warn.mockImplementation(() => {
+      throw new Error('log transport down')
+    })
+    const service = new HealthService(
+      [new ScriptedIndicator('redis', down)],
+      normalizeCoreOptions(),
+      undefined,
+      undefined,
+      { record }
+    )
+
+    const result = await service.checkReadiness()
+    await flushAsync()
+
+    expect(result).toEqual({ status: 'error', checks: [{ name: 'redis', status: 'down' }] })
+  })
+
+  /**
    * With no sink bound the transition lines still reach Nest's logger.
    *
    * Binding a sink routes transitions into a structured surface; it is not what

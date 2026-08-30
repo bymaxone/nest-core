@@ -325,11 +325,36 @@ export class HealthService implements OnApplicationBootstrap {
     if (this.transitionSink !== undefined) {
       return
     }
-    if (isDown) {
-      this.logger.warn(message)
-      return
+    this.writeLine(message, isDown)
+  }
+
+  /**
+   * Write one line to this package's logger, absorbing a logger that fails.
+   *
+   * Nest's logger is replaceable, so what this calls is application code. It can
+   * throw — most plausibly for the very reason a transition is being reported at
+   * all, when the sink and the logger share a backend that is down. Uncontained
+   * that throw leaves the readiness path: synchronously it rejects the probe,
+   * and from the asynchronous sink handler it becomes an unhandled rejection.
+   * Either way a healthy deployment leaves rotation because its logging broke,
+   * which is the outcome this whole seam exists to prevent.
+   *
+   * The failure is swallowed rather than reported, because a logger is the last
+   * place a failure could be reported to. There is nowhere left to go.
+   *
+   * @param message - The line to write.
+   * @param asWarning - Whether to write it at warning level.
+   */
+  private writeLine(message: string, asWarning: boolean): void {
+    try {
+      if (asWarning) {
+        this.logger.warn(message)
+        return
+      }
+      this.logger.log(message)
+    } catch {
+      // Nowhere left to report to; see above.
     }
-    this.logger.log(message)
   }
 
   /**
@@ -375,7 +400,10 @@ export class HealthService implements OnApplicationBootstrap {
    * @param error - Whatever the sink threw or rejected with.
    */
   private reportSinkFailure(error: unknown): void {
-    this.logger.warn(`Health transition sink threw and was ignored: ${summarizeRejection(error)}`)
+    this.writeLine(
+      `Health transition sink threw and was ignored: ${summarizeRejection(error)}`,
+      true
+    )
   }
 
   /**
