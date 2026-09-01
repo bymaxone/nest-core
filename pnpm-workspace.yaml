@@ -7,6 +7,15 @@
 # neverBuiltDependencies and their siblings were removed in v11 and replaced by
 # this map.
 allowBuilds:
+  # File watcher reached as a direct dependency of jest-haste-map, so it is
+  # installed rather than skippable. Denied because its `install` script only
+  # compiles when `npm_config_build_from_source` is set: the package ships a
+  # prebuilt addon per platform as optional dependencies and resolves that
+  # first, so the normal install never runs the script at all. What denial
+  # gives up is the source fallback on a platform with no prebuild, where
+  # watch mode would fail to subscribe — jest loads this only from
+  # `_subscribe()`, and no workflow here runs watch mode.
+  '@parcel/watcher': false
   # Analytics ping pulled in transitively by @nestjs/swagger. Denied: a build
   # script that phones home has no place in this repository's install.
   '@scarf/scarf': false
