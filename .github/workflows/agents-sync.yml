@@ -29,17 +29,31 @@ jobs:
       contents: write
       pull-requests: write
     secrets:
-      # Named rather than `inherit`, so the called workflow receives this one
-      # secret and not every secret this repository holds.
+      # A GitHub App, which is what the called workflow prefers: it mints an
+      # installation token per run, so the credential that reaches the run
+      # expires within the hour. The App's private key behind
+      # AGENTS_SYNC_PRIVATE_KEY is itself long-lived and installed org-wide with
+      # write access, so it still needs rotation hygiene — what changes is that
+      # nothing expires unnoticed mid-run, not that there is nothing to rotate.
       #
-      # The mapping is present even while the secret is not, because a reusable
-      # workflow receives no secret it is not passed: adding AGENTS_SYNC_TOKEN
-      # later would otherwise change nothing, and the run would keep using the
-      # default token while looking configured. An unset secret evaluates to the
-      # empty string, which the called workflow already falls back from.
+      # Both are organisation secrets with `visibility: all`, so this repository
+      # already reads them and nothing has to be configured here. Named rather
+      # than passed with `inherit`, so the called workflow receives these two and
+      # not every secret this repository holds.
       #
-      # Why it is worth setting here: a pull request opened with the default
-      # GITHUB_TOKEN starts no workflow runs, and this repository gates merges on
-      # its CI checks — so an unattended sync pull request cannot merge until
-      # somebody pushes to it.
-      sync-token: ${{ secrets.AGENTS_SYNC_TOKEN }}
+      # Supplied together or not at all: the called workflow refuses a run where
+      # exactly one is set, rather than falling back and looking like a
+      # repository that never configured an App.
+      #
+      # `sync-token` is left unmapped because there is no credential for it, not
+      # because unmapping protects anything. The callee resolves
+      # `app-token || sync-token || github.token`, and an unmapped secret and one
+      # mapped to a missing secret are indistinguishable there — both are empty
+      # and both fall through. **Losing both App secrets is therefore still
+      # silent**: the half-configured guard only catches exactly one, both-unset
+      # is a legal state, and the run would open a pull request with the default
+      # GITHUB_TOKEN that starts none of this repository's required checks.
+      # Nothing in this file closes that; only a both-unset error in the callee
+      # would.
+      app-id: ${{ secrets.AGENTS_SYNC_APP_ID }}
+      app-private-key: ${{ secrets.AGENTS_SYNC_PRIVATE_KEY }}
