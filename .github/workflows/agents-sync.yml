@@ -29,31 +29,33 @@ jobs:
       contents: write
       pull-requests: write
     secrets:
-      # A GitHub App, which is what the called workflow prefers: it mints an
-      # installation token per run, so the credential that reaches the run
-      # expires within the hour. The App's private key behind
-      # AGENTS_SYNC_PRIVATE_KEY is itself long-lived and installed org-wide with
-      # write access, so it still needs rotation hygiene — what changes is that
-      # nothing expires unnoticed mid-run, not that there is nothing to rotate.
+      # Authentication is a GitHub App: the called workflow mints an
+      # installation token per run, so the credential that reaches a run expires
+      # within the hour. The App's private key behind AGENTS_SYNC_PRIVATE_KEY is
+      # long-lived and installed org-wide with write access, so it carries a
+      # rotation requirement of its own.
       #
       # Both are organisation secrets with `visibility: all`, so this repository
-      # already reads them and nothing has to be configured here. Named rather
-      # than passed with `inherit`, so the called workflow receives these two and
-      # not every secret this repository holds.
+      # reads them with no configuration here. Named rather than passed with
+      # `inherit`, so the called workflow receives these two and not every secret
+      # this repository holds.
       #
-      # Supplied together or not at all: the called workflow refuses a run where
-      # exactly one is set, rather than falling back and looking like a
-      # repository that never configured an App.
+      # Supply both or neither: the called workflow refuses a run where exactly
+      # one is set, rather than falling back and presenting as a repository that
+      # never configured an App.
       #
-      # `sync-token` is left unmapped because there is no credential for it, not
-      # because unmapping protects anything. The callee resolves
-      # `app-token || sync-token || github.token`, and an unmapped secret and one
-      # mapped to a missing secret are indistinguishable there — both are empty
-      # and both fall through. **Losing both App secrets is therefore still
-      # silent**: the half-configured guard only catches exactly one, both-unset
-      # is a legal state, and the run would open a pull request with the default
-      # GITHUB_TOKEN that starts none of this repository's required checks.
-      # Nothing in this file closes that; only a both-unset error in the callee
-      # would.
+      # `sync-token` is a declared input of the called workflow with no
+      # credential behind it in this organisation, so it is unmapped. Mapping it
+      # would guard nothing either way: the callee resolves
+      # `app-token || sync-token || github.token`, where an unmapped secret and
+      # one mapped to a missing secret are alike empty and alike fall through.
+      #
+      # Both App secrets absent is therefore a legal state, and the
+      # half-configured guard accepts it. The callee warns rather than refuses
+      # there, deliberately: `sync-token` is optional and `github.token` is a
+      # documented fallback, so a repository that requires no status checks can
+      # run credential-free. This one does require them, so the same fallback
+      # opens a pull request that starts none of its required checks and cannot
+      # merge — an annotation on a green run, not a failure.
       app-id: ${{ secrets.AGENTS_SYNC_APP_ID }}
       app-private-key: ${{ secrets.AGENTS_SYNC_PRIVATE_KEY }}
