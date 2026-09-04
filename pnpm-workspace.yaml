@@ -29,11 +29,44 @@ overrides:
   'brace-expansion@1': '^1.1.18'
   'brace-expansion@2': '^2.1.4'
   'brace-expansion@5': '^5.0.9'
+  # browserslist below 4.28.7 carries GHSA-73wf-gq98-2v4g and
+  # GHSA-c83g-rgw3-j3cx, both high. Every consumer in this tree declares a
+  # range that already admits that floor — @babel/helper-compilation-targets
+  # asks for ^4.24.0 and update-browserslist-db declares a >= 4.21.0 peer on
+  # browserslist — so a plain range override lifts the whole tree, and the
+  # scoped form js-yaml needs below is unnecessary here.
+  'browserslist': '^4.28.7'
   'esbuild': '^0.28.1'
-  'fast-uri': '^3.1.5'
+  # fast-uri below 3.1.6 carries GHSA-f65p-4m7j-42xc and GHSA-fph4-wmhf-6fwf,
+  # both high: server-side request forgery through malformed IPv6 normalization
+  # and through repeated percent-decoding of the hostname. Three consumers reach
+  # it, all under devDependencies — @fastify/ajv-compiler, and two ajv copies
+  # from the eslint, Stryker and commitlint toolchains — so the exposure is this
+  # repository's build surface, not anything a consumer installs.
+  'fast-uri': '^3.1.6'
+  # fastify below 5.12.1 carries GHSA-3m5p-2c4r-xxw2 (X-Forwarded-* spoofing
+  # under a trustProxy hop count) and GHSA-w2qp-rph6-63g4 (schema validation
+  # bypass through root primitive coercion).
+  #
+  # Tree-wide rather than scoped to @nestjs/platform-fastify, which is the one
+  # consumer that carried a vulnerable copy: an override replaces a dependency's
+  # spec outright, so it lifts an exact pin as readily as a range, and scoping it
+  # would leave any future consumer of a vulnerable fastify unguarded for no gain.
+  # The declared devDependency floor moves with it — a caret admitting an
+  # advisory-affected version is the drift `peer-advisory-drift.yml` exists to
+  # catch, and leaving one here while overriding the transitive copy would be
+  # inconsistent.
+  'fastify': '^5.12.1'
   # @nestjs/swagger pins js-yaml to exactly 5.2.1, which carries
   # GHSA-pm4m-ph32-ghv5 (high: exponential parsing time in flow collections).
-  # An exact pin cannot be satisfied by a range bump, so the override is scoped
-  # to that subtree rather than applied to every js-yaml in the tree.
+  # Scoped to that subtree rather than applied tree-wide as a blast-radius
+  # choice, not a necessity: an override replaces a spec outright and would lift
+  # the exact pin either way. Only this subtree is known to need it.
   '@nestjs/swagger>js-yaml': '^5.2.2'
-  'qs': '^6.15.2'
+  # qs below 6.16.0 carries GHSA-4mjr-xmp4-gh2g (denial of service through an
+  # attacker-controlled isBuffer) and GHSA-x5fp-wj9c-mxmx (array-limit bypass
+  # through bracket-key comma parsing). Three consumers reach it, all under
+  # devDependencies: body-parser beneath express, superagent beneath supertest,
+  # and typed-rest-client beneath @stryker-mutator/core. Dropping any one of
+  # them leaves the other two, so this entry outlives all three individually.
+  'qs': '^6.16.0'
