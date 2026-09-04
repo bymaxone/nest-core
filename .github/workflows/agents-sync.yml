@@ -29,17 +29,33 @@ jobs:
       contents: write
       pull-requests: write
     secrets:
-      # Named rather than `inherit`, so the called workflow receives this one
-      # secret and not every secret this repository holds.
+      # Authentication is a GitHub App: the called workflow mints an
+      # installation token per run, so the credential that reaches a run expires
+      # within the hour. The App's private key behind AGENTS_SYNC_PRIVATE_KEY is
+      # long-lived and installed org-wide with write access, so it carries a
+      # rotation requirement of its own.
       #
-      # The mapping is present even while the secret is not, because a reusable
-      # workflow receives no secret it is not passed: adding AGENTS_SYNC_TOKEN
-      # later would otherwise change nothing, and the run would keep using the
-      # default token while looking configured. An unset secret evaluates to the
-      # empty string, which the called workflow already falls back from.
+      # Both are organisation secrets with `visibility: all`, so this repository
+      # reads them with no configuration here. Named rather than passed with
+      # `inherit`, so the called workflow receives these two and not every secret
+      # this repository holds.
       #
-      # Why it is worth setting here: a pull request opened with the default
-      # GITHUB_TOKEN starts no workflow runs, and this repository gates merges on
-      # its CI checks — so an unattended sync pull request cannot merge until
-      # somebody pushes to it.
-      sync-token: ${{ secrets.AGENTS_SYNC_TOKEN }}
+      # Supply both or neither: the called workflow refuses a run where exactly
+      # one is set, rather than falling back and presenting as a repository that
+      # never configured an App.
+      #
+      # `sync-token` is a declared input of the called workflow with no
+      # credential behind it in this organisation, so it is unmapped. Mapping it
+      # would guard nothing either way: the callee resolves
+      # `app-token || sync-token || github.token`, where an unmapped secret and
+      # one mapped to a missing secret are alike empty and alike fall through.
+      #
+      # Both App secrets absent is therefore a legal state, and the
+      # half-configured guard accepts it. The callee warns rather than refuses
+      # there, deliberately: `sync-token` is optional and `github.token` is a
+      # documented fallback, so a repository that requires no status checks can
+      # run credential-free. This one does require them, so the same fallback
+      # opens a pull request that starts none of its required checks and cannot
+      # merge — an annotation on a green run, not a failure.
+      app-id: ${{ secrets.AGENTS_SYNC_APP_ID }}
+      app-private-key: ${{ secrets.AGENTS_SYNC_PRIVATE_KEY }}
