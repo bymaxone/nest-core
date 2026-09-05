@@ -46,6 +46,20 @@ export type { OpenApiDocumentLike }
 /** A document that has been through {@link augmentDocument}. */
 export type AugmentedDocument<T> = T & { components: Readonly<Record<string, unknown>> }
 
+/**
+ * What {@link augmentDocument} produced, and what it could not place.
+ *
+ * A pair rather than a document alone because the discards are not an error —
+ * the document is complete and correct — but they are the only record that a
+ * contribution was offered and not taken.
+ */
+export interface AugmentResult<T> {
+  /** The augmented document. */
+  readonly document: AugmentedDocument<T>
+  /** Every contributed component entry the document already declared. */
+  readonly discarded: readonly DiscardedComponent[]
+}
+
 /** The security scheme this package contributes for a protected scrape endpoint. */
 const METRICS_SCHEME_NAME = 'BymaxMetricsAuth'
 
@@ -68,6 +82,67 @@ function mergeAbsent(
   additions: OpenApiObjectMap
 ): Readonly<Record<string, unknown>> {
   return { ...additions, ...existing }
+}
+
+/**
+ * One component entry a contributor offered and the document already declared.
+ *
+ * Carries the contributor's label because a collision is only actionable if you
+ * know who lost it: an application with several contributing libraries would
+ * otherwise be told a name was dropped without being told whose it was.
+ */
+export interface DiscardedComponent {
+  /** The contributing class, as {@link ResolvedContribution.label} names it. */
+  readonly contributor: string
+  /** The component member, such as `schemas` or `parameters`. */
+  readonly member: string
+  /** The entry's name within that member. */
+  readonly name: string
+}
+
+/**
+ * Whether a schema occupies its name without describing a shape.
+ *
+ * Applies to the `schemas` member alone; the caller enforces that. Every other
+ * component member has its own shape — a parameter carries `name` and `in`, not
+ * `properties` — so this predicate would read them all as empty.
+ *
+ * The peer emits `{"type":"object","properties":{}}` for every DTO in a package
+ * built without its plugin, so a schema name is never actually missing and a
+ * contributed schema under that name would never be written — the same reason
+ * {@link mergeResponses} exists, arriving through a different placeholder. A
+ * schema in that state constrains nothing a validator could check, so filling
+ * it in is additive rather than destructive.
+ *
+ * Deliberately narrow. `type` must be absent or `object`, because
+ * `{"type":"string"}` carries no properties and is nonetheless a complete
+ * declaration; treating it as empty would discard a real schema, which is the
+ * failure this whole path exists to avoid. Any keyword that constrains a value
+ * — a reference, a composition, an enumeration, an item schema, a property, or
+ * a bound on additional properties — makes the entry a declaration.
+ *
+ * @param entry - The entry the document already declares under this name.
+ * @returns Whether it may be replaced by a contributed entry.
+ */
+function describesNoShape(entry: Readonly<Record<string, unknown>>): boolean {
+  const type = entry['type']
+  if (type !== undefined && type !== 'object') {
+    return false
+  }
+  for (const keyword of [
+    '$ref',
+    'allOf',
+    'oneOf',
+    'anyOf',
+    'enum',
+    'items',
+    'additionalProperties'
+  ]) {
+    if (entry[keyword] !== undefined) {
+      return false
+    }
+  }
+  return Object.keys(asRecord(entry['properties'])).length === 0
 }
 
 /**
@@ -672,7 +747,8 @@ function augmentPaths(
  *   application's.
  * @param contributions - What the libraries in this application contributed,
  *   already resolved to the operation ids the document uses.
- * @returns The augmented document.
+ * @returns The augmented document, and every contributed component entry the
+ *   document already declared with a shape of its own.
  * @throws Error When `openapi.operationSecurity` addresses an operation the
  *   document does not contain, or when a security requirement names a scheme
  *   the document does not define.
@@ -682,7 +758,7 @@ export function augmentDocument<T extends OpenApiDocumentLike>(
   options: ResolvedCoreOptions,
   pathPrefixes: readonly string[] = [''],
   contributions: readonly ResolvedContribution[] = []
-): AugmentedDocument<T> {
+): AugmentResult<T> {
   const { openapi } = options
   const components = asRecord(document.components)
   // Accumulated in a `Map`, converted once at the end. Component member names
@@ -726,10 +802,46 @@ export function augmentDocument<T extends OpenApiDocumentLike>(
   }
 
   // Contributed components land beneath everything above: the document, this
-  // package's catalogue and the consumer's own configuration all keep winning.
+  // package's catalogue and the consumer's own configuration all keep winning —
+  // a consumer authored their schema on purpose, and a library overwriting it
+  // is the worse defect wearing the other sign. What a name occupied by a
+  // placeholder does not do is count as authorship; see `describesNoShape`.
+  //
+  // Every genuine collision is recorded rather than dropped in silence. A
+  // contributor cannot observe that its entry lost, and a consumer cannot
+  // observe that something was offered, so without this the failure is
+  // indistinguishable from success at both ends.
+  const discarded: DiscardedComponent[] = []
   for (const contribution of contributions) {
     for (const [member, entries] of Object.entries(contribution.components)) {
-      merged.set(member, mergeAbsent(asRecord(merged.get(member)), entries))
+      const current = asRecord(merged.get(member))
+      const next = new Map(Object.entries(current))
+      for (const [name, contributed] of Object.entries(entries)) {
+        const existing = asRecord(current[name])
+        // The placeholder carve-out is `schemas` only. It exists because the
+        // peer emits an empty object schema per DTO, and no other member has an
+        // analogue — a parameter carries `name` and `in` rather than
+        // `properties`, so a predicate written for schemas reads every
+        // parameter as empty and would let a contributor overwrite one the
+        // consumer wrote. That is the failure this whole path exists to avoid,
+        // arriving through the remedy.
+        const replaceable = member === 'schemas' && describesNoShape(existing)
+        if (current[name] !== undefined && !replaceable) {
+          discarded.push({ contributor: contribution.label, member, name })
+          continue
+        }
+        // A description the document authored survives being filled in: it is
+        // the one part of a placeholder a consumer can have written, and the
+        // same carve-out `mergeResponses` makes for the same reason.
+        const described = existing['description']
+        next.set(
+          name,
+          described === undefined || described === ''
+            ? contributed
+            : { ...contributed, description: described }
+        )
+      }
+      merged.set(member, Object.fromEntries(next))
     }
   }
 
@@ -763,5 +875,8 @@ export function augmentDocument<T extends OpenApiDocumentLike>(
       ? { security: openapi.security }
       : {}
 
-  return { ...document, components: Object.fromEntries(merged), ...paths, ...security }
+  return {
+    document: { ...document, components: Object.fromEntries(merged), ...paths, ...security },
+    discarded
+  }
 }

@@ -37,6 +37,7 @@ import { isProductionRuntime, runtimeEnvironmentName } from '../runtime.environm
 import { collectContributions, createHandlerIdMap } from './openapi.contribution'
 import type { HandlerIdMap, ResolvedContribution } from './openapi.contribution'
 import { augmentDocument, unsecuredOperations } from './openapi.document'
+import type { DiscardedComponent } from './openapi.document'
 import { loadSwagger } from './openapi.loader'
 
 /** Why the document was not mounted. */
@@ -54,6 +55,17 @@ export interface OpenApiMountOutcome {
   reason?: OpenApiSkipReason
   /** The route the UI was mounted at. Present only when `mounted` is `true`. */
   path?: string
+  /**
+   * Component entries a contributor offered that the document already declared
+   * with a shape of its own. Present only when `mounted` is `true`; empty when
+   * every contribution was placed.
+   *
+   * The merge prefers what the document already carries, so a collision is not
+   * an error and does not stop the boot. It is reported because it is otherwise
+   * unobservable from either side: the contributing library cannot tell its
+   * entry was dropped, and the application cannot tell one was offered.
+   */
+  discarded?: readonly DiscardedComponent[]
 }
 
 /**
@@ -282,6 +294,46 @@ function warnUnsecuredOperations(logger: Logger, keys: readonly string[]): void 
 }
 
 /**
+ * Report the contributed component entries the document already declared.
+ *
+ * Warned rather than thrown, for the same reason the unsecured-operation line
+ * is: the document that results is complete and valid, and a collision is a
+ * legitimate configuration — a consumer who authored a schema under a name a
+ * library also supplies keeps theirs, deliberately. What makes it worth a line
+ * is that nothing else can say it. The contributing library cannot observe that
+ * its entry lost, the application cannot observe that one was offered, and the
+ * served document looks the same either way.
+ *
+ * Elided past {@link MAX_WARNED_OPERATIONS} on the same reasoning as its
+ * neighbour: a library contributing a schema per DTO turns one collision into a
+ * hundred, and the line that prints them all is the line an operator learns to
+ * skip.
+ *
+ * @param logger - The logger this helper writes through.
+ * @param discarded - The dropped entries, empty when every one was placed.
+ */
+function warnDiscardedComponents(logger: Logger, discarded: readonly DiscardedComponent[]): void {
+  if (discarded.length === 0) {
+    return
+  }
+  const elided = discarded.length - MAX_WARNED_OPERATIONS
+  const listed = discarded
+    .slice(0, MAX_WARNED_OPERATIONS)
+    .map(({ contributor, member, name }) => `${contributor} -> ${member}.${name}`)
+    .join(', ')
+  // Consequence first: what a reader needs is that the served document is not
+  // the one the library described, which is why a generated client can disagree
+  // with the library's own types.
+  logger.warn(
+    `the OpenAPI document keeps its own definition of ${discarded.length} component entry(ies) a ` +
+      `library also contributes: ${listed}${elided > 0 ? `, and ${elided} more` : ''}. The ` +
+      'contributed version is not served, so a client generated from this document describes those ' +
+      "names as the application declares them. Remove the local definition to take the library's, " +
+      'or keep it deliberately.'
+  )
+}
+
+/**
  * Assemble the document's static metadata from the resolved options.
  *
  * @param builder - A fresh builder from the lazily loaded peer.
@@ -366,11 +418,17 @@ export async function applyBymaxOpenApi(app: INestApplication): Promise<OpenApiM
   // prefixes the merge does, and asking the application twice would let the two
   // answers differ for no reason.
   const prefixes = readPathPrefixes(app)
-  const document = augmentDocument(generated, resolved, prefixes, readContributions(app, handlers))
+  const { document, discarded } = augmentDocument(
+    generated,
+    resolved,
+    prefixes,
+    readContributions(app, handlers)
+  )
   warnUnsecuredOperations(logger, unsecuredOperations(document, resolved, prefixes))
+  warnDiscardedComponents(logger, discarded)
   swagger.SwaggerModule.setup(options.path, app, document, {
     jsonDocumentUrl: options.jsonPath
   })
   logger.log(`OpenAPI document served at "/${options.path}" (JSON at "/${options.jsonPath}")`)
-  return { mounted: true, path: options.path }
+  return { mounted: true, path: options.path, discarded }
 }

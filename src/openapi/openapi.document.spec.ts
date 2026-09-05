@@ -22,7 +22,7 @@ describe('augmentDocument', () => {
    * response or a paginated list describable by a consumer's operations.
    */
   it('contributes the core schemas and parameters', () => {
-    const result = augmentDocument({ openapi: '3.0.0', components: {} }, options())
+    const result = augmentDocument({ openapi: '3.0.0', components: {} }, options()).document
 
     expect(components(result, 'schemas')).toMatchObject(CORE_SCHEMAS)
     expect(components(result, 'parameters')).toMatchObject(CORE_PARAMETERS)
@@ -41,7 +41,7 @@ describe('augmentDocument', () => {
     const result = augmentDocument(
       { components: { schemas: { BymaxErrorEnvelope: mine } } },
       options()
-    )
+    ).document
 
     expect(components(result, 'schemas')['BymaxErrorEnvelope']).toBe(mine)
     expect(components(result, 'schemas')['BymaxHealthResponse']).toBeDefined()
@@ -58,7 +58,7 @@ describe('augmentDocument', () => {
   it('keeps parameters the document already defines', () => {
     const existing = { InvoiceId: { name: 'invoiceId', in: 'path', required: true } }
 
-    const result = augmentDocument({ components: { parameters: existing } }, options())
+    const result = augmentDocument({ components: { parameters: existing } }, options()).document
 
     expect(components(result, 'parameters')['InvoiceId']).toEqual(existing.InvoiceId)
     expect(components(result, 'parameters')['BymaxPageQueryPage']).toBeDefined()
@@ -75,7 +75,7 @@ describe('augmentDocument', () => {
     const result = augmentDocument(
       { components: { schemas: { Invoice: { type: 'object' } } } },
       options({ includeCoreSchemas: false })
-    )
+    ).document
 
     expect(components(result, 'schemas')).toEqual({ Invoice: { type: 'object' } })
     expect(result.components).not.toHaveProperty('parameters')
@@ -89,7 +89,7 @@ describe('augmentDocument', () => {
    * was considered and there is none".
    */
   it('omits securitySchemes when none are configured', () => {
-    const result = augmentDocument({}, options())
+    const result = augmentDocument({}, options()).document
 
     expect(result.components).not.toHaveProperty('securitySchemes')
   })
@@ -106,7 +106,7 @@ describe('augmentDocument', () => {
     const result = augmentDocument(
       { components: { securitySchemes: existing } },
       options({ securitySchemes: { bearer: { type: 'http', scheme: 'bearer' } } })
-    )
+    ).document
 
     expect(components(result, 'securitySchemes')).toEqual({
       legacy: { type: 'apiKey' },
@@ -123,7 +123,7 @@ describe('augmentDocument', () => {
   it('returns a new document and leaves the input untouched', () => {
     const input = { openapi: '3.0.0', components: { schemas: {} } }
 
-    const result = augmentDocument(input, options())
+    const result = augmentDocument(input, options()).document
 
     expect(result).not.toBe(input)
     expect(input.components.schemas).toEqual({})
@@ -138,7 +138,7 @@ describe('augmentDocument', () => {
    * bootstrap, when the application is already half-started.
    */
   it('creates components when the document has none', () => {
-    const result = augmentDocument({}, options())
+    const result = augmentDocument({}, options()).document
 
     expect(Object.keys(components(result, 'schemas'))).toEqual(Object.keys(CORE_SCHEMAS))
   })
@@ -155,7 +155,7 @@ describe('augmentDocument', () => {
     ['an array', []],
     ['a string', 'nope']
   ])('tolerates a components member that is %s', (_label, value) => {
-    const result = augmentDocument({ components: value }, options())
+    const result = augmentDocument({ components: value }, options()).document
 
     expect(Object.keys(components(result, 'schemas'))).toEqual(Object.keys(CORE_SCHEMAS))
   })
@@ -167,7 +167,7 @@ describe('augmentDocument', () => {
    * close to the generated one as the contributions allow.
    */
   it('adds no paths member when the document has none', () => {
-    const result = augmentDocument({ components: {} }, options())
+    const result = augmentDocument({ components: {} }, options()).document
 
     expect(result).not.toHaveProperty('paths')
   })

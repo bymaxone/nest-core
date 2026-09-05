@@ -41,7 +41,7 @@ describe('augmentDocument — library contributions', () => {
       options(),
       [''],
       [contribution('AuthOpenApi', { AuthController_login: { summary: 'Sign in', security: [] } })]
-    )
+    ).document
     const login = operation(result, '/auth/login', 'post')
 
     expect(login['summary']).toBe('Sign in')
@@ -61,7 +61,7 @@ describe('augmentDocument — library contributions', () => {
       options(),
       [''],
       [contribution('AuthOpenApi', { AuthController_login: { summary: 'Theirs' } })]
-    )
+    ).document
 
     expect(operation(result, '/auth/login', 'post')['summary']).toBe('Mine')
   })
@@ -91,7 +91,7 @@ describe('augmentDocument — library contributions', () => {
           }
         })
       ]
-    )
+    ).document
     const responses = operation(result, '/auth/login', 'post')['responses'] as Record<
       string,
       Record<string, unknown>
@@ -114,7 +114,7 @@ describe('augmentDocument — library contributions', () => {
       options(),
       [''],
       [contribution('AuthOpenApi', { AuthController_login: { summary: 'Sign in' } })]
-    )
+    ).document
 
     expect(operation(result, '/auth/login', 'post')).not.toHaveProperty('summary')
   })
@@ -146,7 +146,7 @@ describe('augmentDocument — library contributions', () => {
           }
         )
       ]
-    )
+    ).document
     const schemes = components(result, 'securitySchemes')
 
     expect(schemes['shared']).toBe(mine)
@@ -173,7 +173,7 @@ describe('augmentDocument — library contributions', () => {
             { securitySchemes: { authCookie: { type: 'apiKey', in: 'cookie', name: 'access' } } }
           )
         ]
-      )
+      ).document
 
     expect(build).not.toThrow()
   })
@@ -194,7 +194,7 @@ describe('augmentDocument — library contributions', () => {
       options(),
       [''],
       [contribution('AuthOpenApi', { AuthController_login: { summary: 'Sign in' } })]
-    )
+    ).document
 
     expect(operation(result, '/auth/login', 'post')['summary']).toBe('Sign in')
     expect(operation(result, '/auth/logout', 'post')).not.toHaveProperty('summary')
@@ -212,7 +212,7 @@ describe('augmentDocument — library contributions', () => {
       options({ includeCoreSchemas: false }),
       [''],
       [contribution('AuthOpenApi', { AuthController_login: { summary: 'Sign in' } })]
-    )
+    ).document
 
     expect(operation(result, '/auth/login', 'post')).not.toHaveProperty('responses')
   })
@@ -231,7 +231,7 @@ describe('augmentDocument — library contributions', () => {
       options({ security: [{ cookieAuth: [] }], securitySchemes: SCHEMES }),
       [''],
       [contribution('ProbeOpenApi', { HealthController_live: { security: [{ cookieAuth: [] }] } })]
-    )
+    ).document
 
     expect(operation(result, '/health/live')['security']).toEqual([{ cookieAuth: [] }])
   })
@@ -251,8 +251,226 @@ describe('augmentDocument — library contributions', () => {
         contribution('AlphaOpenApi', { AuthController_login: { summary: 'Alpha' } }),
         contribution('ZuluOpenApi', { AuthController_login: { summary: 'Zulu' } })
       ]
-    )
+    ).document
 
     expect(operation(result, '/auth/login', 'post')['summary']).toBe('Alpha')
+  })
+  /**
+   * An empty placeholder does not count as a declaration.
+   *
+   * The peer emits `{"type":"object","properties":{}}` for every DTO in a
+   * package built without its plugin, so the name is never actually missing and
+   * a contributed schema under it would never be written. Filling one in is
+   * additive: it constrains nothing before and describes a shape after.
+   */
+  it('fills a schema the document declares with no shape', () => {
+    const theirs = { type: 'object', properties: { email: { type: 'string' } } }
+    const result = augmentDocument(
+      {
+        ...withOperation('AuthController_login'),
+        components: { schemas: { LoginDto: { type: 'object', properties: {} } } }
+      },
+      options(),
+      [''],
+      [contribution('AuthOpenApi', {}, { schemas: { LoginDto: theirs } })]
+    )
+
+    expect(components(result.document, 'schemas')['LoginDto']).toEqual(theirs)
+    expect(result.discarded).toEqual([])
+  })
+
+  /**
+   * A schema carrying properties is a real declaration and survives.
+   *
+   * The consumer authored it on purpose, and a library overwriting it is the
+   * worse defect wearing the other sign. The collision is reported rather than
+   * dropped in silence, which is the part neither side could otherwise observe.
+   */
+  it('keeps a schema that describes a shape and reports the discard', () => {
+    const mine = { type: 'object', properties: { id: { type: 'string' } } }
+    const result = augmentDocument(
+      {
+        ...withOperation('AuthController_login'),
+        components: { schemas: { LoginDto: mine } }
+      },
+      options(),
+      [''],
+      [
+        contribution(
+          'AuthOpenApi',
+          {},
+          { schemas: { LoginDto: { type: 'object', properties: { email: { type: 'string' } } } } }
+        )
+      ]
+    )
+
+    expect(components(result.document, 'schemas')['LoginDto']).toBe(mine)
+    expect(result.discarded).toEqual([
+      { contributor: 'AuthOpenApi', member: 'schemas', name: 'LoginDto' }
+    ])
+  })
+
+  /**
+   * A non-object schema is complete without properties.
+   *
+   * `{"type":"string"}` carries no properties and is nonetheless a full
+   * declaration. Reading "no properties" as "no shape" would discard it, which
+   * is the failure this path exists to prevent, so the type is checked first.
+   */
+  it('keeps a primitive schema that declares no properties', () => {
+    const mine = { type: 'string', format: 'uuid' }
+    const result = augmentDocument(
+      { ...withOperation('AuthController_login'), components: { schemas: { UserId: mine } } },
+      options(),
+      [''],
+      [contribution('AuthOpenApi', {}, { schemas: { UserId: { type: 'object' } } })]
+    )
+
+    expect(components(result.document, 'schemas')['UserId']).toBe(mine)
+    expect(result.discarded).toHaveLength(1)
+  })
+
+  /**
+   * A bare `$ref` declares a shape by reference.
+   *
+   * It carries no properties, so a properties-only test would replace it —
+   * discarding the reference and describing the name as something else.
+   */
+  it('keeps a schema that is a reference', () => {
+    const mine = { $ref: '#/components/schemas/Other' }
+    const result = augmentDocument(
+      { ...withOperation('AuthController_login'), components: { schemas: { Alias: mine } } },
+      options(),
+      [''],
+      [contribution('AuthOpenApi', {}, { schemas: { Alias: { type: 'object' } } })]
+    )
+
+    expect(components(result.document, 'schemas')['Alias']).toBe(mine)
+    expect(result.discarded).toHaveLength(1)
+  })
+
+  /**
+   * A description on a placeholder is the one part a consumer authored.
+   *
+   * The shape is filled from the contribution while the prose survives, the
+   * same carve-out `mergeResponses` makes for the same reason.
+   */
+  it('keeps a description the document wrote on an otherwise empty schema', () => {
+    const result = augmentDocument(
+      {
+        ...withOperation('AuthController_login'),
+        components: {
+          schemas: { LoginDto: { type: 'object', properties: {}, description: 'Ours' } }
+        }
+      },
+      options(),
+      [''],
+      [
+        contribution(
+          'AuthOpenApi',
+          {},
+          {
+            schemas: {
+              LoginDto: {
+                type: 'object',
+                properties: { email: { type: 'string' } },
+                description: 'Theirs'
+              }
+            }
+          }
+        )
+      ]
+    )
+
+    expect(components(result.document, 'schemas')['LoginDto']).toEqual({
+      type: 'object',
+      properties: { email: { type: 'string' } },
+      description: 'Ours'
+    })
+  })
+
+  /**
+   * A name the document never mentions still lands.
+   *
+   * The novel case is what already worked; it is asserted beside the collision
+   * so a change that reported everything as discarded would fail here too.
+   */
+  it('places a contributed schema the document does not declare', () => {
+    const theirs = { type: 'object', properties: { token: { type: 'string' } } }
+    const result = augmentDocument(
+      withOperation('AuthController_login'),
+      options(),
+      [''],
+      [contribution('AuthOpenApi', {}, { schemas: { TokenDto: theirs } })]
+    )
+
+    expect(components(result.document, 'schemas')['TokenDto']).toEqual(theirs)
+    expect(result.discarded).toEqual([])
+  })
+
+  /**
+   * The report names which contributor lost, not only what was dropped.
+   *
+   * An application with several contributing libraries would otherwise be told
+   * a name collided without being told whose entry it was.
+   */
+  it('names the contributor and member of every discarded entry', () => {
+    const result = augmentDocument(
+      {
+        ...withOperation('AuthController_login'),
+        components: {
+          schemas: { Shared: { type: 'string' } },
+          parameters: { Page: { name: 'page', in: 'query' } }
+        }
+      },
+      options(),
+      [''],
+      [
+        contribution('AlphaOpenApi', {}, { schemas: { Shared: { type: 'object' } } }),
+        contribution('ZuluOpenApi', {}, { parameters: { Page: { name: 'p', in: 'query' } } })
+      ]
+    )
+
+    expect(result.discarded).toEqual([
+      { contributor: 'AlphaOpenApi', member: 'schemas', name: 'Shared' },
+      { contributor: 'ZuluOpenApi', member: 'parameters', name: 'Page' }
+    ])
+  })
+  /**
+   * The placeholder carve-out never reaches a member that is not `schemas`.
+   *
+   * A parameter carries `name` and `in` rather than `properties`, so a
+   * schema-shaped emptiness test reads every one of them as a placeholder and
+   * lets a contributor overwrite one the consumer wrote — the precedence
+   * failure inverted, arriving through the fix for the other one. Caught by the
+   * multi-member test above during development, and pinned here so a later
+   * widening of the carve-out fails loudly rather than silently.
+   */
+  it('never replaces a non-schema member that looks empty to a schema test', () => {
+    const mine = { name: 'page', in: 'query' }
+    const result = augmentDocument(
+      {
+        ...withOperation('AuthController_login'),
+        components: { parameters: { Page: mine }, headers: { 'X-Trace': { schema: {} } } }
+      },
+      options(),
+      [''],
+      [
+        contribution(
+          'AuthOpenApi',
+          {},
+          {
+            parameters: { Page: { name: 'p', in: 'header' } },
+            headers: { 'X-Trace': { schema: { type: 'string' } } }
+          }
+        )
+      ]
+    )
+
+    expect(components(result.document, 'parameters')['Page']).toBe(mine)
+    expect(result.discarded).toEqual([
+      { contributor: 'AuthOpenApi', member: 'parameters', name: 'Page' },
+      { contributor: 'AuthOpenApi', member: 'headers', name: 'X-Trace' }
+    ])
   })
 })
