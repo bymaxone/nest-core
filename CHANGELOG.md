@@ -11,7 +11,7 @@ heading here.
 
 ## [Unreleased]
 
-## [1.7.0] - 2026-09-05
+## [1.6.1] - 2026-09-05
 
 A library contributing an OpenAPI component under a name the application already
 declared had its entry discarded, and neither side could tell. The document
@@ -21,6 +21,12 @@ was indistinguishable from success at both ends.
 
 Two changes, and they are independent: an empty placeholder no longer counts as a
 declaration, and every genuine collision is now reported.
+
+**This patch adds public surface**, which a patch number cannot tell you:
+`discarded` on `OpenApiMountOutcome`, and the `DiscardedComponent` type it holds.
+Both are additive and nothing is removed or renamed, so the digit stays at a
+patch under this project's versioning policy — which means this paragraph, rather
+than the version, is what says there is something new to look for.
 
 **Apply to a derived backend:** nothing is required, and no served document loses
 anything it carried. A schema the application declares with a shape of its own
@@ -1074,5 +1080,5 @@ have regressed from. They are kept because the reasoning is worth having.
 [1.5.2]: https://github.com/bymaxone/nest-core/compare/v1.5.1...v1.5.2
 [1.5.3]: https://github.com/bymaxone/nest-core/compare/v1.5.2...v1.5.3
 [1.6.0]: https://github.com/bymaxone/nest-core/compare/v1.5.3...v1.6.0
-[1.7.0]: https://github.com/bymaxone/nest-core/compare/v1.6.0...v1.7.0
-[Unreleased]: https://github.com/bymaxone/nest-core/compare/v1.7.0...HEAD
+[1.6.1]: https://github.com/bymaxone/nest-core/compare/v1.6.0...v1.6.1
+[Unreleased]: https://github.com/bymaxone/nest-core/compare/v1.6.1...HEAD

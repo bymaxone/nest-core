@@ -473,4 +473,113 @@ describe('augmentDocument — library contributions', () => {
       { contributor: 'AuthOpenApi', member: 'headers', name: 'X-Trace' }
     ])
   })
+  /**
+   * A schema with no `type` at all is still a placeholder.
+   *
+   * The peer emits one for a DTO it cannot introspect, and a test that only
+   * ever supplies `type: 'object'` leaves the `type !== undefined` half of the
+   * guard unexercised — the schema would then be read as typed-and-not-object
+   * and kept, discarding the contribution.
+   */
+  it('fills a schema that declares neither type nor properties', () => {
+    const theirs = { type: 'object', properties: { email: { type: 'string' } } }
+    const result = augmentDocument(
+      { ...withOperation('AuthController_login'), components: { schemas: { LoginDto: {} } } },
+      options(),
+      [''],
+      [contribution('AuthOpenApi', {}, { schemas: { LoginDto: theirs } })]
+    )
+
+    expect(components(result.document, 'schemas')['LoginDto']).toEqual(theirs)
+    expect(result.discarded).toEqual([])
+  })
+
+  /**
+   * Every constraining keyword makes a schema a declaration, not just `$ref`.
+   *
+   * Each of these describes a shape while carrying no `properties`, so a test
+   * that checks properties alone would replace them — discarding a real schema,
+   * which is the failure this path exists to prevent. Enumerated one per
+   * keyword so a keyword dropped from the list fails here by name.
+   */
+  it.each([
+    ['allOf', { allOf: [{ type: 'object' }] }],
+    ['oneOf', { oneOf: [{ type: 'string' }] }],
+    ['anyOf', { anyOf: [{ type: 'string' }] }],
+    ['enum', { enum: ['a', 'b'] }],
+    ['items', { type: 'object', items: { type: 'string' } }],
+    ['additionalProperties', { type: 'object', additionalProperties: { type: 'string' } }]
+  ])('keeps a schema whose shape comes from %s', (_keyword, mine) => {
+    const result = augmentDocument(
+      { ...withOperation('AuthController_login'), components: { schemas: { Shape: mine } } },
+      options(),
+      [''],
+      [contribution('AuthOpenApi', {}, { schemas: { Shape: { type: 'object' } } })]
+    )
+
+    expect(components(result.document, 'schemas')['Shape']).toBe(mine)
+    expect(result.discarded).toHaveLength(1)
+  })
+
+  /**
+   * A placeholder carrying no description takes the contributed one whole.
+   *
+   * The carve-out preserves prose the consumer wrote; where there is none it
+   * must not write an explicit `undefined` over the contributed description,
+   * which is what an unconditional merge would do.
+   */
+  it('takes the contributed description when the placeholder carries none', () => {
+    const result = augmentDocument(
+      {
+        ...withOperation('AuthController_login'),
+        components: { schemas: { LoginDto: { type: 'object', properties: {} } } }
+      },
+      options(),
+      [''],
+      [
+        contribution(
+          'AuthOpenApi',
+          {},
+          { schemas: { LoginDto: { type: 'object', properties: {}, description: 'Theirs' } } }
+        )
+      ]
+    )
+
+    expect(components(result.document, 'schemas')['LoginDto']).toEqual({
+      type: 'object',
+      properties: {},
+      description: 'Theirs'
+    })
+  })
+
+  /**
+   * An empty description is no description.
+   *
+   * The peer writes one for a DTO with no doc comment, so treating it as prose
+   * the consumer authored would pin every such schema to a blank description
+   * and hide the contributed one.
+   */
+  it('replaces an empty description rather than preserving it', () => {
+    const result = augmentDocument(
+      {
+        ...withOperation('AuthController_login'),
+        components: { schemas: { LoginDto: { type: 'object', properties: {}, description: '' } } }
+      },
+      options(),
+      [''],
+      [
+        contribution(
+          'AuthOpenApi',
+          {},
+          { schemas: { LoginDto: { type: 'object', properties: {}, description: 'Theirs' } } }
+        )
+      ]
+    )
+
+    expect(components(result.document, 'schemas')['LoginDto']).toEqual({
+      type: 'object',
+      properties: {},
+      description: 'Theirs'
+    })
+  })
 })

@@ -101,6 +101,33 @@ class ManyCollisionsOpenApi implements IOpenApiContributor {
   }
 }
 
+/** A library colliding on exactly the number of names the warning lists. */
+@BymaxOpenApiContributor()
+class TenCollisionsOpenApi implements IOpenApiContributor {
+  /** Contributes ten schemes, every one of them already declared. */
+  contributeOpenApi(): OpenApiFragment {
+    return {
+      contractVersion: BYMAX_OPENAPI_CONTRACT_VERSION,
+      components: {
+        securitySchemes: Object.fromEntries(
+          Array.from({ length: 10 }, (_unused, index) => [
+            `scheme${index}`,
+            { type: 'http', scheme: 'bearer' }
+          ])
+        )
+      }
+    }
+  }
+}
+
+/** The ten schemes `TenCollisionsOpenApi` collides with, as the consumer declares them. */
+const TEN_SCHEMES = Object.fromEntries(
+  Array.from({ length: 10 }, (_unused, index) => [
+    `scheme${index}`,
+    { type: 'apiKey', in: 'cookie', name: `c${index}` }
+  ])
+)
+
 /** The eleven schemes `ManyCollisionsOpenApi` collides with, as the consumer declares them. */
 const ELEVEN_SCHEMES = Object.fromEntries(
   Array.from({ length: 11 }, (_unused, index) => [
@@ -839,6 +866,12 @@ describe('applyBymaxOpenApi', () => {
       expect.stringContaining(', and 1 more') as unknown as string,
       LOG_CONTEXT
     )
+    // The count is not enough on its own: a line that listed all eleven and
+    // then said "and 1 more" would satisfy both assertions above.
+    expect(logged.warn).not.toHaveBeenCalledWith(
+      expect.stringContaining('scheme10') as unknown as string,
+      LOG_CONTEXT
+    )
   })
 
   /**
@@ -856,6 +889,62 @@ describe('applyBymaxOpenApi', () => {
     expect(outcome.discarded).toEqual([])
     expect(logged.warn).not.toHaveBeenCalledWith(
       expect.stringContaining('component entry(ies)') as unknown as string,
+      LOG_CONTEXT
+    )
+  })
+  /**
+   * Two collisions are listed as a readable series, not run together.
+   *
+   * A single-entry assertion never exercises the separator, so the line could
+   * join them with nothing and still satisfy every other test here.
+   */
+  it('separates the collisions it lists', async () => {
+    process.env['NODE_ENV'] = 'test'
+    app = await bootApp(
+      {
+        openapi: {
+          enabled: true,
+          securitySchemes: {
+            cookieAuth: { type: 'apiKey', in: 'cookie', name: 'access_token' },
+            scheme0: { type: 'apiKey', in: 'cookie', name: 'c0' }
+          }
+        }
+      },
+      [ExampleController],
+      [CollidingOpenApi, TenCollisionsOpenApi]
+    )
+
+    await applyBymaxOpenApi(app)
+
+    expect(logged.warn).toHaveBeenCalledWith(
+      expect.stringContaining(
+        'CollidingOpenApi -> securitySchemes.cookieAuth, TenCollisionsOpenApi -> ' +
+          'securitySchemes.scheme0'
+      ) as unknown as string,
+      LOG_CONTEXT
+    )
+  })
+
+  /**
+   * Exactly at the cap the line lists everything and counts nothing.
+   *
+   * The boundary is where an off-by-one hides: a rule that elided at `>= 0`
+   * rather than `> 0` appends "and 0 more" here and nowhere else, and every
+   * test either side of the cap stays green.
+   */
+  it('counts no remainder when the collisions exactly fill the listing', async () => {
+    process.env['NODE_ENV'] = 'test'
+    app = await bootApp(
+      { openapi: { enabled: true, securitySchemes: TEN_SCHEMES } },
+      [ExampleController],
+      [TenCollisionsOpenApi]
+    )
+
+    const outcome = await applyBymaxOpenApi(app)
+
+    expect(outcome.discarded).toHaveLength(10)
+    expect(logged.warn).not.toHaveBeenCalledWith(
+      expect.stringContaining('more') as unknown as string,
       LOG_CONTEXT
     )
   })
