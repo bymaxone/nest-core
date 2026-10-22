@@ -299,8 +299,8 @@ describe('BymaxExceptionFilter, unexpected-error sink', () => {
   /**
    * The sink and the protected seam both run, and neither can stop the other.
    *
-   * A subclass overriding `onUnexpectedError` predates the sink; binding a sink
-   * must not silence it, and a seam that throws must not cost the sink its
+   * A subclass overriding `onUnexpectedError` must keep receiving every call
+   * when a sink is bound, and a seam that throws must not cost the sink its
    * report.
    */
   it('runs alongside a throwing onUnexpectedError override', () => {

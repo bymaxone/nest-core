@@ -717,20 +717,15 @@ export function augmentDocument<T extends OpenApiDocumentLike>(
   // is not reported — the catalogue is not a contributor.
   if (openapi.includeCoreSchemas) {
     const keep = (): void => undefined
-    merged.set(
-      'schemas',
-      placeComponentEntries(components['schemas'], 'schemas', CORE_SCHEMAS, keep)
-    )
-    merged.set(
-      'parameters',
-      placeComponentEntries(
-        components['parameters'],
-        // Stryker disable next-line StringLiteral: equivalent — the member name only decides whether the schemas-only placeholder carve-out applies, and every name other than "schemas" behaves identically, so an empty string cannot be told apart from "parameters".
-        'parameters',
-        CORE_PARAMETERS,
-        keep
-      )
-    )
+    // One literal names each member for the read, the rule and the write, so
+    // the three cannot disagree about which member they mean.
+    const catalogue = [
+      ['schemas', CORE_SCHEMAS],
+      ['parameters', CORE_PARAMETERS]
+    ] as const
+    for (const [member, entries] of catalogue) {
+      merged.set(member, placeComponentEntries(merged.get(member), member, entries, keep))
+    }
   }
 
   // Contributed only when the scrape endpoint is actually protected, so the
