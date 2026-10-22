@@ -24,15 +24,18 @@ import {
   VERSION_NEUTRAL,
   VersioningType
 } from '@nestjs/common'
-import type { INestApplication, LoggerService, Type } from '@nestjs/common'
+import type { INestApplication, LoggerService, Provider, Type } from '@nestjs/common'
 import { Test } from '@nestjs/testing'
 import request from 'supertest'
 
 import { DiscoveryService } from '@nestjs/core'
 
+import { BymaxOpenApiContributor, BYMAX_OPENAPI_CONTRACT_VERSION } from './openapi.contract'
+import type { IOpenApiContributor, OpenApiFragment } from './openapi.contract'
 import { BymaxCoreModule } from '../core.module'
 import type { BymaxCoreModuleOptions } from '../core.options'
 import { applyBymaxOpenApi } from './openapi.bootstrap'
+import { bootApp, ExampleController, logged, LOG_CONTEXT } from './__tests__/bootstrap.harness'
 
 /** Every operation id in a document, in document order. */
 function operationIdsOf(document: unknown): readonly string[] {
@@ -44,9 +47,6 @@ function operationIdsOf(document: unknown): readonly string[] {
       .filter((id): id is string => typeof id === 'string')
   )
 }
-
-/** The context every log line this helper writes must carry. */
-const LOG_CONTEXT = 'BymaxCoreModule'
 
 /** The exact warning emitted when production refuses a requested document. */
 const PRODUCTION_WARNING =
@@ -70,22 +70,6 @@ const UNRESOLVED_GUIDANCE =
 /** A module registering nothing at all, used to prove the unresolved-options path. */
 @Module({})
 class BareModule {}
-
-/** A consumer's controller: one route described, one left as generated. */
-@Controller()
-class ExampleController {
-  /** Stands in for a handler a consumer marks public. */
-  @Post('auth/login')
-  login(): string {
-    return 'ok'
-  }
-
-  /** Stands in for the guarded route that loses its requirement. */
-  @Get('examples')
-  list(): string {
-    return 'ok'
-  }
-}
 
 /**
  * A controller exposing `count` bare GET routes.
@@ -121,36 +105,11 @@ function bulkController(count: number): Type<unknown> {
   return BulkController
 }
 
-/** Captures what Nest's logger received, message and context alike. */
-const logged: LoggerService = {
-  log: jest.fn(),
-  error: jest.fn(),
-  warn: jest.fn(),
-  debug: jest.fn(),
-  verbose: jest.fn()
-}
-
 /**
  * Build a real application registering `BymaxCoreModule`, deliberately left
  * uninitialized: the helper under test must run before initialization, which is
  * exactly what a real bootstrap does between `NestFactory.create` and `listen`.
  */
-async function bootApp(
-  options: BymaxCoreModuleOptions,
-  controllers: readonly Type<unknown>[] = []
-): Promise<INestApplication> {
-  const moduleRef = await Test.createTestingModule({
-    imports: [BymaxCoreModule.forRoot(options)],
-    controllers: [...controllers]
-  }).compile()
-  const app = moduleRef.createNestApplication()
-  // Installed here, not in `beforeEach`: creating the application applies its own
-  // logger options over Nest's global logger, so an override registered earlier
-  // is discarded and every assertion on a log line would silently see nothing.
-  Logger.overrideLogger(logged)
-  return app
-}
-
 describe('applyBymaxOpenApi', () => {
   const originalNodeEnv = process.env['NODE_ENV']
   let app: INestApplication | undefined
@@ -179,7 +138,7 @@ describe('applyBymaxOpenApi', () => {
 
     const outcome = await applyBymaxOpenApi(app)
 
-    expect(outcome).toEqual({ mounted: true, path: 'docs' })
+    expect(outcome).toEqual({ mounted: true, path: 'docs', discarded: [] })
   })
 
   /**
@@ -211,7 +170,7 @@ describe('applyBymaxOpenApi', () => {
 
     const outcome = await applyBymaxOpenApi(app)
 
-    expect(outcome).toEqual({ mounted: true, path: 'reference' })
+    expect(outcome).toEqual({ mounted: true, path: 'reference', discarded: [] })
     // The log line names both served routes under this package's context: it is
     // the only feedback a developer gets that the document is up, and where.
     expect(logged.log).toHaveBeenCalledWith(
@@ -440,7 +399,11 @@ describe('applyBymaxOpenApi', () => {
       return (realGet as (...args: unknown[]) => unknown)(token, ...rest)
     })
 
-    await expect(applyBymaxOpenApi(app)).resolves.toEqual({ mounted: true, path: 'docs' })
+    await expect(applyBymaxOpenApi(app)).resolves.toEqual({
+      mounted: true,
+      path: 'docs',
+      discarded: []
+    })
   })
 
   /**
@@ -559,7 +522,7 @@ describe('applyBymaxOpenApi', () => {
     await app.init()
     const document = (await request(app.getHttpServer()).get('/docs-json')).body
 
-    expect(outcome).toEqual({ mounted: true, path: 'docs' })
+    expect(outcome).toEqual({ mounted: true, path: 'docs', discarded: [] })
     // Degraded to "no prefix", which is what an unreadable one must mean: this
     // package's own routes are then recognized unprefixed, so a disabled
     // feature at the default path still leaves the document.

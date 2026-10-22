@@ -33,7 +33,7 @@ describe('augmentDocument — security', () => {
     const result = augmentDocument(
       generated({ '/invoices': { get: {} } }),
       options({ security, securitySchemes: SCHEMES })
-    )
+    ).document
 
     expect(result).toHaveProperty('security', security)
   })
@@ -49,7 +49,7 @@ describe('augmentDocument — security', () => {
     const result = augmentDocument(
       { ...generated({}), security: mine },
       options({ security: [{ cookieAuth: [] }], securitySchemes: SCHEMES })
-    )
+    ).document
 
     expect(result.security).toBe(mine)
   })
@@ -61,7 +61,7 @@ describe('augmentDocument — security', () => {
    * public", which is a claim this package must not make on a consumer's behalf.
    */
   it('writes no document-level requirement when none is configured', () => {
-    const result = augmentDocument(generated({}), options())
+    const result = augmentDocument(generated({}), options()).document
 
     expect(result).not.toHaveProperty('security')
   })
@@ -81,7 +81,7 @@ describe('augmentDocument — security', () => {
         security: [{ cookieAuth: [] }],
         operationSecurity: { 'POST /auth/refresh': [{ refreshCookie: [] }] }
       })
-    )
+    ).document
 
     expect(operation(result, '/auth/refresh', 'post')['security']).toEqual([{ refreshCookie: [] }])
     expect(operation(result, '/invoices')).not.toHaveProperty('security')
@@ -103,7 +103,7 @@ describe('augmentDocument — security', () => {
         security: [{ cookieAuth: [] }],
         operationSecurity: { 'POST /auth/login': [] }
       })
-    )
+    ).document
 
     expect(operation(result, '/auth/login', 'post')['security']).toEqual([])
   })
@@ -124,7 +124,7 @@ describe('augmentDocument — security', () => {
         security: [{ cookieAuth: [] }],
         operationSecurity: { 'POST /auth/login': [] }
       })
-    )
+    ).document
 
     expect(operation(result, '/auth/login', 'post')['security']).toBe(mine)
   })
@@ -142,7 +142,7 @@ describe('augmentDocument — security', () => {
       augmentDocument(
         generated({ '/api/auth/login': { post: {} } }),
         options({ operationSecurity: { 'POST /auth/login': [] } })
-      )
+      ).document
 
     expect(build).toThrow(/\[BymaxCoreModule\] openapi\.operationSecurity addresses 1 operation/)
     expect(build).toThrow(/does not contain: POST \/auth\/login/)
@@ -163,7 +163,7 @@ describe('augmentDocument — security', () => {
       augmentDocument(
         generated({ '/invoices': { get: {} }, '/payments': { post: {} } }),
         options({ operationSecurity: { 'POST /nope': [], 'GET /nada': [] } })
-      )
+      ).document
 
     expect(build).toThrow(/addresses 2 operation/)
     expect(build).toThrow(/does not contain: POST \/nope, GET \/nada\./)
@@ -182,6 +182,7 @@ describe('augmentDocument — security', () => {
   it('throws when a document-level requirement names an undeclared scheme', () => {
     const build = () =>
       augmentDocument(generated({ '/x': { get: {} } }), options({ security: [{ ghost: [] }] }))
+        .document
 
     expect(build).toThrow(/names 1 scheme\(s\) that the document does not define: ghost/)
     expect(build).toThrow(/Declare them in openapi\.securitySchemes, or drop the requirement/)
@@ -202,7 +203,7 @@ describe('augmentDocument — security', () => {
           securitySchemes: SCHEMES,
           operationSecurity: { 'GET /x': [{ refreshCooky: [] }] }
         })
-      )
+      ).document
 
     expect(build).toThrow(/does not define: refreshCooky/)
     expect(build).toThrow(/The document defines: cookieAuth, refreshCookie/)
@@ -223,7 +224,7 @@ describe('augmentDocument — security', () => {
           security: [{ ghostOne: [] }],
           operationSecurity: { 'GET /x': [{ ghostTwo: [] }] }
         })
-      )
+      ).document
 
     expect(build).toThrow(/names 2 scheme\(s\)/)
     expect(build).toThrow(/does not define: ghostOne, ghostTwo\./)
@@ -244,7 +245,7 @@ describe('augmentDocument — security', () => {
           components: { securitySchemes: { legacy: { type: 'apiKey' } } }
         },
         options({ security: [{ legacy: [] }] })
-      )
+      ).document
 
     expect(build).not.toThrow()
   })
@@ -260,7 +261,7 @@ describe('augmentDocument — security', () => {
       augmentDocument(
         generated({ '/auth/login': { post: {} } }),
         options({ operationSecurity: { 'POST /auth/login': [] } })
-      )
+      ).document
 
     expect(build).not.toThrow()
   })
@@ -273,8 +274,9 @@ describe('augmentDocument — security', () => {
    * message was truncated.
    */
   it('names the empty document explicitly', () => {
-    expect(() =>
-      augmentDocument(generated({}), options({ operationSecurity: { 'GET /x': [] } }))
+    expect(
+      () =>
+        augmentDocument(generated({}), options({ operationSecurity: { 'GET /x': [] } })).document
     ).toThrow(/The document contains: \(none\)\./)
   })
 
@@ -288,7 +290,7 @@ describe('augmentDocument — security', () => {
       augmentDocument(
         generated({ '/auth/login': { post: {} } }),
         options({ operationSecurity: { 'POST /auth/login': [] } })
-      )
+      ).document
 
     expect(build).not.toThrow()
   })
@@ -300,11 +302,12 @@ describe('augmentDocument — security', () => {
    * feature this deployment turned off is reported rather than ignored.
    */
   it('throws when an override addresses a disabled feature route', () => {
-    expect(() =>
-      augmentDocument(
-        generated({ ...OWN_ROUTES }),
-        options({ operationSecurity: { 'GET /metrics': [] } })
-      )
+    expect(
+      () =>
+        augmentDocument(
+          generated({ ...OWN_ROUTES }),
+          options({ operationSecurity: { 'GET /metrics': [] } })
+        ).document
     ).toThrow(/does not contain: GET \/metrics/)
   })
 
@@ -318,7 +321,7 @@ describe('augmentDocument — security', () => {
     const result = augmentDocument(
       generated({ ...OWN_ROUTES }),
       options({ security: [{ cookieAuth: [] }], securitySchemes: SCHEMES })
-    )
+    ).document
 
     expect(operation(result, '/health/live')['security']).toEqual([])
     expect(operation(result, '/health/ready')['security']).toEqual([])
@@ -342,7 +345,7 @@ describe('augmentDocument — security', () => {
         { security: [{ cookieAuth: [] }], securitySchemes: SCHEMES },
         { metrics: metrics({ enabled: true, authToken: 'secret' }) }
       )
-    )
+    ).document
 
     expect(operation(result, '/health/live')['security']).toEqual([])
     expect(operation(result, '/health/live', 'post')).not.toHaveProperty('security')
@@ -362,14 +365,15 @@ describe('augmentDocument — security', () => {
   it('throws when the consumer options define the reserved scrape scheme', () => {
     const mine = { BymaxMetricsAuth: { type: 'apiKey', in: 'header', name: 'X-Scrape' } }
 
-    expect(() =>
-      augmentDocument(
-        generated({ '/metrics': { get: {} } }),
-        options(
-          { securitySchemes: mine },
-          { metrics: metrics({ enabled: true, authToken: 'secret' }) }
-        )
-      )
+    expect(
+      () =>
+        augmentDocument(
+          generated({ '/metrics': { get: {} } }),
+          options(
+            { securitySchemes: mine },
+            { metrics: metrics({ enabled: true, authToken: 'secret' }) }
+          )
+        ).document
     ).toThrow(
       /is reserved: this package contributes it to document the bearer token.*in openapi\.securitySchemes\. Rename yours, or unset metrics\.authToken/s
     )
@@ -388,11 +392,12 @@ describe('augmentDocument — security', () => {
   it('throws when the generated document defines the reserved scrape scheme', () => {
     const mine = { BymaxMetricsAuth: { type: 'apiKey', in: 'header', name: 'X-Scrape' } }
 
-    expect(() =>
-      augmentDocument(
-        { ...generated({ '/metrics': { get: {} } }), components: { securitySchemes: mine } },
-        options({}, { metrics: metrics({ enabled: true, authToken: 'secret' }) })
-      )
+    expect(
+      () =>
+        augmentDocument(
+          { ...generated({ '/metrics': { get: {} } }), components: { securitySchemes: mine } },
+          options({}, { metrics: metrics({ enabled: true, authToken: 'secret' }) })
+        ).document
     ).toThrow(/"BymaxMetricsAuth" is reserved.*by the generated document/s)
   })
 
@@ -405,8 +410,10 @@ describe('augmentDocument — security', () => {
   it('allows the reserved name when no scrape token is configured', () => {
     const mine = { BymaxMetricsAuth: { type: 'apiKey', in: 'header', name: 'X-Scrape' } }
 
-    expect(() =>
-      augmentDocument(generated({ '/x': { get: {} } }), options({ securitySchemes: mine }))
+    expect(
+      () =>
+        augmentDocument(generated({ '/x': { get: {} } }), options({ securitySchemes: mine }))
+          .document
     ).not.toThrow()
   })
 
@@ -417,7 +424,7 @@ describe('augmentDocument — security', () => {
    * requires anything.
    */
   it('leaves the health routes unmarked when no default exists', () => {
-    const result = augmentDocument(generated({ ...OWN_ROUTES }), options())
+    const result = augmentDocument(generated({ ...OWN_ROUTES }), options()).document
 
     expect(operation(result, '/health/live')).not.toHaveProperty('security')
   })
@@ -436,7 +443,7 @@ describe('augmentDocument — security', () => {
     const result = augmentDocument(
       { ...generated({ ...OWN_ROUTES }), security: [{ cookieAuth: [] }] },
       options({ securitySchemes: SCHEMES }, { metrics: metrics({ enabled: true }) })
-    )
+    ).document
 
     expect(operation(result, '/metrics')['security']).toEqual([])
     expect(operation(result, '/health/live')['security']).toEqual([])
@@ -453,7 +460,7 @@ describe('augmentDocument — security', () => {
     const result = augmentDocument(
       { ...generated({ ...OWN_ROUTES }), security: [] },
       options({}, { metrics: metrics({ enabled: true }) })
-    )
+    ).document
 
     expect(operation(result, '/metrics')).not.toHaveProperty('security')
     expect(operation(result, '/health/live')).not.toHaveProperty('security')
@@ -471,7 +478,7 @@ describe('augmentDocument — security', () => {
     const result = augmentDocument(
       { ...generated({ ...OWN_ROUTES }), security: 'cookieAuth' },
       options({}, { metrics: metrics({ enabled: true }) })
-    )
+    ).document
 
     expect(operation(result, '/metrics')).not.toHaveProperty('security')
   })
@@ -494,7 +501,7 @@ describe('augmentDocument — security', () => {
         { security: [{ cookieAuth: [] }], securitySchemes: SCHEMES },
         { metrics: metrics({ enabled: true }) }
       )
-    )
+    ).document
 
     expect(operation(result, '/metrics')['security']).toEqual([])
     expect(operation(result, '/health/live')['security']).toEqual([])
@@ -511,7 +518,7 @@ describe('augmentDocument — security', () => {
     const result = augmentDocument(
       generated({ ...OWN_ROUTES }),
       options({}, { metrics: metrics({ enabled: true }) })
-    )
+    ).document
 
     expect(operation(result, '/metrics')).not.toHaveProperty('security')
   })
@@ -530,7 +537,7 @@ describe('augmentDocument — security', () => {
       // candidates and only one matches: a check that required *every*
       // candidate to match would document nothing here.
       options({}, { metrics: metrics({ enabled: true, authToken: 'secret', path: 'scrape' }) })
-    )
+    ).document
 
     expect(operation(result, '/metrics')['security']).toEqual([{ BymaxMetricsAuth: [] }])
     expect(components(result, 'securitySchemes')['BymaxMetricsAuth']).toEqual({
@@ -550,7 +557,7 @@ describe('augmentDocument — security', () => {
     const result = augmentDocument(
       generated({ ...OWN_ROUTES }),
       options({}, { metrics: metrics({ enabled: true }) })
-    )
+    ).document
 
     expect(operation(result, '/metrics')).not.toHaveProperty('security')
     expect(result.components).not.toHaveProperty('securitySchemes')

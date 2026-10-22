@@ -11,6 +11,89 @@ heading here.
 
 ## [Unreleased]
 
+## [1.6.1] - 2026-09-05
+
+A library contributing an OpenAPI component under a name the application already
+declared had its entry discarded, and neither side could tell. The document
+validated, the served output looked exactly as it would have had nothing been
+offered, and the contributing library received no signal at all — so the failure
+was indistinguishable from success at both ends.
+
+Two changes, and they are independent: an empty placeholder no longer counts as a
+declaration, and every genuine collision is now reported.
+
+**This patch adds public surface**, which a patch number cannot tell you:
+`discarded` on `OpenApiMountOutcome`, and the `DiscardedComponent` type it holds.
+Both are additive and nothing is removed or renamed, so the digit stays at a
+patch under this project's versioning policy — which means this paragraph, rather
+than the version, is what says there is something new to look for.
+
+**Apply to a derived backend:** nothing is required, and no served document loses
+anything it carried. A schema the application declares with a shape of its own
+still wins, exactly as before. What changes is that a schema present only as
+`{"type":"object","properties":{}}` — which `@nestjs/swagger` emits for every DTO
+in a package built without its plugin — is now filled from the contribution
+rather than preferred over it. Read `discarded` on the `OpenApiMountOutcome` to
+see what a contributor offered and did not place; the boot log reports the same
+entries.
+
+### Added
+
+- **`discarded` on `OpenApiMountOutcome`, and the `DiscardedComponent` type.**
+  Lists every contributed component entry the document already declared with a
+  shape of its own, naming the contributor, the member and the entry. Present
+  whenever the document mounted, empty when every contribution was placed — an
+  empty array reports that the merge looked and found none, which absence would
+  confuse with not having looked.
+
+  Carries the contributor's label because a collision is only actionable if you
+  know whose entry lost: an application with several contributing libraries would
+  otherwise be told a name was dropped without being told by whom.
+
+  A warning reports the same entries on the way up, elided into a count on the
+  same reasoning as the unsecured-operation line beside it — a library contributing a
+  schema per DTO turns one collision into a hundred, and the version that prints
+  them all is the one an operator learns to skip.
+
+### Changed
+
+- **A schema that describes no shape no longer counts as a declaration.** The
+  merge still prefers what the document carries: a consumer authored theirs on
+  purpose, and a library silently overwriting it is the worse defect wearing the
+  other sign. But `@nestjs/swagger` emits `{"type":"object","properties":{}}` for
+  every DTO in a package built without its plugin, so the name is never actually
+  missing and a contributed schema under it would never be written. The more
+  correct the library's own schema, the more completely it was discarded, because
+  a correct schema and an empty one collide on the same key.
+
+  This is the rule `mergeResponses` already applied to responses, arriving
+  through a different placeholder — a `200` carrying a description and no
+  `content` occupies its status the same way. Filling one in is additive: it
+  constrains nothing before and describes a shape after.
+
+  The test is deliberately narrow. `type` must be absent or `object`, because
+  `{"type":"string"}` carries no properties and is nonetheless complete;
+  reading "no properties" as "no shape" would discard a real schema, which is
+  the failure this path exists to prevent. An empty `required` and a
+  `description` do not change that; any other keyword, or a single property,
+  makes the entry a declaration. A description the document
+  wrote survives being filled in, the same carve-out `mergeResponses` makes.
+
+  The carve-out applies to `schemas` alone. A parameter carries `name` and `in`
+  rather than `properties`, so a schema-shaped emptiness test reads every one of
+  them as a placeholder and would let a contributor overwrite one the consumer
+  wrote — the precedence failure inverted, arriving through the fix for the
+  other one.
+
+  This package's own catalogue, under `openapi.includeCoreSchemas`, is placed by
+  the same rule and before any library. A placeholder under a catalogue name is
+  filled with the package's definition, so a library offering that name meets a
+  declaration and is reported rather than outranking the package.
+
+- **`fastify` and `@nestjs/platform-fastify` devDependency floors raised to
+  `^5.12.5` and `^11.2.4`.** Shipped in the tarball's manifest only; `dist/` is
+  unchanged by them.
+
 ## [1.6.0] - 2026-08-29
 
 A readiness check that fails without rejecting left no record an operator would
@@ -1003,4 +1086,5 @@ have regressed from. They are kept because the reasoning is worth having.
 [1.5.2]: https://github.com/bymaxone/nest-core/compare/v1.5.1...v1.5.2
 [1.5.3]: https://github.com/bymaxone/nest-core/compare/v1.5.2...v1.5.3
 [1.6.0]: https://github.com/bymaxone/nest-core/compare/v1.5.3...v1.6.0
-[Unreleased]: https://github.com/bymaxone/nest-core/compare/v1.6.0...HEAD
+[1.6.1]: https://github.com/bymaxone/nest-core/compare/v1.6.0...v1.6.1
+[Unreleased]: https://github.com/bymaxone/nest-core/compare/v1.6.1...HEAD

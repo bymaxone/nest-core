@@ -20,6 +20,13 @@ export { applyBymaxOpenApi } from './openapi.bootstrap'
 
 export type { OpenApiMountOutcome, OpenApiSkipReason } from './openapi.bootstrap'
 
+// The merge module is private, and this one type is not: `OpenApiMountOutcome`
+// carries it, so leaving it unexported would let a consumer read the list and
+// not name its element — no function could take one, and no variable could be
+// declared to hold one. Exporting the shape of a reported outcome does not
+// export the rules that produced it.
+export type { DiscardedComponent } from './openapi.components'
+
 export {
   BymaxOpenApiContributor,
   BYMAX_OPENAPI_CONTRACT_VERSION,

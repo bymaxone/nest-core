@@ -1163,9 +1163,34 @@ can emit it once and never branch:
 
 | Result                                     | Meaning                                                 |
 | ------------------------------------------ | ------------------------------------------------------- |
-| `{ mounted: true, path }`                  | The UI and the document are served at `path`.           |
+| `{ mounted: true, path, discarded }`       | The UI and the document are served at `path`.           |
 | `{ mounted: false, reason: 'disabled' }`   | `openapi.enabled` is off.                               |
 | `{ mounted: false, reason: 'production' }` | The runtime is production. Nothing was built or served. |
+
+`discarded` lists every component entry a library contributed that the served
+document already defined with a shape of its own — a `DiscardedComponent` per
+entry, naming the contributor, the member and the name. It is empty when every
+contribution was placed, and the boot log reports the same entries.
+
+A collision is not an error and does not stop the boot: the merge prefers
+whatever holds the name already. That is usually your own declaration, and you
+authored it on purpose — but it may also be a core schema this package
+contributes under `openapi.includeCoreSchemas`, or an earlier contributor's
+entry, since contributors merge in class-name order. The report names what was
+dropped and by whom, not who owns the definition that won, so read the document
+before deciding what to remove.
+
+It is reported because it is otherwise unobservable from either side: the
+contributing library cannot tell its entry lost, the application cannot tell one
+was offered, and the served document looks the same either way.
+
+A schema present only as `{"type":"object","properties":{}}` is **not** a
+declaration for this purpose. `@nestjs/swagger` emits exactly that for every DTO
+in a package built without its plugin, so such a name is filled from the
+contribution rather than preferred over it, and does not appear in `discarded`.
+An empty `required: []` and a `description` do not change that; anything else
+does. `{"type":"object"}` and `{}` are deliberate declarations — "any object" and
+"any value" — and are kept.
 
 ### Production is a closed door
 
@@ -1773,6 +1798,7 @@ in the sections above.
 | -------------------------------------------------------------------------------------- | ------------------- | ------------------------------------------------------------------------------ |
 | `applyBymaxOpenApi`                                                                    | function            | Builds and mounts the document; call it before `app.listen()`.                 |
 | `OpenApiMountOutcome`                                                                  | type                | What the helper did: mounted at a path, or skipped with a reason.              |
+| `DiscardedComponent`                                                                   | type                | A contributed component entry the document already declared.                   |
 | `OpenApiSkipReason`                                                                    | type                | Why it was skipped: `'disabled'` or `'production'`.                            |
 | `BymaxOpenApiContributor`, `BYMAX_OPENAPI_CONTRIBUTOR_METADATA`                        | decorator, constant | Marks a provider as describing its own routes, and the metadata key behind it. |
 | `IOpenApiContributor`, `OpenApiFragment`, `OpenApiFragmentObject`, `OpenApiHandlerKey` | types               | The contributor contract and the shape of what it returns.                     |

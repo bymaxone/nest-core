@@ -34,6 +34,7 @@ import type * as Swagger from '@nestjs/swagger'
 import type { ResolvedCoreOptions, ResolvedOpenApiOptions } from '../core.options'
 import { BYMAX_CORE_OPTIONS } from '../core.tokens'
 import { isProductionRuntime, runtimeEnvironmentName } from '../runtime.environment'
+import type { DiscardedComponent } from './openapi.components'
 import { collectContributions, createHandlerIdMap } from './openapi.contribution'
 import type { HandlerIdMap, ResolvedContribution } from './openapi.contribution'
 import { augmentDocument, unsecuredOperations } from './openapi.document'
@@ -54,6 +55,22 @@ export interface OpenApiMountOutcome {
   reason?: OpenApiSkipReason
   /** The route the UI was mounted at. Present only when `mounted` is `true`. */
   path?: string
+  /**
+   * Component entries a contributor offered that the served document already
+   * defined with a shape of its own. Present only when `mounted` is `true`;
+   * empty when every contribution was placed.
+   *
+   * The merge prefers whatever holds the name already, so a collision is not an
+   * error and does not stop the boot. The holder is usually the application's
+   * own declaration, but it may be a core schema this package contributes under
+   * `openapi.includeCoreSchemas` or an earlier contributor's entry — the report
+   * names what was dropped and by whom, not who owns the winning definition.
+   *
+   * It is reported because it is otherwise unobservable from either side: the
+   * contributing library cannot tell its entry was dropped, and the application
+   * cannot tell one was offered.
+   */
+  discarded?: readonly DiscardedComponent[]
 }
 
 /**
@@ -282,6 +299,52 @@ function warnUnsecuredOperations(logger: Logger, keys: readonly string[]): void 
 }
 
 /**
+ * Report the contributed component entries the document already declared.
+ *
+ * Warned rather than thrown, for the same reason the unsecured-operation line
+ * is: the document that results is complete and valid, and a collision is a
+ * legitimate configuration — a consumer who authored a schema under a name a
+ * library also supplies keeps theirs, deliberately. What makes it worth a line
+ * is that nothing else can say it. The contributing library cannot observe that
+ * its entry lost, the application cannot observe that one was offered, and the
+ * served document looks the same either way.
+ *
+ * Elided past {@link MAX_WARNED_OPERATIONS} on the same reasoning as its
+ * neighbour: a library contributing a schema per DTO turns one collision into a
+ * hundred, and the line that prints them all is the line an operator learns to
+ * skip.
+ *
+ * @param logger - The logger this helper writes through.
+ * @param discarded - The dropped entries, empty when every one was placed.
+ */
+function warnDiscardedComponents(logger: Logger, discarded: readonly DiscardedComponent[]): void {
+  if (discarded.length === 0) {
+    return
+  }
+  const elided = discarded.length - MAX_WARNED_OPERATIONS
+  const listed = discarded
+    .slice(0, MAX_WARNED_OPERATIONS)
+    .map(({ contributor, member, name }) => `${contributor} -> ${member}.${name}`)
+    .join(', ')
+  // Consequence first: what a reader needs is that the served document is not
+  // the one the library described, which is why a generated client can disagree
+  // with the library's own types.
+  //
+  // The line names what was dropped and by whom, never who owns the definition
+  // that won. The merge runs the document, then this package's catalogue, then
+  // the consumer's configuration, then contributors in label order — so "remove
+  // your local definition" is advice that does not always have a referent.
+  logger.warn(
+    `the served OpenAPI document already defines ${discarded.length} component entry(ies) a ` +
+      `library also contributes: ${listed}${elided > 0 ? `, and ${elided} more` : ''}. The ` +
+      'contributed version is not served, so a client generated from this document will not ' +
+      "match that library's own types. What holds the name may be the application's own " +
+      'declaration, a core schema under openapi.includeCoreSchemas, or a contributor that ' +
+      'sorted earlier — read the document before deciding what to remove.'
+  )
+}
+
+/**
  * Assemble the document's static metadata from the resolved options.
  *
  * @param builder - A fresh builder from the lazily loaded peer.
@@ -366,11 +429,17 @@ export async function applyBymaxOpenApi(app: INestApplication): Promise<OpenApiM
   // prefixes the merge does, and asking the application twice would let the two
   // answers differ for no reason.
   const prefixes = readPathPrefixes(app)
-  const document = augmentDocument(generated, resolved, prefixes, readContributions(app, handlers))
+  const { document, discarded } = augmentDocument(
+    generated,
+    resolved,
+    prefixes,
+    readContributions(app, handlers)
+  )
   warnUnsecuredOperations(logger, unsecuredOperations(document, resolved, prefixes))
+  warnDiscardedComponents(logger, discarded)
   swagger.SwaggerModule.setup(options.path, app, document, {
     jsonDocumentUrl: options.jsonPath
   })
   logger.log(`OpenAPI document served at "/${options.path}" (JSON at "/${options.jsonPath}")`)
-  return { mounted: true, path: options.path }
+  return { mounted: true, path: options.path, discarded }
 }
