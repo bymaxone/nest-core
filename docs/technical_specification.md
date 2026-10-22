@@ -357,7 +357,7 @@ export interface IUnexpectedErrorSink {
 
 The collapse in §5.2 rule 3 is what makes the response safe, and it is also what makes the cause unrecoverable: once the reply is written, nothing downstream of the filter can get the thrown value back. The filter therefore resolves `BYMAX_UNEXPECTED_ERROR_SINK` (`@Optional()`, unbound by default) on both registration paths and calls it once per unexpected error, before replying.
 
-Four decisions are load-bearing:
+These decisions are load-bearing:
 
 1. **Unexpected errors only.** An `HttpException` and an exposed `4xx` from the body pipeline never reach the sink; a sink fed client mistakes would bury the server failures it exists to surface.
 2. **A bounded, non-sensitive request description.** `route` is the matched template, or `UNMATCHED_ROUTE` — the label §6 uses — never the raw URL. The report carries no query string, headers or body, because a log outlives the request and is read by more people than its sender. The thrown value itself is passed uncut whatever `exposeInternals` says: that option governs the response, and the sink is application code at the logger's trust level.
