@@ -723,8 +723,13 @@ export function augmentDocument<T extends OpenApiDocumentLike>(
     )
     merged.set(
       'parameters',
-      // Stryker disable next-line StringLiteral: equivalent — the member name only decides whether the schemas-only placeholder carve-out applies, and every name other than "schemas" behaves identically, so an empty string cannot be told apart from "parameters".
-      placeComponentEntries(components['parameters'], 'parameters', CORE_PARAMETERS, keep)
+      placeComponentEntries(
+        components['parameters'],
+        // Stryker disable next-line StringLiteral: equivalent — the member name only decides whether the schemas-only placeholder carve-out applies, and every name other than "schemas" behaves identically, so an empty string cannot be told apart from "parameters".
+        'parameters',
+        CORE_PARAMETERS,
+        keep
+      )
     )
   }
 
