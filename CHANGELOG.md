@@ -25,7 +25,7 @@ and nothing else, and a 500 on a read endpoint left no recoverable cause.
 renamed, so the digit stays at a patch under this project's versioning policy.
 
 **Apply to a derived backend:** nothing is required; with no sink bound the
-filter behaves exactly as before. To record the cause of every 500, bind an
+filter behaves as before. To record each unexpected error's cause, bind an
 `IUnexpectedErrorSink` under `BYMAX_UNEXPECTED_ERROR_SINK` from a `@Global()`
 module of your own, as the README's "Recording the cause of a 500" shows. A
 backend registered through `forRootAsync` with `telemetry.exposeTraceId` on
