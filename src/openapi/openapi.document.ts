@@ -30,7 +30,7 @@ import type {
   ResolvedCoreOptions,
   ResolvedOpenApiOptions
 } from '../core.options'
-import { mergeContributedComponents } from './openapi.components'
+import { mergeContributedComponents, placeComponentEntries } from './openapi.components'
 import type { DiscardedComponent } from './openapi.components'
 import type { OpenApiFragmentObject } from './openapi.contract'
 import type { ResolvedContribution } from './openapi.contribution'
@@ -710,9 +710,21 @@ export function augmentDocument<T extends OpenApiDocumentLike>(
   // take part in the scheme validation below. A `Map` key cannot do that.
   const merged = new Map(Object.entries(components))
 
+  // The catalogue is placed by the rule contributors are, and before them: a
+  // placeholder under a catalogue name is filled by the package's own
+  // definition, so a library offering the same name later meets a declaration
+  // rather than a vacancy. A document that declared the name keeps it, as it
+  // always did, and that is not reported — the catalogue is not a contributor.
   if (openapi.includeCoreSchemas) {
-    merged.set('schemas', mergeAbsent(asRecord(components['schemas']), CORE_SCHEMAS))
-    merged.set('parameters', mergeAbsent(asRecord(components['parameters']), CORE_PARAMETERS))
+    const keep = (): void => undefined
+    merged.set(
+      'schemas',
+      placeComponentEntries(components['schemas'], 'schemas', CORE_SCHEMAS, keep)
+    )
+    merged.set(
+      'parameters',
+      placeComponentEntries(components['parameters'], 'parameters', CORE_PARAMETERS, keep)
+    )
   }
 
   // Contributed only when the scrape endpoint is actually protected, so the

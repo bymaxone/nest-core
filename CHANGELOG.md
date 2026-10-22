@@ -85,6 +85,11 @@ entries.
   wrote — the precedence failure inverted, arriving through the fix for the
   other one.
 
+  This package's own catalogue, under `openapi.includeCoreSchemas`, is placed by
+  the same rule and before any library. A placeholder under a catalogue name is
+  filled with the package's definition, so a library offering that name meets a
+  declaration and is reported rather than outranking the package.
+
 - **`fastify` devDependency floor raised to `^5.12.1`.** Shipped in the tarball's
   manifest only; `dist/` is unchanged by it.
 

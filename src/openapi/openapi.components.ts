@@ -57,8 +57,8 @@ function isEmptyRequired(key: string, value: unknown): boolean {
  * Every member is a key whose loss is not silent: `type` and `properties` are
  * what the contributed schema replaces by definition, and `description` is
  * carried across by the merge. A key that would simply disappear does not
- * belong here — `title` was, and dropping a consumer's title without a word is
- * the same silence this release exists to remove.
+ * belong here: `title` is not carried across, so admitting it would drop a
+ * consumer's title without a word.
  */
 const IGNORABLE_KEYS = new Set(['type', 'properties', 'description'])
 
@@ -120,11 +120,71 @@ function describesNoShape(entry: Readonly<Record<string, unknown>>): boolean {
 }
 
 /**
+ * Place one member's offered entries beneath what that member already holds.
+ *
+ * The existing side wins, because whoever holds a name authored it on purpose
+ * and an offer overwriting it is the worse defect wearing the other sign. What
+ * a name occupied by a placeholder does not do is count as authorship; see
+ * `describesNoShape`. The same rule serves this package's catalogue and every
+ * contributor, so a placeholder yields to the first of them to offer a shape
+ * and the precedence between them is the order of the calls.
+ *
+ * @param existing - The member as the document holds it so far.
+ * @param member - The member's name, such as `schemas` or `parameters`.
+ * @param offered - The entries offered for it; anything but an object offers
+ *   none, so a JavaScript contributor's `null` member cannot stop the boot.
+ * @param onKept - Told the name of every offered entry the existing side kept.
+ * @returns The member with every placeable entry in it.
+ */
+export function placeComponentEntries(
+  existing: unknown,
+  member: string,
+  offered: unknown,
+  onKept: (name: string) => void
+): Readonly<Record<string, unknown>> {
+  // Read through a `Map`. `Object.entries` yields own enumerable keys only, so
+  // an entry named `__proto__` or `constructor` cannot resolve to something the
+  // document never declared — which a computed read on the plain record would do.
+  const next = new Map(Object.entries(asRecord(existing)))
+  for (const [name, contributed] of Object.entries(asRecord(offered))) {
+    const declared = next.get(name)
+    const held = asRecord(declared)
+    // The placeholder carve-out is `schemas` only. It exists because the peer
+    // emits an empty object schema per DTO, and no other member has an analogue
+    // — a parameter carries `name` and `in` rather than `properties`, so a
+    // predicate written for schemas reads every parameter as empty and would
+    // let an offer overwrite one the consumer wrote.
+    const replaceable = member === 'schemas' && describesNoShape(held)
+    if (declared !== undefined && !replaceable) {
+      onKept(name)
+      continue
+    }
+    // A description the document authored survives being filled in: it is the
+    // one part of a placeholder a consumer can have written, and the same
+    // carve-out the response merge makes for the same reason.
+    const described = held['description']
+    next.set(
+      name,
+      described === undefined || described === ''
+        ? contributed
+        : { ...asRecord(contributed), description: described }
+    )
+  }
+  return Object.fromEntries(next)
+}
+
+/**
  * Merge every contributor's components into the document's, in order.
  *
- * @param merged - The document's components, accumulated so far. Mutated in
- *   place: it is the same map the caller goes on to build the document from,
- *   and copying it here would leave two answers to the same question.
+ * Every genuine collision is recorded rather than dropped in silence. A
+ * contributor cannot observe that its entry lost, and a consumer cannot observe
+ * that something was offered, so without this the failure is indistinguishable
+ * from success at both ends.
+ *
+ * @param merged - The document's components, accumulated so far, with this
+ *   package's catalogue already placed. Mutated in place: it is the same map
+ *   the caller goes on to build the document from, and copying it here would
+ *   leave two answers to the same question.
  * @param contributions - The contributions, in the order the collector fixed.
  * @returns Every entry a contributor offered that the document already declared
  *   with a shape of its own.
@@ -133,54 +193,13 @@ export function mergeContributedComponents(
   merged: Map<string, unknown>,
   contributions: readonly ResolvedContribution[]
 ): readonly DiscardedComponent[] {
-  // Contributed components land beneath everything above: the document, this
-  // package's catalogue and the consumer's own configuration all keep winning —
-  // a consumer authored their schema on purpose, and a library overwriting it
-  // is the worse defect wearing the other sign. What a name occupied by a
-  // placeholder does not do is count as authorship; see `describesNoShape`.
-  //
-  // Every genuine collision is recorded rather than dropped in silence. A
-  // contributor cannot observe that its entry lost, and a consumer cannot
-  // observe that something was offered, so without this the failure is
-  // indistinguishable from success at both ends.
   const discarded: DiscardedComponent[] = []
   for (const contribution of contributions) {
     for (const [member, entries] of Object.entries(contribution.components)) {
-      // Read through the same `Map` the writes go into. `Object.entries` yields
-      // own enumerable keys only, so an entry named `__proto__` or `constructor`
-      // cannot resolve to something the document never declared — which a
-      // computed read on the plain record would do.
-      const next = new Map(Object.entries(asRecord(merged.get(member))))
-      // Read totally: a JavaScript contributor can hand over a member that is
-      // `null` or a scalar, and a member with no entries contributes nothing
-      // rather than stopping the boot.
-      for (const [name, contributed] of Object.entries(asRecord(entries))) {
-        const declared = next.get(name)
-        const existing = asRecord(declared)
-        // The placeholder carve-out is `schemas` only. It exists because the
-        // peer emits an empty object schema per DTO, and no other member has an
-        // analogue — a parameter carries `name` and `in` rather than
-        // `properties`, so a predicate written for schemas reads every
-        // parameter as empty and would let a contributor overwrite one the
-        // consumer wrote. That is the failure this whole path exists to avoid,
-        // arriving through the remedy.
-        const replaceable = member === 'schemas' && describesNoShape(existing)
-        if (declared !== undefined && !replaceable) {
-          discarded.push({ contributor: contribution.label, member, name })
-          continue
-        }
-        // A description the document authored survives being filled in: it is
-        // the one part of a placeholder a consumer can have written, and the
-        // same carve-out the response merge makes for the same reason.
-        const described = existing['description']
-        next.set(
-          name,
-          described === undefined || described === ''
-            ? contributed
-            : { ...asRecord(contributed), description: described }
-        )
-      }
-      merged.set(member, Object.fromEntries(next))
+      const placed = placeComponentEntries(merged.get(member), member, entries, (name) => {
+        discarded.push({ contributor: contribution.label, member, name })
+      })
+      merged.set(member, placed)
     }
   }
   return discarded
