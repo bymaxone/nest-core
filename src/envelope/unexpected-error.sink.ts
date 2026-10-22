@@ -31,7 +31,7 @@
  */
 
 /**
- * One unexpected error, as the filter saw it just before collapsing it.
+ * One unexpected error, as the filter saw it when collapsing it.
  *
  * Optional fields are **absent** when unknown, never present holding
  * `undefined`, so a sink that spreads the report into a structured log line

@@ -52,6 +52,7 @@ function buildHarness(params: {
   correlationId?: string
   traceId?: string
   filterCtor?: typeof BymaxExceptionFilter
+  exposeInternals?: boolean
 }): { filter: BymaxExceptionFilter; host: ArgumentsHost; captured: Captured } {
   const captured: Captured = { body: undefined, status: undefined }
   const request = params.request ?? {
@@ -76,7 +77,10 @@ function buildHarness(params: {
   } as unknown as ArgumentsHost
   const FilterCtor = params.filterCtor ?? BymaxExceptionFilter
   const filter = new FilterCtor(
-    normalizeCoreOptions({ telemetry: { enabled: true } }),
+    normalizeCoreOptions({
+      telemetry: { enabled: true },
+      envelope: { exposeInternals: params.exposeInternals ?? false }
+    }),
     { getCorrelationId: () => params.correlationId },
     { httpAdapter } as unknown as HttpAdapterHost,
     {
@@ -332,5 +336,54 @@ describe('BymaxExceptionFilter, unexpected-error sink', () => {
 
     expect(captured.status).toBe(500)
     expect(captured.body?.code).toBe('BYMAX_INTERNAL_ERROR')
+  })
+
+  /**
+   * A sink that mutates the thrown value cannot reach the response.
+   *
+   * The sink receives the original `Error`, and a logging sink may redact or
+   * enrich it in place. With `exposeInternals` on, the envelope carries that
+   * error's message and stack, so they must be read before the sink runs —
+   * otherwise the response would depend on what the sink did.
+   */
+  it('builds the envelope from the error as thrown, before the sink can change it', () => {
+    const redacting: IUnexpectedErrorSink = {
+      record: ({ error }): void => {
+        if (error instanceof Error) {
+          error.message = 'redacted by the sink'
+          error.stack = 'redacted stack'
+        }
+      }
+    }
+    const { filter, host, captured } = buildHarness({ sink: redacting, exposeInternals: true })
+
+    filter.catch(new Error('original failure'), host)
+
+    expect(captured.body?.details).toMatchObject({ message: 'original failure' })
+    expect(JSON.stringify(captured.body)).not.toContain('redacted')
+  })
+
+  /**
+   * The protected seam is held to the same rule as the sink.
+   *
+   * A subclass overriding `onUnexpectedError` receives the same mutable value;
+   * redacting it there must not reach the response either.
+   */
+  it('builds the envelope before an onUnexpectedError override can change the error', () => {
+    class RedactingFilter extends BymaxExceptionFilter {
+      protected override onUnexpectedError(error: unknown): void {
+        if (error instanceof Error) {
+          error.message = 'redacted by the seam'
+        }
+      }
+    }
+    const { filter, host, captured } = buildHarness({
+      filterCtor: RedactingFilter,
+      exposeInternals: true
+    })
+
+    filter.catch(new Error('original failure'), host)
+
+    expect(captured.body?.details).toMatchObject({ message: 'original failure' })
   })
 })

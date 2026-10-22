@@ -395,8 +395,8 @@ export class BymaxExceptionFilter implements ExceptionFilter {
 
   /**
    * Select the mapping rule for the exception and build its envelope. An
-   * unknown error is handed to the observability seam before it collapses, so
-   * an integration can record the original error with the request context.
+   * unknown error is handed to the observability seam once its envelope is
+   * built, so an integration can record the original error with the context.
    *
    * @param exception - The error that escaped the handler.
    * @param context - The neutral request context.
@@ -423,6 +423,11 @@ export class BymaxExceptionFilter implements ExceptionFilter {
         context
       )
     }
+    // Built first: the hooks below receive the original, mutable value, and
+    // with `exposeInternals` on the envelope reads its message and stack — so a
+    // hook that redacts or enriches the error in place must find the response
+    // already formed.
+    const envelope = this.mapUnknown(exception, context)
     try {
       this.onUnexpectedError(exception, context)
     } catch {
@@ -430,7 +435,7 @@ export class BymaxExceptionFilter implements ExceptionFilter {
       // override is swallowed so the envelope is still delivered.
     }
     this.reportUnexpected(exception, context, request)
-    return this.mapUnknown(exception, context)
+    return envelope
   }
 
   /**
@@ -562,7 +567,7 @@ export class BymaxExceptionFilter implements ExceptionFilter {
 
   /**
    * Observability seam invoked for every unexpected (non-`HttpException`) error
-   * before it collapses to the generic 500. The base implementation is a no-op:
+   * collapsed to the generic 500. The base implementation is a no-op:
    * this library owns no logger. An integration (for example
    * `@bymax-one/nest-logger`) subclasses the filter and overrides this to record
    * the original error with the current request context and correlation id.

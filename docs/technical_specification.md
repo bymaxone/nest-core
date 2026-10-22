@@ -326,7 +326,7 @@ Every error that leaves the application has this exact shape. The contract is ve
 
 1. **`HttpException` and subclasses.** Status and message are taken from the exception. If the exception response object carries a `code` property, it is passed through; otherwise the code is derived from the status (§10).
 2. **Validation errors.** Exceptions carrying an array of constraint violations (the `BadRequestException` shape produced by validation pipes) are translated into `code: BYMAX_VALIDATION_FAILED` with one structured entry per violation in `details`.
-3. **Unknown errors.** Anything else becomes `statusCode: 500`, `code: BYMAX_INTERNAL_ERROR`, and the fixed message `"Internal server error"`. The original error is never serialized into the response unless `envelope.exposeInternals` is true, which is intended for development only. Before collapsing it, the filter hands the original error to the bound unexpected-error sink (§5.4) and to the protected `onUnexpectedError` seam.
+3. **Unknown errors.** Anything else becomes `statusCode: 500`, `code: BYMAX_INTERNAL_ERROR`, and the fixed message `"Internal server error"`. The original error is never serialized into the response unless `envelope.exposeInternals` is true, which is intended for development only. Once the envelope is built, the filter hands the original error to the protected `onUnexpectedError` seam and the bound unexpected-error sink (§5.4).
 
 ### 5.3 Correlation Id Integration
 
