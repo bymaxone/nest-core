@@ -713,8 +713,8 @@ export function augmentDocument<T extends OpenApiDocumentLike>(
   // The catalogue is placed by the rule contributors are, and before them: a
   // placeholder under a catalogue name is filled by the package's own
   // definition, so a library offering the same name later meets a declaration
-  // rather than a vacancy. A document that declared the name keeps it, as it
-  // always did, and that is not reported — the catalogue is not a contributor.
+  // rather than a vacancy. A document that declared the name keeps it, and that
+  // is not reported — the catalogue is not a contributor.
   if (openapi.includeCoreSchemas) {
     const keep = (): void => undefined
     merged.set(
@@ -723,6 +723,7 @@ export function augmentDocument<T extends OpenApiDocumentLike>(
     )
     merged.set(
       'parameters',
+      // Stryker disable next-line StringLiteral: equivalent — the member name only decides whether the schemas-only placeholder carve-out applies, and every name other than "schemas" behaves identically, so an empty string cannot be told apart from "parameters".
       placeComponentEntries(components['parameters'], 'parameters', CORE_PARAMETERS, keep)
     )
   }
