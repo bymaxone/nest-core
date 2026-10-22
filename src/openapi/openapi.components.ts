@@ -100,10 +100,15 @@ function describesNoShape(entry: Readonly<Record<string, unknown>>): boolean {
   // emits, which always writes `properties` explicitly. Reading an absent key
   // as an empty one would replace both — and, because the merge treats a
   // placeholder as vacant, replace them without reporting it.
-  if (!Object.hasOwn(entry, 'properties')) {
+  //
+  // And it must be an object: `asRecord` reads `null`, an array or a scalar as
+  // empty, which would let a malformed schema the document authored pass for
+  // the placeholder and be overwritten unreported.
+  const properties = entry['properties']
+  if (!Object.hasOwn(entry, 'properties') || asRecord(properties) !== properties) {
     return false
   }
-  if (Object.keys(asRecord(entry['properties'])).length > 0) {
+  if (Object.keys(asRecord(properties)).length > 0) {
     return false
   }
   // Walks the entry's own keys rather than reading the entry at each keyword: a
@@ -146,7 +151,10 @@ export function mergeContributedComponents(
       // cannot resolve to something the document never declared — which a
       // computed read on the plain record would do.
       const next = new Map(Object.entries(asRecord(merged.get(member))))
-      for (const [name, contributed] of Object.entries(entries)) {
+      // Read totally: a JavaScript contributor can hand over a member that is
+      // `null` or a scalar, and a member with no entries contributes nothing
+      // rather than stopping the boot.
+      for (const [name, contributed] of Object.entries(asRecord(entries))) {
         const declared = next.get(name)
         const existing = asRecord(declared)
         // The placeholder carve-out is `schemas` only. It exists because the
@@ -169,7 +177,7 @@ export function mergeContributedComponents(
           name,
           described === undefined || described === ''
             ? contributed
-            : { ...contributed, description: described }
+            : { ...asRecord(contributed), description: described }
         )
       }
       merged.set(member, Object.fromEntries(next))

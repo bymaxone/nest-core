@@ -703,6 +703,72 @@ describe('augmentDocument — library contributions', () => {
   })
 
   /**
+   * A `properties` that is not an object is not an empty one.
+   *
+   * The placeholder is `properties: {}`. A `null`, an array or a scalar there
+   * is a malformed schema the document authored, not the peer's placeholder,
+   * and unmodelled input counts as a declaration — so it is kept and reported
+   * rather than overwritten in silence.
+   */
+  it.each([
+    ['null', null],
+    ['an array', []],
+    ['a string', 'none']
+  ])('keeps a schema whose properties is %s', (_label, properties) => {
+    const mine = { type: 'object', properties }
+    const result = augmentDocument(
+      { ...withOperation('AuthController_login'), components: { schemas: { Shape: mine } } },
+      options(),
+      [''],
+      [
+        contribution(
+          'AuthOpenApi',
+          {},
+          { schemas: { Shape: { type: 'object', properties: { id: { type: 'string' } } } } }
+        )
+      ]
+    )
+
+    expect(components(result.document, 'schemas')['Shape']).toBe(mine)
+    expect(result.discarded).toEqual([
+      { contributor: 'AuthOpenApi', member: 'schemas', name: 'Shape' }
+    ])
+  })
+
+  /**
+   * A contributed member that holds no entries contributes nothing.
+   *
+   * A JavaScript contributor, or one assembling its fragment from JSON, can
+   * hand over a member whose value is `null` or a scalar. That member carries
+   * no entries; it must not stop the boot, and the members beside it still
+   * merge.
+   */
+  it('ignores a contributed member that is not an object and merges the rest', () => {
+    const theirs = { type: 'object', properties: { id: { type: 'string' } } }
+    const malformed: Record<string, Record<string, Record<string, unknown>>> = JSON.parse(
+      '{"parameters": null, "headers": 5, "responses": []}'
+    )
+    const result = augmentDocument(
+      withOperation('AuthController_login'),
+      options(),
+      [''],
+      [contribution('AuthOpenApi', {}, { ...malformed, schemas: { Session: theirs } })]
+    )
+    const wellFormed = augmentDocument(
+      withOperation('AuthController_login'),
+      options(),
+      [''],
+      [contribution('AuthOpenApi', {}, { schemas: { Session: theirs } })]
+    )
+
+    expect(components(result.document, 'schemas')['Session']).toEqual(theirs)
+    expect(components(result.document, 'parameters')).toEqual(
+      components(wellFormed.document, 'parameters')
+    )
+    expect(result.discarded).toEqual([])
+  })
+
+  /**
    * The placeholder rule belongs to `schemas` alone.
    *
    * An entry in another member that happens to look exactly like the peer's
