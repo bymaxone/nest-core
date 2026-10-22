@@ -59,7 +59,7 @@ export interface UnexpectedErrorReport {
 }
 
 /**
- * Receives the original error behind every `500 BYMAX_INTERNAL_ERROR`.
+ * Receives the cause of each collapsed `500 BYMAX_INTERNAL_ERROR`.
  *
  * Bind an implementation under `BYMAX_UNEXPECTED_ERROR_SINK` from a module of
  * your own marked `@Global()`. Nothing is bound by default, and with no sink the
