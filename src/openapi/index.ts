@@ -25,7 +25,7 @@ export type { OpenApiMountOutcome, OpenApiSkipReason } from './openapi.bootstrap
 // not name its element — no function could take one, and no variable could be
 // declared to hold one. Exporting the shape of a reported outcome does not
 // export the rules that produced it.
-export type { DiscardedComponent } from './openapi.document'
+export type { DiscardedComponent } from './openapi.components'
 
 export {
   BymaxOpenApiContributor,

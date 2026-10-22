@@ -442,9 +442,8 @@ describe('augmentDocument — library contributions', () => {
    * A parameter carries `name` and `in` rather than `properties`, so a
    * schema-shaped emptiness test reads every one of them as a placeholder and
    * lets a contributor overwrite one the consumer wrote — the precedence
-   * failure inverted, arriving through the fix for the other one. Caught by the
-   * multi-member test above during development, and pinned here so a later
-   * widening of the carve-out fails loudly rather than silently.
+   * failure inverted, arriving through the fix for the other one. Widening the
+   * carve-out past `schemas` fails here rather than in a consumer's document.
    */
   it('never replaces a non-schema member that looks empty to a schema test', () => {
     const mine = { name: 'page', in: 'query' }
@@ -474,17 +473,19 @@ describe('augmentDocument — library contributions', () => {
     ])
   })
   /**
-   * A schema with no `type` at all is still a placeholder.
+   * A placeholder with no `type` is still a placeholder.
    *
-   * The peer emits one for a DTO it cannot introspect, and a test that only
-   * ever supplies `type: 'object'` leaves the `type !== undefined` half of the
-   * guard unexercised — the schema would then be read as typed-and-not-object
-   * and kept, discarding the contribution.
+   * A test that only ever supplies `type: 'object'` leaves the
+   * `type !== undefined` half of the guard unexercised — the schema would then
+   * read as typed-and-not-object and be kept, discarding the contribution.
    */
-  it('fills a schema that declares neither type nor properties', () => {
+  it('fills a placeholder that omits its type', () => {
     const theirs = { type: 'object', properties: { email: { type: 'string' } } }
     const result = augmentDocument(
-      { ...withOperation('AuthController_login'), components: { schemas: { LoginDto: {} } } },
+      {
+        ...withOperation('AuthController_login'),
+        components: { schemas: { LoginDto: { properties: {} } } }
+      },
       options(),
       [''],
       [contribution('AuthOpenApi', {}, { schemas: { LoginDto: theirs } })]
@@ -492,6 +493,39 @@ describe('augmentDocument — library contributions', () => {
 
     expect(components(result.document, 'schemas')['LoginDto']).toEqual(theirs)
     expect(result.discarded).toEqual([])
+  })
+
+  /**
+   * An unconstrained object or an empty schema is a deliberate declaration.
+   *
+   * `{"type":"object"}` is the OpenAPI idiom for "any JSON object" and `{}` for
+   * "any value"; the peer never emits either, because it always writes
+   * `properties` explicitly. Reading an absent `properties` as an empty one
+   * would replace both — and, since the merge treats a placeholder as vacant,
+   * replace them without reporting it, which is the observability gap this
+   * release closes running in the other direction.
+   */
+  it.each([
+    ['an unconstrained object', { type: 'object' }],
+    ['an empty schema', {}]
+  ])('keeps %s and reports the discard', (_label, mine) => {
+    const result = augmentDocument(
+      { ...withOperation('AuthController_login'), components: { schemas: { Metadata: mine } } },
+      options(),
+      [''],
+      [
+        contribution(
+          'AuthOpenApi',
+          {},
+          { schemas: { Metadata: { type: 'object', properties: { id: { type: 'string' } } } } }
+        )
+      ]
+    )
+
+    expect(components(result.document, 'schemas')['Metadata']).toBe(mine)
+    expect(result.discarded).toEqual([
+      { contributor: 'AuthOpenApi', member: 'schemas', name: 'Metadata' }
+    ])
   })
 
   /**
@@ -581,5 +615,83 @@ describe('augmentDocument — library contributions', () => {
       properties: {},
       description: 'Theirs'
     })
+  })
+  /**
+   * A constraint without properties is still a contract.
+   *
+   * `required`, `minProperties`, `not` and `const` each describe validation an
+   * application authored, while declaring no `properties` at all. Enumerating
+   * the keywords that constrain is a list that goes stale as the vocabulary
+   * grows, so the predicate allows only keys that describe nothing and treats
+   * everything else as a declaration — including keywords it has never heard of.
+   */
+  it.each([
+    ['required', { type: 'object', required: ['id'] }],
+    ['minProperties', { type: 'object', minProperties: 1 }],
+    ['maxProperties', { type: 'object', maxProperties: 4 }],
+    ['not', { type: 'object', not: { type: 'string' } }],
+    ['const', { type: 'object', const: { id: 'x' } }],
+    ['patternProperties', { type: 'object', patternProperties: { '^x-': { type: 'string' } } }],
+    ['a keyword this predicate does not model', { type: 'object', unevaluatedProperties: false }]
+  ])('keeps a schema constrained only by %s', (_keyword, mine) => {
+    const result = augmentDocument(
+      { ...withOperation('AuthController_login'), components: { schemas: { Shape: mine } } },
+      options(),
+      [''],
+      [contribution('AuthOpenApi', {}, { schemas: { Shape: { type: 'object' } } })]
+    )
+
+    expect(components(result.document, 'schemas')['Shape']).toBe(mine)
+    expect(result.discarded).toHaveLength(1)
+  })
+
+  /**
+   * An empty `required` list requires nothing, so it is still a placeholder.
+   *
+   * The peer emits it for a DTO whose members are all optional. Reading the
+   * key's mere presence as a constraint would put every such schema back in the
+   * case the carve-out exists to fix.
+   */
+  it('fills a placeholder whose required list is empty', () => {
+    const theirs = { type: 'object', properties: { email: { type: 'string' } } }
+    const result = augmentDocument(
+      {
+        ...withOperation('AuthController_login'),
+        components: { schemas: { LoginDto: { type: 'object', properties: {}, required: [] } } }
+      },
+      options(),
+      [''],
+      [contribution('AuthOpenApi', {}, { schemas: { LoginDto: theirs } })]
+    )
+
+    expect(components(result.document, 'schemas')['LoginDto']).toEqual(theirs)
+    expect(result.discarded).toEqual([])
+  })
+
+  /**
+   * A key the merge would drop in silence is not ignorable.
+   *
+   * `description` is carried across, so an empty schema carrying one is still
+   * fillable. `title` is not carried, so treating it as ignorable would delete
+   * a consumer's title with no record — the same silence this release removes,
+   * reintroduced by the predicate that removes it.
+   */
+  it('keeps a schema whose only content is a title', () => {
+    const mine = { type: 'object', properties: {}, title: 'Login' }
+    const result = augmentDocument(
+      { ...withOperation('AuthController_login'), components: { schemas: { LoginDto: mine } } },
+      options(),
+      [''],
+      [
+        contribution(
+          'AuthOpenApi',
+          {},
+          { schemas: { LoginDto: { type: 'object', properties: { email: { type: 'string' } } } } }
+        )
+      ]
+    )
+
+    expect(components(result.document, 'schemas')['LoginDto']).toBe(mine)
+    expect(result.discarded).toHaveLength(1)
   })
 })

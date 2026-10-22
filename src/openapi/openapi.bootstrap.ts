@@ -34,10 +34,10 @@ import type * as Swagger from '@nestjs/swagger'
 import type { ResolvedCoreOptions, ResolvedOpenApiOptions } from '../core.options'
 import { BYMAX_CORE_OPTIONS } from '../core.tokens'
 import { isProductionRuntime, runtimeEnvironmentName } from '../runtime.environment'
+import type { DiscardedComponent } from './openapi.components'
 import { collectContributions, createHandlerIdMap } from './openapi.contribution'
 import type { HandlerIdMap, ResolvedContribution } from './openapi.contribution'
 import { augmentDocument, unsecuredOperations } from './openapi.document'
-import type { DiscardedComponent } from './openapi.document'
 import { loadSwagger } from './openapi.loader'
 
 /** Why the document was not mounted. */
@@ -56,14 +56,19 @@ export interface OpenApiMountOutcome {
   /** The route the UI was mounted at. Present only when `mounted` is `true`. */
   path?: string
   /**
-   * Component entries a contributor offered that the document already declared
-   * with a shape of its own. Present only when `mounted` is `true`; empty when
-   * every contribution was placed.
+   * Component entries a contributor offered that the served document already
+   * defined with a shape of its own. Present only when `mounted` is `true`;
+   * empty when every contribution was placed.
    *
-   * The merge prefers what the document already carries, so a collision is not
-   * an error and does not stop the boot. It is reported because it is otherwise
-   * unobservable from either side: the contributing library cannot tell its
-   * entry was dropped, and the application cannot tell one was offered.
+   * The merge prefers whatever holds the name already, so a collision is not an
+   * error and does not stop the boot. The holder is usually the application's
+   * own declaration, but it may be a core schema this package contributes under
+   * `openapi.includeCoreSchemas` or an earlier contributor's entry — the report
+   * names what was dropped and by whom, not who owns the winning definition.
+   *
+   * It is reported because it is otherwise unobservable from either side: the
+   * contributing library cannot tell its entry was dropped, and the application
+   * cannot tell one was offered.
    */
   discarded?: readonly DiscardedComponent[]
 }
@@ -324,12 +329,18 @@ function warnDiscardedComponents(logger: Logger, discarded: readonly DiscardedCo
   // Consequence first: what a reader needs is that the served document is not
   // the one the library described, which is why a generated client can disagree
   // with the library's own types.
+  //
+  // The line names what was dropped and by whom, never who owns the definition
+  // that won. The merge runs the document, then this package's catalogue, then
+  // the consumer's configuration, then contributors in label order — so "remove
+  // your local definition" is advice that does not always have a referent.
   logger.warn(
-    `the OpenAPI document keeps its own definition of ${discarded.length} component entry(ies) a ` +
+    `the served OpenAPI document already defines ${discarded.length} component entry(ies) a ` +
       `library also contributes: ${listed}${elided > 0 ? `, and ${elided} more` : ''}. The ` +
-      'contributed version is not served, so a client generated from this document describes those ' +
-      "names as the application declares them. Remove the local definition to take the library's, " +
-      'or keep it deliberately.'
+      'contributed version is not served, so a client generated from this document will not ' +
+      "match that library's own types. What holds the name may be the application's own " +
+      'declaration, a core schema under openapi.includeCoreSchemas, or a contributor that ' +
+      'sorted earlier — read the document before deciding what to remove.'
   )
 }
 

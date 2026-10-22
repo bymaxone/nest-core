@@ -35,6 +35,7 @@ import type { IOpenApiContributor, OpenApiFragment } from './openapi.contract'
 import { BymaxCoreModule } from '../core.module'
 import type { BymaxCoreModuleOptions } from '../core.options'
 import { applyBymaxOpenApi } from './openapi.bootstrap'
+import { bootApp, ExampleController, logged, LOG_CONTEXT } from './__tests__/bootstrap.harness'
 
 /** Every operation id in a document, in document order. */
 function operationIdsOf(document: unknown): readonly string[] {
@@ -46,9 +47,6 @@ function operationIdsOf(document: unknown): readonly string[] {
       .filter((id): id is string => typeof id === 'string')
   )
 }
-
-/** The context every log line this helper writes must carry. */
-const LOG_CONTEXT = 'BymaxCoreModule'
 
 /** The exact warning emitted when production refuses a requested document. */
 const PRODUCTION_WARNING =
@@ -63,79 +61,6 @@ const UNSECURED_WARNING =
   'default than a public API. Set openapi.security, or state the intent per operation with an ' +
   'explicit [] in openapi.operationSecurity.'
 
-/** The exact warning emitted for a single contributed entry the document keeps. */
-const DISCARDED_WARNING =
-  'the OpenAPI document keeps its own definition of 1 component entry(ies) a library also ' +
-  'contributes: CollidingOpenApi -> securitySchemes.cookieAuth. The contributed version is not ' +
-  'served, so a client generated from this document describes those names as the application ' +
-  "declares them. Remove the local definition to take the library's, or keep it deliberately."
-
-/** A library contributing one scheme under a name the application already declares. */
-@BymaxOpenApiContributor()
-class CollidingOpenApi implements IOpenApiContributor {
-  /** Contributes a scheme whose name the consumer's own options also supply. */
-  contributeOpenApi(): OpenApiFragment {
-    return {
-      contractVersion: BYMAX_OPENAPI_CONTRACT_VERSION,
-      components: { securitySchemes: { cookieAuth: { type: 'http', scheme: 'bearer' } } }
-    }
-  }
-}
-
-/** A library colliding on more names than the warning lists, to prove the elision. */
-@BymaxOpenApiContributor()
-class ManyCollisionsOpenApi implements IOpenApiContributor {
-  /** Contributes eleven schemes, every one of them already declared. */
-  contributeOpenApi(): OpenApiFragment {
-    return {
-      contractVersion: BYMAX_OPENAPI_CONTRACT_VERSION,
-      components: {
-        securitySchemes: Object.fromEntries(
-          Array.from({ length: 11 }, (_unused, index) => [
-            `scheme${index}`,
-            { type: 'http', scheme: 'bearer' }
-          ])
-        )
-      }
-    }
-  }
-}
-
-/** A library colliding on exactly the number of names the warning lists. */
-@BymaxOpenApiContributor()
-class TenCollisionsOpenApi implements IOpenApiContributor {
-  /** Contributes ten schemes, every one of them already declared. */
-  contributeOpenApi(): OpenApiFragment {
-    return {
-      contractVersion: BYMAX_OPENAPI_CONTRACT_VERSION,
-      components: {
-        securitySchemes: Object.fromEntries(
-          Array.from({ length: 10 }, (_unused, index) => [
-            `scheme${index}`,
-            { type: 'http', scheme: 'bearer' }
-          ])
-        )
-      }
-    }
-  }
-}
-
-/** The ten schemes `TenCollisionsOpenApi` collides with, as the consumer declares them. */
-const TEN_SCHEMES = Object.fromEntries(
-  Array.from({ length: 10 }, (_unused, index) => [
-    `scheme${index}`,
-    { type: 'apiKey', in: 'cookie', name: `c${index}` }
-  ])
-)
-
-/** The eleven schemes `ManyCollisionsOpenApi` collides with, as the consumer declares them. */
-const ELEVEN_SCHEMES = Object.fromEntries(
-  Array.from({ length: 11 }, (_unused, index) => [
-    `scheme${index}`,
-    { type: 'apiKey', in: 'cookie', name: `c${index}` }
-  ])
-)
-
 /** The exact guidance thrown when the core options cannot be resolved. */
 const UNRESOLVED_GUIDANCE =
   '[BymaxCoreModule] applyBymaxOpenApi could not resolve BYMAX_CORE_OPTIONS from the application. ' +
@@ -145,22 +70,6 @@ const UNRESOLVED_GUIDANCE =
 /** A module registering nothing at all, used to prove the unresolved-options path. */
 @Module({})
 class BareModule {}
-
-/** A consumer's controller: one route described, one left as generated. */
-@Controller()
-class ExampleController {
-  /** Stands in for a handler a consumer marks public. */
-  @Post('auth/login')
-  login(): string {
-    return 'ok'
-  }
-
-  /** Stands in for the guarded route that loses its requirement. */
-  @Get('examples')
-  list(): string {
-    return 'ok'
-  }
-}
 
 /**
  * A controller exposing `count` bare GET routes.
@@ -196,38 +105,11 @@ function bulkController(count: number): Type<unknown> {
   return BulkController
 }
 
-/** Captures what Nest's logger received, message and context alike. */
-const logged: LoggerService = {
-  log: jest.fn(),
-  error: jest.fn(),
-  warn: jest.fn(),
-  debug: jest.fn(),
-  verbose: jest.fn()
-}
-
 /**
  * Build a real application registering `BymaxCoreModule`, deliberately left
  * uninitialized: the helper under test must run before initialization, which is
  * exactly what a real bootstrap does between `NestFactory.create` and `listen`.
  */
-async function bootApp(
-  options: BymaxCoreModuleOptions,
-  controllers: readonly Type<unknown>[] = [],
-  providers: readonly Provider[] = []
-): Promise<INestApplication> {
-  const moduleRef = await Test.createTestingModule({
-    imports: [BymaxCoreModule.forRoot(options)],
-    controllers: [...controllers],
-    providers: [...providers]
-  }).compile()
-  const app = moduleRef.createNestApplication()
-  // Installed here, not in `beforeEach`: creating the application applies its own
-  // logger options over Nest's global logger, so an override registered earlier
-  // is discarded and every assertion on a log line would silently see nothing.
-  Logger.overrideLogger(logged)
-  return app
-}
-
 describe('applyBymaxOpenApi', () => {
   const originalNodeEnv = process.env['NODE_ENV']
   let app: INestApplication | undefined
@@ -775,177 +657,5 @@ describe('applyBymaxOpenApi', () => {
     expect(message).toContain('will send no credentials to 10 operation(s)')
     expect(message).toContain('GET /bulk/r10. They state no security requirement')
     expect(message).not.toContain(', and 0 more')
-  })
-  /**
-   * A contributed entry the document already declares is named on the way up.
-   *
-   * Silent by construction on both sides, which is what makes the log line the
-   * only surface that can speak: the served document validates and looks
-   * exactly as it would had nothing been offered, the contributing library gets
-   * no signal that its entry lost, and the application gets none that one was
-   * offered. A consumer's own document test stays green either way.
-   */
-  it('warns about a contributed component the document keeps its own version of', async () => {
-    process.env['NODE_ENV'] = 'test'
-    app = await bootApp(
-      {
-        openapi: {
-          enabled: true,
-          securitySchemes: { cookieAuth: { type: 'apiKey', in: 'cookie', name: 'access_token' } }
-        }
-      },
-      [ExampleController],
-      [CollidingOpenApi]
-    )
-
-    const outcome = await applyBymaxOpenApi(app)
-
-    // Asserted whole: the consequence leads, because what makes someone act is
-    // that a generated client will disagree with the library's own types, and
-    // the last clause names both ways out rather than only the fix.
-    expect(logged.warn).toHaveBeenCalledWith(DISCARDED_WARNING, LOG_CONTEXT)
-    expect(outcome.discarded).toEqual([
-      { contributor: 'CollidingOpenApi', member: 'securitySchemes', name: 'cookieAuth' }
-    ])
-  })
-
-  /**
-   * The served document is unchanged by the collision, which is the point.
-   *
-   * Read from the response rather than from the outcome object: a test that
-   * asserts only what this package reports would pass even if the merge had
-   * served the contributed entry after all.
-   */
-  it('serves the application definition of a contested component', async () => {
-    process.env['NODE_ENV'] = 'test'
-    app = await bootApp(
-      {
-        openapi: {
-          enabled: true,
-          securitySchemes: { cookieAuth: { type: 'apiKey', in: 'cookie', name: 'access_token' } }
-        }
-      },
-      [ExampleController],
-      [CollidingOpenApi]
-    )
-    await applyBymaxOpenApi(app)
-    await app.init()
-
-    const response = await request(app.getHttpServer()).get('/docs-json')
-
-    expect(response.body.components.securitySchemes.cookieAuth).toEqual({
-      type: 'apiKey',
-      in: 'cookie',
-      name: 'access_token'
-    })
-  })
-
-  /**
-   * Past the listing cap the line counts the rest instead of printing it.
-   *
-   * A library contributing a schema per DTO turns one collision into a hundred,
-   * and the version that prints them all is the one an operator learns to skip
-   * — which would cost the neighbouring warning its audience too.
-   */
-  it('elides the collisions it does not list', async () => {
-    process.env['NODE_ENV'] = 'test'
-    app = await bootApp(
-      { openapi: { enabled: true, securitySchemes: ELEVEN_SCHEMES } },
-      [ExampleController],
-      [ManyCollisionsOpenApi]
-    )
-
-    const outcome = await applyBymaxOpenApi(app)
-
-    expect(outcome.discarded).toHaveLength(11)
-    expect(logged.warn).toHaveBeenCalledWith(
-      expect.stringContaining('11 component entry(ies)') as unknown as string,
-      LOG_CONTEXT
-    )
-    expect(logged.warn).toHaveBeenCalledWith(
-      expect.stringContaining(', and 1 more') as unknown as string,
-      LOG_CONTEXT
-    )
-    // The count is not enough on its own: a line that listed all eleven and
-    // then said "and 1 more" would satisfy both assertions above.
-    expect(logged.warn).not.toHaveBeenCalledWith(
-      expect.stringContaining('scheme10') as unknown as string,
-      LOG_CONTEXT
-    )
-  })
-
-  /**
-   * An application whose contributions all land boots without the line.
-   *
-   * The warning is only worth having if it stays rare; fired on every boot it
-   * trains people to skip warnings, including this one.
-   */
-  it('stays silent when every contributed component is placed', async () => {
-    process.env['NODE_ENV'] = 'test'
-    app = await bootApp({ openapi: { enabled: true } }, [ExampleController], [CollidingOpenApi])
-
-    const outcome = await applyBymaxOpenApi(app)
-
-    expect(outcome.discarded).toEqual([])
-    expect(logged.warn).not.toHaveBeenCalledWith(
-      expect.stringContaining('component entry(ies)') as unknown as string,
-      LOG_CONTEXT
-    )
-  })
-  /**
-   * Two collisions are listed as a readable series, not run together.
-   *
-   * A single-entry assertion never exercises the separator, so the line could
-   * join them with nothing and still satisfy every other test here.
-   */
-  it('separates the collisions it lists', async () => {
-    process.env['NODE_ENV'] = 'test'
-    app = await bootApp(
-      {
-        openapi: {
-          enabled: true,
-          securitySchemes: {
-            cookieAuth: { type: 'apiKey', in: 'cookie', name: 'access_token' },
-            scheme0: { type: 'apiKey', in: 'cookie', name: 'c0' }
-          }
-        }
-      },
-      [ExampleController],
-      [CollidingOpenApi, TenCollisionsOpenApi]
-    )
-
-    await applyBymaxOpenApi(app)
-
-    expect(logged.warn).toHaveBeenCalledWith(
-      expect.stringContaining(
-        'CollidingOpenApi -> securitySchemes.cookieAuth, TenCollisionsOpenApi -> ' +
-          'securitySchemes.scheme0'
-      ) as unknown as string,
-      LOG_CONTEXT
-    )
-  })
-
-  /**
-   * Exactly at the cap the line lists everything and counts nothing.
-   *
-   * The boundary is where an off-by-one hides: a rule that elided at `>= 0`
-   * rather than `> 0` appends "and 0 more" here and nowhere else, and every
-   * test either side of the cap stays green.
-   */
-  it('counts no remainder when the collisions exactly fill the listing', async () => {
-    process.env['NODE_ENV'] = 'test'
-    app = await bootApp(
-      { openapi: { enabled: true, securitySchemes: TEN_SCHEMES } },
-      [ExampleController],
-      [TenCollisionsOpenApi]
-    )
-
-    const outcome = await applyBymaxOpenApi(app)
-
-    expect(outcome.discarded).toHaveLength(10)
-    expect(logged.warn).not.toHaveBeenCalledWith(
-      expect.stringContaining('more') as unknown as string,
-      LOG_CONTEXT
-    )
   })
 })
