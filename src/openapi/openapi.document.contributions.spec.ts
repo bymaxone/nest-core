@@ -669,6 +669,67 @@ describe('augmentDocument — library contributions', () => {
   })
 
   /**
+   * The predicate's later checks hold on an entry that passes its early ones.
+   *
+   * Every case carries an empty `properties`, which is what the peer emits and
+   * what gets an entry past the presence check — so these reach the `type` and
+   * `required` tests that a schema without `properties` never does. A
+   * non-empty `required` is a constraint; an empty array under any other key is
+   * a keyword the predicate does not know, not an empty `required`; and a
+   * primitive `type` is a declaration whatever else it carries.
+   */
+  it.each([
+    ['a non-empty required list', { type: 'object', properties: {}, required: ['id'] }],
+    ['an empty array under another keyword', { type: 'object', properties: {}, enum: [] }],
+    ['a primitive type', { type: 'string', properties: {} }]
+  ])('keeps a placeholder-shaped schema carrying %s', (_label, mine) => {
+    const result = augmentDocument(
+      { ...withOperation('AuthController_login'), components: { schemas: { Shape: mine } } },
+      options(),
+      [''],
+      [
+        contribution(
+          'AuthOpenApi',
+          {},
+          { schemas: { Shape: { type: 'object', properties: { id: { type: 'string' } } } } }
+        )
+      ]
+    )
+
+    expect(components(result.document, 'schemas')['Shape']).toBe(mine)
+    expect(result.discarded).toEqual([
+      { contributor: 'AuthOpenApi', member: 'schemas', name: 'Shape' }
+    ])
+  })
+
+  /**
+   * The placeholder rule belongs to `schemas` alone.
+   *
+   * An entry in another member that happens to look exactly like the peer's
+   * placeholder is still that member's own declaration, and is kept.
+   */
+  it('keeps a placeholder-shaped entry outside schemas', () => {
+    const mine = { type: 'object', properties: {} }
+    const result = augmentDocument(
+      { ...withOperation('AuthController_login'), components: { requestBodies: { Login: mine } } },
+      options(),
+      [''],
+      [
+        contribution(
+          'AuthOpenApi',
+          {},
+          { requestBodies: { Login: { content: { 'application/json': { schema: {} } } } } }
+        )
+      ]
+    )
+
+    expect(components(result.document, 'requestBodies')['Login']).toBe(mine)
+    expect(result.discarded).toEqual([
+      { contributor: 'AuthOpenApi', member: 'requestBodies', name: 'Login' }
+    ])
+  })
+
+  /**
    * A key the merge would drop in silence is not ignorable.
    *
    * `description` is carried across, so an empty schema carrying one is still
