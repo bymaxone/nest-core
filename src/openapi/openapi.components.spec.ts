@@ -215,9 +215,9 @@ describe('augmentDocument — component placement', () => {
    *
    * A parameter carries `name` and `in` rather than `properties`, so a
    * schema-shaped emptiness test reads every one of them as a placeholder and
-   * lets a contributor overwrite one the consumer wrote — the precedence
-   * failure inverted, arriving through the fix for the other one. Widening the
-   * carve-out past `schemas` fails here rather than in a consumer's document.
+   * lets a contributor overwrite one the consumer wrote, inverting the
+   * existing-side precedence every other member keeps. Widening the carve-out
+   * past `schemas` fails here rather than in a consumer's document.
    */
   it('never replaces a non-schema member that looks empty to a schema test', () => {
     const mine = { name: 'page', in: 'query' }

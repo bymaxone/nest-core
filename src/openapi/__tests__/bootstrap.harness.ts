@@ -3,9 +3,9 @@
  * logger, a controller with one described and one bare route, and a helper that
  * boots a real Nest application around `BymaxCoreModule`.
  *
- * Extracted so the bootstrap suites can be split by concern — mounting rules in
- * one file, contributed-component reporting in another — without either copying
- * the harness. Nest's logger is replaced through the public
+ * Shared so the bootstrap suites stay split by concern — mounting rules in one
+ * file, contributed-component reporting in another — without either copying the
+ * harness. Nest's logger is replaced through the public
  * `Logger.overrideLogger` hook rather than by spying on `Logger.prototype`: a
  * prototype spy intercepts the call before Nest appends the logger's context, so
  * the context could not be asserted.

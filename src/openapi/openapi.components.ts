@@ -1,9 +1,9 @@
 /**
- * @fileoverview Merging library-contributed entries into a document's
- * `components`, and reporting what could not be placed.
+ * @fileoverview Placing offered entries — this package's catalogue and every
+ * library contribution — into a document's `components`, and reporting what a
+ * contributor could not place.
  *
- * Split from the document module because the rule here is not the document's
- * rule: everywhere else the merge is "the existing side wins", and this is the
+ * A module of its own because the rule here is not the document's rule: everywhere else the merge is "the existing side wins", and this is the
  * one place that asks whether the existing side says anything at all. Keeping
  * the question and its narrow carve-out together makes the exception legible as
  * an exception.

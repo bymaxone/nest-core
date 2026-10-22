@@ -90,8 +90,9 @@ entries.
   filled with the package's definition, so a library offering that name meets a
   declaration and is reported rather than outranking the package.
 
-- **`fastify` devDependency floor raised to `^5.12.1`.** Shipped in the tarball's
-  manifest only; `dist/` is unchanged by it.
+- **`fastify` and `@nestjs/platform-fastify` devDependency floors raised to
+  `^5.12.5` and `^11.2.4`.** Shipped in the tarball's manifest only; `dist/` is
+  unchanged by them.
 
 ## [1.6.0] - 2026-08-29
 
