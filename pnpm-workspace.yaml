@@ -72,12 +72,13 @@ overrides:
   'js-yaml@3': '^3.15.2'
   'js-yaml@4': '^4.3.2'
   # handlebars below 4.7.10 carries GHSA-8r5x-fm3f-whwj and GHSA-p8wg-vrv2-v86f
-  # (critical) and GHSA-xw65-4hp5-5hc7, reached through istanbul-reports under
-  # jest's coverage reporter.
+  # (critical) and GHSA-xw65-4hp5-5hc7, reached as a dependency of ts-jest.
   'handlebars': '^4.7.10'
-  # multer below 2.4.0 and proxy-addr below 2.0.8 sit beneath
-  # @nestjs/platform-express and express, both devDependencies here; proxy-addr
-  # carries GHSA-jqcg-44mw-7w3h (critical).
+  # multer below 2.4.0 carries GHSA-3pph-fpjx-jg34, and below 2.3.0
+  # GHSA-535w-7cp7-47q4, GHSA-qfvm-cv95-jqjf, GHSA-wc9g-mqfw-jrwm (high) and
+  # GHSA-qvfw-j98x-7q72. proxy-addr below 2.0.8 carries GHSA-jqcg-44mw-7w3h
+  # (critical). Both sit beneath @nestjs/platform-express and express, which
+  # are devDependencies here.
   'multer': '^2.4.0'
   'proxy-addr': '^2.0.8'
   # qs below 6.16.0 carries GHSA-4mjr-xmp4-gh2g (denial of service through an
