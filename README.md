@@ -516,8 +516,9 @@ requirement.
 ## 🔑 DI Tokens
 
 Every token is a `Symbol`. `BYMAX_CORRELATION_PROVIDER`,
-`BYMAX_HEALTH_INDICATORS` and `BYMAX_HEALTH_TRANSITION_SINK` are consumed with
-`@Optional()` and are not bound by the module: provide either from your own module to supply your own
+`BYMAX_HEALTH_INDICATORS`, `BYMAX_HEALTH_TRANSITION_SINK` and
+`BYMAX_UNEXPECTED_ERROR_SINK` are consumed with `@Optional()` and are not bound
+by the module: provide any of them from your own module to supply your own
 implementation, otherwise the internal fallback in the last column applies.
 `BYMAX_TIMING_SINK` and `BYMAX_METRICS_REGISTRY` behave differently on
 `forRootAsync`, where options resolve after the module is defined: there the
@@ -535,6 +536,7 @@ below.
 | `BYMAX_TIMING_SINK`            | `ITimingSink`                         | internal no-op, or the metrics bridge when timing and metrics are both enabled                                    |
 | `BYMAX_HEALTH_INDICATORS`      | `IHealthIndicator[]`                  | treated as an empty indicator set                                                                                 |
 | `BYMAX_HEALTH_TRANSITION_SINK` | `IHealthTransitionSink`               | no sink; readiness transitions go to Nest's logger instead (binding one stands that line down)                    |
+| `BYMAX_UNEXPECTED_ERROR_SINK`  | `IUnexpectedErrorSink`                | no sink; the cause of a `500 BYMAX_INTERNAL_ERROR` is not recorded anywhere                                       |
 | `BYMAX_METRICS_REGISTRY`       | the `prom-client` `Registry`          | bound when metrics are enabled; on `forRootAsync` always registered, guarded-placeholder when off                 |
 | `BYMAX_TRACE_CONTEXT`          | `ITraceContextProvider`               | bound on every path: the OpenTelemetry reader when telemetry is enabled, a no-op that resolves no trace otherwise |
 
@@ -666,6 +668,62 @@ A depth ceiling well above anything a legitimate payload nests and well below
 what exhausts the stack leaves a wide margin: one consumer runs `32`, against
 the ~2000 levels that overflow. Walk the parsed body iteratively — a recursive
 depth check on a hostile payload overflows the stack it was written to protect.
+
+### Recording the cause of a 500
+
+An error the filter does not recognise collapses to a fixed
+`500 BYMAX_INTERNAL_ERROR`, and that collapse is the point: the client learns
+nothing about your internals. It also means that once the response is written,
+the thrown value is gone — an access log sees only the status. Bind an
+`IUnexpectedErrorSink` and the filter hands it the original value first:
+
+```typescript
+import { Global, Logger, Module } from '@nestjs/common'
+import { BYMAX_UNEXPECTED_ERROR_SINK } from '@bymax-one/nest-core'
+import type { IUnexpectedErrorSink, UnexpectedErrorReport } from '@bymax-one/nest-core'
+
+export class UnexpectedErrorLogger implements IUnexpectedErrorSink {
+  private readonly logger = new Logger('UnexpectedError')
+
+  record({ error, method, route, correlationId }: UnexpectedErrorReport): void {
+    this.logger.error(
+      `${method} ${route} failed (correlationId=${correlationId ?? '-'})`,
+      error instanceof Error ? error.stack : String(error)
+    )
+  }
+}
+
+@Global()
+@Module({
+  providers: [{ provide: BYMAX_UNEXPECTED_ERROR_SINK, useClass: UnexpectedErrorLogger }],
+  exports: [BYMAX_UNEXPECTED_ERROR_SINK]
+})
+export class ErrorReportingModule {}
+```
+
+The sink is called once per unexpected error, on both registration paths, and
+for nothing else: an `HttpException` is a deliberate answer and an exposed `4xx`
+from the body pipeline is a client mistake, so neither reaches it. The report
+carries the thrown value as it was thrown, the method, the route **template**
+(`/invoices/:id`, or `<unmatched>` for an error raised before routing), and the
+correlation and trace ids when they resolve. It carries no raw URL, query
+string, headers or body.
+
+The response never depends on the sink. A sink that throws, or an
+`async record()` that rejects, is absorbed and the client receives the same
+envelope it would have received with no sink bound, so a broken logger cannot
+turn one failure into two. It runs synchronously before the reply, so hand the
+report off and return.
+
+The value is passed uncut whatever `envelope.exposeInternals` says, since that
+option governs the response body and the sink is not the response. A driver's
+error message can carry hosts and query fragments: send the report where access
+is already controlled.
+
+`IUnexpectedErrorSink` is matched by shape, so a library can ship a compatible
+class without importing this package. Subclassing `BymaxExceptionFilter` and
+overriding `onUnexpectedError` still works and runs alongside the sink; the
+sink is what reaches the filter `BymaxCoreModule` registers itself.
 
 ## ⏱️ Request Timing
 
@@ -1739,26 +1797,27 @@ in the sections above.
 
 ### `.` (root)
 
-| Export                                                                                                                                                                                                           | Kind      | Description                                                                        |
-| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- | ---------------------------------------------------------------------------------- |
-| `BymaxCoreModule`                                                                                                                                                                                                | class     | The dynamic module: `forRoot` and `forRootAsync`.                                  |
-| `BymaxCoreModuleOptions`, `EnvelopeOptions`, `TimingOptions`, `HealthOptions`, `MetricsOptions`, `TelemetryOptions`, `OpenApiOptions`, `OpenApiServerDescriptor`, `OpenApiSecurityScheme`, `ResolvedCoreOptions` | types     | The options surface and its resolved shape.                                        |
-| `OpenApiSecurityRequirement`, `OpenApiHttpMethod`, `OpenApiOperationKey`, `OperationSecurityMap`                                                                                                                 | types     | The operation-key contract a sibling library targets to ship its own security map. |
-| `OpenApiOperationIdFactory`                                                                                                                                                                                      | type      | Names the operations in the generated document.                                    |
-| `BYMAX_CORE_OPTIONS`, `BYMAX_CORRELATION_PROVIDER`, `BYMAX_TIMING_SINK`, `BYMAX_HEALTH_INDICATORS`, `BYMAX_HEALTH_TRANSITION_SINK`, `BYMAX_METRICS_REGISTRY`, `BYMAX_TRACE_CONTEXT`                              | tokens    | The DI tokens; see the [token table](#-di-tokens).                                 |
-| `IHealthTransitionSink`, `HealthTransition`, `HealthTransitionCause`                                                                                                                                             | types     | The readiness-transition contract; also on `./health`.                             |
-| `ICorrelationIdProvider`                                                                                                                                                                                         | type      | The correlation-provider contract.                                                 |
-| `ITraceContextProvider`, `TraceContext`                                                                                                                                                                          | types     | The trace-context contract and the identifiers it resolves.                        |
-| `BymaxExceptionFilter`                                                                                                                                                                                           | class     | The envelope exception filter.                                                     |
-| `FilterErrorContext`                                                                                                                                                                                             | type      | The neutral request context passed to the filter's observability seam.             |
-| `buildErrorEnvelope`                                                                                                                                                                                             | function  | Pure builder assembling an `ErrorEnvelope`.                                        |
-| `ErrorEnvelope`, `ErrorDetails`, `BuildErrorEnvelopeInput`                                                                                                                                                       | types     | The envelope contract and its builder input.                                       |
-| `BymaxTimingMiddleware`                                                                                                                                                                                          | class     | The request-timing middleware, applied to every route when timing is enabled.      |
-| `UNMATCHED_ROUTE`                                                                                                                                                                                                | constant  | The bounded label recorded when a request matched no route (`<unmatched>`).        |
-| `TimingInterceptor`                                                                                                                                                                                              | class     | Deprecated: superseded by `BymaxTimingMiddleware`, which the module registers.     |
-| `ITimingSink`, `RequestTimingSample`                                                                                                                                                                             | types     | The timing-sink contract and its sample shape.                                     |
-| `BYMAX_BAD_GATEWAY` … `BYMAX_VALIDATION_FAILED`                                                                                                                                                                  | constants | The full error-code catalog (see [Error envelope](#-error-envelope)).              |
-| `codeForStatus`                                                                                                                                                                                                  | function  | Derives a catalog code from an HTTP status.                                        |
+| Export                                                                                                                                                                                                             | Kind      | Description                                                                                                                             |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `BymaxCoreModule`                                                                                                                                                                                                  | class     | The dynamic module: `forRoot` and `forRootAsync`.                                                                                       |
+| `BymaxCoreModuleOptions`, `EnvelopeOptions`, `TimingOptions`, `HealthOptions`, `MetricsOptions`, `TelemetryOptions`, `OpenApiOptions`, `OpenApiServerDescriptor`, `OpenApiSecurityScheme`, `ResolvedCoreOptions`   | types     | The options surface and its resolved shape.                                                                                             |
+| `OpenApiSecurityRequirement`, `OpenApiHttpMethod`, `OpenApiOperationKey`, `OperationSecurityMap`                                                                                                                   | types     | The operation-key contract a sibling library targets to ship its own security map.                                                      |
+| `OpenApiOperationIdFactory`                                                                                                                                                                                        | type      | Names the operations in the generated document.                                                                                         |
+| `BYMAX_CORE_OPTIONS`, `BYMAX_CORRELATION_PROVIDER`, `BYMAX_TIMING_SINK`, `BYMAX_HEALTH_INDICATORS`, `BYMAX_HEALTH_TRANSITION_SINK`, `BYMAX_UNEXPECTED_ERROR_SINK`, `BYMAX_METRICS_REGISTRY`, `BYMAX_TRACE_CONTEXT` | tokens    | The DI tokens; see the [token table](#-di-tokens).                                                                                      |
+| `IHealthTransitionSink`, `HealthTransition`, `HealthTransitionCause`                                                                                                                                               | types     | The readiness-transition contract; also on `./health`.                                                                                  |
+| `ICorrelationIdProvider`                                                                                                                                                                                           | type      | The correlation-provider contract.                                                                                                      |
+| `ITraceContextProvider`, `TraceContext`                                                                                                                                                                            | types     | The trace-context contract and the identifiers it resolves.                                                                             |
+| `BymaxExceptionFilter`                                                                                                                                                                                             | class     | The envelope exception filter.                                                                                                          |
+| `FilterErrorContext`                                                                                                                                                                                               | type      | The neutral request context passed to the filter's observability seam.                                                                  |
+| `IUnexpectedErrorSink`, `UnexpectedErrorReport`                                                                                                                                                                    | types     | Receives the original error behind every `500 BYMAX_INTERNAL_ERROR`; see [Recording the cause of a 500](#recording-the-cause-of-a-500). |
+| `buildErrorEnvelope`                                                                                                                                                                                               | function  | Pure builder assembling an `ErrorEnvelope`.                                                                                             |
+| `ErrorEnvelope`, `ErrorDetails`, `BuildErrorEnvelopeInput`                                                                                                                                                         | types     | The envelope contract and its builder input.                                                                                            |
+| `BymaxTimingMiddleware`                                                                                                                                                                                            | class     | The request-timing middleware, applied to every route when timing is enabled.                                                           |
+| `UNMATCHED_ROUTE`                                                                                                                                                                                                  | constant  | The bounded label recorded when a request matched no route (`<unmatched>`).                                                             |
+| `TimingInterceptor`                                                                                                                                                                                                | class     | Deprecated: superseded by `BymaxTimingMiddleware`, which the module registers.                                                          |
+| `ITimingSink`, `RequestTimingSample`                                                                                                                                                                               | types     | The timing-sink contract and its sample shape.                                                                                          |
+| `BYMAX_BAD_GATEWAY` … `BYMAX_VALIDATION_FAILED`                                                                                                                                                                    | constants | The full error-code catalog (see [Error envelope](#-error-envelope)).                                                                   |
+| `codeForStatus`                                                                                                                                                                                                    | function  | Derives a catalog code from an HTTP status.                                                                                             |
 
 ### `./pagination`
 

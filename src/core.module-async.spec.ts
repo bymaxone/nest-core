@@ -9,15 +9,21 @@
  * registering reads as absent rather than broken.
  * Mocks: none; a real Express Nest app exercises the pipeline via supertest.
  */
-import { Controller, Get, HttpStatus, NotFoundException } from '@nestjs/common'
-import type { INestApplication } from '@nestjs/common'
+import { Controller, Get, Global, HttpStatus, Module, NotFoundException } from '@nestjs/common'
+import type { DynamicModule, INestApplication } from '@nestjs/common'
 import { Test } from '@nestjs/testing'
 import request from 'supertest'
 
 import { normalizeCoreOptions } from './core.options'
 import type { BymaxCoreModuleOptions } from './core.options'
 import { BymaxCoreModule } from './core.module'
-import { BYMAX_CORE_OPTIONS, BYMAX_METRICS_REGISTRY, BYMAX_TIMING_SINK } from './core.tokens'
+import {
+  BYMAX_CORE_OPTIONS,
+  BYMAX_METRICS_REGISTRY,
+  BYMAX_TIMING_SINK,
+  BYMAX_UNEXPECTED_ERROR_SINK
+} from './core.tokens'
+import type { UnexpectedErrorReport } from './envelope/unexpected-error.sink'
 import { assertAsyncFeatureEnabled } from './passthrough.providers'
 
 /** Minimal controller whose responses reveal any pipeline interference. */
@@ -32,12 +38,20 @@ class ProbeController {
   boom(): never {
     throw new NotFoundException('missing')
   }
+
+  @Get('crash')
+  crash(): never {
+    throw new Error('crashed')
+  }
 }
 
 /** Build and initialize an app whose core module registers via the async path. */
-async function createAsyncApp(factory: () => BymaxCoreModuleOptions): Promise<INestApplication> {
+async function createAsyncApp(
+  factory: () => BymaxCoreModuleOptions,
+  extraImports: DynamicModule[] = []
+): Promise<INestApplication> {
   const moduleRef = await Test.createTestingModule({
-    imports: [BymaxCoreModule.forRootAsync({ inject: [], useFactory: factory })],
+    imports: [BymaxCoreModule.forRootAsync({ inject: [], useFactory: factory }), ...extraImports],
     controllers: [ProbeController]
   }).compile()
   const app = moduleRef.createNestApplication()
@@ -117,6 +131,44 @@ describe('BymaxCoreModule.forRootAsync', () => {
 
     expect(repeat.body).toMatchObject({ statusCode: 404, message: 'missing' })
     expect(repeat.body).not.toHaveProperty('code')
+  })
+})
+
+describe('BymaxCoreModule.forRootAsync, unexpected-error sink', () => {
+  let app: INestApplication | undefined
+
+  afterEach(async () => {
+    await app?.close()
+    app = undefined
+  })
+
+  /**
+   * The async filter slot resolves the consumer's sink.
+   *
+   * The slot is built by a factory with a hand-written injection list, so a
+   * token missing from it reaches the filter as `undefined` without any error.
+   * A sink bound from a `@Global()` module must receive the thrown error.
+   */
+  it('hands an unexpected error to a sink bound from a global module', async () => {
+    const reports: UnexpectedErrorReport[] = []
+    @Global()
+    @Module({
+      providers: [
+        {
+          provide: BYMAX_UNEXPECTED_ERROR_SINK,
+          useValue: { record: (report: UnexpectedErrorReport) => reports.push(report) }
+        }
+      ],
+      exports: [BYMAX_UNEXPECTED_ERROR_SINK]
+    })
+    class SinkModule {}
+    app = await createAsyncApp(() => ({}), [{ module: SinkModule }])
+
+    await request(app.getHttpServer()).get('/probe/crash').expect(500)
+
+    expect(reports).toHaveLength(1)
+    expect((reports[0]?.error as Error).message).toBe('crashed')
+    expect(reports[0]?.route).toBe('/probe/crash')
   })
 })
 

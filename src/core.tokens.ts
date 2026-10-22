@@ -81,6 +81,15 @@ export const BYMAX_HEALTH_TRANSITION_SINK: unique symbol = Symbol.for(
 )
 
 /**
+ * Provide the `IUnexpectedErrorSink` that receives the original error behind
+ * every `500 BYMAX_INTERNAL_ERROR`. Nothing is bound by default, and with no
+ * sink the filter records nothing.
+ */
+export const BYMAX_UNEXPECTED_ERROR_SINK: unique symbol = Symbol.for(
+  '@bymax-one/nest-core:unexpected-error-sink'
+)
+
+/**
  * Provide the `prom-client` `Registry` backing the metrics endpoint. Bound
  * lazily and only when the metrics feature is enabled.
  */

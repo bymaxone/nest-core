@@ -274,6 +274,7 @@ All tokens are `Symbol`s. String tokens are not used anywhere in the package.
 | `BYMAX_TIMING_SINK`            | `ITimingSink`                     | no-op                              |
 | `BYMAX_HEALTH_INDICATORS`      | `IHealthIndicator[]`              | empty array                        |
 | `BYMAX_HEALTH_TRANSITION_SINK` | `IHealthTransitionSink`           | none; transitions go to the logger |
+| `BYMAX_UNEXPECTED_ERROR_SINK`  | `IUnexpectedErrorSink`            | none; the cause is not recorded    |
 | `BYMAX_METRICS_REGISTRY`       | `prom-client` `Registry`          | lazy, only when enabled            |
 | `BYMAX_TRACE_CONTEXT`          | `ITraceContextProvider`           | no-op when telemetry is off        |
 
@@ -325,7 +326,7 @@ Every error that leaves the application has this exact shape. The contract is ve
 
 1. **`HttpException` and subclasses.** Status and message are taken from the exception. If the exception response object carries a `code` property, it is passed through; otherwise the code is derived from the status (§10).
 2. **Validation errors.** Exceptions carrying an array of constraint violations (the `BadRequestException` shape produced by validation pipes) are translated into `code: BYMAX_VALIDATION_FAILED` with one structured entry per violation in `details`.
-3. **Unknown errors.** Anything else becomes `statusCode: 500`, `code: BYMAX_INTERNAL_ERROR`, and the fixed message `"Internal server error"`. The original error is never serialized into the response unless `envelope.exposeInternals` is true, which is intended for development only. The filter always hands the original error to the correlation-aware logging pipeline before collapsing it.
+3. **Unknown errors.** Anything else becomes `statusCode: 500`, `code: BYMAX_INTERNAL_ERROR`, and the fixed message `"Internal server error"`. The original error is never serialized into the response unless `envelope.exposeInternals` is true, which is intended for development only. Before collapsing it, the filter hands the original error to the bound unexpected-error sink (§5.4) and to the protected `onUnexpectedError` seam.
 
 ### 5.3 Correlation Id Integration
 
@@ -337,6 +338,31 @@ export interface ICorrelationIdProvider {
 ```
 
 The filter resolves `BYMAX_CORRELATION_PROVIDER` and stamps the result into the envelope. The default binding is a no-op. The `LogContext` service of `@bymax-one/nest-logger` (AsyncLocalStorage-based) satisfies this interface out of the box, so pairing the two libraries yields correlated logs and error responses with one `useExisting` provider and no hard coupling.
+
+### 5.4 Unexpected-Error Sink
+
+```typescript
+export interface UnexpectedErrorReport {
+  readonly error: unknown
+  readonly method: string
+  readonly route: string
+  readonly correlationId?: string
+  readonly traceId?: string
+}
+
+export interface IUnexpectedErrorSink {
+  record(report: UnexpectedErrorReport): void
+}
+```
+
+The collapse in §5.2 rule 3 is what makes the response safe, and it is also what makes the cause unrecoverable: once the reply is written, nothing downstream of the filter can get the thrown value back. The filter therefore resolves `BYMAX_UNEXPECTED_ERROR_SINK` (`@Optional()`, unbound by default) on both registration paths and calls it once per unexpected error, before replying.
+
+Four decisions are load-bearing:
+
+1. **Unexpected errors only.** An `HttpException` and an exposed `4xx` from the body pipeline never reach the sink; a sink fed client mistakes would bury the server failures it exists to surface.
+2. **A bounded, non-sensitive request description.** `route` is the matched template, or `UNMATCHED_ROUTE` — the label §6 uses — never the raw URL. The report carries no query string, headers or body, because a log outlives the request and is read by more people than its sender. The thrown value itself is passed uncut whatever `exposeInternals` says: that option governs the response, and the sink is application code at the logger's trust level.
+3. **The response never depends on the sink.** A synchronous throw is caught and an `async record()` rejection is contained, both silently, since reporting the sink's own failure from inside the filter would push aside the failure being formatted.
+4. **Structural.** The contract is a plain interface, so a logging library can ship a compatible class without importing this package or declaring it as a peer.
 
 ---
 
