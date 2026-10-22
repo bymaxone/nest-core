@@ -34,7 +34,7 @@ still wins, exactly as before. What changes is that a schema present only as
 `{"type":"object","properties":{}}` — which `@nestjs/swagger` emits for every DTO
 in a package built without its plugin — is now filled from the contribution
 rather than preferred over it. Read `discarded` on the `OpenApiMountOutcome` to
-see what a contributor offered and did not place; the boot log names the same
+see what a contributor offered and did not place; the boot log reports the same
 entries.
 
 ### Added
@@ -50,8 +50,8 @@ entries.
   know whose entry lost: an application with several contributing libraries would
   otherwise be told a name was dropped without being told by whom.
 
-  A warning names the same entries on the way up, elided past ten on the same
-  reasoning as the unsecured-operation line beside it — a library contributing a
+  A warning reports the same entries on the way up, elided into a count on the
+  same reasoning as the unsecured-operation line beside it — a library contributing a
   schema per DTO turns one collision into a hundred, and the version that prints
   them all is the one an operator learns to skip.
 
@@ -74,9 +74,9 @@ entries.
   The test is deliberately narrow. `type` must be absent or `object`, because
   `{"type":"string"}` carries no properties and is nonetheless complete;
   reading "no properties" as "no shape" would discard a real schema, which is
-  the failure this path exists to prevent. Any keyword that constrains a value —
-  `$ref`, `allOf`, `oneOf`, `anyOf`, `enum`, `items`, `additionalProperties`, or
-  a single property — makes the entry a declaration. A description the document
+  the failure this path exists to prevent. An empty `required` and a
+  `description` do not change that; any other keyword, or a single property,
+  makes the entry a declaration. A description the document
   wrote survives being filled in, the same carve-out `mergeResponses` makes.
 
   The carve-out applies to `schemas` alone. A parameter carries `name` and `in`

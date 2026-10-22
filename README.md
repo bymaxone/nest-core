@@ -1170,7 +1170,7 @@ can emit it once and never branch:
 `discarded` lists every component entry a library contributed that the served
 document already defined with a shape of its own — a `DiscardedComponent` per
 entry, naming the contributor, the member and the name. It is empty when every
-contribution was placed, and the boot log names the same entries.
+contribution was placed, and the boot log reports the same entries.
 
 A collision is not an error and does not stop the boot: the merge prefers
 whatever holds the name already. That is usually your own declaration, and you
