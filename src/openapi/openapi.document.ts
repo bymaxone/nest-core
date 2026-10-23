@@ -713,18 +713,19 @@ export function augmentDocument<T extends OpenApiDocumentLike>(
   // The catalogue is placed by the rule contributors are, and before them: a
   // placeholder under a catalogue name is filled by the package's own
   // definition, so a library offering the same name later meets a declaration
-  // rather than a vacancy. A document that declared the name keeps it, as it
-  // always did, and that is not reported — the catalogue is not a contributor.
+  // rather than a vacancy. A document that declared the name keeps it, and that
+  // is not reported — the catalogue is not a contributor.
   if (openapi.includeCoreSchemas) {
     const keep = (): void => undefined
-    merged.set(
-      'schemas',
-      placeComponentEntries(components['schemas'], 'schemas', CORE_SCHEMAS, keep)
-    )
-    merged.set(
-      'parameters',
-      placeComponentEntries(components['parameters'], 'parameters', CORE_PARAMETERS, keep)
-    )
+    // One literal names each member for the read, the rule and the write, so
+    // the three cannot disagree about which member they mean.
+    const catalogue = [
+      ['schemas', CORE_SCHEMAS],
+      ['parameters', CORE_PARAMETERS]
+    ] as const
+    for (const [member, entries] of catalogue) {
+      merged.set(member, placeComponentEntries(merged.get(member), member, entries, keep))
+    }
   }
 
   // Contributed only when the scrape endpoint is actually protected, so the

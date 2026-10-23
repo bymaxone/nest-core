@@ -66,10 +66,15 @@ class PlainAppModule {}
 /** Boot an application with the given core options and application module. */
 async function bootApp(
   options: BymaxCoreModuleOptions,
-  appModule: typeof TracedAppModule | typeof PlainAppModule
+  appModule: typeof TracedAppModule | typeof PlainAppModule,
+  registration: 'sync' | 'async' = 'sync'
 ): Promise<INestApplication> {
+  const coreModule =
+    registration === 'sync'
+      ? BymaxCoreModule.forRoot(options)
+      : BymaxCoreModule.forRootAsync({ useFactory: () => options })
   const moduleRef = await Test.createTestingModule({
-    imports: [BymaxCoreModule.forRoot(options), appModule]
+    imports: [coreModule, appModule]
   }).compile()
   const app = moduleRef.createNestApplication()
   await app.init()
@@ -104,6 +109,27 @@ describe('trace correlation', () => {
    */
   it('serves the active trace id in the error envelope when opted in', async () => {
     app = await bootApp({ telemetry: { enabled: true, exposeTraceId: true } }, TracedAppModule)
+
+    const response = await request(app.getHttpServer()).get('/missing')
+
+    expect(response.status).toBe(404)
+    expect(response.body.traceId).toBe(TRACE_ID)
+  })
+
+  /**
+   * The async path serves the trace id too.
+   *
+   * `forRootAsync` builds the filter in a factory whose injection list is
+   * written by hand, so a dependency the sync path resolves through the class
+   * can be missing there without any error: the filter falls back to its no-op
+   * reader and the envelope silently carries no trace id.
+   */
+  it('serves the active trace id when registered through forRootAsync', async () => {
+    app = await bootApp(
+      { telemetry: { enabled: true, exposeTraceId: true } },
+      TracedAppModule,
+      'async'
+    )
 
     const response = await request(app.getHttpServer()).get('/missing')
 

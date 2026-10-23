@@ -11,6 +11,56 @@ heading here.
 
 ## [Unreleased]
 
+## [1.6.2] - 2026-10-22
+
+An unexpected error became `500 BYMAX_INTERNAL_ERROR` and the application had no
+way to record what it was. `BymaxCoreModule` builds the filter itself, and the
+only seam — the protected `onUnexpectedError` — is reachable only by subclassing
+a filter the module never lets you substitute. So the access log saw the status
+and nothing else, and a 500 on a read endpoint left no recoverable cause.
+
+**This patch adds public surface**, which a patch number cannot tell you: the
+`BYMAX_UNEXPECTED_ERROR_SINK` token and the `IUnexpectedErrorSink` and
+`UnexpectedErrorReport` types. All are additive and nothing is removed or
+renamed, so the digit stays at a patch under this project's versioning policy.
+
+**Apply to a derived backend:** nothing is required; with no sink bound the
+filter behaves as before. To record each unexpected error's cause, bind an
+`IUnexpectedErrorSink` under `BYMAX_UNEXPECTED_ERROR_SINK` from a `@Global()`
+module of your own, as the README's "Recording the cause of a 500" shows. A
+backend registered through `forRootAsync` with `telemetry.exposeTraceId` on
+starts serving `traceId` in its error envelopes, which it was configured to do
+and did not; see Fixed.
+
+### Added
+
+- **`BYMAX_UNEXPECTED_ERROR_SINK`, `IUnexpectedErrorSink` and
+  `UnexpectedErrorReport`.** The filter calls `record(report)` once per
+  unexpected error, before replying, with the original thrown value, the
+  method, the matched route template (`<unmatched>` before routing), and the
+  correlation and trace ids when they resolve. An `HttpException` and an
+  exposed `4xx` from the body pipeline never reach it.
+
+  The report carries no raw URL, query string, headers or body: a log outlives
+  the request and a query string is where tokens end up. The thrown value is
+  passed uncut whatever `envelope.exposeInternals` says, since that option
+  governs the response and the sink is not the response.
+
+  The response never depends on the sink. A synchronous throw is caught and an
+  `async record()` rejection is contained, both silently. The interface is
+  structural, so a logging library can ship a compatible class without
+  importing this package. The protected `onUnexpectedError` seam is unchanged
+  and runs alongside the sink.
+
+### Fixed
+
+- **`forRootAsync` never put the trace id in the error envelope.** The async
+  filter slot is built by a factory whose injection list did not include
+  `BYMAX_TRACE_CONTEXT`, so the filter fell back to its no-op reader: with
+  `telemetry.exposeTraceId` on, `forRoot` served `traceId` and `forRootAsync`
+  silently did not. The factory now injects every dependency the sync path
+  resolves through the class.
+
 ## [1.6.1] - 2026-09-05
 
 A library contributing an OpenAPI component under a name the application already
@@ -1087,4 +1137,5 @@ have regressed from. They are kept because the reasoning is worth having.
 [1.5.3]: https://github.com/bymaxone/nest-core/compare/v1.5.2...v1.5.3
 [1.6.0]: https://github.com/bymaxone/nest-core/compare/v1.5.3...v1.6.0
 [1.6.1]: https://github.com/bymaxone/nest-core/compare/v1.6.0...v1.6.1
-[Unreleased]: https://github.com/bymaxone/nest-core/compare/v1.6.1...HEAD
+[1.6.2]: https://github.com/bymaxone/nest-core/compare/v1.6.1...v1.6.2
+[Unreleased]: https://github.com/bymaxone/nest-core/compare/v1.6.2...HEAD
