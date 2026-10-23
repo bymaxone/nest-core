@@ -88,3 +88,8 @@ overrides:
   # and typed-rest-client beneath @stryker-mutator/core. Dropping any one of
   # them leaves the other two, so this entry outlives all three individually.
   'qs': '^6.16.0'
+  # zod below 4.6.6 carries GHSA-mrhx-c7xc-m3w5 (high). Its one consumer is
+  # mutation-server-protocol beneath @stryker-mutator/core, a devDependency, so
+  # the exposure is this repository's build surface, not anything a consumer
+  # installs.
+  'zod': '^4.6.6'
