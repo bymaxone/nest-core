@@ -59,19 +59,27 @@ const INTERNAL_ERROR_MESSAGE = 'Internal server error'
 const VALIDATION_FAILED_MESSAGE = 'Validation failed'
 
 /**
- * The request path, without its query string.
+ * The request path: no query string, and no scheme or authority.
  *
- * Both adapters return the original URL, query included, and a query string is
- * where reset codes and tokens travel; the envelope reaches the client and any
- * log that stores it, so it carries the path its contract names and no more.
+ * Both adapters return the request target as received, query included, and an
+ * absolute-form target (`GET http://user:pass@host/p`, as a proxy sends) also
+ * carries the authority. The envelope reaches the client and any log that
+ * stores it, so it carries the path its contract names and no more.
  *
- * @param url - The URL the adapter reports for the request.
- * @returns The part before the first `?`.
+ * @param url - The request target the adapter reports.
+ * @returns The path; a target that is not a URL, such as `*`, as received.
  */
 function pathOf(url: unknown): string {
   const text = String(url)
   const query = text.indexOf('?')
-  return query === -1 ? text : text.slice(0, query)
+  const target = query === -1 ? text : text.slice(0, query)
+  // An origin-form target (`/p`) is not a URL on its own and throws here, so it
+  // is returned as it stands, as is the asterisk form.
+  try {
+    return new URL(target).pathname
+  } catch {
+    return target
+  }
 }
 
 /**

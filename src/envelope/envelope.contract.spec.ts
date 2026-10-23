@@ -184,11 +184,29 @@ describe('error envelope contract', () => {
    */
   it.each([
     ['a query string', `${FIXED_PATH}?token=reset-code&page=2`],
-    ['an empty query', `${FIXED_PATH}?`]
+    ['an empty query', `${FIXED_PATH}?`],
+    [
+      'the authority of an absolute-form target',
+      `http://example.test${FIXED_PATH}?token=reset-code`
+    ],
+    ['credentials in an absolute-form target', `https://user:reset-code@example.test${FIXED_PATH}`]
   ])('serializes path without %s', (_label, url) => {
     const body = serializeCatch(new NotFoundException('missing'), { url })
 
     expect(body['path']).toBe(FIXED_PATH)
     expect(JSON.stringify(body)).not.toContain('reset-code')
+    expect(JSON.stringify(body)).not.toContain('example.test')
+  })
+
+  /**
+   * A target that is neither origin-form nor a URL is reported as received.
+   *
+   * The asterisk-form of `OPTIONS *` has no path to extract; there is nothing
+   * to strip from it and nothing to invent.
+   */
+  it('keeps an asterisk-form target as it is', () => {
+    const body = serializeCatch(new NotFoundException('missing'), { url: '*' })
+
+    expect(body['path']).toBe('*')
   })
 })

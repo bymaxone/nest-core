@@ -14,6 +14,10 @@
  * supertest.
  */
 import type { INestApplication } from '@nestjs/common'
+import { request as httpRequest } from 'node:http'
+import type { Server } from 'node:http'
+import type { AddressInfo } from 'node:net'
+
 import request from 'supertest'
 
 import { buildFixtureApp } from './fixture/app.fixture'
@@ -95,6 +99,41 @@ describe('BymaxCoreModule.forRoot, all features enabled', () => {
 
     expect(response.body.path).toBe('/missing')
     expect(JSON.stringify(response.body)).not.toContain('reset-code-e2e')
+  })
+
+  /**
+   * An absolute-form request target reports only its path.
+   *
+   * A client talking to a proxy sends `GET http://user:pass@host/p`, and
+   * Express reports that whole target as `originalUrl`. Scheme, authority and
+   * credentials must not reach a body that goes back to the client and into
+   * logs. Sent over a raw socket because supertest only issues origin-form.
+   */
+  it('reports only the path for an absolute-form request target', async () => {
+    const server = app?.getHttpServer() as Server
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+    const { port } = server.address() as AddressInfo
+    const target = 'http://user:secret-e2e@example.test/missing?token=reset-code-e2e'
+
+    const raw = await new Promise<string>((resolve, reject) => {
+      const outgoing = httpRequest(
+        { host: '127.0.0.1', port, method: 'GET', path: target },
+        (res) => {
+          let text = ''
+          res.on('data', (chunk: Buffer) => {
+            text += chunk.toString()
+          })
+          res.on('end', () => resolve(text))
+        }
+      )
+      outgoing.on('error', reject)
+      outgoing.end()
+    })
+
+    expect(JSON.parse(raw)).toMatchObject({ statusCode: 404, path: '/missing' })
+    expect(raw).not.toContain('secret-e2e')
+    expect(raw).not.toContain('example.test')
+    expect(raw).not.toContain('reset-code-e2e')
   })
 
   /**

@@ -20,7 +20,7 @@ recipe for pairing with `@bymax-one/nest-logger` bound nothing.
 
 - **`path` changes in the response body.** An application that reads `path`
   from the envelope now gets the request path alone. `/invoices/42?token=x`
-  now reads `/invoices/42`. The query string was never part of the documented
+  and `http://host/invoices/42` both now read `/invoices/42`. The query string was never part of the documented
   contract, and is where reset codes and tokens travel.
 - **The nest-logger correlation recipe changes.** An application that
   followed the previous README recipe bound
@@ -35,8 +35,9 @@ recipe for pairing with `@bymax-one/nest-logger` bound nothing.
   report the original URL, query included: Express returns `originalUrl`, and
   Fastify the raw URL. The filter copied that into `path`, which is documented
   as the request URL path. So a query-string secret reached the client and any
-  log that stores the envelope. The `onUnexpectedError` context now receives
-  the same path. The unexpected-error sink already reported the route
+  log that stores the envelope. An absolute-form target, as a proxy sends it,
+  also carried its scheme, authority and any credentials; only the path is
+  kept now. The `onUnexpectedError` context now receives the same path. The unexpected-error sink already reported the route
   template and is unaffected.
 - **The nest-logger integration recipe binds what it promises.** It imported
   `NestLoggerModule`, which does not exist; the module is `BymaxLoggerModule`.
