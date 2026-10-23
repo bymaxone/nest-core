@@ -392,8 +392,8 @@ describe('BymaxExceptionFilter, unexpected-error sink', () => {
    *
    * With `exposeInternals` on, the envelope reads the value's message and
    * stack. A value with no prototype has no `toString`, and an `Error` can
-   * carry a `stack` getter that throws; either one used to throw out of the
-   * filter, costing the response and the hooks with it.
+   * carry a `stack` getter that throws. Either must still yield the response
+   * and reach the reporting hooks.
    */
   it.each([
     ['a value with no prototype', (): unknown => Object.create(null)],
