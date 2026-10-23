@@ -1588,9 +1588,8 @@ The id exists only once nest-logger's request-id middleware runs, and
 `applyRequestIdMiddleware(consumer)` from a module's `configure()`:
 
 > **Express only.** nest-logger's request-id middleware supports
-> `@nestjs/platform-express`. On the Fastify adapter no `requestId` is set, so
-> this correlation provider resolves nothing and envelopes carry no
-> `correlationId`.
+> `@nestjs/platform-express`; the Fastify adapter is unsupported, so do not
+> rely on this correlation provider there.
 
 ```typescript
 import { NestFactory } from '@nestjs/core'
