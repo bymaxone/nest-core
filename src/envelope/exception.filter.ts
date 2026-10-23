@@ -295,20 +295,31 @@ function extractHttpMessage(
   return exception.message
 }
 
+/** Internals message for a thrown value that cannot be read or stringified. */
+const UNREPRESENTABLE_MESSAGE = 'Unrepresentable thrown value'
+
 /**
  * Build the development-only internals dump for a collapsed unknown error. The
  * original message is always captured; the stack is captured when present.
+ *
+ * Total, because it runs on whatever was thrown: a value with no prototype has
+ * no `toString`, and a getter on `stack` or `message` can throw. Failing here
+ * would cost the response and the hooks, so the dump degrades instead.
  *
  * @param exception - The original thrown value.
  * @returns The `{ message, stack? }` object surfaced only when `exposeInternals` is on.
  */
 function buildInternalDetails(exception: unknown): ErrorDetails {
-  if (exception instanceof Error) {
-    return exception.stack !== undefined
-      ? { message: exception.message, stack: exception.stack }
-      : { message: exception.message }
+  try {
+    if (exception instanceof Error) {
+      return exception.stack !== undefined
+        ? { message: exception.message, stack: exception.stack }
+        : { message: exception.message }
+    }
+    return { message: String(exception) }
+  } catch {
+    return { message: UNREPRESENTABLE_MESSAGE }
   }
-  return { message: String(exception) }
 }
 
 /**

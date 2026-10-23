@@ -386,4 +386,36 @@ describe('BymaxExceptionFilter, unexpected-error sink', () => {
 
     expect(captured.body?.details).toMatchObject({ message: 'original failure' })
   })
+
+  /**
+   * A thrown value that cannot be described still yields the envelope.
+   *
+   * With `exposeInternals` on, the envelope reads the value's message and
+   * stack. A value with no prototype has no `toString`, and an `Error` can
+   * carry a `stack` getter that throws; either one used to throw out of the
+   * filter, costing the response and the hooks with it.
+   */
+  it.each([
+    ['a value with no prototype', (): unknown => Object.create(null)],
+    [
+      'an Error whose stack getter throws',
+      (): unknown =>
+        Object.defineProperty(new Error('broken stack'), 'stack', {
+          get: (): never => {
+            throw new Error('stack unavailable')
+          }
+        })
+    ]
+  ])('delivers the 500 and still reports %s', (_label, makeThrown) => {
+    const sink = new RecordingSink()
+    const { filter, host, captured } = buildHarness({ sink, exposeInternals: true })
+    const thrown = makeThrown()
+
+    filter.catch(thrown, host)
+
+    expect(captured.status).toBe(500)
+    expect(captured.body?.code).toBe('BYMAX_INTERNAL_ERROR')
+    expect(captured.body?.details).toEqual({ message: 'Unrepresentable thrown value' })
+    expect(sink.reports.map((report) => report.error)).toEqual([thrown])
+  })
 })
