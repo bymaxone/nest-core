@@ -175,38 +175,38 @@ describe('error envelope contract', () => {
   })
 
   /**
-   * `path` is the path, never the query string.
+   * `path` is the request path, whatever form the request target took.
    *
-   * Both adapters hand the filter the original URL, query included, and a
-   * query string is where reset codes and tokens travel. The envelope reaches
-   * the client and any log that stores it, so it carries only what its
-   * contract names: the request path.
+   * Both adapters report the target as received. An origin-form target
+   * carries a query string, where reset codes and tokens travel; an
+   * absolute-form target, as a proxy sends it, also carries a scheme, an
+   * authority and possibly credentials, valid or not. The envelope reaches the
+   * client and any log that stores it, so only the path belongs in it. One row
+   * per form, so dropping a rule fails by name.
    */
   it.each([
-    ['a query string', `${FIXED_PATH}?token=reset-code&page=2`],
-    ['an empty query', `${FIXED_PATH}?`],
-    [
-      'the authority of an absolute-form target',
-      `http://example.test${FIXED_PATH}?token=reset-code`
-    ],
-    ['credentials in an absolute-form target', `https://user:reset-code@example.test${FIXED_PATH}`]
-  ])('serializes path without %s', (_label, url) => {
+    ['an origin-form target', FIXED_PATH, FIXED_PATH],
+    ['a query string', `${FIXED_PATH}?token=reset-code&page=2`, FIXED_PATH],
+    ['an empty query', `${FIXED_PATH}?`, FIXED_PATH],
+    ['a fragment', `${FIXED_PATH}#reset-code`, FIXED_PATH],
+    ['an asterisk-form target', '*', '*'],
+    ['an absolute-form target', `http://example.test${FIXED_PATH}?token=reset-code`, FIXED_PATH],
+    ['credentials', `https://user:reset-code@example.test${FIXED_PATH}`, FIXED_PATH],
+    ['an upper-case scheme', `HTTP://example.test${FIXED_PATH}`, FIXED_PATH],
+    ['an invalid port', `http://user:reset-code@example.test:99999${FIXED_PATH}`, FIXED_PATH],
+    ['an invalid IPv4 host', `http://user:reset-code@1.2.3.999${FIXED_PATH}`, FIXED_PATH],
+    ['an empty host', `http://user:reset-code@${FIXED_PATH}`, FIXED_PATH],
+    ['a `?` inside the userinfo', 'http://user:reset?code@example.test/p', '/'],
+    ['a `#` inside the userinfo', 'http://user:reset#code@example.test/p', '/'],
+    ['no path at all', 'http://user:reset-code@example.test', '/'],
+    ['a query and no path', 'http://example.test?token=reset-code', '/'],
+    ['an origin-form target that is only a query', '?token=reset-code', '/'],
+    ['a scheme-like segment inside an origin-form path', '/files/a:b://c', '/files/a:b://c']
+  ])('serializes path from %s', (_label, url, expected) => {
     const body = serializeCatch(new NotFoundException('missing'), { url })
 
-    expect(body['path']).toBe(FIXED_PATH)
-    expect(JSON.stringify(body)).not.toContain('reset-code')
+    expect(body['path']).toBe(expected)
+    expect(JSON.stringify(body)).not.toContain('reset')
     expect(JSON.stringify(body)).not.toContain('example.test')
-  })
-
-  /**
-   * A target that is neither origin-form nor a URL is reported as received.
-   *
-   * The asterisk-form of `OPTIONS *` has no path to extract; there is nothing
-   * to strip from it and nothing to invent.
-   */
-  it('keeps an asterisk-form target as it is', () => {
-    const body = serializeCatch(new NotFoundException('missing'), { url: '*' })
-
-    expect(body['path']).toBe('*')
   })
 })

@@ -58,28 +58,38 @@ const INTERNAL_ERROR_MESSAGE = 'Internal server error'
 /** Fixed, end-user-safe message for a validation failure; specifics live in details. */
 const VALIDATION_FAILED_MESSAGE = 'Validation failed'
 
+/** An absolute-form request target's `scheme "://"` prefix (RFC 3986 §3). */
+const ABSOLUTE_FORM_PREFIX = /^[A-Za-z][A-Za-z0-9+.-]*:\/\//
+
 /**
- * The request path: no query string, and no scheme or authority.
+ * The request path: no query, no fragment, and no scheme or authority.
  *
- * Both adapters return the request target as received, query included, and an
- * absolute-form target (`GET http://user:pass@host/p`, as a proxy sends) also
- * carries the authority. The envelope reaches the client and any log that
+ * Both adapters return the request target as received. An origin-form target
+ * carries the query, where reset codes and tokens travel; an absolute-form one
+ * (`GET http://user:pass@host/p`, as a proxy sends it) also carries the
+ * authority, valid or not. The envelope reaches the client and any log that
  * stores it, so it carries the path its contract names and no more.
  *
+ * Read by the RFC 3986 grammar rather than a URL parser: the authority ends at
+ * the first `/`, `?` or `#`, and everything before that is dropped whether or
+ * not it would parse. A parser that rejects a malformed authority leaves
+ * nothing to fall back on but the whole target.
+ *
  * @param url - The request target the adapter reports.
- * @returns The path; a target that is not a URL, such as `*`, as received.
+ * @returns The path; `/` when the target has none, and the asterisk form as
+ *   received.
  */
 function pathOf(url: unknown): string {
-  const text = String(url)
-  const query = text.indexOf('?')
-  const target = query === -1 ? text : text.slice(0, query)
-  // An origin-form target (`/p`) is not a URL on its own and throws here, so it
-  // is returned as it stands, as is the asterisk form.
-  try {
-    return new URL(target).pathname
-  } catch {
-    return target
+  let target = String(url)
+  const prefix = ABSOLUTE_FORM_PREFIX.exec(target)
+  if (prefix !== null) {
+    const afterScheme = target.slice(prefix[0].length)
+    const authorityEnd = afterScheme.search(/[/?#]/)
+    target = authorityEnd === -1 ? '' : afterScheme.slice(authorityEnd)
   }
+  const pathEnd = target.search(/[?#]/)
+  const path = pathEnd === -1 ? target : target.slice(0, pathEnd)
+  return path === '' ? '/' : path
 }
 
 /**
