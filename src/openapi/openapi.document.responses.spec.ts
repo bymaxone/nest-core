@@ -29,7 +29,7 @@ describe('augmentDocument — responses', () => {
     const result = augmentDocument(
       generated({ '/invoices': item }),
       options({}, { health: health({ enabled: false }) })
-    )
+    ).document
 
     for (const method of methods) {
       const responses = operation(result, '/invoices', method)['responses'] as Record<
@@ -55,7 +55,7 @@ describe('augmentDocument — responses', () => {
    * success shape precisely.
    */
   it('attaches the health response to the health operations', () => {
-    const result = augmentDocument(generated({ ...OWN_ROUTES }), options())
+    const result = augmentDocument(generated({ ...OWN_ROUTES }), options()).document
     const responses = operation(result, '/health/ready')['responses'] as Record<string, unknown>
 
     expect(responses['200']).toMatchObject({
@@ -80,7 +80,7 @@ describe('augmentDocument — responses', () => {
     const result = augmentDocument(
       generated({ '/invoices': { get: { responses: { default: mine } } } }),
       options()
-    )
+    ).document
     const responses = operation(result, '/invoices')['responses'] as Record<string, unknown>
 
     expect(responses['default']).toBe(mine)
@@ -100,7 +100,7 @@ describe('augmentDocument — responses', () => {
     const result = augmentDocument(
       generated({ '/invoices': { get: { responses: { default: mine } } } }),
       options()
-    )
+    ).document
     const responses = operation(result, '/invoices')['responses'] as Record<string, unknown>
 
     expect(responses['default']).toBe(mine)
@@ -122,7 +122,7 @@ describe('augmentDocument — responses', () => {
       health: { ...base.health, enabled: true }
     }
 
-    const result = augmentDocument(generated({ ...OWN_ROUTES }), off)
+    const result = augmentDocument(generated({ ...OWN_ROUTES }), off).document
     const invoices = operation(result, '/health/ready')['responses'] as Record<string, unknown>
 
     expect(invoices).not.toHaveProperty('default')
@@ -142,7 +142,7 @@ describe('augmentDocument — responses', () => {
     const result = augmentDocument(
       generated({ '/health/live': { get: { responses: { 200: { description: '' } } } } }),
       options()
-    )
+    ).document
     const responses = operation(result, '/health/live')['responses'] as Record<
       string,
       Record<string, unknown>
@@ -167,7 +167,7 @@ describe('augmentDocument — responses', () => {
     const result = augmentDocument(
       generated({ '/health/live': { get: { responses: { 200: { description: 'Alive.' } } } } }),
       options()
-    )
+    ).document
     const responses = operation(result, '/health/live')['responses'] as Record<
       string,
       Record<string, unknown>
@@ -198,7 +198,7 @@ describe('augmentDocument — responses', () => {
         '/invoices': { get: {} }
       }),
       options({ includeCoreSchemas: false })
-    )
+    ).document
 
     expect(JSON.stringify(result)).not.toContain('$ref')
     expect(result.components).not.toHaveProperty('schemas')
@@ -216,7 +216,7 @@ describe('augmentDocument — responses', () => {
     const result = augmentDocument(
       generated({ '/invoices': { get: {} } }),
       options({ includeCoreSchemas: false })
-    )
+    ).document
 
     expect(operation(result, '/invoices')).not.toHaveProperty('responses')
   })
@@ -234,7 +234,7 @@ describe('augmentDocument — responses', () => {
     const result = augmentDocument(
       generated({ '/invoices': { parameters, get: {} } }),
       options({}, { health: health({ enabled: false }) })
-    )
+    ).document
     const item = (result.paths as Record<string, Record<string, unknown>>)['/invoices']
 
     expect(item?.['parameters']).toBe(parameters)
@@ -248,7 +248,7 @@ describe('augmentDocument — responses', () => {
    * item must degrade to an empty one rather than throw at bootstrap.
    */
   it('tolerates a path item that is not an object', () => {
-    const result = augmentDocument(generated({ '/invoices': null }), options())
+    const result = augmentDocument(generated({ '/invoices': null }), options()).document
 
     expect((result.paths as Record<string, unknown>)['/invoices']).toEqual({})
   })

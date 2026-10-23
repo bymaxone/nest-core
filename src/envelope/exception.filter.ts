@@ -30,15 +30,24 @@ import { Catch, HttpException, Inject, Optional } from '@nestjs/common'
 import type { ArgumentsHost, ExceptionFilter } from '@nestjs/common'
 import { HttpAdapterHost } from '@nestjs/core'
 
+import { containRejection } from '../contain-rejection'
 import type { ResolvedCoreOptions } from '../core.options'
-import { BYMAX_CORE_OPTIONS, BYMAX_CORRELATION_PROVIDER, BYMAX_TRACE_CONTEXT } from '../core.tokens'
+import {
+  BYMAX_CORE_OPTIONS,
+  BYMAX_CORRELATION_PROVIDER,
+  BYMAX_TRACE_CONTEXT,
+  BYMAX_UNEXPECTED_ERROR_SINK
+} from '../core.tokens'
 import { NoopCorrelationIdProvider } from '../defaults.providers'
 import type { ICorrelationIdProvider } from './correlation.interfaces'
 import { BYMAX_INTERNAL_ERROR, BYMAX_VALIDATION_FAILED, codeForStatus } from './error-codes'
 import { buildErrorEnvelope } from './error-envelope'
 import type { ErrorDetails, ErrorEnvelope } from './error-envelope'
+import type { IUnexpectedErrorSink, UnexpectedErrorReport } from './unexpected-error.sink'
 import type { ITraceContextProvider } from '../telemetry/trace-context'
 import { NoopTraceContextProvider } from '../telemetry/trace-context'
+import { readRequestInfo } from '../timing/request-info.accessor'
+import type { RequestShape } from '../timing/request-info.accessor'
 
 /** HTTP status used for the production-safe collapse of any unknown error. */
 const INTERNAL_ERROR_STATUS = 500
@@ -310,12 +319,17 @@ export class BymaxExceptionFilter implements ExceptionFilter {
    *   (from their own, globally-visible module) is not shadowed by one; when
    *   nothing is bound, this falls back to a no-op that omits `correlationId`.
    * @param adapterHost - Host of the live HTTP adapter, resolved lazily per catch.
+   * @param traceContext - Reader for the active trace; a no-op when unbound.
+   * @param unexpectedErrorSink - Receives every unexpected error; unbound by default.
    */
   constructor(
     @Inject(BYMAX_CORE_OPTIONS) private readonly options: ResolvedCoreOptions,
     @Optional() @Inject(BYMAX_CORRELATION_PROVIDER) correlation: ICorrelationIdProvider | undefined,
     @Inject(HttpAdapterHost) private readonly adapterHost: HttpAdapterHost,
-    @Optional() @Inject(BYMAX_TRACE_CONTEXT) traceContext?: ITraceContextProvider
+    @Optional() @Inject(BYMAX_TRACE_CONTEXT) traceContext?: ITraceContextProvider,
+    @Optional()
+    @Inject(BYMAX_UNEXPECTED_ERROR_SINK)
+    private readonly unexpectedErrorSink?: IUnexpectedErrorSink
   ) {
     this.correlation = correlation ?? new NoopCorrelationIdProvider()
     this.traceContext = traceContext ?? new NoopTraceContextProvider()
@@ -375,20 +389,25 @@ export class BymaxExceptionFilter implements ExceptionFilter {
       ...(correlationId !== undefined ? { correlationId } : {}),
       ...(traceId !== undefined ? { traceId } : {})
     }
-    const envelope = this.buildEnvelope(exception, context)
+    const envelope = this.buildEnvelope(exception, context, request)
     httpAdapter.reply(response, envelope, envelope.statusCode)
   }
 
   /**
    * Select the mapping rule for the exception and build its envelope. An
-   * unknown error is handed to the observability seam before it collapses, so
-   * an integration can record the original error with the request context.
+   * unknown error is handed to the observability seam once its envelope is
+   * built, so an integration can record the original error with the context.
    *
    * @param exception - The error that escaped the handler.
    * @param context - The neutral request context.
+   * @param request - The framework request, read only for the sink's route template.
    * @returns The formatted envelope.
    */
-  private buildEnvelope(exception: unknown, context: FilterErrorContext): ErrorEnvelope {
+  private buildEnvelope(
+    exception: unknown,
+    context: FilterErrorContext,
+    request: unknown
+  ): ErrorEnvelope {
     if (exception instanceof HttpException) {
       return this.mapHttpException(exception, context)
     }
@@ -404,13 +423,47 @@ export class BymaxExceptionFilter implements ExceptionFilter {
         context
       )
     }
+    // Built first: the hooks below receive the original, mutable value, and
+    // with `exposeInternals` on the envelope reads its message and stack — so a
+    // hook that redacts or enriches the error in place must find the response
+    // already formed.
+    const envelope = this.mapUnknown(exception, context)
     try {
       this.onUnexpectedError(exception, context)
     } catch {
       // The observability hook must never break error formatting; a throwing
       // override is swallowed so the envelope is still delivered.
     }
-    return this.mapUnknown(exception, context)
+    this.reportUnexpected(exception, context, request)
+    return envelope
+  }
+
+  /**
+   * Hand an unexpected error to the bound sink, if any. Whatever the sink does
+   * — throw, or return a promise that rejects — is absorbed: the response must
+   * not depend on it. See `IUnexpectedErrorSink` for the contract.
+   *
+   * @param error - The original thrown value.
+   * @param context - The neutral request context.
+   * @param request - The framework request, read for its route template only.
+   */
+  private reportUnexpected(error: unknown, context: FilterErrorContext, request: unknown): void {
+    const sink = this.unexpectedErrorSink
+    if (sink === undefined) {
+      return
+    }
+    try {
+      const report: UnexpectedErrorReport = {
+        error,
+        method: context.method,
+        route: readRequestInfo(request as RequestShape).route,
+        ...(context.correlationId !== undefined ? { correlationId: context.correlationId } : {}),
+        ...(context.traceId !== undefined ? { traceId: context.traceId } : {})
+      }
+      containRejection(sink.record(report), () => undefined)
+    } catch {
+      // Same rule as the seam above: a failing sink costs its own record, never the response.
+    }
   }
 
   /**
@@ -514,7 +567,7 @@ export class BymaxExceptionFilter implements ExceptionFilter {
 
   /**
    * Observability seam invoked for every unexpected (non-`HttpException`) error
-   * before it collapses to the generic 500. The base implementation is a no-op:
+   * collapsed to the generic 500. The base implementation is a no-op:
    * this library owns no logger. An integration (for example
    * `@bymax-one/nest-logger`) subclasses the filter and overrides this to record
    * the original error with the current request context and correlation id.

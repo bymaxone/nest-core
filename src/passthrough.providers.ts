@@ -15,6 +15,8 @@ import { BaseExceptionFilter } from '@nestjs/core'
 import type { ResolvedCoreOptions } from './core.options'
 import type { ICorrelationIdProvider } from './envelope/correlation.interfaces'
 import { BymaxExceptionFilter } from './envelope/exception.filter'
+import type { IUnexpectedErrorSink } from './envelope/unexpected-error.sink'
+import type { ITraceContextProvider } from './telemetry/trace-context'
 
 /**
  * Exception filter that reproduces Nest's default error handling, used on the
@@ -92,14 +94,19 @@ export function assertAsyncFeatureEnabled(feature: string, enabled: boolean): vo
  *   or `undefined` when no provider is bound anywhere in the application; the
  *   real filter falls back to its own no-op default in that case.
  * @param adapterHost - The HTTP adapter host used to read and write the response.
+ * @param traceContext - The trace-context reader bound on this path.
+ * @param unexpectedErrorSink - The consumer's unexpected-error sink, or
+ *   `undefined` when none is bound.
  * @returns The real envelope filter when enabled, else a transparent pass-through.
  */
 export function selectAsyncExceptionFilter(
   options: ResolvedCoreOptions,
   correlation: ICorrelationIdProvider | undefined,
-  adapterHost: HttpAdapterHost
+  adapterHost: HttpAdapterHost,
+  traceContext?: ITraceContextProvider,
+  unexpectedErrorSink?: IUnexpectedErrorSink
 ): ExceptionFilter {
   return options.envelope.enabled
-    ? new BymaxExceptionFilter(options, correlation, adapterHost)
+    ? new BymaxExceptionFilter(options, correlation, adapterHost, traceContext, unexpectedErrorSink)
     : new PassThroughExceptionFilter(adapterHost)
 }

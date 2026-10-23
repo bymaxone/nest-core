@@ -112,7 +112,7 @@ describe('unsecuredOperations', () => {
     const document = augmentDocument(
       generated({ ...OWN_ROUTES, '/examples': { get: {} } }),
       protectedScrape
-    )
+    ).document
 
     expect(operation(document, '/metrics')['security']).toEqual([{ BymaxMetricsAuth: [] }])
     expect(unsecuredOperations(document, protectedScrape)).toEqual([])
@@ -175,7 +175,7 @@ describe('unsecuredOperations', () => {
           components: {}
         }
       ]
-    )
+    ).document
 
     expect(unsecuredOperations(document, options())).toEqual(['GET /examples'])
   })
@@ -191,7 +191,7 @@ describe('unsecuredOperations', () => {
     const paths = { '/auth/login': { post: { security: [] } }, '/examples': { get: {} } }
     const configured = options({ operationSecurity: { 'GET /examples': [] } })
 
-    const document = augmentDocument(generated(paths), configured)
+    const document = augmentDocument(generated(paths), configured).document
 
     expect(unsecuredOperations(document, configured)).toEqual([])
   })

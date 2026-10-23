@@ -3,11 +3,12 @@
  * application (Express, driven by supertest) with `BymaxCoreModule` wired
  * exactly the way a real application would wire it: one small controller
  * exercising the happy path, a mapped `HttpException`, an unmapped error, and
- * an artificially slow route; a stub correlation provider and a stub health
- * indicator bound through the documented consumer-override pattern (a
- * `@Global()` sibling module providing `BYMAX_CORRELATION_PROVIDER` and
- * `BYMAX_HEALTH_INDICATORS`, imported alongside `BymaxCoreModule`), so both
- * stubs are switchable at request time from the test that built the fixture.
+ * an artificially slow route; a stub correlation provider, a stub health
+ * indicator and a stub unexpected-error sink bound through the documented
+ * consumer-override pattern (a `@Global()` sibling module providing
+ * `BYMAX_CORRELATION_PROVIDER`, `BYMAX_HEALTH_INDICATORS` and
+ * `BYMAX_UNEXPECTED_ERROR_SINK`, imported alongside `BymaxCoreModule`), so every
+ * stub is switchable at request time from the test that built the fixture.
  * Every README integration example is mirrored by this file, so a snippet a
  * consumer copies from the README is guaranteed to compile and behave exactly
  * as shown here.
@@ -20,9 +21,15 @@ import { Test } from '@nestjs/testing'
 import {
   BymaxCoreModule,
   BYMAX_CORRELATION_PROVIDER,
-  BYMAX_HEALTH_INDICATORS
+  BYMAX_HEALTH_INDICATORS,
+  BYMAX_UNEXPECTED_ERROR_SINK
 } from '@bymax-one/nest-core'
-import type { BymaxCoreModuleOptions, ICorrelationIdProvider } from '@bymax-one/nest-core'
+import type {
+  BymaxCoreModuleOptions,
+  ICorrelationIdProvider,
+  IUnexpectedErrorSink,
+  UnexpectedErrorReport
+} from '@bymax-one/nest-core'
 import type { HealthIndicatorResult, IHealthIndicator } from '@bymax-one/nest-core/health'
 
 /** Milliseconds the fixture's slow route artificially waits before replying. */
@@ -51,6 +58,38 @@ export class StubCorrelationIdProvider implements ICorrelationIdProvider {
    */
   getCorrelationId(): string | undefined {
     return this.id
+  }
+}
+
+/**
+ * Unexpected-error sink stub. Keeps every report, and can be switched to throw
+ * so a test can prove a broken sink never changes the response.
+ */
+export class StubUnexpectedErrorSink implements IUnexpectedErrorSink {
+  readonly reports: UnexpectedErrorReport[] = []
+
+  private broken = false
+
+  /**
+   * Make subsequent calls throw, or record again.
+   *
+   * @param broken - `true` throws from `record`; `false` records.
+   */
+  setBroken(broken: boolean): void {
+    this.broken = broken
+  }
+
+  /**
+   * Keep the report, or throw when switched to broken.
+   *
+   * @param report - The unexpected error and the request it failed.
+   * @throws Error When switched to broken.
+   */
+  record(report: UnexpectedErrorReport): void {
+    if (this.broken) {
+      throw new Error('fixture sink is broken')
+    }
+    this.reports.push(report)
   }
 }
 
@@ -128,19 +167,22 @@ export class FixtureController {
  *
  * @param correlation - The stub correlation provider instance to bind.
  * @param indicator - The stub health indicator instance to bind.
+ * @param sink - The stub unexpected-error sink instance to bind.
  * @returns The dynamic module to import alongside `BymaxCoreModule`.
  */
 function observabilityModule(
   correlation: StubCorrelationIdProvider,
-  indicator: StubHealthIndicator
+  indicator: StubHealthIndicator,
+  sink: StubUnexpectedErrorSink
 ): DynamicModule {
   @Global()
   @Module({
     providers: [
       { provide: BYMAX_CORRELATION_PROVIDER, useValue: correlation },
-      { provide: BYMAX_HEALTH_INDICATORS, useValue: [indicator] }
+      { provide: BYMAX_HEALTH_INDICATORS, useValue: [indicator] },
+      { provide: BYMAX_UNEXPECTED_ERROR_SINK, useValue: sink }
     ],
-    exports: [BYMAX_CORRELATION_PROVIDER, BYMAX_HEALTH_INDICATORS]
+    exports: [BYMAX_CORRELATION_PROVIDER, BYMAX_HEALTH_INDICATORS, BYMAX_UNEXPECTED_ERROR_SINK]
   })
   class ObservabilityModule {}
   return { module: ObservabilityModule }
@@ -156,6 +198,7 @@ export interface Fixture {
   readonly app: INestApplication
   readonly correlation: StubCorrelationIdProvider
   readonly indicator: StubHealthIndicator
+  readonly sink: StubUnexpectedErrorSink
 }
 
 /**
@@ -169,17 +212,18 @@ export interface Fixture {
 export async function buildFixtureApp(registration: FixtureRegistration): Promise<Fixture> {
   const correlation = new StubCorrelationIdProvider()
   const indicator = new StubHealthIndicator()
+  const sink = new StubUnexpectedErrorSink()
   const coreModule =
     registration.kind === 'sync'
       ? BymaxCoreModule.forRoot(registration.options)
       : BymaxCoreModule.forRootAsync({ inject: [], useFactory: registration.factory })
   const moduleRef = await Test.createTestingModule({
-    imports: [coreModule, observabilityModule(correlation, indicator)],
+    imports: [coreModule, observabilityModule(correlation, indicator, sink)],
     controllers: [FixtureController]
   }).compile()
   const app = moduleRef.createNestApplication()
   await app.init()
-  return { app, correlation, indicator }
+  return { app, correlation, indicator, sink }
 }
 
 /**

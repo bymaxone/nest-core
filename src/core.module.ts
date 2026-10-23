@@ -25,11 +25,14 @@ import {
   BYMAX_CORE_OPTIONS,
   BYMAX_CORRELATION_PROVIDER,
   BYMAX_METRICS_REGISTRY,
-  BYMAX_TIMING_SINK
+  BYMAX_TIMING_SINK,
+  BYMAX_TRACE_CONTEXT,
+  BYMAX_UNEXPECTED_ERROR_SINK
 } from './core.tokens'
 import { buildDefaultProviders, buildTraceContextProvider } from './defaults.providers'
 import type { ICorrelationIdProvider } from './envelope/correlation.interfaces'
 import { BymaxExceptionFilter } from './envelope/exception.filter'
+import type { IUnexpectedErrorSink } from './envelope/unexpected-error.sink'
 import { createHealthController } from './health/health.controller'
 import { HealthService } from './health/health.service'
 import { MetricsContributionRunner } from './metrics/metrics.contribution'
@@ -39,6 +42,7 @@ import {
   buildMetricsTimingSinkProvider
 } from './metrics/metrics.providers'
 import { selectAsyncExceptionFilter } from './passthrough.providers'
+import type { ITraceContextProvider } from './telemetry/trace-context'
 import { bridgeFastifyRouteMetadata } from './timing/fastify-route.bridge'
 import type { HttpAdapterShape } from './timing/fastify-route.bridge'
 import { BymaxTimingMiddleware } from './timing/timing.middleware'
@@ -160,12 +164,26 @@ function buildAsyncSlots(): Provider[] {
       useFactory: (
         options: ResolvedCoreOptions,
         correlation: ICorrelationIdProvider | undefined,
-        adapterHost: HttpAdapterHost
-      ): ExceptionFilter => selectAsyncExceptionFilter(options, correlation, adapterHost),
+        adapterHost: HttpAdapterHost,
+        traceContext: ITraceContextProvider,
+        unexpectedErrorSink: IUnexpectedErrorSink | undefined
+      ): ExceptionFilter =>
+        selectAsyncExceptionFilter(
+          options,
+          correlation,
+          adapterHost,
+          traceContext,
+          unexpectedErrorSink
+        ),
+      // Every constructor dependency the sync path resolves through `useClass`
+      // has to be listed here by hand; one left out reaches the filter as its
+      // no-op fallback and nothing fails.
       inject: [
         BYMAX_CORE_OPTIONS,
         { token: BYMAX_CORRELATION_PROVIDER, optional: true },
-        HttpAdapterHost
+        HttpAdapterHost,
+        BYMAX_TRACE_CONTEXT,
+        { token: BYMAX_UNEXPECTED_ERROR_SINK, optional: true }
       ]
     }
   ]
