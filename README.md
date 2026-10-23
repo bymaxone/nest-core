@@ -1583,6 +1583,23 @@ import {
 export class ObservabilityModule {}
 ```
 
+The id exists only once nest-logger's request-id middleware runs, and
+`BymaxLoggerModule` mounts none on its own. Mount it in `main.ts`, or call
+`applyRequestIdMiddleware(consumer)` from a module's `configure()`:
+
+```typescript
+import { NestFactory } from '@nestjs/core'
+import { applyAccessLog } from '@bymax-one/nest-logger'
+import { AppModule } from './app.module'
+
+async function bootstrap(): Promise<void> {
+  const app = await NestFactory.create(AppModule)
+  applyAccessLog(app) // opens the request context that carries `requestId`
+  await app.listen(3000)
+}
+void bootstrap()
+```
+
 Every error envelope now carries the same correlation id your logs do, and the
 cause of every collapsed `500` is logged with it (`PinoUnexpectedErrorSink`
 needs `@bymax-one/nest-logger` 1.4.1 or later). The

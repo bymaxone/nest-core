@@ -26,8 +26,9 @@ recipe for pairing with `@bymax-one/nest-logger` bound nothing.
   followed the previous README recipe bound
   `BYMAX_CORRELATION_PROVIDER` to `LogContextService` with `useExisting`, and
   got no correlation id at all. Replace it with the `useFactory` in the
-  README's "Integration with `@bymax-one/nest-logger`". Nothing else needs to
-  change.
+  README's "Integration with `@bymax-one/nest-logger`", and make sure
+  nest-logger's request-id middleware is mounted (`applyAccessLog(app)` or
+  `applyRequestIdMiddleware(consumer)`). Without it there is no id to read.
 
 ### Fixed
 
