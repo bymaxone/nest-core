@@ -11,6 +11,58 @@ heading here.
 
 ## [Unreleased]
 
+## [1.6.3] - 2026-10-23
+
+The error envelope's `path` carried the query string, and the documented
+recipe for pairing with `@bymax-one/nest-logger` bound nothing.
+
+**Apply to a derived backend:**
+
+- **`path` changes in the response body.** An application that reads `path`
+  from the envelope now gets the request path alone. `/invoices/42?token=x`
+  now reads `/invoices/42`. The query string was never part of the documented
+  contract, and is where reset codes and tokens travel.
+- **The nest-logger correlation recipe changes.** An application that
+  followed the previous README recipe bound
+  `BYMAX_CORRELATION_PROVIDER` to `LogContextService` with `useExisting`, and
+  got no correlation id at all. Replace it with the `useFactory` in the
+  README's "Integration with `@bymax-one/nest-logger`". Nothing else needs to
+  change.
+
+### Fixed
+
+- **The envelope `path` no longer carries the query string.** Both adapters
+  report the original URL, query included: Express returns `originalUrl`, and
+  Fastify the raw URL. The filter copied that into `path`, which is documented
+  as the request URL path. So a query-string secret reached the client and any
+  log that stores the envelope. The `onUnexpectedError` context now receives
+  the same path. The unexpected-error sink already reported the route
+  template and is unaffected.
+- **The nest-logger integration recipe binds what it promises.** It imported
+  `NestLoggerModule`, which does not exist; the module is `BymaxLoggerModule`.
+  It also aliased `LogContextService` with `useExisting`, but that service
+  has no `getCorrelationId()`. The binding was inert, and silently so: the
+  filter treats a failing correlation read as "no id". The README and the
+  technical specification now adapt the `requestId` key with a factory, and
+  bind `PinoUnexpectedErrorSink` (nest-logger 1.4.1) beside it. The snippet
+  passed the published-surface gate before only because that gate ignores
+  diagnostics from a peer the fixture does not install.
+- **A thrown value that cannot be described no longer breaks the response.**
+  With `envelope.exposeInternals` on, a value with no prototype, or an `Error`
+  whose `stack` getter throws, threw out of the filter. The internals dump now
+  degrades to a fixed message, and the hooks still run.
+- **The discard warning no longer claims a mismatch for identical entries.**
+  It now says a generated client will not match the library's own types only
+  where the two definitions differ.
+
+### Changed
+
+- **Served component order (since 1.6.1).** Since 1.6.1, a document's own
+  `components.schemas` and `components.parameters` entries are listed before
+  this package's catalogue and before contributed entries. The 1.6.1 entry did
+  not say so. Order in a components map carries no meaning in OpenAPI, but it
+  shows in Swagger UI's model list and in a stored `openapi.json` snapshot.
+
 ## [1.6.2] - 2026-10-22
 
 An unexpected error became `500 BYMAX_INTERNAL_ERROR` and the application had no
@@ -1138,4 +1190,5 @@ have regressed from. They are kept because the reasoning is worth having.
 [1.6.0]: https://github.com/bymaxone/nest-core/compare/v1.5.3...v1.6.0
 [1.6.1]: https://github.com/bymaxone/nest-core/compare/v1.6.0...v1.6.1
 [1.6.2]: https://github.com/bymaxone/nest-core/compare/v1.6.1...v1.6.2
-[Unreleased]: https://github.com/bymaxone/nest-core/compare/v1.6.2...HEAD
+[1.6.3]: https://github.com/bymaxone/nest-core/compare/v1.6.2...v1.6.3
+[Unreleased]: https://github.com/bymaxone/nest-core/compare/v1.6.3...HEAD
