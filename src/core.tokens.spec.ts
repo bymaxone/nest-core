@@ -16,7 +16,8 @@ import {
   BYMAX_HEALTH_TRANSITION_SINK,
   BYMAX_METRICS_REGISTRY,
   BYMAX_TIMING_SINK,
-  BYMAX_TRACE_CONTEXT
+  BYMAX_TRACE_CONTEXT,
+  BYMAX_UNEXPECTED_ERROR_SINK
 } from './core.tokens'
 
 describe('core DI tokens', () => {
@@ -26,6 +27,7 @@ describe('core DI tokens', () => {
     [BYMAX_TIMING_SINK, '@bymax-one/nest-core:timing-sink'],
     [BYMAX_HEALTH_INDICATORS, '@bymax-one/nest-core:health-indicators'],
     [BYMAX_HEALTH_TRANSITION_SINK, '@bymax-one/nest-core:health-transition-sink'],
+    [BYMAX_UNEXPECTED_ERROR_SINK, '@bymax-one/nest-core:unexpected-error-sink'],
     [BYMAX_METRICS_REGISTRY, '@bymax-one/nest-core:metrics-registry'],
     [BYMAX_TRACE_CONTEXT, '@bymax-one/nest-core:trace-context']
   ]

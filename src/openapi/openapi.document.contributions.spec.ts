@@ -41,7 +41,7 @@ describe('augmentDocument — library contributions', () => {
       options(),
       [''],
       [contribution('AuthOpenApi', { AuthController_login: { summary: 'Sign in', security: [] } })]
-    )
+    ).document
     const login = operation(result, '/auth/login', 'post')
 
     expect(login['summary']).toBe('Sign in')
@@ -61,7 +61,7 @@ describe('augmentDocument — library contributions', () => {
       options(),
       [''],
       [contribution('AuthOpenApi', { AuthController_login: { summary: 'Theirs' } })]
-    )
+    ).document
 
     expect(operation(result, '/auth/login', 'post')['summary']).toBe('Mine')
   })
@@ -91,7 +91,7 @@ describe('augmentDocument — library contributions', () => {
           }
         })
       ]
-    )
+    ).document
     const responses = operation(result, '/auth/login', 'post')['responses'] as Record<
       string,
       Record<string, unknown>
@@ -114,7 +114,7 @@ describe('augmentDocument — library contributions', () => {
       options(),
       [''],
       [contribution('AuthOpenApi', { AuthController_login: { summary: 'Sign in' } })]
-    )
+    ).document
 
     expect(operation(result, '/auth/login', 'post')).not.toHaveProperty('summary')
   })
@@ -146,7 +146,7 @@ describe('augmentDocument — library contributions', () => {
           }
         )
       ]
-    )
+    ).document
     const schemes = components(result, 'securitySchemes')
 
     expect(schemes['shared']).toBe(mine)
@@ -173,7 +173,7 @@ describe('augmentDocument — library contributions', () => {
             { securitySchemes: { authCookie: { type: 'apiKey', in: 'cookie', name: 'access' } } }
           )
         ]
-      )
+      ).document
 
     expect(build).not.toThrow()
   })
@@ -194,7 +194,7 @@ describe('augmentDocument — library contributions', () => {
       options(),
       [''],
       [contribution('AuthOpenApi', { AuthController_login: { summary: 'Sign in' } })]
-    )
+    ).document
 
     expect(operation(result, '/auth/login', 'post')['summary']).toBe('Sign in')
     expect(operation(result, '/auth/logout', 'post')).not.toHaveProperty('summary')
@@ -212,7 +212,7 @@ describe('augmentDocument — library contributions', () => {
       options({ includeCoreSchemas: false }),
       [''],
       [contribution('AuthOpenApi', { AuthController_login: { summary: 'Sign in' } })]
-    )
+    ).document
 
     expect(operation(result, '/auth/login', 'post')).not.toHaveProperty('responses')
   })
@@ -231,7 +231,7 @@ describe('augmentDocument — library contributions', () => {
       options({ security: [{ cookieAuth: [] }], securitySchemes: SCHEMES }),
       [''],
       [contribution('ProbeOpenApi', { HealthController_live: { security: [{ cookieAuth: [] }] } })]
-    )
+    ).document
 
     expect(operation(result, '/health/live')['security']).toEqual([{ cookieAuth: [] }])
   })
@@ -251,7 +251,7 @@ describe('augmentDocument — library contributions', () => {
         contribution('AlphaOpenApi', { AuthController_login: { summary: 'Alpha' } }),
         contribution('ZuluOpenApi', { AuthController_login: { summary: 'Zulu' } })
       ]
-    )
+    ).document
 
     expect(operation(result, '/auth/login', 'post')['summary']).toBe('Alpha')
   })

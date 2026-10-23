@@ -33,7 +33,8 @@ export {
   BYMAX_HEALTH_INDICATORS,
   BYMAX_HEALTH_TRANSITION_SINK,
   BYMAX_METRICS_REGISTRY,
-  BYMAX_TRACE_CONTEXT
+  BYMAX_TRACE_CONTEXT,
+  BYMAX_UNEXPECTED_ERROR_SINK
 } from './core.tokens'
 
 export type {
@@ -49,6 +50,8 @@ export type { ITraceContextProvider, TraceContext } from './telemetry/trace-cont
 export { BymaxExceptionFilter } from './envelope/exception.filter'
 
 export type { FilterErrorContext } from './envelope/exception.filter'
+
+export type { IUnexpectedErrorSink, UnexpectedErrorReport } from './envelope/unexpected-error.sink'
 
 export { buildErrorEnvelope } from './envelope/error-envelope'
 

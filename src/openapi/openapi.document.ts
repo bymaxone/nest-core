@@ -30,6 +30,8 @@ import type {
   ResolvedCoreOptions,
   ResolvedOpenApiOptions
 } from '../core.options'
+import { mergeContributedComponents, placeComponentEntries } from './openapi.components'
+import type { DiscardedComponent } from './openapi.components'
 import type { OpenApiFragmentObject } from './openapi.contract'
 import type { ResolvedContribution } from './openapi.contribution'
 import { indexOwnRoutes, isOwnRoute } from './openapi.routes'
@@ -45,6 +47,20 @@ export type { OpenApiDocumentLike }
 
 /** A document that has been through {@link augmentDocument}. */
 export type AugmentedDocument<T> = T & { components: Readonly<Record<string, unknown>> }
+
+/**
+ * What {@link augmentDocument} produced, and what it could not place.
+ *
+ * A pair rather than a document alone because the discards are not an error —
+ * the document is complete and correct — but they are the only record that a
+ * contribution was offered and not taken.
+ */
+export interface AugmentResult<T> {
+  /** The augmented document. */
+  readonly document: AugmentedDocument<T>
+  /** Every contributed component entry the document already declared. */
+  readonly discarded: readonly DiscardedComponent[]
+}
 
 /** The security scheme this package contributes for a protected scrape endpoint. */
 const METRICS_SCHEME_NAME = 'BymaxMetricsAuth'
@@ -672,7 +688,8 @@ function augmentPaths(
  *   application's.
  * @param contributions - What the libraries in this application contributed,
  *   already resolved to the operation ids the document uses.
- * @returns The augmented document.
+ * @returns The augmented document, and every contributed component entry the
+ *   document already declared with a shape of its own.
  * @throws Error When `openapi.operationSecurity` addresses an operation the
  *   document does not contain, or when a security requirement names a scheme
  *   the document does not define.
@@ -682,7 +699,7 @@ export function augmentDocument<T extends OpenApiDocumentLike>(
   options: ResolvedCoreOptions,
   pathPrefixes: readonly string[] = [''],
   contributions: readonly ResolvedContribution[] = []
-): AugmentedDocument<T> {
+): AugmentResult<T> {
   const { openapi } = options
   const components = asRecord(document.components)
   // Accumulated in a `Map`, converted once at the end. Component member names
@@ -693,9 +710,22 @@ export function augmentDocument<T extends OpenApiDocumentLike>(
   // take part in the scheme validation below. A `Map` key cannot do that.
   const merged = new Map(Object.entries(components))
 
+  // The catalogue is placed by the rule contributors are, and before them: a
+  // placeholder under a catalogue name is filled by the package's own
+  // definition, so a library offering the same name later meets a declaration
+  // rather than a vacancy. A document that declared the name keeps it, and that
+  // is not reported — the catalogue is not a contributor.
   if (openapi.includeCoreSchemas) {
-    merged.set('schemas', mergeAbsent(asRecord(components['schemas']), CORE_SCHEMAS))
-    merged.set('parameters', mergeAbsent(asRecord(components['parameters']), CORE_PARAMETERS))
+    const keep = (): void => undefined
+    // One literal names each member for the read, the rule and the write, so
+    // the three cannot disagree about which member they mean.
+    const catalogue = [
+      ['schemas', CORE_SCHEMAS],
+      ['parameters', CORE_PARAMETERS]
+    ] as const
+    for (const [member, entries] of catalogue) {
+      merged.set(member, placeComponentEntries(merged.get(member), member, entries, keep))
+    }
   }
 
   // Contributed only when the scrape endpoint is actually protected, so the
@@ -725,13 +755,7 @@ export function augmentDocument<T extends OpenApiDocumentLike>(
     merged.set('securitySchemes', declaredSchemes)
   }
 
-  // Contributed components land beneath everything above: the document, this
-  // package's catalogue and the consumer's own configuration all keep winning.
-  for (const contribution of contributions) {
-    for (const [member, entries] of Object.entries(contribution.components)) {
-      merged.set(member, mergeAbsent(asRecord(merged.get(member)), entries))
-    }
-  }
+  const discarded = mergeContributedComponents(merged, contributions)
 
   // Validated against everything the served document will define, libraries
   // included: rejecting a consumer for naming a scheme their own library
@@ -763,5 +787,8 @@ export function augmentDocument<T extends OpenApiDocumentLike>(
       ? { security: openapi.security }
       : {}
 
-  return { ...document, components: Object.fromEntries(merged), ...paths, ...security }
+  return {
+    document: { ...document, components: Object.fromEntries(merged), ...paths, ...security },
+    discarded
+  }
 }

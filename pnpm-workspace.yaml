@@ -26,9 +26,11 @@ allowBuilds:
 # NOT in package.json: pnpm 11 no longer reads the `pnpm` field of package.json,
 # so an override placed there is ignored — with a warning, but ignored.
 overrides:
-  'brace-expansion@1': '^1.1.18'
-  'brace-expansion@2': '^2.1.4'
-  'brace-expansion@5': '^5.0.9'
+  # brace-expansion carries GHSA-6j4f-fj2g-mc7p and GHSA-qhr7-859c-m2p7 (high)
+  # and GHSA-q2hr-2g5m-vwhr below 1.1.21, 2.1.7 and 5.0.12 in its three lines.
+  'brace-expansion@1': '^1.1.21'
+  'brace-expansion@2': '^2.1.7'
+  'brace-expansion@5': '^5.0.12'
   # browserslist below 4.28.7 carries GHSA-73wf-gq98-2v4g and
   # GHSA-c83g-rgw3-j3cx, both high. Every consumer in this tree declares a
   # range that already admits that floor — @babel/helper-compilation-targets
@@ -37,16 +39,17 @@ overrides:
   # scoped form js-yaml needs below is unnecessary here.
   'browserslist': '^4.28.7'
   'esbuild': '^0.28.1'
-  # fast-uri below 3.1.6 carries GHSA-f65p-4m7j-42xc and GHSA-fph4-wmhf-6fwf,
-  # both high: server-side request forgery through malformed IPv6 normalization
+  # fast-uri below 3.1.8 carries GHSA-hrr3-gc8f-f4qj, and below 3.1.6
+  # GHSA-f65p-4m7j-42xc and GHSA-fph4-wmhf-6fwf, both high: server-side request forgery through malformed IPv6 normalization
   # and through repeated percent-decoding of the hostname. Three consumers reach
   # it, all under devDependencies — @fastify/ajv-compiler, and two ajv copies
   # from the eslint, Stryker and commitlint toolchains — so the exposure is this
   # repository's build surface, not anything a consumer installs.
-  'fast-uri': '^3.1.6'
-  # fastify below 5.12.1 carries GHSA-3m5p-2c4r-xxw2 (X-Forwarded-* spoofing
-  # under a trustProxy hop count) and GHSA-w2qp-rph6-63g4 (schema validation
-  # bypass through root primitive coercion).
+  'fast-uri': '^3.1.8'
+  # fastify below 5.12.5 carries GHSA-4mh8-r7rc-xpvc, and below 5.12.2
+  # GHSA-667r-xxjv-c9mm, GHSA-9q9j-q6p8-xq58, GHSA-hwr6-493r-vm6h and
+  # GHSA-p68q-wchp-6fh7 (high); below 5.12.1 it also carries GHSA-3m5p-2c4r-xxw2
+  # and GHSA-w2qp-rph6-63g4.
   #
   # Tree-wide rather than scoped to @nestjs/platform-fastify, which is the one
   # consumer that carried a vulnerable copy: an override replaces a dependency's
@@ -56,13 +59,28 @@ overrides:
   # advisory-affected version is the drift `peer-advisory-drift.yml` exists to
   # catch, and leaving one here while overriding the transitive copy would be
   # inconsistent.
-  'fastify': '^5.12.1'
+  'fastify': '^5.12.5'
   # @nestjs/swagger pins js-yaml to exactly 5.2.1, which carries
   # GHSA-pm4m-ph32-ghv5 (high: exponential parsing time in flow collections).
   # Scoped to that subtree rather than applied tree-wide as a blast-radius
   # choice, not a necessity: an override replaces a spec outright and would lift
   # the exact pin either way. Only this subtree is known to need it.
-  '@nestjs/swagger>js-yaml': '^5.2.2'
+  '@nestjs/swagger>js-yaml': '^5.4.1'
+  # js-yaml carries GHSA-2883-xcg3-v3hh (high) below 3.15.2 and 4.3.2, and
+  # GHSA-r3ph-w7gj-g6xm below 5.4.1; the 3.x and 4.x copies are reached through
+  # the jest and eslint toolchains.
+  'js-yaml@3': '^3.15.2'
+  'js-yaml@4': '^4.3.2'
+  # handlebars below 4.7.10 carries GHSA-8r5x-fm3f-whwj and GHSA-p8wg-vrv2-v86f
+  # (critical) and GHSA-xw65-4hp5-5hc7, reached as a dependency of ts-jest.
+  'handlebars': '^4.7.10'
+  # multer below 2.4.0 carries GHSA-3pph-fpjx-jg34, and below 2.3.0
+  # GHSA-535w-7cp7-47q4, GHSA-qfvm-cv95-jqjf, GHSA-wc9g-mqfw-jrwm (high) and
+  # GHSA-qvfw-j98x-7q72. proxy-addr below 2.0.8 carries GHSA-jqcg-44mw-7w3h
+  # (critical). Both sit beneath @nestjs/platform-express and express, which
+  # are devDependencies here.
+  'multer': '^2.4.0'
+  'proxy-addr': '^2.0.8'
   # qs below 6.16.0 carries GHSA-4mjr-xmp4-gh2g (denial of service through an
   # attacker-controlled isBuffer) and GHSA-x5fp-wj9c-mxmx (array-limit bypass
   # through bracket-key comma parsing). Three consumers reach it, all under
