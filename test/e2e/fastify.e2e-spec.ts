@@ -133,6 +133,24 @@ describe('request timing on the Fastify adapter', () => {
   })
 
   /**
+   * The error envelope's `path` never carries the query string on Fastify.
+   *
+   * Fastify reports the raw URL, query included, the same as Express's
+   * `originalUrl`. Only the path belongs in a body that reaches the client and
+   * any log that stores it.
+   */
+  it('reports the envelope path without the query string', async () => {
+    const fastify = await bootFastify()
+    app = fastify
+
+    const response = await fastify.inject({ method: 'GET', url: '/admin?token=reset-code-fy' })
+
+    expect(response.statusCode).toBe(401)
+    expect(response.json()).toMatchObject({ path: '/admin' })
+    expect(response.body).not.toContain('reset-code-fy')
+  })
+
+  /**
    * A global prefix does not change the shape of the answer.
    *
    * The prefixed root is the case that distinguishes a working mount from a

@@ -59,6 +59,22 @@ const INTERNAL_ERROR_MESSAGE = 'Internal server error'
 const VALIDATION_FAILED_MESSAGE = 'Validation failed'
 
 /**
+ * The request path, without its query string.
+ *
+ * Both adapters return the original URL, query included, and a query string is
+ * where reset codes and tokens travel; the envelope reaches the client and any
+ * log that stores it, so it carries the path its contract names and no more.
+ *
+ * @param url - The URL the adapter reports for the request.
+ * @returns The part before the first `?`.
+ */
+function pathOf(url: unknown): string {
+  const text = String(url)
+  const query = text.indexOf('?')
+  return query === -1 ? text : text.slice(0, query)
+}
+
+/**
  * Neutral view of the current request handed to {@link BymaxExceptionFilter}
  * mappers and to the {@link BymaxExceptionFilter.onUnexpectedError} seam. It
  * exposes only the framework-agnostic surface (path, method, correlation id,
@@ -385,7 +401,7 @@ export class BymaxExceptionFilter implements ExceptionFilter {
     const traceId = this.readAnnotation(() => this.traceContext.getTraceContext()?.traceId)
     const context: FilterErrorContext = {
       method: String(httpAdapter.getRequestMethod(request)),
-      path: String(httpAdapter.getRequestUrl(request)),
+      path: pathOf(httpAdapter.getRequestUrl(request)),
       ...(correlationId !== undefined ? { correlationId } : {}),
       ...(traceId !== undefined ? { traceId } : {})
     }

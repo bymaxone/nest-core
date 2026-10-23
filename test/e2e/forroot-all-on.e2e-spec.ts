@@ -82,6 +82,22 @@ describe('BymaxCoreModule.forRoot, all features enabled', () => {
   })
 
   /**
+   * The envelope's `path` never carries the query string.
+   *
+   * Express reports `originalUrl`, query included, and a query string is where
+   * reset codes and tokens travel. The envelope goes back to the client and
+   * into any log that stores it, so only the path belongs in it.
+   */
+  it('reports the path without the query string', async () => {
+    const response = await request(app?.getHttpServer())
+      .get('/missing?token=reset-code-e2e&page=2')
+      .expect(404)
+
+    expect(response.body.path).toBe('/missing')
+    expect(JSON.stringify(response.body)).not.toContain('reset-code-e2e')
+  })
+
+  /**
    * Liveness always responds.
    *
    * Liveness must reply 200 with the documented empty-checks shape regardless

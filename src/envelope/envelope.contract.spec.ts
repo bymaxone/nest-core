@@ -33,10 +33,10 @@ function stubCorrelation(id?: string): ICorrelationIdProvider {
 /** Run the filter against a mocked HTTP host and return the serialized reply body. */
 function serializeCatch(
   exception: unknown,
-  params?: { options?: ResolvedCoreOptions; correlation?: ICorrelationIdProvider }
+  params?: { options?: ResolvedCoreOptions; correlation?: ICorrelationIdProvider; url?: string }
 ): Record<string, unknown> {
   let body: ErrorEnvelope | undefined
-  const request = { url: FIXED_PATH, method: 'GET' }
+  const request = { url: params?.url ?? FIXED_PATH, method: 'GET' }
   const httpAdapter = {
     getRequestUrl: (req: { url: string }): string => req.url,
     getRequestMethod: (req: { method: string }): string => req.method,
@@ -172,5 +172,23 @@ describe('error envelope contract', () => {
       timestamp: FIXED_ISO,
       path: FIXED_PATH
     })
+  })
+
+  /**
+   * `path` is the path, never the query string.
+   *
+   * Both adapters hand the filter the original URL, query included, and a
+   * query string is where reset codes and tokens travel. The envelope reaches
+   * the client and any log that stores it, so it carries only what its
+   * contract names: the request path.
+   */
+  it.each([
+    ['a query string', `${FIXED_PATH}?token=reset-code&page=2`],
+    ['an empty query', `${FIXED_PATH}?`]
+  ])('serializes path without %s', (_label, url) => {
+    const body = serializeCatch(new NotFoundException('missing'), { url })
+
+    expect(body['path']).toBe(FIXED_PATH)
+    expect(JSON.stringify(body)).not.toContain('reset-code')
   })
 })
