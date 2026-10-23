@@ -43,8 +43,8 @@ recipe for pairing with `@bymax-one/nest-logger` bound nothing.
   It also aliased `LogContextService` with `useExisting`, but that service
   has no `getCorrelationId()`. The binding was inert, and silently so: the
   filter treats a failing correlation read as "no id". The README and the
-  technical specification now adapt the `requestId` key with a factory, and
-  bind `PinoUnexpectedErrorSink` (nest-logger 1.4.1) beside it. The snippet
+  specification now adapt the `requestId` key with a factory; the README
+  binds `PinoUnexpectedErrorSink` (nest-logger 1.4.1) beside it. The snippet
   passed the published-surface gate before only because that gate ignores
   diagnostics from a peer the fixture does not install.
 - **A thrown value that cannot be described no longer breaks the response.**
