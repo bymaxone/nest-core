@@ -66,8 +66,8 @@ const IGNORABLE_KEYS = new Set(['type', 'properties', 'description'])
  * Whether a schema occupies its name without describing a shape.
  *
  * Applies to the `schemas` member alone; the caller enforces that. Every other
- * component member has its own shape — a parameter carries `name` and `in`, not
- * `properties` — so this predicate would read them all as empty.
+ * component member has a shape of its own, so an entry there that happens to
+ * look like a schema placeholder is still that member's declaration.
  *
  * The peer emits `{"type":"object","properties":{}}` for every DTO in a package
  * built without its plugin, so a schema name is never actually missing and a
@@ -150,10 +150,9 @@ export function placeComponentEntries(
     const declared = next.get(name)
     const held = asRecord(declared)
     // The placeholder carve-out is `schemas` only. It exists because the peer
-    // emits an empty object schema per DTO, and no other member has an analogue
-    // — a parameter carries `name` and `in` rather than `properties`, so a
-    // predicate written for schemas reads every parameter as empty and would
-    // let an offer overwrite one the consumer wrote.
+    // emits an empty object schema per DTO, and no other member has an analogue,
+    // so an entry elsewhere shaped like one is still the consumer's declaration
+    // and an offer must not overwrite it.
     const replaceable = member === 'schemas' && describesNoShape(held)
     if (declared !== undefined && !replaceable) {
       onKept(name)

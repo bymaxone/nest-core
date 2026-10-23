@@ -299,8 +299,8 @@ function extractHttpMessage(
 const UNREPRESENTABLE_MESSAGE = 'Unrepresentable thrown value'
 
 /**
- * Build the development-only internals dump for a collapsed unknown error. The
- * original message is always captured; the stack is captured when present.
+ * Build the development-only internals dump for a collapsed unknown error: the
+ * original message, and the stack when present.
  *
  * Total, because it runs on whatever was thrown: a value with no prototype has
  * no `toString`, and a getter on `stack` or `message` can throw. Failing here
