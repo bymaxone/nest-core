@@ -211,13 +211,13 @@ describe('augmentDocument — component placement', () => {
     ])
   })
   /**
-   * The placeholder carve-out never reaches a member that is not `schemas`.
+   * A taken parameter or header name keeps the document's entry and is reported.
    *
-   * A parameter carries `name` and `in` rather than `properties`, so a
-   * schema-shaped emptiness test reads every one of them as a placeholder and
-   * lets a contributor overwrite one the consumer wrote, inverting the
-   * existing-side precedence every other member keeps. Widening the carve-out
-   * past `schemas` fails here rather than in a consumer's document.
+   * Both members keep the existing-side precedence: a contributed entry under a
+   * name the document holds is discarded and named in the report. The case
+   * that fails if the placeholder carve-out is widened past `schemas` is the
+   * placeholder-shaped `requestBodies` one below; these entries carry no
+   * `properties`, so the placeholder test would not fill them either way.
    */
   it('never replaces a non-schema member that looks empty to a schema test', () => {
     const mine = { name: 'page', in: 'query' }

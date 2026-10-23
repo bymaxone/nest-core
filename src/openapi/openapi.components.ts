@@ -31,10 +31,10 @@ export interface DiscardedComponent {
 /**
  * Whether this key is a `required` list that requires nothing.
  *
- * The peer emits `required: []` for a DTO whose members are all optional, so
- * treating the key's mere presence as a constraint would put every such schema
- * back in the case this carve-out exists to fix. A non-empty list is a real
- * constraint and is not ignorable.
+ * An empty list requires nothing, so a generator that always writes the key
+ * would otherwise keep an all-optional DTO's placeholder in the case this
+ * carve-out exists to fix. A non-empty list is a real constraint and is not
+ * ignorable.
  *
  * @param key - The schema key under test.
  * @param value - The value it carries.
