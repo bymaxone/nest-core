@@ -1587,6 +1587,11 @@ The id exists only once nest-logger's request-id middleware runs, and
 `BymaxLoggerModule` mounts none on its own. Mount it in `main.ts`, or call
 `applyRequestIdMiddleware(consumer)` from a module's `configure()`:
 
+> **Express only.** nest-logger's request-id middleware supports
+> `@nestjs/platform-express`. On the Fastify adapter no `requestId` is set, so
+> this correlation provider resolves nothing and envelopes carry no
+> `correlationId`.
+
 ```typescript
 import { NestFactory } from '@nestjs/core'
 import { applyAccessLog } from '@bymax-one/nest-logger'

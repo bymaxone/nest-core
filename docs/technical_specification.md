@@ -340,7 +340,7 @@ export interface ICorrelationIdProvider {
 }
 ```
 
-The filter resolves `BYMAX_CORRELATION_PROVIDER` and stamps the result into the envelope. The default binding is a no-op. `@bymax-one/nest-logger` keeps the request id under the `requestId` key of its AsyncLocalStorage-based `LogContextService`, which has no `getCorrelationId()`; a `useFactory` provider adapts it (§4.3), and `useExisting` on the service would bind an object the filter cannot read an id from. The id is set by nest-logger's request-id middleware, mounted with `applyAccessLog(app)` or `applyRequestIdMiddleware(consumer)`; without it there is no id to read.
+The filter resolves `BYMAX_CORRELATION_PROVIDER` and stamps the result into the envelope. The default binding is a no-op. `@bymax-one/nest-logger` keeps the request id under the `requestId` key of its AsyncLocalStorage-based `LogContextService`, which has no `getCorrelationId()`; a `useFactory` provider adapts it (§4.3), and `useExisting` on the service would bind an object the filter cannot read an id from. The id is set by nest-logger's request-id middleware, mounted with `applyAccessLog(app)` or `applyRequestIdMiddleware(consumer)`; without it there is no id to read. That middleware supports `@nestjs/platform-express` only, so on Fastify the recipe correlates nothing.
 
 ### 5.4 Unexpected-Error Sink
 
