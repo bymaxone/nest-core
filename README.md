@@ -1546,27 +1546,46 @@ your samples and your logs.
 
 ## 🔗 Integration with `@bymax-one/nest-logger`
 
-Pairing this package with `@bymax-one/nest-logger` yields correlated logs and
-error responses with one binding and no hard coupling: `LogContextService`
-satisfies `ICorrelationIdProvider` out of the box, so `useExisting` aliases it
-onto the shared token. Bind it from a `@Global()` module of your own so the
-binding is visible outside the module that declares it:
+Pairing this package with `@bymax-one/nest-logger` gives correlated logs and
+error responses without either package importing the other. nest-logger's
+request-id middleware stores the id under the `requestId` key of
+`LogContextService`. That service is not itself an `ICorrelationIdProvider` —
+it has no `getCorrelationId()` — so adapt it with a factory. `useExisting` on
+it binds an object without that method, and the filter then reads no id and
+reports nothing. Bind both tokens from a `@Global()` module of your own so they
+are visible outside the module that declares them:
 
 ```typescript
 import { Global, Module } from '@nestjs/common'
-import { BYMAX_CORRELATION_PROVIDER } from '@bymax-one/nest-core'
-import { LogContextService, NestLoggerModule } from '@bymax-one/nest-logger'
+import { BYMAX_CORRELATION_PROVIDER, BYMAX_UNEXPECTED_ERROR_SINK } from '@bymax-one/nest-core'
+import type { ICorrelationIdProvider } from '@bymax-one/nest-core'
+import {
+  BymaxLoggerModule,
+  LogContextService,
+  PinoUnexpectedErrorSink
+} from '@bymax-one/nest-logger'
 
 @Global()
 @Module({
-  imports: [NestLoggerModule.forRoot()],
-  providers: [{ provide: BYMAX_CORRELATION_PROVIDER, useExisting: LogContextService }],
-  exports: [BYMAX_CORRELATION_PROVIDER]
+  imports: [BymaxLoggerModule.forRoot({ service: { name: 'api', version: '1.0.0' } })],
+  providers: [
+    {
+      provide: BYMAX_CORRELATION_PROVIDER,
+      inject: [LogContextService],
+      useFactory: (context: LogContextService): ICorrelationIdProvider => ({
+        getCorrelationId: () => context.get<string>('requestId')
+      })
+    },
+    { provide: BYMAX_UNEXPECTED_ERROR_SINK, useClass: PinoUnexpectedErrorSink }
+  ],
+  exports: [BYMAX_CORRELATION_PROVIDER, BYMAX_UNEXPECTED_ERROR_SINK]
 })
 export class ObservabilityModule {}
 ```
 
-Every error envelope now carries the same correlation id your logs do. The
+Every error envelope now carries the same correlation id your logs do, and the
+cause of every collapsed `500` is logged with it (`PinoUnexpectedErrorSink`
+needs `@bymax-one/nest-logger` 1.4.1 or later). The
 same `@Global()`-module pattern is how every pluggable token in this package
 is overridden: `BYMAX_TIMING_SINK` and `BYMAX_HEALTH_INDICATORS` follow it
 identically.

@@ -285,7 +285,10 @@ Consumers override a default by providing the token in their own module:
   providers: [
     {
       provide: BYMAX_CORRELATION_PROVIDER,
-      useExisting: LogContextService // from @bymax-one/nest-logger
+      inject: [LogContextService], // from @bymax-one/nest-logger
+      useFactory: (context: LogContextService) => ({
+        getCorrelationId: () => context.get<string>('requestId')
+      })
     }
   ]
 })
@@ -337,7 +340,7 @@ export interface ICorrelationIdProvider {
 }
 ```
 
-The filter resolves `BYMAX_CORRELATION_PROVIDER` and stamps the result into the envelope. The default binding is a no-op. The `LogContext` service of `@bymax-one/nest-logger` (AsyncLocalStorage-based) satisfies this interface out of the box, so pairing the two libraries yields correlated logs and error responses with one `useExisting` provider and no hard coupling.
+The filter resolves `BYMAX_CORRELATION_PROVIDER` and stamps the result into the envelope. The default binding is a no-op. `@bymax-one/nest-logger` keeps the request id under the `requestId` key of its AsyncLocalStorage-based `LogContextService`, which has no `getCorrelationId()`; a `useFactory` provider adapts it (§4.3), and `useExisting` on the service would bind an object the filter cannot read an id from.
 
 ### 5.4 Unexpected-Error Sink
 
@@ -746,8 +749,14 @@ import type { IHealthIndicator } from '@bymax-one/nest-core/health'
     })
   ],
   providers: [
-    // Correlated error responses: reuse the logger's request context.
-    { provide: BYMAX_CORRELATION_PROVIDER, useExisting: LogContextService },
+    // Correlated error responses: adapt the logger's request context.
+    {
+      provide: BYMAX_CORRELATION_PROVIDER,
+      inject: [LogContextService],
+      useFactory: (context: LogContextService) => ({
+        getCorrelationId: () => context.get<string>('requestId')
+      })
+    },
     // Readiness: report Redis health through the shared indicator token.
     { provide: BYMAX_HEALTH_INDICATORS, useClass: RedisHealthIndicator, multi: true }
   ]

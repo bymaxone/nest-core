@@ -58,6 +58,40 @@ const INTERNAL_ERROR_MESSAGE = 'Internal server error'
 /** Fixed, end-user-safe message for a validation failure; specifics live in details. */
 const VALIDATION_FAILED_MESSAGE = 'Validation failed'
 
+/** An absolute-form request target's `scheme "://"` prefix (RFC 3986 §3). */
+const ABSOLUTE_FORM_PREFIX = /^[A-Za-z][A-Za-z0-9+.-]*:\/\//
+
+/**
+ * The request path: no query, no fragment, and no scheme or authority.
+ *
+ * Both adapters return the request target as received. An origin-form target
+ * carries the query, where reset codes and tokens travel; an absolute-form one
+ * (`GET http://user:pass@host/p`, as a proxy sends it) also carries the
+ * authority, valid or not. The envelope reaches the client and any log that
+ * stores it, so it carries the path its contract names and no more.
+ *
+ * Read by the RFC 3986 grammar rather than a URL parser: the authority ends at
+ * the first `/`, `?` or `#`, and everything before that is dropped whether or
+ * not it would parse. A parser that rejects a malformed authority leaves
+ * nothing to fall back on but the whole target.
+ *
+ * @param url - The request target the adapter reports.
+ * @returns The path; `/` when the target has none, and the asterisk form as
+ *   received.
+ */
+function pathOf(url: unknown): string {
+  let target = String(url)
+  const prefix = ABSOLUTE_FORM_PREFIX.exec(target)
+  if (prefix !== null) {
+    const afterScheme = target.slice(prefix[0].length)
+    const authorityEnd = afterScheme.search(/[/?#]/)
+    target = authorityEnd === -1 ? '' : afterScheme.slice(authorityEnd)
+  }
+  const pathEnd = target.search(/[?#]/)
+  const path = pathEnd === -1 ? target : target.slice(0, pathEnd)
+  return path === '' ? '/' : path
+}
+
 /**
  * Neutral view of the current request handed to {@link BymaxExceptionFilter}
  * mappers and to the {@link BymaxExceptionFilter.onUnexpectedError} seam. It
@@ -279,20 +313,31 @@ function extractHttpMessage(
   return exception.message
 }
 
+/** Internals message for a thrown value that cannot be read or stringified. */
+const UNREPRESENTABLE_MESSAGE = 'Unrepresentable thrown value'
+
 /**
- * Build the development-only internals dump for a collapsed unknown error. The
- * original message is always captured; the stack is captured when present.
+ * Build the development-only internals dump for a collapsed unknown error: the
+ * original message, and the stack when present.
+ *
+ * Total, because it runs on whatever was thrown: a value with no prototype has
+ * no `toString`, and a getter on `stack` or `message` can throw. Failing here
+ * would cost the response and the hooks, so the dump degrades instead.
  *
  * @param exception - The original thrown value.
  * @returns The `{ message, stack? }` object surfaced only when `exposeInternals` is on.
  */
 function buildInternalDetails(exception: unknown): ErrorDetails {
-  if (exception instanceof Error) {
-    return exception.stack !== undefined
-      ? { message: exception.message, stack: exception.stack }
-      : { message: exception.message }
+  try {
+    if (exception instanceof Error) {
+      return exception.stack !== undefined
+        ? { message: exception.message, stack: exception.stack }
+        : { message: exception.message }
+    }
+    return { message: String(exception) }
+  } catch {
+    return { message: UNREPRESENTABLE_MESSAGE }
   }
-  return { message: String(exception) }
 }
 
 /**
@@ -385,7 +430,7 @@ export class BymaxExceptionFilter implements ExceptionFilter {
     const traceId = this.readAnnotation(() => this.traceContext.getTraceContext()?.traceId)
     const context: FilterErrorContext = {
       method: String(httpAdapter.getRequestMethod(request)),
-      path: String(httpAdapter.getRequestUrl(request)),
+      path: pathOf(httpAdapter.getRequestUrl(request)),
       ...(correlationId !== undefined ? { correlationId } : {}),
       ...(traceId !== undefined ? { traceId } : {})
     }

@@ -337,8 +337,8 @@ function warnDiscardedComponents(logger: Logger, discarded: readonly DiscardedCo
   logger.warn(
     `the served OpenAPI document already defines ${discarded.length} component entry(ies) a ` +
       `library also contributes: ${listed}${elided > 0 ? `, and ${elided} more` : ''}. The ` +
-      'contributed version is not served, so a client generated from this document will not ' +
-      "match that library's own types. What holds the name may be the application's own " +
+      'contributed version is not served, so where the two differ a client generated from this ' +
+      "document will not match that library's own types. What holds the name may be the application's own " +
       'declaration, a core schema under openapi.includeCoreSchemas, or a contributor that ' +
       'sorted earlier — read the document before deciding what to remove.'
   )
