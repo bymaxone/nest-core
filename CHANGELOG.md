@@ -59,6 +59,11 @@ A 5xx envelope no longer carries `details` unless `envelope.exposeInternals` is 
 - **Subpath lists.** `SECURITY.md` and both issue templates name the
   subpaths, including `./metrics` and `./openapi`, and `SECURITY.md` calls the
   request-timing component a middleware.
+- **Unknown errors and the logger.** The README no longer says the message and
+  stack of an unknown error are "captured for your logger". They go to the
+  `BYMAX_UNEXPECTED_ERROR_SINK` seam when one is bound, and never to the
+  response. The `package.json` description calls the request-timing component
+  a middleware, as the module registers it.
 
 ## [1.6.3] - 2026-10-23
 
