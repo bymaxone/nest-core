@@ -10,10 +10,11 @@ take vulnerability reports seriously and triage them ahead of feature work.
 
 Security patches are issued for the most recent minor on the active `1.x` line.
 
-| Version | Status                          |
-| ------- | ------------------------------- |
-| `1.0.x` | Active, receives security fixes |
-| `< 1.0` | End-of-life                     |
+| Version         | Status                                               |
+| --------------- | ---------------------------------------------------- |
+| `1.6.x`         | Active, receives security fixes                      |
+| `1.0.x`–`1.5.x` | Superseded, upgrade to `1.6.x` (backport on request) |
+| `< 1.0`         | End-of-life                                          |
 
 If you are stuck on an older version and need a backport, open a private
 advisory (see below) and we will discuss feasibility on a case-by-case basis.
