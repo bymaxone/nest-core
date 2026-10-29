@@ -11,7 +11,23 @@ heading here.
 
 ## [Unreleased]
 
+A 5xx envelope no longer carries `details`.
+
+**Apply to a derived backend:**
+
+- **`details` is absent from a response with status 500 or above.** The filter used to pass the
+  `details` of any `HttpException` through verbatim, so a library that put a payload fragment
+  there (a cache preview, a query excerpt) published it in the body of a 5xx. The `code` and
+  `message` are unchanged, and so is every 4xx, where `details` is the contract. A backend
+  that read `details` from a 5xx body should log that context where the error is thrown instead.
+  `envelope.exposeInternals` keeps the details, for local debugging only. The filter owns no
+  logger and records nothing about them itself.
+
 ### Security
+
+- **A server error no longer publishes its `details`.** Both the flat `{ code, message, details }`
+  and the nested `{ error: { code, message, details } }` shapes are cut for a status of 500 or
+  above, as is a validation-shaped 5xx, because every mapping rule shares one builder.
 
 - **Development dependencies lifted past four advisories.** `body-parser` 2.4.0
   (GHSA-27r3-jxmh-p828), `multer` 2.5.0 (GHSA-q7qp-rjg7-q26m) and `qs` 6.16.1

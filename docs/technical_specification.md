@@ -199,7 +199,8 @@ export interface BymaxCoreModuleOptions {
     enabled?: boolean
     /**
      * When true, unknown errors include the original message and stack in the
-     * envelope details. Never enable in production.
+     * envelope details, and a 5xx `HttpException` keeps its `details`, which
+     * are otherwise withheld. Never enable in production.
      */
     exposeInternals?: boolean
   }
@@ -315,19 +316,19 @@ Every error that leaves the application has this exact shape. The contract is ve
 }
 ```
 
-| Field           | Type              | Presence | Notes                                        |
-| --------------- | ----------------- | -------- | -------------------------------------------- |
-| `statusCode`    | number            | always   | HTTP status                                  |
-| `code`          | string            | always   | Stable machine-readable code (see §10)       |
-| `message`       | string            | always   | Human-readable, safe for end users           |
-| `details`       | array or object   | optional | Structured context (validation issues, etc.) |
-| `correlationId` | string            | optional | Present when a correlation provider is bound |
-| `timestamp`     | string (ISO 8601) | always   | Time the error was formatted                 |
-| `path`          | string            | always   | Request URL path                             |
+| Field           | Type              | Presence | Notes                                                                                        |
+| --------------- | ----------------- | -------- | -------------------------------------------------------------------------------------------- |
+| `statusCode`    | number            | always   | HTTP status                                                                                  |
+| `code`          | string            | always   | Stable machine-readable code (see §10)                                                       |
+| `message`       | string            | always   | Human-readable, safe for end users                                                           |
+| `details`       | array or object   | optional | Structured context (validation issues, etc.); absent on a 5xx unless `exposeInternals` is on |
+| `correlationId` | string            | optional | Present when a correlation provider is bound                                                 |
+| `timestamp`     | string (ISO 8601) | always   | Time the error was formatted                                                                 |
+| `path`          | string            | always   | Request URL path                                                                             |
 
 ### 5.2 Mapping Rules
 
-1. **`HttpException` and subclasses.** Status and message are taken from the exception. If the exception response object carries a `code` property, it is passed through; otherwise the code is derived from the status (§10).
+1. **`HttpException` and subclasses.** Status and message are taken from the exception. If the exception response object carries a `code` property, it is passed through; otherwise the code is derived from the status (§10). For a status of 500 or above the envelope omits `details` unless `envelope.exposeInternals` is true, however the exception shaped them, flat or nested under `error`: the `code` and `message` are the text the thrower chose for the caller, while `details` is the free-form blob where a payload fragment ends up. The filter owns no logger and does not record those details; the thrower logs them server side. Client errors keep their details. Basis: OWASP Error Handling Cheat Sheet (a generic client response, details logged server side), RFC 9457 §3.1.4 and §5 (no implementation details through the HTTP interface), and the NestJS exception-filters documentation (an `HttpException` response object is serialized as the whole body).
 2. **Validation errors.** Exceptions carrying an array of constraint violations (the `BadRequestException` shape produced by validation pipes) are translated into `code: BYMAX_VALIDATION_FAILED` with one structured entry per violation in `details`.
 3. **Unknown errors.** Anything else becomes `statusCode: 500`, `code: BYMAX_INTERNAL_ERROR`, and the fixed message `"Internal server error"`. The original error is never serialized into the response unless `envelope.exposeInternals` is true, which is intended for development only. Once the envelope is built, the filter hands the original error to the protected `onUnexpectedError` seam and the bound unexpected-error sink (§5.4).
 

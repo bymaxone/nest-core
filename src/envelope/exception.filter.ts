@@ -8,8 +8,9 @@
  *
  * Three mapping rules apply, in order:
  *
- * 1. `HttpException` carrying an explicit `code` passes that domain code, its
- *    message and its details through verbatim, so the `BYMAX_` prefix stays
+ * 1. `HttpException` carrying an explicit `code` passes that domain code and its
+ *    message through verbatim, and its details too below status 500 (a 5xx body
+ *    carries no details unless `exposeInternals` is on), so the `BYMAX_` prefix stays
  *    reserved for codes this package emits. The fields are read flat off the
  *    response or from a nested `error` object, since both shapes are in use
  *    across the `@bymax-one` libraries.
@@ -194,7 +195,7 @@ function extractExplicitDetails(carrier: object): ErrorDetails | undefined {
 /** Inclusive lower bound of the HTTP client-error range. */
 const CLIENT_ERROR_MIN = 400
 
-/** Exclusive upper bound of the HTTP client-error range. */
+/** Exclusive upper bound of the HTTP client-error range, and the first server-error status. */
 const CLIENT_ERROR_MAX = 500
 
 /** The client-error status and safe message read off an exposed non-`HttpException` error. */
@@ -513,7 +514,7 @@ export class BymaxExceptionFilter implements ExceptionFilter {
 
   /**
    * Map an `HttpException` to the envelope. A domain error passes its own code,
-   * message and details through, whether it wrote them flat on the response or
+   * message and details through (a 5xx's details are withheld in `toEnvelope`), whether it wrote them flat on the response or
    * nested under `error`; the validation shape becomes `BYMAX_VALIDATION_FAILED`
    * with structured details; everything else derives its code from the status.
    *
@@ -575,7 +576,8 @@ export class BymaxExceptionFilter implements ExceptionFilter {
 
   /**
    * Assemble the envelope through the pure builder, threading the shared clock
-   * and omitting absent optional details.
+   * and omitting absent optional details. A server-error status carries none
+   * unless `exposeInternals` is on, whichever mapping rule produced them.
    *
    * @param statusCode - HTTP status for the envelope.
    * @param code - Stable machine-readable code.
@@ -591,13 +593,14 @@ export class BymaxExceptionFilter implements ExceptionFilter {
     context: FilterErrorContext,
     details?: ErrorDetails
   ): ErrorEnvelope {
+    const withheld = statusCode >= CLIENT_ERROR_MAX && !this.options.envelope.exposeInternals
     return buildErrorEnvelope({
       statusCode,
       code,
       message,
       path: context.path,
       now: this.now,
-      ...(details !== undefined ? { details } : {}),
+      ...(details !== undefined && !withheld ? { details } : {}),
       // Stryker disable next-line ConditionalExpression: equivalent — the always-spread form hands the builder `correlationId: undefined`, and `buildErrorEnvelope` re-guards `input.correlationId !== undefined` and omits an undefined value, so the emitted envelope is byte-for-byte identical whether or not a correlation id is present.
       ...(context.correlationId !== undefined ? { correlationId: context.correlationId } : {}),
       // Gated separately from the context above: the trace id reaches the
