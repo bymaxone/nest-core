@@ -74,12 +74,19 @@ overrides:
   # handlebars below 4.7.10 carries GHSA-8r5x-fm3f-whwj and GHSA-p8wg-vrv2-v86f
   # (critical) and GHSA-xw65-4hp5-5hc7, reached as a dependency of ts-jest.
   'handlebars': '^4.7.10'
-  # multer below 2.4.0 carries GHSA-3pph-fpjx-jg34, and below 2.3.0
-  # GHSA-535w-7cp7-47q4, GHSA-qfvm-cv95-jqjf, GHSA-wc9g-mqfw-jrwm (high) and
-  # GHSA-qvfw-j98x-7q72. proxy-addr below 2.0.8 carries GHSA-jqcg-44mw-7w3h
-  # (critical). Both sit beneath @nestjs/platform-express and express, which
-  # are devDependencies here.
-  'multer': '^2.4.0'
+  # body-parser below 2.4.0 carries GHSA-27r3-jxmh-p828 (high, CVSS 7.5: denial
+  # of service through trailing bytes after a compressed request body). It sits
+  # beneath express, a devDependency here, whose own range admits the floor.
+  'body-parser@2': '^2.4.0'
+  # multer below 2.5.0 carries GHSA-q7qp-rjg7-q26m (high, CVSS 7.5: denial of
+  # service through a pending asynchronous fileFilter after request teardown),
+  # below 2.4.0 GHSA-3pph-fpjx-jg34, and below 2.3.0 GHSA-535w-7cp7-47q4,
+  # GHSA-qfvm-cv95-jqjf, GHSA-wc9g-mqfw-jrwm (high) and GHSA-qvfw-j98x-7q72.
+  # @nestjs/platform-express pins multer to an exact version, so only an
+  # override lifts it; drop the entry once that pin moves past 2.5.0.
+  # proxy-addr below 2.0.8 carries GHSA-jqcg-44mw-7w3h (critical). Both sit
+  # beneath @nestjs/platform-express and express, which are devDependencies here.
+  'multer': '^2.5.0'
   'proxy-addr': '^2.0.8'
   # qs below 6.16.0 carries GHSA-4mjr-xmp4-gh2g (denial of service through an
   # attacker-controlled isBuffer) and GHSA-x5fp-wj9c-mxmx (array-limit bypass
