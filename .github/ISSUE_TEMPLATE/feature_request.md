@@ -11,7 +11,7 @@ labels: enhancement
 
 ## Proposed solution
 
-<!-- API shape, subpath it belongs to (. / pagination / health), and how it would compose with existing primitives. -->
+<!-- API shape, subpath it belongs to (. / pagination / health / metrics / openapi), and how it would compose with existing primitives. -->
 
 ## Alternatives considered
 
@@ -19,7 +19,7 @@ labels: enhancement
 
 ## Scope
 
-- Affects subpath(s): . / pagination / health
+- Affects subpath(s): . / pagination / health / metrics / openapi
 - Breaking change: yes / no
 - Requires a new peer dependency: yes / no
 

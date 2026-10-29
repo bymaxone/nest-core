@@ -32,6 +32,18 @@ heading here.
   `type` modifiers; the exported names are the same. `SECURITY.md` and
   `CONTRIBUTING.md` now match the current release line and the pinned `pnpm`.
 
+### Documentation
+
+- **Support policy.** `SECURITY.md` states that only the latest minor (`1.6.x`)
+  receives security fixes, and that earlier versions are not supported and
+  get no backports: the guidance is to upgrade.
+- **Issue template contact links.** The "Questions and discussion" link is
+  removed from the issue chooser, since the repository has GitHub Discussions
+  turned off. The private security contact stays.
+- **Subpath lists.** `SECURITY.md` and both issue templates name the
+  subpaths, including `./metrics` and `./openapi`, and `SECURITY.md` calls the
+  request-timing component a middleware.
+
 ## [1.6.3] - 2026-10-23
 
 The error envelope's `path` carried the query string, and the documented

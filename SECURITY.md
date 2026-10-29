@@ -1,7 +1,7 @@
 # Security Policy
 
 `@bymax-one/nest-core` ships an error-envelope exception filter, a request-timing
-interceptor, pagination helpers, health endpoints, and an optional Prometheus
+middleware, pagination helpers, health endpoints, and an optional Prometheus
 metrics endpoint that downstream applications rely on to avoid leaking
 sensitive data through error responses, health checks, or metrics output. We
 take vulnerability reports seriously and triage them ahead of feature work.
@@ -10,14 +10,13 @@ take vulnerability reports seriously and triage them ahead of feature work.
 
 Security patches are issued for the most recent minor on the active `1.x` line.
 
-| Version         | Status                                               |
-| --------------- | ---------------------------------------------------- |
-| `1.6.x`         | Active, receives security fixes                      |
-| `1.0.x`–`1.5.x` | Superseded, upgrade to `1.6.x` (backport on request) |
-| `< 1.0`         | End-of-life                                          |
+| Version | Status                             |
+| ------- | ---------------------------------- |
+| `1.6.x` | Supported, receives security fixes |
+| `< 1.6` | Not supported, upgrade to `1.6.x`  |
 
-If you are stuck on an older version and need a backport, open a private
-advisory (see below) and we will discuss feasibility on a case-by-case basis.
+Only the latest minor is supported. Earlier versions receive no security fixes
+and no backports: upgrade to the latest `1.6.x` release.
 
 ## Reporting a vulnerability
 
@@ -39,8 +38,8 @@ line.
 A useful report contains:
 
 - A clear description of the vulnerability and its impact (CIA triad, confidentiality, integrity, availability)
-- Step-by-step reproduction against the latest `0.x` release
-- The affected subpath (`.`, `./pagination`, or `./health`)
+- Step-by-step reproduction against the latest `1.6.x` release
+- The affected subpath (`.`, `./pagination`, `./health`, `./metrics`, or `./openapi`)
 - A suggested fix or mitigation, if you have one
 - Whether you would like to be credited in the published advisory (and how, name, handle, affiliation)
 
@@ -75,7 +74,7 @@ The following classes are explicitly in scope:
 
 These are not vulnerabilities in `@bymax-one/nest-core` itself:
 
-- Issues only reproducible in versions older than `1.0.0`
+- Issues only reproducible in a version older than `1.6.0`, which is not supported
 - Misconfigurations in the **consuming application** (e.g., explicitly enabling `exposeInternals` in production) unless they reproduce with the documented default configuration
 - Issues in optional peer dependencies (`prom-client`) when the upstream maintainer has already accepted them or when the dependency is not exercised by the library
 - Self-XSS, social engineering, denial of service via legitimate authenticated load
