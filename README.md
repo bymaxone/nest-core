@@ -69,7 +69,8 @@ never loads its peer, which the release gate asserts against the packed tarball.
 - ✅ **Versioned code catalog** — `BYMAX_NOT_FOUND`, `BYMAX_CONFLICT`, `BYMAX_BAD_GATEWAY`
   and the rest, exported as constants so a client maps a `code` rather than a message string
 - ✅ **Internals stay internal** — an unknown error becomes a generic 500; its message and
-  stack are captured for your logger, and reach the body only under `exposeInternals`. A 5xx
+  stack go to the `BYMAX_UNEXPECTED_ERROR_SINK` seam when you bind one, and reach the body
+  only under `exposeInternals`. A 5xx
   never carries `details` either, whichever library threw it, unless `exposeInternals` is on
 - ✅ **Correlation id** — resolved through `BYMAX_CORRELATION_PROVIDER`, so the id comes from
   wherever your request context already keeps it
@@ -1699,8 +1700,9 @@ disclose.
 ### An error envelope is an exfiltration surface
 
 The filter's job is to make every failure look the same to a client, so an unknown error
-becomes a generic 500 whose body carries the code, the correlation id and nothing else. The
-original message and stack are captured for your logger, not for the response.
+becomes a generic 500 whose body carries the fixed envelope fields and the generic message,
+and not the cause unless `exposeInternals` is on. The original message and stack go to the
+`BYMAX_UNEXPECTED_ERROR_SINK` seam when you bind one.
 `envelope.exposeInternals` puts them in the body and exists for local debugging — its own
 documentation says never to enable it in production, and it defaults to `false`.
 
@@ -1776,7 +1778,7 @@ the deployment nobody configured is the one most likely to be exposed.
 | Layer               | Implementation                                                                                                                                                                   |
 | ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Error responses     | One shape for everything; unknown errors become a generic 500                                                                                                                    |
-| Internals           | Message and stack captured for logging, in the body only under `exposeInternals` (default `false`)                                                                               |
+| Internals           | Message and stack handed to the unexpected-error sink when bound, in the body only under `exposeInternals` (default `false`)                                                     |
 | Health output       | The response names which indicator is down and nothing more; the reason goes to the logger. `exposeIndicatorErrors` (default `false`) puts it back in the response for debugging |
 | Slow indicators     | Converted to `down` by the aggregator, so a probe cannot hang on one                                                                                                             |
 | Correlation         | Resolved through `BYMAX_CORRELATION_PROVIDER` — the app decides where the id comes from                                                                                          |
