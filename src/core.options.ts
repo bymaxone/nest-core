@@ -16,7 +16,8 @@ export interface EnvelopeOptions {
   enabled?: boolean
   /**
    * Include the original message and stack of unknown errors in the envelope
-   * details. Never enable in production. Default: `false`.
+   * details, and keep the `details` of a 5xx `HttpException`, which are
+   * otherwise withheld from the body. Never enable in production. Default: `false`.
    */
   exposeInternals?: boolean
 }

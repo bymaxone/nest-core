@@ -69,7 +69,8 @@ never loads its peer, which the release gate asserts against the packed tarball.
 - ✅ **Versioned code catalog** — `BYMAX_NOT_FOUND`, `BYMAX_CONFLICT`, `BYMAX_BAD_GATEWAY`
   and the rest, exported as constants so a client maps a `code` rather than a message string
 - ✅ **Internals stay internal** — an unknown error becomes a generic 500; its message and
-  stack are captured for your logger, and reach the body only under `exposeInternals`
+  stack are captured for your logger, and reach the body only under `exposeInternals`. A 5xx
+  never carries `details` either, whichever library threw it, unless `exposeInternals` is on
 - ✅ **Correlation id** — resolved through `BYMAX_CORRELATION_PROVIDER`, so the id comes from
   wherever your request context already keeps it
 
@@ -218,10 +219,10 @@ and the classification table: [Production is a closed door](#production-is-a-clo
 
 ### `envelope`
 
-| Option            | Type      | Default | Description                                                                                    |
-| ----------------- | --------- | ------- | ---------------------------------------------------------------------------------------------- |
-| `enabled`         | `boolean` | `true`  | Registers the global exception filter.                                                         |
-| `exposeInternals` | `boolean` | `false` | Includes the original message and stack of unknown errors. Development only, never production. |
+| Option            | Type      | Default | Description                                                                                                                |
+| ----------------- | --------- | ------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `enabled`         | `boolean` | `true`  | Registers the global exception filter.                                                                                     |
+| `exposeInternals` | `boolean` | `false` | Includes the original message and stack of unknown errors, and the `details` of a 5xx. Development only, never production. |
 
 ### `timing`
 
@@ -557,15 +558,29 @@ follows this exact, versioned shape:
 }
 ```
 
-| Field           | Type              | Presence | Notes                                              |
-| --------------- | ----------------- | -------- | -------------------------------------------------- |
-| `statusCode`    | number            | always   | HTTP status.                                       |
-| `code`          | string            | always   | Stable, machine-readable code.                     |
-| `message`       | string            | always   | Human-readable, safe for end users.                |
-| `details`       | array or object   | optional | Structured context, for example validation issues. |
-| `correlationId` | string            | optional | Present when a correlation provider is bound.      |
-| `timestamp`     | string (ISO 8601) | always   | Time the error was formatted.                      |
-| `path`          | string            | always   | Request URL path.                                  |
+| Field           | Type              | Presence | Notes                                                                                              |
+| --------------- | ----------------- | -------- | -------------------------------------------------------------------------------------------------- |
+| `statusCode`    | number            | always   | HTTP status.                                                                                       |
+| `code`          | string            | always   | Stable, machine-readable code.                                                                     |
+| `message`       | string            | always   | Human-readable, safe for end users.                                                                |
+| `details`       | array or object   | optional | Structured context, for example validation issues. Absent on a 5xx unless `exposeInternals` is on. |
+| `correlationId` | string            | optional | Present when a correlation provider is bound.                                                      |
+| `timestamp`     | string (ISO 8601) | always   | Time the error was formatted.                                                                      |
+| `path`          | string            | always   | Request URL path.                                                                                  |
+
+**A server error carries no `details` by default.** For a status of 500 or above, the filter omits `details`
+from the body, whichever library threw the `HttpException` and whether it wrote them flat or
+under `error`; the `code` and `message` stay, because they are text the thrower chose for the
+caller. `envelope.exposeInternals` keeps the details, for local debugging only. The filter owns no
+logger and does not record a 5xx's `details` itself, so whatever throws such an error should log
+that context on the server and must not interpolate internal data into its `message`. Client
+errors are unchanged: their details are the contract. The reasoning follows the OWASP
+[Error Handling Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Error_Handling_Cheat_Sheet.html)
+(a generic client response, details logged server side), RFC 9457
+[sections 3.1.4 and 5](https://www.rfc-editor.org/rfc/rfc9457.html) (a problem detail helps the client
+correct the problem rather than debug, and no implementation details leave through the HTTP
+interface), and the NestJS [exception filters](https://docs.nestjs.com/exception-filters) behaviour
+of serializing an `HttpException` response object as the whole body.
 
 Codes are stable strings under a reserved `BYMAX_` prefix, derived from the
 HTTP status: `BYMAX_NOT_FOUND` for 404, `BYMAX_VALIDATION_FAILED` for the
@@ -1777,8 +1792,9 @@ the deployment nobody configured is the one most likely to be exposed.
 
 > [!IMPORTANT]
 > **`exposeInternals` is a debugging switch, not a verbosity setting.** With it on,
-> the body of a 500 carries the original message and stack of whatever failed —
-> including anything a driver, an SDK or a template put in them.
+> the body of a 500 carries the original message and stack of whatever failed, and the
+> `details` of any 5xx `HttpException` — including anything a driver, an SDK or a
+> template put in them.
 
 ---
 
