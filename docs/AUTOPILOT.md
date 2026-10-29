@@ -7,7 +7,7 @@
 ## Identity
 
 - **Project root**: /Users/maximiliano/Documents/MyApps/bymax-one/nest-core
-- **GitHub repo**: bymaxone/nest-core (visibility: private — must become public before the phase 8 release task)
+- **GitHub repo**: bymaxone/nest-core (visibility: public)
 - **Default branch**: main
 - **Product summary**: Zero-dependency NestJS 11 foundation library published as
   `@bymax-one/nest-core`: dynamic module (`forRoot`/`forRootAsync`) providing an
@@ -70,7 +70,7 @@ CI (`ci.yml`, created in P0) runs lint, typecheck, build, tests, and size
 sequentially on every PR from the first PR onward.
 
 **Expected-skip CI checks**: `codeql` and `scorecard` report skipped/neutral
-while the repository is private — they count as pass until visibility flips.
+on a private repository and run normally while it is public.
 `release.yml` stays inert until a `v*` tag exists.
 
 ## Invariant greps
