@@ -1701,8 +1701,8 @@ disclose.
 
 The filter's job is to make every failure look the same to a client, so an unknown error
 becomes a generic 500 whose body carries the fixed envelope fields and the generic message,
-never the cause. The original message and stack go to the `BYMAX_UNEXPECTED_ERROR_SINK` seam
-when you bind one; they are never put in the response.
+and not the cause unless `exposeInternals` is on. The original message and stack go to the
+`BYMAX_UNEXPECTED_ERROR_SINK` seam when you bind one.
 `envelope.exposeInternals` puts them in the body and exists for local debugging — its own
 documentation says never to enable it in production, and it defaults to `false`.
 
