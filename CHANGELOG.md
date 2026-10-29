@@ -25,8 +25,9 @@ heading here.
 ### Changed
 
 - Development tooling only: `tsup` 9.0.0, `@opentelemetry/context-async-hooks`
-  3.0.0, `@nestjs/*` 11.2.8, `@opentelemetry/api` 1.10.0 and the CodeQL
-  upload action 4.39.1. With `tsup` 9 the declaration files list type-only
+  3.0.0, `@nestjs/common`, `core`, `platform-express`, `platform-fastify` and
+  `testing` 11.2.8, `@opentelemetry/api` 1.10.0 and the CodeQL upload action
+  4.39.1. With `tsup` 9 the declaration files list type-only
   exports in a separate `export type { … }` statement instead of inline
   `type` modifiers; the exported names are the same. `SECURITY.md` and
   `CONTRIBUTING.md` now match the current release line and the pinned `pnpm`.
