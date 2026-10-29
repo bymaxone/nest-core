@@ -38,7 +38,7 @@ line.
 A useful report contains:
 
 - A clear description of the vulnerability and its impact (CIA triad, confidentiality, integrity, availability)
-- Step-by-step reproduction against the latest `0.x` release
+- Step-by-step reproduction against the latest `1.6.x` release
 - The affected subpath (`.`, `./pagination`, or `./health`)
 - A suggested fix or mitigation, if you have one
 - Whether you would like to be credited in the published advisory (and how, name, handle, affiliation)
@@ -74,7 +74,7 @@ The following classes are explicitly in scope:
 
 These are not vulnerabilities in `@bymax-one/nest-core` itself:
 
-- Issues only reproducible in versions older than `1.0.0`
+- Issues only reproducible in a version older than `1.6.0`, which is not supported
 - Misconfigurations in the **consuming application** (e.g., explicitly enabling `exposeInternals` in production) unless they reproduce with the documented default configuration
 - Issues in optional peer dependencies (`prom-client`) when the upstream maintainer has already accepted them or when the dependency is not exercised by the library
 - Self-XSS, social engineering, denial of service via legitimate authenticated load
