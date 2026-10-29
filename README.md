@@ -70,7 +70,7 @@ never loads its peer, which the release gate asserts against the packed tarball.
   and the rest, exported as constants so a client maps a `code` rather than a message string
 - ✅ **Internals stay internal** — an unknown error becomes a generic 500; its message and
   stack are captured for your logger, and reach the body only under `exposeInternals`. A 5xx
-  never carries `details` either, whichever library threw it
+  never carries `details` either, whichever library threw it, unless `exposeInternals` is on
 - ✅ **Correlation id** — resolved through `BYMAX_CORRELATION_PROVIDER`, so the id comes from
   wherever your request context already keeps it
 
@@ -568,7 +568,7 @@ follows this exact, versioned shape:
 | `timestamp`     | string (ISO 8601) | always   | Time the error was formatted.                                                                      |
 | `path`          | string            | always   | Request URL path.                                                                                  |
 
-**A server error carries no `details`.** For a status of 500 or above, the filter omits `details`
+**A server error carries no `details` by default.** For a status of 500 or above, the filter omits `details`
 from the body, whichever library threw the `HttpException` and whether it wrote them flat or
 under `error`; the `code` and `message` stay, because they are text the thrower chose for the
 caller. `envelope.exposeInternals` keeps the details, for local debugging only. The filter owns no

@@ -11,7 +11,7 @@ heading here.
 
 ## [Unreleased]
 
-A 5xx envelope no longer carries `details`.
+A 5xx envelope no longer carries `details` unless `envelope.exposeInternals` is on.
 
 **Apply to a derived backend:**
 
@@ -25,7 +25,7 @@ A 5xx envelope no longer carries `details`.
 
 ### Security
 
-- **A server error no longer publishes its `details`.** Both the flat `{ code, message, details }`
+- **A server error no longer publishes its `details` by default.** Both the flat `{ code, message, details }`
   and the nested `{ error: { code, message, details } }` shapes are cut for a status of 500 or
   above, as is a validation-shaped 5xx, because every mapping rule shares one builder.
 
