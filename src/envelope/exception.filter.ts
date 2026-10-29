@@ -514,9 +514,10 @@ export class BymaxExceptionFilter implements ExceptionFilter {
 
   /**
    * Map an `HttpException` to the envelope. A domain error passes its own code,
-   * message and details through (a 5xx's details are withheld in `toEnvelope`), whether it wrote them flat on the response or
-   * nested under `error`; the validation shape becomes `BYMAX_VALIDATION_FAILED`
-   * with structured details; everything else derives its code from the status.
+   * message and details through (a 5xx's details are withheld by default in
+   * `toEnvelope`), whether it wrote them flat on the response or nested under
+   * `error`; the validation shape becomes `BYMAX_VALIDATION_FAILED` with
+   * structured details; everything else derives its code from the status.
    *
    * @param exception - The HTTP exception to format.
    * @param context - The neutral request context.

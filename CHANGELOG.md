@@ -15,7 +15,7 @@ A 5xx envelope no longer carries `details` unless `envelope.exposeInternals` is 
 
 **Apply to a derived backend:**
 
-- **`details` is absent from a response with status 500 or above.** The filter used to pass the
+- **`details` is absent from a response with status 500 or above, by default.** The filter used to pass the
   `details` of any `HttpException` through verbatim, so a library that put a payload fragment
   there (a cache preview, a query excerpt) published it in the body of a 5xx. The `code` and
   `message` are unchanged, and so is every 4xx, where `details` is the contract. A backend
