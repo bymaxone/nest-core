@@ -12,7 +12,7 @@ reporting process described in [SECURITY.md](./SECURITY.md).
 ## Prerequisites
 
 - Node.js >= 24
-- pnpm 10.8.1 (`corepack enable`)
+- pnpm 11.20.0 (`corepack enable`; the `packageManager` field pins it)
 
 ## Getting started
 

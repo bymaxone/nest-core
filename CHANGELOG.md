@@ -11,6 +11,27 @@ heading here.
 
 ## [Unreleased]
 
+### Security
+
+- **Development dependencies lifted past four advisories.** `body-parser` 2.4.0
+  (GHSA-27r3-jxmh-p828), `multer` 2.5.0 (GHSA-q7qp-rjg7-q26m) and `qs` 6.16.1
+  (GHSA-6pq8-jhm2-2vcw) are now the only resolved copies, through `pnpm`
+  overrides. `deepmerge` (GHSA-gcqx-w48m-w2h4) has no patched release and is
+  reached only through `jest-config`, so it is ignored in `osv-scanner.toml`
+  until 2027-01-27. All of them sit in the development tree: the package
+  declares no `dependencies`, and the published JavaScript is byte-identical to
+  1.6.3.
+
+### Changed
+
+- Development tooling only: `tsup` 9.0.0, `@opentelemetry/context-async-hooks`
+  3.0.0, `@nestjs/common`, `core`, `platform-express`, `platform-fastify` and
+  `testing` 11.2.8, `@opentelemetry/api` 1.10.0 and the CodeQL upload action
+  4.39.1. With `tsup` 9 the declaration files list type-only
+  exports in a separate `export type { … }` statement instead of inline
+  `type` modifiers; the exported names are the same. `SECURITY.md` and
+  `CONTRIBUTING.md` now match the current release line and the pinned `pnpm`.
+
 ## [1.6.3] - 2026-10-23
 
 The error envelope's `path` carried the query string, and the documented
