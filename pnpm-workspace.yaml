@@ -88,13 +88,15 @@ overrides:
   # beneath @nestjs/platform-express and express, which are devDependencies here.
   'multer': '^2.5.0'
   'proxy-addr': '^2.0.8'
-  # qs below 6.16.0 carries GHSA-4mjr-xmp4-gh2g (denial of service through an
+  # qs below 6.16.1 carries GHSA-6pq8-jhm2-2vcw (moderate: qs.stringify with
+  # arrayFormat 'comma' throws on an array element with a non-callable own
+  # toString), below 6.16.0 GHSA-4mjr-xmp4-gh2g (denial of service through an
   # attacker-controlled isBuffer) and GHSA-x5fp-wj9c-mxmx (array-limit bypass
   # through bracket-key comma parsing). Three consumers reach it, all under
   # devDependencies: body-parser beneath express, superagent beneath supertest,
   # and typed-rest-client beneath @stryker-mutator/core. Dropping any one of
   # them leaves the other two, so this entry outlives all three individually.
-  'qs': '^6.16.0'
+  'qs': '^6.16.1'
   # zod below 4.6.6 carries GHSA-mrhx-c7xc-m3w5 (high). Its one consumer is
   # mutation-server-protocol beneath @stryker-mutator/core, a devDependency, so
   # the exposure is this repository's build surface, not anything a consumer
