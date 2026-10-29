@@ -11,7 +11,7 @@ labels: bug
 
 ## Reproduction
 
-<!-- Minimal steps or a repo link. Include the subpath you were using (. / pagination / health). -->
+<!-- Minimal steps or a repo link. Include the subpath you were using (. / pagination / health / metrics / openapi). -->
 
 1.
 2.

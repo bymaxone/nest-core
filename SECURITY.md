@@ -1,7 +1,7 @@
 # Security Policy
 
 `@bymax-one/nest-core` ships an error-envelope exception filter, a request-timing
-interceptor, pagination helpers, health endpoints, and an optional Prometheus
+middleware, pagination helpers, health endpoints, and an optional Prometheus
 metrics endpoint that downstream applications rely on to avoid leaking
 sensitive data through error responses, health checks, or metrics output. We
 take vulnerability reports seriously and triage them ahead of feature work.
@@ -39,7 +39,7 @@ A useful report contains:
 
 - A clear description of the vulnerability and its impact (CIA triad, confidentiality, integrity, availability)
 - Step-by-step reproduction against the latest `1.6.x` release
-- The affected subpath (`.`, `./pagination`, or `./health`)
+- The affected subpath (`.`, `./pagination`, `./health`, `./metrics`, or `./openapi`)
 - A suggested fix or mitigation, if you have one
 - Whether you would like to be credited in the published advisory (and how, name, handle, affiliation)
 

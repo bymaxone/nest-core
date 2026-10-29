@@ -40,6 +40,9 @@ heading here.
 - **Issue template contact links.** The "Questions and discussion" link is
   removed from the issue chooser, since the repository has GitHub Discussions
   turned off. The private security contact stays.
+- **Subpath lists.** `SECURITY.md` and both issue templates name the
+  subpaths, including `./metrics` and `./openapi`, and `SECURITY.md` calls the
+  request-timing component a middleware.
 
 ## [1.6.3] - 2026-10-23
 
