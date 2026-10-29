@@ -128,33 +128,23 @@ error` and added a message exactly at the 300-character truncation bound.
 
 ## Documented equivalent mutants
 
-Each survivor below is a genuine equivalent: no test can distinguish the mutant
-from the original because they produce identical observable behavior on every
-reachable input. They are left as survivors (not `// Stryker disable`d) and
-recorded here; the score clears the gate without suppressing them.
-
-| #   | File                               | Line:Col | Mutator               | Mutation                                                                       | Why it is equivalent                                                                                                                                                                                                                                                                                                              |
-| --- | ---------------------------------- | -------- | --------------------- | ------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1   | `src/pagination/offset.ts`         | 87:52    | EqualityOperator      | `totalItems > 0` -> `totalItems >= 0`                                          | Only `totalItems === 0` selects a different branch, and both branches yield `0`: the true branch is `Math.floor(0) === 0`, the false branch is the literal `0`. The result is identical for every input.                                                                                                                          |
-| 2   | `src/pagination/cursor.ts`         | 165:47   | EqualityOperator      | `limit > 0` -> `limit >= 0`                                                    | Same shape as above: only `limit === 0` differs, and both branches yield `0` (`Math.floor(0)` vs the literal `0`), so `safeLimit` is unchanged for every input.                                                                                                                                                                   |
-| 3   | `src/pagination/cursor.ts`         | 100:11   | BlockStatement        | `catch { throw cursorRejection() }` -> `catch {}`                              | Emptying the catch leaves `parsed` as its initial `undefined`; `isOrderingKeyRecord(undefined)` is then `false`, so the very next guard throws the identical `cursorRejection()`. Same exception, same message, for every non-JSON input.                                                                                         |
-| 4   | `src/pagination/cursor.ts`         | 54:46    | ConditionalExpression | `typeof entry === 'number'` -> `true`                                          | Leaves `true && Number.isFinite(entry)`, i.e. `Number.isFinite(entry)`. The strict `Number.isFinite` never coerces, so it already returns `false` for every non-number; the `typeof === 'number'` guard it replaces is redundant, and the predicate is unchanged for every value.                                                 |
-| 5   | `src/envelope/error-codes.ts`      | 102:7    | EqualityOperator      | `status >= CLIENT_ERROR_MIN` -> `status > CLIENT_ERROR_MIN`                    | The two differ only at `status === 400`, but 400 is a catalogued row returned by the `Map` lookup before this branch is reached, so the boundary is unreachable and the fallback is identical for every status that gets here.                                                                                                    |
-| 6   | `src/envelope/error-codes.ts`      | 102:37   | EqualityOperator      | `status < CLIENT_ERROR_MAX` -> `status <= CLIENT_ERROR_MAX`                    | The two differ only at `status === 500`, but 500 is a catalogued row returned before this branch, so the boundary is unreachable and every reachable status resolves to the same code.                                                                                                                                            |
-| 7   | `src/core.module.ts`               | 64:37    | ObjectLiteral         | `setExtras({ isGlobal: true }, ...)` -> `setExtras({}, ...)`                   | The transform computes `global: extras.isGlobal !== false`. With the default removed, an unset `isGlobal` is `undefined`, and `undefined !== false` is still `true`, so the module is global unless explicitly set to `false` either way. `global` is identical for every extras input.                                           |
-| 8   | `src/envelope/exception.filter.ts` | 344:11   | ConditionalExpression | `context.correlationId !== undefined ? { correlationId } : {}` -> `true ? ...` | The always-spread form injects `correlationId: undefined` into the builder input, but `buildErrorEnvelope` re-guards `input.correlationId !== undefined` and omits an undefined value, so the emitted envelope is byte-for-byte identical whether or not a correlation id is present.                                             |
-| 9   | `src/envelope/exception.filter.ts` | 348:51   | ConditionalExpression | `context.traceId !== undefined ? { traceId } : {}` -> `... && true`            | Identical in kind to #8, and for the same reason: the always-spread form hands the builder `traceId: undefined`, which `buildErrorEnvelope` re-guards and omits. The guard exists at the call site because `exactOptionalPropertyTypes` rejects an explicit `undefined` for an optional field, not because it changes the output. |
+Each equivalent mutant is documented in the source, on the line it applies to,
+with its reason after the colon of a `// Stryker disable` directive:
+`grep -rn 'Stryker disable' src` lists them. `pnpm check:mutants` enforces the
+directive grammar. This report keeps no copy of that list, because a copy
+drifts from the code it describes; the suppression policy in the plan explains
+why.
 
 ---
 
 ## Reproduction
 
 ```
-pnpm mutation
+pnpm mutation:full
 ```
 
-Runs the full gate sequentially (about three and a half minutes on the reference
-machine). The HTML report is written to `reports/mutation/mutation.html` and the
+Runs the full gate cold: it removes the incremental cache first, so
+every mutant is tested. (`pnpm mutation` reuses that cache and re-tests only what changed.) The HTML report is written to `reports/mutation/mutation.html` and the
 machine-readable report to `reports/mutation/mutation.json`.
 
 ---
@@ -257,3 +247,20 @@ mutants surfaced during this work and neither became a tenth:
   the one condition that matters — which also stopped it rejecting a _callable_ instance, the
   shape Express uses for its own app object, so the simplification fixed a latent narrowing bug
   as well as the mutant.
+
+---
+
+## Re-run — 2026-10-26 (scheduled cold run)
+
+| Metric                    | Value        |
+| ------------------------- | ------------ |
+| **Mutation score**        | **100.00 %** |
+| Killed                    | 1377         |
+| Timed out (counts killed) | 11           |
+| Survived                  | 0            |
+| No coverage               | 0            |
+| Compile-error (excluded)  | 729          |
+| Break threshold           | 95 % -> PASS |
+
+The weekly `mutation-full.yml` run on `main` at 8049f62, with the incremental cache removed:
+[run 40298781550](https://github.com/bymaxone/nest-core/actions/runs/40298781550).

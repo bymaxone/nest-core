@@ -42,12 +42,15 @@ The gate for release is a score of at least 95 with the `break` check passing.
 
 ## Run commands
 
-- **Full run (release gate):** `pnpm mutation` (`stryker run`). Ten to twenty
-  minutes. Runs the whole mutated surface.
-- **Incremental run (iteration):** `pnpm mutation:full`
-  (`stryker run --incremental`). Reuses `reports/stryker-incremental.json` to
-  re-test only mutants affected by changed files. Used while hardening; the
-  release gate is always a full run.
+- **Full run (release gate):** `pnpm mutation:full`. It deletes
+  `reports/stryker-incremental.json` first, so every mutant is tested cold. Ten
+  to twenty minutes. The `mutation-full.yml` workflow runs the same measurement
+  every week.
+- **Incremental run (iteration):** `pnpm mutation` (`stryker run`).
+  `stryker.config.json` sets `incremental: true`, so it reuses
+  `reports/stryker-incremental.json` and re-tests only mutants affected by
+  changed files. Used while hardening; its verdict is only as current as that
+  baseline, so the release gate is always the full run.
 - **Dry run (config sanity):** `pnpm mutation:dry-run`
   (`stryker run --dryRunOnly`). Confirms the runner and checker are wired
   without mutating.
@@ -79,11 +82,10 @@ Classify every surviving mutant into one of three buckets and act accordingly.
 3. **Genuine equivalent.** No test can distinguish the mutant from the original
    because the two are behaviorally identical (for example, a mutated statement
    whose result is never observable, or a change that produces the same output on
-   every reachable input). Document it in
-   [`mutation_testing_results.md`](./mutation_testing_results.md) with the file,
-   line, mutator, and the reason no test can kill it. An inline
-   `// Stryker disable next-line <mutator>` comment is used only for a genuine
-   equivalent, and only with a written justification on the same line.
+   every reachable input). Document it in the source, with an inline
+   `// Stryker disable next-line <mutator>: <reason>` comment that states why no
+   test can kill it. The comment is used only for a genuine equivalent (see the
+   suppression policy below).
 
 **Hardening strengthens tests, never production code.** The production behavior
 is frozen at this point; a mutant is killed by a better test, never by reshaping
@@ -95,7 +97,8 @@ the code to make the mutant impossible, and never by lowering a threshold.
 
 - [`mutation_testing_results.md`](./mutation_testing_results.md): the baseline
   score with killed / survived / timeout counts and the survivor inventory, then
-  the final score after hardening and the documented-equivalents section.
+  the score after each later measurement. Equivalent mutants are documented in
+  the source, as the suppression policy below says.
 
 ---
 
