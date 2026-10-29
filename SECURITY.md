@@ -10,14 +10,13 @@ take vulnerability reports seriously and triage them ahead of feature work.
 
 Security patches are issued for the most recent minor on the active `1.x` line.
 
-| Version         | Status                                               |
-| --------------- | ---------------------------------------------------- |
-| `1.6.x`         | Active, receives security fixes                      |
-| `1.0.x`–`1.5.x` | Superseded, upgrade to `1.6.x` (backport on request) |
-| `< 1.0`         | End-of-life                                          |
+| Version | Status                             |
+| ------- | ---------------------------------- |
+| `1.6.x` | Supported, receives security fixes |
+| `< 1.6` | Not supported, upgrade to `1.6.x`  |
 
-If you are stuck on an older version and need a backport, open a private
-advisory (see below) and we will discuss feasibility on a case-by-case basis.
+Only the latest minor is supported. Earlier versions receive no security fixes
+and no backports: upgrade to the latest `1.6.x` release.
 
 ## Reporting a vulnerability
 
