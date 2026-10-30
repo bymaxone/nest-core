@@ -567,7 +567,7 @@ follows this exact, versioned shape:
 | `details`       | array or object   | optional | Structured context, for example validation issues. Absent on a 5xx unless `exposeInternals` is on. |
 | `correlationId` | string            | optional | Present when a correlation provider is bound.                                                      |
 | `timestamp`     | string (ISO 8601) | always   | Time the error was formatted.                                                                      |
-| `path`          | string            | always   | Request URL path.                                                                                  |
+| `path`          | string            | always   | Request URL path, never the query string. The router's own 404 `message` names the same path.      |
 
 **A server error carries no `details` by default.** For a status of 500 or above, the filter omits `details`
 from the body, whichever library threw the `HttpException` and whether it wrote them flat or

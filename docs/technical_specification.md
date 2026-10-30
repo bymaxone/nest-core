@@ -324,7 +324,7 @@ Every error that leaves the application has this exact shape. The contract is ve
 | `details`       | array or object   | optional | Structured context (validation issues, etc.); absent on a 5xx unless `exposeInternals` is on |
 | `correlationId` | string            | optional | Present when a correlation provider is bound                                                 |
 | `timestamp`     | string (ISO 8601) | always   | Time the error was formatted                                                                 |
-| `path`          | string            | always   | Request URL path                                                                             |
+| `path`          | string            | always   | Request URL path, never the query string; the router's own 404 `message` names the same path |
 
 ### 5.2 Mapping Rules
 
