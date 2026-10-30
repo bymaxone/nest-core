@@ -11,7 +11,8 @@ heading here.
 
 ## [Unreleased]
 
-A 5xx envelope no longer carries `details` unless `envelope.exposeInternals` is on.
+A 5xx envelope no longer carries `details` unless `envelope.exposeInternals` is on, and the
+message of the router's own 404 no longer carries the query string.
 
 **Apply to a derived backend:**
 
@@ -22,8 +23,19 @@ A 5xx envelope no longer carries `details` unless `envelope.exposeInternals` is 
   that read `details` from a 5xx body should log that context where the error is thrown instead.
   `envelope.exposeInternals` keeps the details, for local debugging only. The filter owns no
   logger and records nothing about them itself.
+- **The router's 404 `message` names the path, not the URL.** For a request that matches no
+  route, Nest answers `Cannot GET /orders?token=…` with the raw URL. A test or a client that
+  matches that text for a request with a query string now reads `Cannot GET /orders`. A
+  `NotFoundException` the application throws is not touched.
 
 ### Security
+
+- **The router's 404 `message` no longer carries the query string or credentials.** 1.6.3 took
+  the query out of `path`, "where reset codes and tokens travel", but the `message` of Nest's own
+  404 (`Cannot ${method} ${url}`, built in `@nestjs/core` from the adapter's raw URL) still held
+  it, and held the userinfo of an absolute-form target as well. Both now read
+  `Cannot GET /path`, as `path` does. Only that exact framework message is rewritten, so a
+  message the application wrote, and a domain error's message, stay as written.
 
 - **A server error no longer publishes its `details` by default.** Both the flat `{ code, message, details }`
   and the nested `{ error: { code, message, details } }` shapes are cut for a status of 500 or

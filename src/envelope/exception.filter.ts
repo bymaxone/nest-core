@@ -455,7 +455,7 @@ export class BymaxExceptionFilter implements ExceptionFilter {
     request: unknown
   ): ErrorEnvelope {
     if (exception instanceof HttpException) {
-      return this.mapHttpException(exception, context)
+      return this.mapHttpException(exception, context, request)
     }
     const exposed = resolveExposedClientError(exception)
     if (exposed !== undefined) {
@@ -523,7 +523,11 @@ export class BymaxExceptionFilter implements ExceptionFilter {
    * @param context - The neutral request context.
    * @returns The formatted envelope.
    */
-  private mapHttpException(exception: HttpException, context: FilterErrorContext): ErrorEnvelope {
+  private mapHttpException(
+    exception: HttpException,
+    context: FilterErrorContext,
+    request: unknown
+  ): ErrorEnvelope {
     const status = exception.getStatus()
     const response = exception.getResponse()
     const carrier = resolveErrorCarrier(response)
@@ -545,10 +549,14 @@ export class BymaxExceptionFilter implements ExceptionFilter {
         toValidationDetails(response.message)
       )
     }
+    const message = extractHttpMessage(response, exception)
+    const rawUrl = String(this.adapterHost.httpAdapter.getRequestUrl(request))
     return this.toEnvelope(
       status,
       codeForStatus(status),
-      extractHttpMessage(response, exception),
+      message === `Cannot ${context.method} ${rawUrl}`
+        ? `Cannot ${context.method} ${context.path}`
+        : message,
       context
     )
   }
