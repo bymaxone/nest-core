@@ -11,8 +11,11 @@ heading here.
 
 ## [Unreleased]
 
+## [1.6.4] - 2026-10-30
+
 A 5xx envelope no longer carries `details` unless `envelope.exposeInternals` is on, and the
-message of the router's own 404 no longer carries the query string.
+message of the router's own 404 no longer carries the query string or the credentials of an
+absolute-form target.
 
 **Apply to a derived backend:**
 
@@ -25,7 +28,8 @@ message of the router's own 404 no longer carries the query string.
   logger and records nothing about them itself.
 - **The router's 404 `message` names the path, not the URL.** For a request that matches no
   route, Nest answers `Cannot GET /orders?token=…` with the raw URL. A test or a client that
-  matches that text for a request with a query string now reads `Cannot GET /orders`. A
+  matches that text for a request with a query string now reads `Cannot GET /orders`, and the
+  userinfo of an absolute-form target (`GET http://user:pw@host/orders`) is gone from it too. A
   `NotFoundException` the application throws is not touched.
 
 ### Security
@@ -1261,4 +1265,5 @@ have regressed from. They are kept because the reasoning is worth having.
 [1.6.1]: https://github.com/bymaxone/nest-core/compare/v1.6.0...v1.6.1
 [1.6.2]: https://github.com/bymaxone/nest-core/compare/v1.6.1...v1.6.2
 [1.6.3]: https://github.com/bymaxone/nest-core/compare/v1.6.2...v1.6.3
-[Unreleased]: https://github.com/bymaxone/nest-core/compare/v1.6.3...HEAD
+[1.6.4]: https://github.com/bymaxone/nest-core/compare/v1.6.3...v1.6.4
+[Unreleased]: https://github.com/bymaxone/nest-core/compare/v1.6.4...HEAD
