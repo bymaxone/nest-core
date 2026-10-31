@@ -13,6 +13,21 @@ heading here.
 
 ### Documentation
 
+- **README snippets are corrected so they compile.** The metrics
+  `authToken` example no longer passes `string | undefined` where `exactOptionalPropertyTypes` requires
+  `string`; the `environment` example reads the validated value with `getOrThrow`; the contributor
+  example imports `Injectable`; and the `authOperationSecurity` example is a complete function and a
+  complete `forRoot` call.
+
+### Tests
+
+- **`pnpm check:published` compiles every README snippet through the TypeScript API.** Syntax and type
+  errors are reported together, snippets that do not import the package are checked too, and the names
+  a snippet takes from its prose are typed in `scripts/readme-prelude.d.ts`, so a wrong method, option
+  or field fails the gate instead of resolving to `any`.
+
+### Documentation
+
 - **The README's `RequestTimingSample` snippet lists the two optional trace fields.** The interface
   carries `traceId?` and `spanId?`, present when telemetry is enabled and a span was recording.
 
