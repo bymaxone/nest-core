@@ -273,8 +273,9 @@ is rejected at boot rather than silently ignored, so a mistyped secret fails lou
 instead of leaving the endpoint open:
 
 ```ts
+const token = process.env.METRICS_TOKEN
 BymaxCoreModule.forRoot({
-  metrics: { enabled: true, authToken: process.env.METRICS_TOKEN }
+  metrics: { enabled: true, ...(token === undefined ? {} : { authToken: token }) }
 })
 // Scrape: curl -H "Authorization: Bearer $METRICS_TOKEN" http://host/metrics
 ```
@@ -356,10 +357,14 @@ place that knows it:
 
 ```ts
 // in the library
-export function authOperationSecurity(prefix = ''): OperationSecurityMap { /* … */ }
+export function authOperationSecurity(prefix = ''): OperationSecurityMap {
+  return {} /* … */
+}
 
 // in the application
-operationSecurity: { ...authOperationSecurity('api'), ...myOwnOverrides }
+BymaxCoreModule.forRoot({
+  openapi: { operationSecurity: { ...authOperationSecurity('api'), ...myOwnOverrides } }
+})
 ```
 
 A requirement naming a scheme that is not declared **fails the document build**
@@ -1298,7 +1303,7 @@ BymaxCoreModule.forRootAsync({
   inject: [ConfigService],
   useFactory: (config: ConfigService) => ({
     // Your validated value, not a second copy of NODE_ENV.
-    environment: config.get('APP_ENV'),
+    environment: config.getOrThrow<string>('APP_ENV'),
     openapi: { enabled: true }
   })
 })
@@ -1401,6 +1406,7 @@ So a library marks a provider and returns fragments keyed by **handler
 identity**, which survives every prefix, version and mount point:
 
 ```ts
+import { Injectable } from '@nestjs/common'
 import { BymaxOpenApiContributor } from '@bymax-one/nest-core/openapi'
 import type { IOpenApiContributor, OpenApiFragment } from '@bymax-one/nest-core/openapi'
 
