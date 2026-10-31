@@ -753,6 +753,8 @@ export interface RequestTimingSample {
   statusCode: number
   durationMs: number
   slow: boolean
+  traceId?: string
+  spanId?: string
 }
 ```
 
