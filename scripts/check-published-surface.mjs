@@ -51,6 +51,8 @@ import { createRequire } from 'node:module'
 import { dirname, join, relative, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+import { redeclarationDrift } from './readme-interface-drift.mjs'
+
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 const PKG = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'))
 const README = readFileSync(join(ROOT, 'README.md'), 'utf8')
@@ -208,49 +210,6 @@ function compileGate() {
     return `${where}(${String(line + 1)},${String(character + 1)}): error TS${String(d.code)}: ${text}`
   })
   return { lines, program }
-}
-
-/** The members of a type as `name`, optionality and written type, sorted, so two
- * declarations can be compared. */
-function memberShape(checker, type, location) {
-  return type
-    .getProperties()
-    .map((symbol) => {
-      const optional = symbol.flags & ts.SymbolFlags.Optional ? '?' : ''
-      const written = checker.typeToString(checker.getTypeOfSymbolAtLocation(symbol, location))
-      return `${symbol.name}${optional}: ${written}`
-    })
-    .sort()
-}
-
-/** A snippet that restates a shipped interface says what the package exports, so a
- * member it adds, drops or retypes is drift the compile cannot see: a local
- * declaration is simply a different type. Returns one line per divergence. */
-function redeclarationDrift(program, snippetFiles) {
-  const exported = new Map(shippedExports().map((e) => [e.name, e]))
-  const drift = []
-  for (const file of snippetFiles) {
-    const source = program.getSourceFile(join(GATE_DIR, file))
-    if (source === undefined) continue
-    const checker = program.getTypeChecker()
-    for (const node of source.statements) {
-      const real = ts.isInterfaceDeclaration(node) ? exported.get(node.name.text) : undefined
-      if (real === undefined) continue
-      const local = memberShape(checker, checker.getTypeAtLocation(node.name), node)
-      const declared = real.checker.getDeclaredTypeOfSymbol(real.symbol)
-      const remote = memberShape(real.checker, declared, real.symbol.declarations?.[0] ?? node)
-      const missing = remote.filter((m) => !local.includes(m))
-      const extra = local.filter((m) => !remote.includes(m))
-      if (missing.length + extra.length > 0) {
-        drift.push(
-          `${file}: interface ${node.name.text} differs from the shipped one` +
-            (missing.length > 0 ? `; missing or different: ${missing.join(', ')}` : '') +
-            (extra.length > 0 ? `; not shipped: ${extra.join(', ')}` : '')
-        )
-      }
-    }
-  }
-  return drift
 }
 
 const failures = []
@@ -790,7 +749,15 @@ function checkSnippets() {
     const { lines, program } = compileGate()
     if (process.env.GATE_DEBUG) console.log(lines.join('\n'))
     const real = lines.filter((l) => !isForeignModule(l) && !isAbbreviatedLocalType(l, sources))
-    for (const drift of redeclarationDrift(program, fileNames)) real.push(drift)
+    const snippetFiles = fileNames.map((name) => join(GATE_DIR, name))
+    for (const drift of redeclarationDrift({
+      ts,
+      program,
+      snippetFiles,
+      shipped: shippedExports()
+    })) {
+      real.push(drift)
+    }
     const context = lines.length - lines.filter((l) => real.includes(l)).length
     if (real.length > 0) {
       fail(
