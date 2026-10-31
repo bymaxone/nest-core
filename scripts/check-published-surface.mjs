@@ -109,6 +109,38 @@ function declaredNames(code) {
   return [...code.matchAll(pattern)].map((m) => m[1])
 }
 
+/** `useFactory` is typed as a union with a `Promise`, which switches off the
+ * excess-property check on the object an arrow returns, so a misspelled option in a
+ * `forRootAsync` example would compile. Annotating the arrow's return type puts the
+ * check back; only the `=> ({` form the README writes is rewritten. */
+function typeFactories(code) {
+  const options = `import('${PKG.name}').BymaxCoreModuleOptions`
+  return code.replace(
+    /useFactory:\s*(async\s+)?(\([^)]*\))\s*=>\s*\(\{/g,
+    (_match, isAsync, params) =>
+      `useFactory: ${isAsync ?? ''}${params}: ${isAsync ? `Promise<${options}>` : options} => ({`
+  )
+}
+
+/** A README snippet that imports `./app.module` means the snippet above it that
+ * exports `AppModule`. Each relative import is pointed at the snippet file exporting
+ * its first name, so the import is type-checked instead of resolving to `any`; one
+ * that no snippet exports is left as written and fails as an unresolved module.
+ * `fileOf` maps an exported name to the snippet file that declares it. */
+function resolveRelativeImports(code, fileOf) {
+  const pattern = /^(import\s+(?:type\s+)?\{([^}]*)\}\s+from\s+)(['"])(\.{1,2}\/[^'"]+)\3/gm
+  return code.replace(pattern, (match, head, names, quote) => {
+    const first =
+      names
+        .split(',')[0]
+        ?.trim()
+        .replace(/^type\s+/, '')
+        .split(/\s+as\s+/)[0] ?? ''
+    const file = fileOf.get(first)
+    return file === undefined ? match : `${head}${quote}./${file}${quote}`
+  })
+}
+
 /**
  * Turns a README fragment into something a compiler can check without changing what
  * it claims: a snippet that does not import the package gets every public name
@@ -122,7 +154,7 @@ function prepareSnippet(code, importsPkg) {
   const imports = code.match(importPattern) ?? []
   // `{ ... }` is how a snippet says "the usual arguments". Left alone it is a parse
   // error, and a parse error in a call hides every semantic error around it.
-  const body = code.replace(importPattern, '').replaceAll('{ ... }', '{} as never')
+  const body = typeFactories(code.replace(importPattern, '')).replaceAll('{ ... }', '{} as never')
   const injected = importsPkg ? '' : `${publicImports(declaredNames(body))}\n`
   const header = `${injected}${imports.join('')}`
   const declares = /^(export\s+)?(abstract\s+)?(class|interface|type|enum|function)\s/m.test(body)
@@ -628,14 +660,24 @@ function checkSnippets() {
   }))
 
   scaffoldConsumer()
+  const fileNames = subjects.map(({ ext }, i) => `snippet-${String(i + 1).padStart(2, '0')}.${ext}`)
+  /** exported name → the snippet file that declares it, first declaration winning. */
+  const fileOf = new Map()
+  subjects.forEach(({ raw }, i) => {
+    const exported =
+      /^export\s+(?:default\s+)?(?:abstract\s+)?(?:class|function|const|let|interface|type|enum)\s+([A-Za-z_$][\w$]*)/gm
+    for (const m of raw.matchAll(exported)) {
+      if (!fileOf.has(m[1])) fileOf.set(m[1], fileNames[i].replace(/\.tsx?$/, ''))
+    }
+  })
   /** file name → its source, so a diagnostic can be traced back to the snippet. */
   const sources = new Map()
-  subjects.forEach(({ ext, raw, code }, i) => {
-    const name = `snippet-${String(i + 1).padStart(2, '0')}.${ext}`
+  subjects.forEach(({ raw, code }, i) => {
+    const name = fileNames[i]
     // The abbreviated-type check below reads what the author wrote, not the header
     // this script added, which names every public type.
     sources.set(name, raw)
-    writeFileSync(join(GATE_DIR, name), code)
+    writeFileSync(join(GATE_DIR, name), resolveRelativeImports(code, fileOf))
   })
 
   // The names a snippet uses without introducing them are declared, typed, in
@@ -658,8 +700,10 @@ function checkSnippets() {
     return new RegExp(`\\b(class|interface|type)\\s+${m[1]}\\b`).test(own)
   }
   /** An import of some OTHER package the fixture does not install — a documented
-   * optional integration. Reported as uncovered, not as a failure. */
-  const isForeignModule = (line) => /error TS2307/.test(line) && !line.includes(PKG.name)
+   * optional integration. Reported as uncovered, not as a failure. A relative import
+   * is never foreign: it names a file the README itself has to supply. */
+  const isForeignModule = (line) =>
+    /error TS2307: Cannot find module '(?!\.)/.test(line) && !line.includes(PKG.name)
 
   try {
     const lines = compileGate()
@@ -680,7 +724,7 @@ function checkSnippets() {
     console.log(
       `  snippets: ${subjects.length} compiled against dist/` +
         (context > 0
-          ? ` (${context} diagnostic(s) ignored: an import the fixture cannot resolve, or an abbreviated local class)`
+          ? ` (${context} diagnostic(s) ignored: a package the fixture does not install, or an abbreviated local class)`
           : '')
     )
   } finally {

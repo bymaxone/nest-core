@@ -13,26 +13,20 @@ heading here.
 
 ### Documentation
 
-- **README snippets are corrected so they compile.** The metrics
-  `authToken` example no longer passes `string | undefined` where `exactOptionalPropertyTypes` requires
-  `string`; the `environment` example reads the validated value with `getOrThrow`; the contributor
-  example imports `Injectable`; and the `authOperationSecurity` example is a complete function and a
-  complete `forRoot` call.
-
-### Tests
-
-- **`pnpm check:published` compiles every README snippet through the TypeScript API.** Syntax and type
-  errors are reported together, snippets that do not import the package are checked too, and the names
-  a snippet takes from its prose are typed in `scripts/readme-prelude.d.ts`, so a wrong method, option
-  or field fails the gate instead of resolving to `any`.
-
-### Documentation
-
+- **README snippets are corrected so they compile.** The metrics `authToken` example no longer passes
+  `string | undefined` where `exactOptionalPropertyTypes` requires `string`; the `environment` example
+  reads the validated value with `getOrThrow`; the contributor example imports `Injectable`; and the
+  `authOperationSecurity` example is a complete function and a complete `forRoot` call.
 - **The README's `RequestTimingSample` snippet lists the two optional trace fields.** The interface
   carries `traceId?` and `spanId?`, present when telemetry is enabled and a span was recording.
 
 ### Tests
 
+- **`pnpm check:published` compiles every README snippet through the TypeScript API.** Syntax and type
+  errors are reported together, snippets that do not import the package are checked too, a relative
+  import resolves to the snippet that exports the name, and the names a snippet takes from its prose
+  are typed in `scripts/readme-prelude.d.ts`, so a wrong method, option or field fails the gate
+  instead of resolving to `any`. An option misspelled in a `forRootAsync` factory fails too.
 - **The README's option tables are pinned to the resolved defaults.** A spec parses every table under
   the Configuration section and fails when a documented default, or a documented option, differs from
   `DEFAULT_CORE_OPTIONS`, or when a resolved option has no row.
