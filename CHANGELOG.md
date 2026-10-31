@@ -17,13 +17,13 @@ heading here.
   `string | undefined` where `exactOptionalPropertyTypes` requires `string`; the `environment` example
   reads the validated value with `getOrThrow`; the contributor example imports `Injectable`; and the
   `authOperationSecurity` example is a complete function and a complete `forRoot` call.
-- **The README lists every error-code constant and the OpenAPI contract version.** The eleven status
-  codes it never named are in a catalog beside the status each maps from, and
+- **The README lists every error-code constant and the OpenAPI contract version.** Each code is in a
+  catalog beside the status it maps from, and
   `BYMAX_OPENAPI_CONTRACT_VERSION` is documented and used by the contributor example instead of a
   literal `1`.
 - **The README says this package mints no request id.** `correlationId` is whatever the bound
   `BYMAX_CORRELATION_PROVIDER` returns, and the id comes from what the application binds, such as the
-  `@bymax-one/nest-logger` request-id middleware, which supports Express only.
+  `@bymax-one/nest-logger` request-id middleware.
 - **The README explains why `TimingInterceptor` is deprecated.** It records a second sample for every
   request that reaches a handler when wired next to the middleware, and it never saw a request a guard
   rejected.

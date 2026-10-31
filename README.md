@@ -578,7 +578,7 @@ follows this exact, versioned shape:
 `ICorrelationIdProvider` (`BYMAX_CORRELATION_PROVIDER`) returns: the filter only
 reads it, and with no provider bound the field is absent. The id has to come from
 something you bind. With `@bymax-one/nest-logger` that is its request-id
-middleware, which supports Express only; see
+middleware; see
 [Integration with `@bymax-one/nest-logger`](#-integration-with-bymax-onenest-logger).
 
 **A server error carries no `details` by default.** For a status of 500 or above, the filter omits `details`
@@ -609,24 +609,24 @@ throw new BadRequestException({ code: 'INVOICE_OVERDUE', message: 'Invoice is ov
 
 Every code the package assigns is exported from `@bymax-one/nest-core` as a constant:
 
-| Code                           | Status    | When                                                      |
-| ------------------------------ | --------- | --------------------------------------------------------- |
-| `BYMAX_BAD_REQUEST`            | 400       | A bad request that is not a validation failure.           |
-| `BYMAX_VALIDATION_FAILED`      | 400       | The shape a validation pipe produces.                     |
-| `BYMAX_UNAUTHORIZED`           | 401       | No or invalid credentials.                                |
-| `BYMAX_FORBIDDEN`              | 403       | Authenticated, but not allowed.                           |
-| `BYMAX_NOT_FOUND`              | 404       | Unknown resource, including a route no handler matched.   |
-| `BYMAX_CONFLICT`               | 409       | A state conflict.                                         |
-| `BYMAX_PAYLOAD_TOO_LARGE`      | 413       | A body over the size limit.                               |
-| `BYMAX_UNSUPPORTED_MEDIA_TYPE` | 415       | A content type the route does not accept.                 |
-| `BYMAX_UNPROCESSABLE_ENTITY`   | 422       | A well-formed body that is semantically invalid.          |
-| `BYMAX_TOO_MANY_REQUESTS`      | 429       | A rate limit.                                             |
-| `BYMAX_CLIENT_ERROR`           | other 4xx | A client error with no code of its own.                   |
-| `BYMAX_INTERNAL_ERROR`         | 500       | An unknown error, and any status with no code of its own. |
-| `BYMAX_NOT_IMPLEMENTED`        | 501       | A handler that is not implemented.                        |
-| `BYMAX_BAD_GATEWAY`            | 502       | A failure of an upstream service.                         |
-| `BYMAX_SERVICE_UNAVAILABLE`    | 503       | Temporary unavailability.                                 |
-| `BYMAX_GATEWAY_TIMEOUT`        | 504       | An upstream service that did not answer in time.          |
+| Code                           | Status    | When                                                     |
+| ------------------------------ | --------- | -------------------------------------------------------- |
+| `BYMAX_BAD_REQUEST`            | 400       | A bad request that is not a validation failure.          |
+| `BYMAX_VALIDATION_FAILED`      | 400       | The shape a validation pipe produces.                    |
+| `BYMAX_UNAUTHORIZED`           | 401       | No or invalid credentials.                               |
+| `BYMAX_FORBIDDEN`              | 403       | Authenticated, but not allowed.                          |
+| `BYMAX_NOT_FOUND`              | 404       | Unknown resource, including a route no handler matched.  |
+| `BYMAX_CONFLICT`               | 409       | A state conflict.                                        |
+| `BYMAX_PAYLOAD_TOO_LARGE`      | 413       | A body over the size limit.                              |
+| `BYMAX_UNSUPPORTED_MEDIA_TYPE` | 415       | A content type the route does not accept.                |
+| `BYMAX_UNPROCESSABLE_ENTITY`   | 422       | A well-formed body that is semantically invalid.         |
+| `BYMAX_TOO_MANY_REQUESTS`      | 429       | A rate limit.                                            |
+| `BYMAX_CLIENT_ERROR`           | other 4xx | A client error with no code of its own.                  |
+| `BYMAX_INTERNAL_ERROR`         | 500       | An unknown error, and any non-4xx status without a code. |
+| `BYMAX_NOT_IMPLEMENTED`        | 501       | A handler that is not implemented.                       |
+| `BYMAX_BAD_GATEWAY`            | 502       | A failure of an upstream service.                        |
+| `BYMAX_SERVICE_UNAVAILABLE`    | 503       | Temporary unavailability.                                |
+| `BYMAX_GATEWAY_TIMEOUT`        | 504       | An upstream service that did not answer in time.         |
 
 `codeForStatus(status)` returns the code for a status.
 
