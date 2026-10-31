@@ -7,7 +7,7 @@
  * field on a package type is a real error and must stay one.
  */
 import type { IHealthIndicator } from '@bymax-one/nest-core/health'
-import type { OperationSecurityMap } from '@bymax-one/nest-core/openapi'
+import type { OperationSecurityMap } from '@bymax-one/nest-core'
 import type { PageQuery } from '@bymax-one/nest-core/pagination'
 import type { INestApplication } from '@nestjs/common'
 import type supertest from 'supertest'
