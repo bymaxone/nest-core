@@ -574,6 +574,13 @@ follows this exact, versioned shape:
 | `timestamp`     | string (ISO 8601) | always   | Time the error was formatted.                                                                      |
 | `path`          | string            | always   | Request URL path, never the query string. The router's own 404 `message` names the same path.      |
 
+**This package mints no request id.** `correlationId` is whatever the bound
+`ICorrelationIdProvider` (`BYMAX_CORRELATION_PROVIDER`) returns: the filter only
+reads it, and with no provider bound the field is absent. The id has to come from
+something you bind. With `@bymax-one/nest-logger` that is its request-id
+middleware; see
+[Integration with `@bymax-one/nest-logger`](#-integration-with-bymax-onenest-logger).
+
 **A server error carries no `details` by default.** For a status of 500 or above, the filter omits `details`
 from the body, whichever library threw the `HttpException` and whether it wrote them flat or
 under `error`; the `code` and `message` stay, because they are text the thrower chose for the
@@ -599,6 +606,29 @@ import { BadRequestException } from '@nestjs/common'
 
 throw new BadRequestException({ code: 'INVOICE_OVERDUE', message: 'Invoice is overdue' })
 ```
+
+Every code the package assigns is exported from `@bymax-one/nest-core` as a constant:
+
+| Code                           | Status    | When                                                     |
+| ------------------------------ | --------- | -------------------------------------------------------- |
+| `BYMAX_BAD_REQUEST`            | 400       | A bad request that is not a validation failure.          |
+| `BYMAX_VALIDATION_FAILED`      | 400       | The shape a validation pipe produces.                    |
+| `BYMAX_UNAUTHORIZED`           | 401       | No or invalid credentials.                               |
+| `BYMAX_FORBIDDEN`              | 403       | Authenticated, but not allowed.                          |
+| `BYMAX_NOT_FOUND`              | 404       | Unknown resource, including a route no handler matched.  |
+| `BYMAX_CONFLICT`               | 409       | A state conflict.                                        |
+| `BYMAX_PAYLOAD_TOO_LARGE`      | 413       | A body over the size limit.                              |
+| `BYMAX_UNSUPPORTED_MEDIA_TYPE` | 415       | A content type the route does not accept.                |
+| `BYMAX_UNPROCESSABLE_ENTITY`   | 422       | A well-formed body that is semantically invalid.         |
+| `BYMAX_TOO_MANY_REQUESTS`      | 429       | A rate limit.                                            |
+| `BYMAX_CLIENT_ERROR`           | other 4xx | A client error with no code of its own.                  |
+| `BYMAX_INTERNAL_ERROR`         | 500       | An unknown error, and any non-4xx status without a code. |
+| `BYMAX_NOT_IMPLEMENTED`        | 501       | A handler that is not implemented.                       |
+| `BYMAX_BAD_GATEWAY`            | 502       | A failure of an upstream service.                        |
+| `BYMAX_SERVICE_UNAVAILABLE`    | 503       | Temporary unavailability.                                |
+| `BYMAX_GATEWAY_TIMEOUT`        | 504       | An upstream service that did not answer in time.         |
+
+`codeForStatus(status)` returns the code for a status.
 
 ### What the filter classifies from, and what it cannot
 
@@ -762,6 +792,12 @@ export interface RequestTimingSample {
   spanId?: string
 }
 ```
+
+`TimingInterceptor` is still exported and is **deprecated**: nothing registers it. It
+was the recorder until `BymaxTimingMiddleware` replaced it, because guards run
+before interceptors and a request a guard rejected never reached it. Registering it
+as well records a second sample for every request that reaches a handler, so leave
+it out.
 
 ### Rejected requests are counted too
 
@@ -1407,7 +1443,10 @@ identity**, which survives every prefix, version and mount point:
 
 ```ts
 import { Injectable } from '@nestjs/common'
-import { BymaxOpenApiContributor } from '@bymax-one/nest-core/openapi'
+import {
+  BymaxOpenApiContributor,
+  BYMAX_OPENAPI_CONTRACT_VERSION
+} from '@bymax-one/nest-core/openapi'
 import type { IOpenApiContributor, OpenApiFragment } from '@bymax-one/nest-core/openapi'
 
 @BymaxOpenApiContributor()
@@ -1420,7 +1459,7 @@ export class AuthOpenApi implements IOpenApiContributor {
       // Required, and declared rather than inferred: a fragment crosses a
       // boundary between independently released packages, where each side
       // type-checked against its own copy.
-      contractVersion: 1,
+      contractVersion: BYMAX_OPENAPI_CONTRACT_VERSION,
       components: {
         securitySchemes: {
           // Derived from resolved options — which is why this cannot be a
@@ -1449,14 +1488,15 @@ library that is never imported contributes nothing.
 
 #### What the merge guarantees
 
-| Rule                  | Behavior                                                                                                                                                                     |
-| --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Marked, not shaped    | Only providers carrying the marker are called. A class that merely exposes `contributeOpenApi` is never touched.                                                             |
-| Called once           | While the document is built, after options resolve — so a contributor may derive its contribution from its own configuration.                                                |
-| Stable order          | Contributors run sorted by class name, so two libraries describing the same operation resolve the same way on every boot.                                                    |
-| Data, not mutation    | A contributor returns fragments; this package decides what to write. That is what makes precedence enforceable.                                                              |
-| Named failures        | A marked class that cannot contribute, one that throws, or a fragment addressing a handler the application does not have all fail the document build naming the contributor. |
-| Off with the document | With `openapi.enabled` false, no contributor runs.                                                                                                                           |
+| Rule                  | Behavior                                                                                                                                                                       |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Marked, not shaped    | Only providers carrying the marker are called. A class that merely exposes `contributeOpenApi` is never touched.                                                               |
+| Called once           | While the document is built, after options resolve — so a contributor may derive its contribution from its own configuration.                                                  |
+| Stable order          | Contributors run sorted by class name, so two libraries describing the same operation resolve the same way on every boot.                                                      |
+| Data, not mutation    | A contributor returns fragments; this package decides what to write. That is what makes precedence enforceable.                                                                |
+| Named failures        | A marked class that cannot contribute, one that throws, or a fragment addressing a handler the application does not have all fail the document build naming the contributor.   |
+| Versioned contract    | A fragment declares `contractVersion` as `BYMAX_OPENAPI_CONTRACT_VERSION`, currently `1`. A fragment declaring another version fails the document build, naming both versions. |
+| Off with the document | With `openapi.enabled` false, no contributor runs.                                                                                                                             |
 
 **Precedence, weakest first:** what this package infers about its own routes,
 then what a library contributed, then what the consumer configured, and above
@@ -1863,27 +1903,27 @@ in the sections above.
 
 ### `.` (root)
 
-| Export                                                                                                                                                                                                             | Kind      | Description                                                                                                                             |
-| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| `BymaxCoreModule`                                                                                                                                                                                                  | class     | The dynamic module: `forRoot` and `forRootAsync`.                                                                                       |
-| `BymaxCoreModuleOptions`, `EnvelopeOptions`, `TimingOptions`, `HealthOptions`, `MetricsOptions`, `TelemetryOptions`, `OpenApiOptions`, `OpenApiServerDescriptor`, `OpenApiSecurityScheme`, `ResolvedCoreOptions`   | types     | The options surface and its resolved shape.                                                                                             |
-| `OpenApiSecurityRequirement`, `OpenApiHttpMethod`, `OpenApiOperationKey`, `OperationSecurityMap`                                                                                                                   | types     | The operation-key contract a sibling library targets to ship its own security map.                                                      |
-| `OpenApiOperationIdFactory`                                                                                                                                                                                        | type      | Names the operations in the generated document.                                                                                         |
-| `BYMAX_CORE_OPTIONS`, `BYMAX_CORRELATION_PROVIDER`, `BYMAX_TIMING_SINK`, `BYMAX_HEALTH_INDICATORS`, `BYMAX_HEALTH_TRANSITION_SINK`, `BYMAX_UNEXPECTED_ERROR_SINK`, `BYMAX_METRICS_REGISTRY`, `BYMAX_TRACE_CONTEXT` | tokens    | The DI tokens; see the [token table](#-di-tokens).                                                                                      |
-| `IHealthTransitionSink`, `HealthTransition`, `HealthTransitionCause`                                                                                                                                               | types     | The readiness-transition contract; also on `./health`.                                                                                  |
-| `ICorrelationIdProvider`                                                                                                                                                                                           | type      | The correlation-provider contract.                                                                                                      |
-| `ITraceContextProvider`, `TraceContext`                                                                                                                                                                            | types     | The trace-context contract and the identifiers it resolves.                                                                             |
-| `BymaxExceptionFilter`                                                                                                                                                                                             | class     | The envelope exception filter.                                                                                                          |
-| `FilterErrorContext`                                                                                                                                                                                               | type      | The neutral request context passed to the filter's observability seam.                                                                  |
-| `IUnexpectedErrorSink`, `UnexpectedErrorReport`                                                                                                                                                                    | types     | Receives the cause behind each collapsed `500 BYMAX_INTERNAL_ERROR`; see [Recording the cause of a 500](#recording-the-cause-of-a-500). |
-| `buildErrorEnvelope`                                                                                                                                                                                               | function  | Pure builder assembling an `ErrorEnvelope`.                                                                                             |
-| `ErrorEnvelope`, `ErrorDetails`, `BuildErrorEnvelopeInput`                                                                                                                                                         | types     | The envelope contract and its builder input.                                                                                            |
-| `BymaxTimingMiddleware`                                                                                                                                                                                            | class     | The request-timing middleware, applied to every route when timing is enabled.                                                           |
-| `UNMATCHED_ROUTE`                                                                                                                                                                                                  | constant  | The bounded label recorded when a request matched no route (`<unmatched>`).                                                             |
-| `TimingInterceptor`                                                                                                                                                                                                | class     | Deprecated: superseded by `BymaxTimingMiddleware`, which the module registers.                                                          |
-| `ITimingSink`, `RequestTimingSample`                                                                                                                                                                               | types     | The timing-sink contract and its sample shape.                                                                                          |
-| `BYMAX_BAD_GATEWAY` … `BYMAX_VALIDATION_FAILED`                                                                                                                                                                    | constants | The full error-code catalog (see [Error envelope](#-error-envelope)).                                                                   |
-| `codeForStatus`                                                                                                                                                                                                    | function  | Derives a catalog code from an HTTP status.                                                                                             |
+| Export                                                                                                                                                                                                             | Kind      | Description                                                                                                                                                                                                                                                                                                                                |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `BymaxCoreModule`                                                                                                                                                                                                  | class     | The dynamic module: `forRoot` and `forRootAsync`.                                                                                                                                                                                                                                                                                          |
+| `BymaxCoreModuleOptions`, `EnvelopeOptions`, `TimingOptions`, `HealthOptions`, `MetricsOptions`, `TelemetryOptions`, `OpenApiOptions`, `OpenApiServerDescriptor`, `OpenApiSecurityScheme`, `ResolvedCoreOptions`   | types     | The options surface and its resolved shape.                                                                                                                                                                                                                                                                                                |
+| `OpenApiSecurityRequirement`, `OpenApiHttpMethod`, `OpenApiOperationKey`, `OperationSecurityMap`                                                                                                                   | types     | The operation-key contract a sibling library targets to ship its own security map.                                                                                                                                                                                                                                                         |
+| `OpenApiOperationIdFactory`                                                                                                                                                                                        | type      | Names the operations in the generated document.                                                                                                                                                                                                                                                                                            |
+| `BYMAX_CORE_OPTIONS`, `BYMAX_CORRELATION_PROVIDER`, `BYMAX_TIMING_SINK`, `BYMAX_HEALTH_INDICATORS`, `BYMAX_HEALTH_TRANSITION_SINK`, `BYMAX_UNEXPECTED_ERROR_SINK`, `BYMAX_METRICS_REGISTRY`, `BYMAX_TRACE_CONTEXT` | tokens    | The DI tokens; see the [token table](#-di-tokens).                                                                                                                                                                                                                                                                                         |
+| `IHealthTransitionSink`, `HealthTransition`, `HealthTransitionCause`                                                                                                                                               | types     | The readiness-transition contract; also on `./health`.                                                                                                                                                                                                                                                                                     |
+| `ICorrelationIdProvider`                                                                                                                                                                                           | type      | The correlation-provider contract.                                                                                                                                                                                                                                                                                                         |
+| `ITraceContextProvider`, `TraceContext`                                                                                                                                                                            | types     | The trace-context contract and the identifiers it resolves.                                                                                                                                                                                                                                                                                |
+| `BymaxExceptionFilter`                                                                                                                                                                                             | class     | The envelope exception filter.                                                                                                                                                                                                                                                                                                             |
+| `FilterErrorContext`                                                                                                                                                                                               | type      | The neutral request context passed to the filter's observability seam.                                                                                                                                                                                                                                                                     |
+| `IUnexpectedErrorSink`, `UnexpectedErrorReport`                                                                                                                                                                    | types     | Receives the cause behind each collapsed `500 BYMAX_INTERNAL_ERROR`; see [Recording the cause of a 500](#recording-the-cause-of-a-500).                                                                                                                                                                                                    |
+| `buildErrorEnvelope`                                                                                                                                                                                               | function  | Pure builder assembling an `ErrorEnvelope`.                                                                                                                                                                                                                                                                                                |
+| `ErrorEnvelope`, `ErrorDetails`, `BuildErrorEnvelopeInput`                                                                                                                                                         | types     | The envelope contract and its builder input.                                                                                                                                                                                                                                                                                               |
+| `BymaxTimingMiddleware`                                                                                                                                                                                            | class     | The request-timing middleware, applied to every route when timing is enabled.                                                                                                                                                                                                                                                              |
+| `UNMATCHED_ROUTE`                                                                                                                                                                                                  | constant  | The bounded label recorded when a request matched no route (`<unmatched>`).                                                                                                                                                                                                                                                                |
+| `TimingInterceptor`                                                                                                                                                                                                | class     | **Deprecated, registered nowhere.** `BymaxTimingMiddleware` replaced it as the recorder because guards run before interceptors, so it never saw a request a guard rejected; wiring it by hand next to the middleware records a second sample for every request that reaches a handler. Kept so code that wired it by hand keeps compiling. |
+| `ITimingSink`, `RequestTimingSample`                                                                                                                                                                               | types     | The timing-sink contract and its sample shape.                                                                                                                                                                                                                                                                                             |
+| `BYMAX_BAD_GATEWAY` … `BYMAX_VALIDATION_FAILED`                                                                                                                                                                    | constants | The full error-code catalog (see [Error envelope](#-error-envelope)).                                                                                                                                                                                                                                                                      |
+| `codeForStatus`                                                                                                                                                                                                    | function  | Derives a catalog code from an HTTP status.                                                                                                                                                                                                                                                                                                |
 
 ### `./pagination`
 
@@ -1919,14 +1959,15 @@ in the sections above.
 
 ### `./openapi`
 
-| Export                                                                                 | Kind                | Description                                                                    |
-| -------------------------------------------------------------------------------------- | ------------------- | ------------------------------------------------------------------------------ |
-| `applyBymaxOpenApi`                                                                    | function            | Builds and mounts the document; call it before `app.listen()`.                 |
-| `OpenApiMountOutcome`                                                                  | type                | What the helper did: mounted at a path, or skipped with a reason.              |
-| `DiscardedComponent`                                                                   | type                | A contributed component entry the document already declared.                   |
-| `OpenApiSkipReason`                                                                    | type                | Why it was skipped: `'disabled'` or `'production'`.                            |
-| `BymaxOpenApiContributor`, `BYMAX_OPENAPI_CONTRIBUTOR_METADATA`                        | decorator, constant | Marks a provider as describing its own routes, and the metadata key behind it. |
-| `IOpenApiContributor`, `OpenApiFragment`, `OpenApiFragmentObject`, `OpenApiHandlerKey` | types               | The contributor contract and the shape of what it returns.                     |
+| Export                                                                                 | Kind                | Description                                                                                       |
+| -------------------------------------------------------------------------------------- | ------------------- | ------------------------------------------------------------------------------------------------- |
+| `applyBymaxOpenApi`                                                                    | function            | Builds and mounts the document; call it before `app.listen()`.                                    |
+| `OpenApiMountOutcome`                                                                  | type                | What the helper did: mounted at a path, or skipped with a reason.                                 |
+| `DiscardedComponent`                                                                   | type                | A contributed component entry the document already declared.                                      |
+| `OpenApiSkipReason`                                                                    | type                | Why it was skipped: `'disabled'` or `'production'`.                                               |
+| `BymaxOpenApiContributor`, `BYMAX_OPENAPI_CONTRIBUTOR_METADATA`                        | decorator, constant | Marks a provider as describing its own routes, and the metadata key behind it.                    |
+| `BYMAX_OPENAPI_CONTRACT_VERSION`                                                       | constant            | The version of the fragment contract, currently `1`; a fragment declares it as `contractVersion`. |
+| `IOpenApiContributor`, `OpenApiFragment`, `OpenApiFragmentObject`, `OpenApiHandlerKey` | types               | The contributor contract and the shape of what it returns.                                        |
 
 ## 🧩 Compatibility
 
