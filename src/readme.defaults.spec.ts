@@ -22,6 +22,18 @@ const NOT_AN_OPTION: Readonly<Record<string, readonly string[]>> = {
   openapi: ['suppressedInProduction']
 }
 
+/**
+ * Options that have no default, so the resolver leaves them absent and the loop
+ * over the resolved values cannot see them. Each must have a row documenting it
+ * as unset, and every row documented as unset must be listed here.
+ */
+const DEFAULTLESS: Readonly<Record<string, readonly string[]>> = {
+  environment: ['environment'],
+  timing: ['slowRequestThresholdMs'],
+  metrics: ['authToken'],
+  openapi: ['operationIdFactory']
+}
+
 /** One parsed table row: where it sits, and the default the README states. */
 interface DocumentedDefault {
   readonly block: string
@@ -111,6 +123,24 @@ describe('README option tables', () => {
     } else {
       expect(actual).toEqual(expected)
     }
+  })
+
+  /**
+   * Options without a default stay documented, and only they are documented as unset.
+   *
+   * The resolver omits these, so the case above cannot notice a missing row. Each
+   * listed option must have a row stating no default, and a row stating no default
+   * for an option not listed here means the list or the README is stale.
+   */
+  it('documents exactly the defaultless options as unset', () => {
+    const listed = Object.entries(DEFAULTLESS).flatMap(([block, options]) =>
+      options.map((option) => `${block}.${option}`)
+    )
+    const unset = documented
+      .filter((row) => parseDefault(row.cell) === UNSET)
+      .map((row) => `${row.block}.${row.option}`)
+
+    expect(unset.sort()).toEqual(listed.sort())
   })
 
   /**
