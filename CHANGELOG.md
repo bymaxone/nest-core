@@ -11,6 +11,17 @@ heading here.
 
 ## [Unreleased]
 
+### Documentation
+
+- **The README's `RequestTimingSample` snippet lists the two optional trace fields.** The interface
+  carries `traceId?` and `spanId?`, present when telemetry is enabled and a span was recording.
+
+### Tests
+
+- **The README's option tables are pinned to the resolved defaults.** A spec parses every table under
+  the Configuration section and fails when a documented default, or a documented option, differs from
+  `DEFAULT_CORE_OPTIONS`, or when a resolved option has no row.
+
 ## [1.6.4] - 2026-10-30
 
 A 5xx envelope no longer carries `details` unless `envelope.exposeInternals` is on, and the
