@@ -14,7 +14,7 @@ heading here.
 ## [1.6.5] - 2026-10-31
 
 A documentation release. The compiled JavaScript is byte-identical to `1.6.4`: what changes in the
-package is the README and three comments in the type declarations.
+package is the README and comments in the type declarations.
 
 **Apply to a derived backend:** `pnpm up @bymax-one/nest-core`. No code change is needed.
 
