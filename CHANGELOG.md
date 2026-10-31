@@ -27,6 +27,9 @@ heading here.
   import resolves to the snippet that exports the name, and the names a snippet takes from its prose
   are typed in `scripts/readme-prelude.d.ts`, so a wrong method, option or field fails the gate
   instead of resolving to `any`. An option misspelled in a `forRootAsync` factory fails too.
+- **`pnpm check:published` fails on three more kinds of README defect.** A syntax error in a snippet,
+  a prelude import that stopped resolving, and a snippet that restates a shipped interface with a
+  member added, dropped or retyped.
 - **The README snippet gate no longer exempts a type error on an imported type or a union.** The
   exemption for an abbreviated local class now reads only the snippet's own declarations, accepts a
   plain identifier only, and handles a `$` in a class name.

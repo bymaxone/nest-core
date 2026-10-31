@@ -24,7 +24,10 @@
  *    do not import it.
  * 3. The names a snippet takes from the surrounding prose are typed in
  *    `scripts/readme-prelude.d.ts`; an undeclared name is an error, and a typed one is
- *    checked instead of resolving to `any`.
+ *    checked instead of resolving to `any`. The prelude is compiled as a `.ts` file,
+ *    because `skipLibCheck` never diagnoses a declaration file.
+ * 4. A syntax error in a snippet is an error, and a snippet that restates a shipped
+ *    interface must match the shipped one member for member.
  *
  * Portable between packages: everything here is generic except `readme-prelude.d.ts`
  * (the typed names the README assumes) and the `BymaxCoreModule.forRoot` wrapper that
@@ -47,6 +50,8 @@ import {
 import { createRequire } from 'node:module'
 import { dirname, join, relative, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
+
+import { redeclarationDrift } from './readme-interface-drift.mjs'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 const PKG = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'))
@@ -76,13 +81,14 @@ const IMPORT_STATEMENT = /^import\s[\s\S]*?from\s+['"][^'"]+['"]\s*;?\n/gm
  * and in the type tests. */
 const ts = createRequire(join(ROOT, 'package.json'))('typescript')
 
-/** `import { values, type Types } from '<specifier>'` for every name each published
- * subpath exports, read from the built declaration files so it cannot drift from
- * `dist/`. A name already imported from an earlier subpath is not imported twice,
- * and `skip` holds the names a snippet declares itself. */
-function publicImports(skip) {
-  const seen = new Set(skip)
-  const statements = []
+/** Every name each published subpath exports, read from the built declaration files
+ * so it cannot drift from `dist/`. A name an earlier subpath already exports is not
+ * listed again. */
+let shipped
+function shippedExports() {
+  if (shipped !== undefined) return shipped
+  shipped = []
+  const seen = new Set()
   for (const [subpath, target] of Object.entries(PKG.exports)) {
     const entry = typeof target === 'object' ? target.import?.types : undefined
     if (entry === undefined) continue
@@ -91,20 +97,37 @@ function publicImports(skip) {
     const checker = program.getTypeChecker()
     const source = program.getSourceFile(file)
     const moduleSymbol = source && checker.getSymbolAtLocation(source)
-    const parts = []
+    const specifier = subpath === '.' ? PKG.name : `${PKG.name}/${subpath.slice(2)}`
     for (const symbol of moduleSymbol ? checker.getExportsOfModule(moduleSymbol) : []) {
       if (seen.has(symbol.name)) continue
       seen.add(symbol.name)
-      const aliased =
-        symbol.flags & ts.SymbolFlags.Alias ? checker.getAliasedSymbol(symbol) : symbol
-      parts.push(aliased.flags & ts.SymbolFlags.Value ? symbol.name : `type ${symbol.name}`)
-    }
-    if (parts.length > 0) {
-      const specifier = subpath === '.' ? PKG.name : `${PKG.name}/${subpath.slice(2)}`
-      statements.push(`import { ${parts.join(', ')} } from '${specifier}'`)
+      const target = symbol.flags & ts.SymbolFlags.Alias ? checker.getAliasedSymbol(symbol) : symbol
+      shipped.push({
+        name: symbol.name,
+        specifier,
+        checker,
+        symbol: target,
+        isValue: Boolean(target.flags & ts.SymbolFlags.Value)
+      })
     }
   }
-  return statements.join('\n')
+  return shipped
+}
+
+/** `import { values, type Types } from '<specifier>'` for every shipped name, minus
+ * `skip`, which holds the names a snippet declares itself. */
+function publicImports(skip) {
+  const bySpecifier = new Map()
+  for (const { name, specifier, isValue } of shippedExports()) {
+    if (skip.includes(name)) continue
+    bySpecifier.set(specifier, [
+      ...(bySpecifier.get(specifier) ?? []),
+      isValue ? name : `type ${name}`
+    ])
+  }
+  return [...bySpecifier]
+    .map(([specifier, parts]) => `import { ${parts.join(', ')} } from '${specifier}'`)
+    .join('\n')
 }
 
 /** Names a snippet introduces itself, which an injected import must not shadow. */
@@ -179,13 +202,14 @@ function compileGate() {
   const config = ts.readConfigFile(join(GATE_DIR, 'tsconfig.json'), ts.sys.readFile)
   const parsed = ts.parseJsonConfigFileContent(config.config, ts.sys, GATE_DIR)
   const program = ts.createProgram({ rootNames: parsed.fileNames, options: parsed.options })
-  return ts.getPreEmitDiagnostics(program).map((d) => {
+  const lines = ts.getPreEmitDiagnostics(program).map((d) => {
     const text = ts.flattenDiagnosticMessageText(d.messageText, ' ')
     if (!d.file) return `error TS${String(d.code)}: ${text}`
     const { line, character } = d.file.getLineAndCharacterOfPosition(d.start ?? 0)
     const where = relative(ROOT, d.file.fileName).split(sep).join('/')
     return `${where}(${String(line + 1)},${String(character + 1)}): error TS${String(d.code)}: ${text}`
   })
+  return { lines, program }
 }
 
 const failures = []
@@ -634,8 +658,10 @@ function scaffoldConsumer() {
     )}\n`
   )
   // The names a snippet uses without introducing them, typed for real so a call
-  // made through one is checked instead of silently resolving to `any`.
-  copyFileSync(join(ROOT, 'scripts', 'readme-prelude.d.ts'), join(GATE_DIR, 'prelude.d.ts'))
+  // made through one is checked instead of silently resolving to `any`. Copied as a
+  // `.ts` file: `skipLibCheck` never diagnoses a declaration file, so a prelude import
+  // that stopped resolving would turn its types into `any` without a word.
+  copyFileSync(join(ROOT, 'scripts', 'readme-prelude.d.ts'), join(GATE_DIR, 'prelude.ts'))
 }
 
 // ---------------------------------------------------------------------------
@@ -688,10 +714,11 @@ function checkSnippets() {
 
   // The names a snippet uses without introducing them are declared, typed, in
   // `readme-prelude.d.ts`, so a call through one of them is checked and an
-  // undeclared name is an error. What is still not held against a snippet is a
-  // parse-level elision (`…`, a bare `return`) and a peer package the fixture does
-  // not install; those are counted and reported, never dropped silently.
-  const CONTEXT_ONLY = new Set(['TS1108', 'TS1109'])
+  // undeclared name is an error. A syntax error is never held against the context: an
+  // elision is written `{ ... }`, which `prepareSnippet` turns into a valid literal,
+  // and anything else that does not parse is a defect in the example. What is still
+  // not held against a snippet is a peer package the fixture does not install and a
+  // class the snippet abbreviates; those are counted and reported, never dropped.
   /** `Property 'x' does not exist on type 'Y'` is an API defect when `Y` comes
    * from the package, and snippet noise when `Y` is a class the snippet declares
    * itself and abbreviates — a README example routinely writes `this.repo`
@@ -719,15 +746,19 @@ function checkSnippets() {
     /error TS2307: Cannot find module '(?!\.)/.test(line) && !line.includes(PKG.name)
 
   try {
-    const lines = compileGate()
+    const { lines, program } = compileGate()
     if (process.env.GATE_DEBUG) console.log(lines.join('\n'))
-    const real = lines.filter(
-      (l) =>
-        !CONTEXT_ONLY.has((/error (TS\d+)/.exec(l) ?? [])[1]) &&
-        !isForeignModule(l) &&
-        !isAbbreviatedLocalType(l, sources)
-    )
-    const context = lines.length - real.length
+    const real = lines.filter((l) => !isForeignModule(l) && !isAbbreviatedLocalType(l, sources))
+    const snippetFiles = fileNames.map((name) => join(GATE_DIR, name))
+    for (const drift of redeclarationDrift({
+      ts,
+      program,
+      snippetFiles,
+      shipped: shippedExports()
+    })) {
+      real.push(drift)
+    }
+    const context = lines.length - lines.filter((l) => real.includes(l)).length
     if (real.length > 0) {
       fail(
         'snippets',
