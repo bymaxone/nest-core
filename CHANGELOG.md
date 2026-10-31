@@ -11,6 +11,13 @@ heading here.
 
 ## [Unreleased]
 
+## [1.6.5] - 2026-10-31
+
+A documentation release. The compiled JavaScript is byte-identical to `1.6.4`: what changes in the
+package is the README and three comments in the type declarations.
+
+**Apply to a derived backend:** `pnpm up @bymax-one/nest-core`. No code change is needed.
+
 ### Documentation
 
 - **README snippets are corrected so they compile.** The metrics `authToken` example no longer passes
@@ -18,9 +25,8 @@ heading here.
   reads the validated value with `getOrThrow`; the contributor example imports `Injectable`; and the
   `authOperationSecurity` example is a complete function and a complete `forRoot` call.
 - **The README lists every error-code constant and the OpenAPI contract version.** Each code is in a
-  catalog beside the status it maps from, and
-  `BYMAX_OPENAPI_CONTRACT_VERSION` is documented and used by the contributor example instead of a
-  literal `1`.
+  catalog beside the status it maps from, and `BYMAX_OPENAPI_CONTRACT_VERSION` is documented and used
+  by the contributor example instead of a literal `1`.
 - **The README says this package mints no request id.** `correlationId` is whatever the bound
   `BYMAX_CORRELATION_PROVIDER` returns, and the id comes from what the application binds, such as the
   `@bymax-one/nest-logger` request-id middleware.
@@ -1307,4 +1313,5 @@ have regressed from. They are kept because the reasoning is worth having.
 [1.6.2]: https://github.com/bymaxone/nest-core/compare/v1.6.1...v1.6.2
 [1.6.3]: https://github.com/bymaxone/nest-core/compare/v1.6.2...v1.6.3
 [1.6.4]: https://github.com/bymaxone/nest-core/compare/v1.6.3...v1.6.4
-[Unreleased]: https://github.com/bymaxone/nest-core/compare/v1.6.4...HEAD
+[1.6.5]: https://github.com/bymaxone/nest-core/compare/v1.6.4...v1.6.5
+[Unreleased]: https://github.com/bymaxone/nest-core/compare/v1.6.5...HEAD
