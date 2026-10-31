@@ -22,9 +22,9 @@ export interface EnvelopeOptions {
   exposeInternals?: boolean
 }
 
-/** Request-timing interceptor configuration. */
+/** Request-timing middleware configuration. */
 export interface TimingOptions {
-  /** Register the timing interceptor. Default: `true`. */
+  /** Register the request-timing middleware (`BymaxTimingMiddleware`). Default: `true`. */
   enabled?: boolean
   /** Samples above this threshold are flagged as slow. No default (unset). */
   slowRequestThresholdMs?: number
@@ -291,7 +291,7 @@ export interface MetricsOptions {
 export interface BymaxCoreModuleOptions {
   /** Error-envelope exception filter. Default: enabled. */
   envelope?: EnvelopeOptions
-  /** Request timing interceptor. Default: enabled. */
+  /** Request-timing middleware. Default: enabled. */
   timing?: TimingOptions
   /** Liveness and readiness endpoints. Default: enabled. */
   health?: HealthOptions

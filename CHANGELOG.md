@@ -17,6 +17,18 @@ heading here.
   `string | undefined` where `exactOptionalPropertyTypes` requires `string`; the `environment` example
   reads the validated value with `getOrThrow`; the contributor example imports `Injectable`; and the
   `authOperationSecurity` example is a complete function and a complete `forRoot` call.
+- **The README lists every error-code constant and the OpenAPI contract version.** The eleven status
+  codes it never named are in a catalog beside the status each maps from, and
+  `BYMAX_OPENAPI_CONTRACT_VERSION` is documented and used by the contributor example instead of a
+  literal `1`.
+- **The README says this package mints no request id.** `correlationId` is whatever the bound
+  `BYMAX_CORRELATION_PROVIDER` returns, and the id comes from what the application binds, such as the
+  `@bymax-one/nest-logger` request-id middleware, which supports Express only.
+- **The README explains why `TimingInterceptor` is deprecated.** It records a second sample for every
+  request that reaches a handler when wired next to the middleware, and it never saw a request a guard
+  rejected.
+- **The `TimingOptions` declarations name the middleware.** `timing.enabled` registers
+  `BymaxTimingMiddleware`, not an interceptor.
 - **The README's `RequestTimingSample` snippet lists the two optional trace fields.** The interface
   carries `traceId?` and `spanId?`, present when telemetry is enabled and a span was recording.
 
@@ -33,6 +45,9 @@ heading here.
 - **The README snippet gate no longer exempts a type error on an imported type or a union.** The
   exemption for an abbreviated local class now reads only the snippet's own declarations, accepts a
   plain identifier only, and handles a `$` in a class name.
+- **The README's error-code catalog and contract version are pinned to the code.** A spec fails when an
+  exported code constant has no row, a row names a status `codeForStatus` does not map to it, or the
+  README states a contract version other than `BYMAX_OPENAPI_CONTRACT_VERSION`.
 - **The README's option tables are pinned to the resolved defaults.** A spec parses every table under
   the Configuration section and fails when a documented default, or a documented option, differs from
   `DEFAULT_CORE_OPTIONS`, or when a resolved option has no row.
