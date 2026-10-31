@@ -257,9 +257,9 @@ their features are disabled.
 
 ### `docs/` is English in this repository
 
-The shared block exempts Portuguese under `docs/` because Bymax projects generally keep it there.
-This repository does not: it is a published library whose specification is read by consumers outside
-Bymax, so `docs/` is English like everything else. Portuguese anywhere in this tree is a finding.
+The shared block leaves the language of `docs/` to each repository, and this one states it here: it
+is a published library whose specification is read by consumers outside Bymax, so `docs/` is English
+like everything else. Portuguese anywhere in this tree is a finding.
 
 ## Session memory (Obsidian vault)
 
