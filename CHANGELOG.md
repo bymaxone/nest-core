@@ -13,10 +13,8 @@ heading here.
 
 ### Documentation
 
-- **The README's `RequestTimingSample` snippet lists the two optional trace fields.** It showed five
-  fields; the interface also carries `traceId?` and `spanId?`, present when telemetry is enabled and a
-  span was recording. The README's other identifiers, option defaults, token table, status codes and
-  counts were checked against the source and hold.
+- **The README's `RequestTimingSample` snippet lists the two optional trace fields.** The interface
+  carries `traceId?` and `spanId?`, present when telemetry is enabled and a span was recording.
 
 ### Tests
 
