@@ -66,6 +66,10 @@ const GATE_DIR = join(ROOT, '.docs-gate')
  * library has none — the check then covers only the README snippets. */
 const TYPE_TESTS_GLOB = existsSync(join(ROOT, 'test', 'types')) ? '../test/types/**/*.ts' : '*.ts'
 
+/** One `import ... from '...'` statement, so a snippet's imports can be hoisted out of
+ * the wrapper and left out of a search for what the snippet itself declares. */
+const IMPORT_STATEMENT = /^import\s[\s\S]*?from\s+['"][^'"]+['"]\s*;?\n/gm
+
 /** The repository's pinned compiler, loaded as a library: the `tsc` command stops
  * after the syntax errors and never reports the semantic ones, so a single
  * unparsable snippet would hide every wrong option name in every other snippet
@@ -150,11 +154,13 @@ function resolveRelativeImports(code, fileOf) {
  * written.
  */
 function prepareSnippet(code, importsPkg) {
-  const importPattern = /^import\s[\s\S]*?from\s+['"][^'"]+['"]\s*;?\n/gm
-  const imports = code.match(importPattern) ?? []
+  const imports = code.match(IMPORT_STATEMENT) ?? []
   // `{ ... }` is how a snippet says "the usual arguments". Left alone it is a parse
   // error, and a parse error in a call hides every semantic error around it.
-  const body = typeFactories(code.replace(importPattern, '')).replaceAll('{ ... }', '{} as never')
+  const body = typeFactories(code.replace(IMPORT_STATEMENT, '')).replaceAll(
+    '{ ... }',
+    '{} as never'
+  )
   const injected = importsPkg ? '' : `${publicImports(declaredNames(body))}\n`
   const header = `${injected}${imports.join('')}`
   const declares = /^(export\s+)?(abstract\s+)?(class|interface|type|enum|function)\s/m.test(body)
@@ -695,9 +701,16 @@ function checkSnippets() {
     const m = /Property '[^']+' does not exist on type '([^']+)'/.exec(line)
     if (!m) return false
     const file = /^([^(]+)\(/.exec(line)?.[1]
-    // `tsc` emits backslashes on Windows, so the basename is taken on either.
-    const own = sources.get(file?.split(/[\\/]/).pop() ?? '') ?? ''
-    return new RegExp(`\\b(class|interface|type)\\s+${m[1]}\\b`).test(own)
+    // A union or an object type is not a declared name, and the text is about to be
+    // part of a pattern: only a plain identifier may exempt the error.
+    if (!/^[A-Za-z_$][\w$]*$/.test(m[1])) return false
+    // `tsc` emits backslashes on Windows, so the basename is taken on either. The
+    // imports are left out: an imported `type Name` is the package's own type.
+    const own = (sources.get(file?.split(/[\\/]/).pop() ?? '') ?? '').replace(IMPORT_STATEMENT, '')
+    // `$` is the one identifier character that is also a pattern metacharacter, and it
+    // is not a word character, so `\b` cannot end the name: a lookahead does.
+    const name = m[1].replaceAll('$', '\\$')
+    return new RegExp(`\\b(class|interface|type)\\s+${name}(?![\\w$])`).test(own)
   }
   /** An import of some OTHER package the fixture does not install — a documented
    * optional integration. Reported as uncovered, not as a failure. A relative import

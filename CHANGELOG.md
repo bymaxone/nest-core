@@ -27,6 +27,9 @@ heading here.
   import resolves to the snippet that exports the name, and the names a snippet takes from its prose
   are typed in `scripts/readme-prelude.d.ts`, so a wrong method, option or field fails the gate
   instead of resolving to `any`. An option misspelled in a `forRootAsync` factory fails too.
+- **The README snippet gate no longer exempts a type error on an imported type or a union.** The
+  exemption for an abbreviated local class now reads only the snippet's own declarations, accepts a
+  plain identifier only, and handles a `$` in a class name.
 - **The README's option tables are pinned to the resolved defaults.** A spec parses every table under
   the Configuration section and fails when a documented default, or a documented option, differs from
   `DEFAULT_CORE_OPTIONS`, or when a resolved option has no row.
