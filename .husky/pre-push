@@ -12,7 +12,9 @@
 # does rewrite delegates here with git's stdin intact.
 #
 # git hands a pre-push hook one record per pushed ref on stdin, so the check
-# sees the actual commits regardless of how the push command was spelled.
+# sees the actual commits regardless of how the push command was spelled. Git's own
+# arguments, the remote name and its URL, are forwarded too: the check reads them to
+# tell a tag on a commit the remote already holds from one that needs a receipt.
 #
 # Skipped when the reviewer runtime is absent. The receipt protocol is a local
 # workflow that a given clone may never have opted into, and a tracked hook
@@ -23,5 +25,5 @@
 # where a hook the developer can edit could never provide it anyway.
 receipts="$HOME/.claude/bymax-review/review_prepush.py"
 if [ -f "$receipts" ]; then
-  python3 "$receipts" || exit $?
+  python3 "$receipts" "$@" || exit $?
 fi
