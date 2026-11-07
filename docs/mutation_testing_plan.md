@@ -34,9 +34,9 @@ Family-wide thresholds, pinned in `stryker.config.json`:
 | --------- | ----- | --------------------------------------------------------- |
 | `high`    | 99    | Score at or above this is reported as healthy (green).    |
 | `low`     | 95    | Score below this is reported as warning (red band).       |
-| `break`   | 95    | Score below this fails the run with a non-zero exit code. |
+| `break`   | 100   | Score below this fails the run with a non-zero exit code. |
 
-The gate for release is a score of at least 95 with the `break` check passing.
+The gate for release is a score of 100 with the `break` check passing.
 
 ---
 
