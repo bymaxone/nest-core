@@ -55,6 +55,8 @@ All of the following must pass:
 Mutation testing (`pnpm mutation`) is a **release gate**, run manually before
 tagging a version, never on every PR.
 
+Stryker does not mutate the entries of an `as const` value table: it neither removes a property nor changes a number. `scripts/mutate-const-tables.mjs` does, one entry at a time, against a test command you give it. It is a development tool, not a CI step; its header has the usage.
+
 ### Before a major
 
 The DI tokens in `src/core.tokens.ts` are minted with `Symbol.for` against the
