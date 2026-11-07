@@ -81,13 +81,10 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 // consumer loads — while leaving room for prose to change without a false
 // alarm. A real leak here is kilobytes, not hundreds of bytes.
 //
-// The root moved 17 -> 17.25 KiB when requests refused before routing stopped returning the
-// parser's own text (the exception filter's fixed-message table and the unmatched-route test).
-// Measured on the same tree: brotli 17384 -> 17511 bytes (+127), raw 74619 -> 75126 (+507), against
-// a 17408-byte budget, so it overran by 103. The growth is code: none of the added prose reaches
-// the bundle (the comment text is absent from `dist/index.mjs`), no module entered it, and the
-// optional peers are still unloaded with their features off (`pnpm check:runtime`). 17.25 KiB is
-// 17664 bytes, 153 above the measurement; the previous number left 24.
+// Root budget 17.25 KiB = 17664 B: measured 17511 B brotli (raw 75126 B) plus 153 B of headroom.
+// Re-derive it when the measurement exceeds it, after checking that the growth is code and not
+// prose (comment text is absent from `dist/index.mjs`), that no module entered the bundle, and
+// that the optional peers stay unloaded with their features off (`pnpm check:runtime`).
 const BUDGETS = [
   { name: '. (root)', path: 'dist/index.mjs', brotli: 17.25 * 1024 },
   { name: './pagination', path: 'dist/pagination/index.mjs', brotli: 1.5 * 1024 },
