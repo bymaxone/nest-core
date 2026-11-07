@@ -11,6 +11,23 @@ heading here.
 
 ## [Unreleased]
 
+### Fixed
+
+- **A request refused before routing no longer has the parser's own text returned.** The message of
+  a body-parser, router or decoding refusal quotes the request: V8's JSON excerpt (on a login body
+  with a missing value it ends in the password's last characters), a charset or content-encoding
+  header value, or the path. The status is unchanged and the envelope keeps its shape, but the
+  message is now fixed per status: `Malformed request` (400), `Request entity too large` (413) and
+  `Unsupported media type` (415). It is chosen from the error's own `type` (the body pipeline's
+  refusals carry one) or, for the `SyntaxError` and `URIError` that Nest rewrites into a plain
+  `BadRequestException`, from a 400 raised while the request matched no route. Not covered: Fastify,
+  whose body errors take another path and were not measured here.
+
+  **Apply to a derived backend:** `pnpm up @bymax-one/nest-core`. A client that matched on those
+  message strings must match `code` instead. A middleware that throws a plain `BadRequestException`
+  before routing now answers `Malformed request` with the same 400; to keep its message, throw it with
+  a `code` (`new HttpException({ code: 'TENANT_REQUIRED', message }, 400)`).
+
 ## [1.6.5] - 2026-10-31
 
 A documentation release. The compiled JavaScript is byte-identical to `1.6.4`: what changes in the

@@ -25,6 +25,14 @@
  *    that status and its safe message. A self-reported 5xx does not: it, and
  *    every other unrecognised throw, collapses to a fixed, production-safe 500
  *    that never leaks internals unless `exposeInternals` is on (development only).
+ *
+ * A request refused before routing never has its parser text returned, because that
+ * text quotes the input: V8's JSON excerpt, a header value, the path. A body-pipeline
+ * error carrying a string `type` (rule 4) and a plain 400 `HttpException` raised while
+ * the request matched no route (rule 3) get a fixed message per status; the status is
+ * kept. Fastify's own error texts are not covered. A middleware that throws a plain
+ * `BadRequestException` before routing loses its message to this; it keeps it by
+ * throwing with a `code` (rule 1).
  * @layer Filter
  */
 import { Catch, HttpException, Inject, Optional } from '@nestjs/common'
@@ -47,7 +55,7 @@ import type { ErrorDetails, ErrorEnvelope } from './error-envelope'
 import type { IUnexpectedErrorSink, UnexpectedErrorReport } from './unexpected-error.sink'
 import type { ITraceContextProvider } from '../telemetry/trace-context'
 import { NoopTraceContextProvider } from '../telemetry/trace-context'
-import { readRequestInfo } from '../timing/request-info.accessor'
+import { UNMATCHED_ROUTE, readRequestInfo } from '../timing/request-info.accessor'
 import type { RequestShape } from '../timing/request-info.accessor'
 
 /** HTTP status used for the production-safe collapse of any unknown error. */
@@ -58,6 +66,19 @@ const INTERNAL_ERROR_MESSAGE = 'Internal server error'
 
 /** Fixed, end-user-safe message for a validation failure; specifics live in details. */
 const VALIDATION_FAILED_MESSAGE = 'Validation failed'
+
+/** Fixed message for a malformed request refused before routing. */
+const MALFORMED_REQUEST_MESSAGE = 'Malformed request'
+
+/**
+ * Fixed message per status for a request refused before routing. The parser's own message can
+ * quote the input (a JSON excerpt, a header value, the path), so it is never returned.
+ */
+const PRE_ROUTING_MESSAGES: ReadonlyMap<number, string> = new Map([
+  [400, MALFORMED_REQUEST_MESSAGE],
+  [413, 'Request entity too large'],
+  [415, 'Unsupported media type']
+])
 
 /** An absolute-form request target's `scheme "://"` prefix (RFC 3986 §3). */
 const ABSOLUTE_FORM_PREFIX = /^[A-Za-z][A-Za-z0-9+.-]*:\/\//
@@ -230,7 +251,12 @@ function resolveExposedClientError(exception: unknown): ExposedClientError | und
   if (typeof exception !== 'object' || exception === null) {
     return undefined
   }
-  const candidate = exception as { expose?: unknown; status?: unknown; statusCode?: unknown }
+  const candidate = exception as {
+    expose?: unknown
+    status?: unknown
+    statusCode?: unknown
+    type?: unknown
+  }
   if (candidate.expose !== true) {
     return undefined
   }
@@ -249,8 +275,12 @@ function resolveExposedClientError(exception: unknown): ExposedClientError | und
   ) {
     return undefined
   }
+  // A string `type` is how the body pipeline names its refusals (`entity.parse.failed`,
+  // `charset.unsupported`, ...), and their messages quote the request. Read off the marker, never
+  // the message text.
+  const fixed = typeof candidate.type === 'string' ? PRE_ROUTING_MESSAGES.get(status) : undefined
   const message = exception instanceof Error ? exception.message : ''
-  return { status, message: message === '' ? INTERNAL_ERROR_MESSAGE : message }
+  return { status, message: fixed ?? (message === '' ? INTERNAL_ERROR_MESSAGE : message) }
 }
 
 /**
@@ -548,6 +578,12 @@ export class BymaxExceptionFilter implements ExceptionFilter {
         context,
         toValidationDetails(response.message)
       )
+    }
+    // Nest maps the body parser's `SyntaxError` and the router's `URIError` to a plain
+    // `BadRequestException(err.message)`, dropping the original, so the only remaining mark is that
+    // the request matched no route.
+    if (status === 400 && readRequestInfo(request as RequestShape).route === UNMATCHED_ROUTE) {
+      return this.toEnvelope(status, codeForStatus(status), MALFORMED_REQUEST_MESSAGE, context)
     }
     const message = extractHttpMessage(response, exception)
     const rawUrl = String(this.adapterHost.httpAdapter.getRequestUrl(request))

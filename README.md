@@ -639,6 +639,12 @@ marks itself `expose: true` with a `4xx` status, which is the `http-errors`
 convention Node's body pipeline follows. Nothing in the application failed, so
 it is not routed through the unexpected-error seam either.
 
+The message of such a refusal is fixed per status — `Malformed request` (400),
+`Request entity too large` (413), `Unsupported media type` (415) — because the
+parser's own text quotes the request: a JSON excerpt, a header value, the path.
+A `BadRequestException` a middleware throws before routing gets the same 400
+message; throw it with a `code` to keep its own. Fastify is not covered.
+
 **An error that carries no such marking is a 500, including when a client
 caused it.** The clearest case is depth: a body of a few kilobytes nested
 thousands of levels deep overflows the stack during validation and surfaces as
