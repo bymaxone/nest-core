@@ -49,6 +49,7 @@ All of the following must pass:
 - **Build**, tsup produces ESM + CJS + `.d.ts` for every subpath
 - **Size**, every subpath stays within the budget in `scripts/check-size.mjs`
 - **Dogfood**, every subpath resolves in ESM and CJS from the packed tarball
+- **File length**, `pnpm check:file-length`: a tracked source file over 800 lines fails unless `scripts/file-length-baseline.json` lists it, and that list can only shrink; on a pull request it is also compared with the base branch's list
 - **Consumer runtime**, `pnpm check:runtime`: the packed tarball is laid out the way npm would, every subpath is loaded in ESM and CJS, the optional peers are asserted to stay unloaded, and a real application is booted across two entries — registered from the package root, then driven through `applyBymaxOpenApi` from the `./openapi` subpath. Nothing that runs against `src/` can see a defect that only exists once the code is bundled, so this gate is the only one that observes what a consumer observes
 
 Mutation testing (`pnpm mutation`) is a **release gate**, run manually before

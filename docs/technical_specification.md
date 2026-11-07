@@ -693,7 +693,7 @@ Every provider constructor parameter and every factory `inject` entry uses an ex
 | Gate                   | Tool                             | Threshold                                                            |
 | ---------------------- | -------------------------------- | -------------------------------------------------------------------- |
 | Coverage               | Jest                             | 100% line/branch/function/statement, enforced in both jest configs   |
-| Mutation (pre-release) | Stryker                          | `high: 99, low: 95, break: 95`                                       |
+| Mutation (pre-release) | Stryker                          | `high: 99, low: 95, break: 100`                                      |
 | Bundle size            | `scripts/check-size.mjs`         | Budgets in KiB brotli per subpath, calibrated to the real artifact   |
 | Packaging              | `scripts/dogfood-smoke-test.mjs` | Every subpath imports cleanly in ESM and CJS from the packed tarball |
 
