@@ -52,6 +52,8 @@ All of the following must pass:
 - **File length**, `pnpm check:file-length`: a tracked source file over 800 lines fails unless `scripts/file-length-baseline.json` lists it, and that list can only shrink; on a pull request it is also compared with the base branch's list
 - **Consumer runtime**, `pnpm check:runtime`: the packed tarball is laid out the way npm would, every subpath is loaded in ESM and CJS, the optional peers are asserted to stay unloaded, and a real application is booted across two entries — registered from the package root, then driven through `applyBymaxOpenApi` from the `./openapi` subpath. Nothing that runs against `src/` can see a defect that only exists once the code is bundled, so this gate is the only one that observes what a consumer observes
 
+`pnpm test:e2e` and `pnpm test:cov:all` start Jest with Node's `--experimental-vm-modules`, and need Node 24.9 or later to do so (measured: 24.8 fails, 24.9 passes). The Fastify e2e specs reach `cookie` 2, which is ES-only, through `light-my-request`, and Jest refuses to `require` an ES module without the flag. The two scripts are the only ones that run those specs; `pnpm test`, `pnpm test:cov` and the Stryker run stay on plain Jest. If Node or Jest changes the flag, the Fastify suites fail with `Must use import to load ES Module`; that is this setup breaking, not a defect in the library. Drop the flag when Jest loads ES-only dependencies without it.
+
 Mutation testing (`pnpm mutation`) is a **release gate**, run manually before
 tagging a version, never on every PR.
 
