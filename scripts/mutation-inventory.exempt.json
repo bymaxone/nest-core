@@ -1,0 +1,10 @@
+[
+  {
+    "file": "src/check-file-length.spec.ts",
+    "reason": "Runs scripts/check-file-length.mjs as a child process against throwaway git repositories and imports nothing from src, so it executes no mutated source."
+  },
+  {
+    "file": "src/mutate-const-tables.spec.ts",
+    "reason": "Runs scripts/mutate-const-tables.mjs as a child process against throwaway projects and imports nothing from src, so it executes no mutated source."
+  }
+]
