@@ -35,7 +35,8 @@ middleware with `bodyDepth: { enabled: true }` and a local helmet, parser and ti
   (options pass through, `helmet: false` leaves it out), JSON and urlencoded parsers that refuse a
   compressed body with `415` instead of decompressing it, and the header and request timeouts
   (15 s and 30 s), enforced within a second: it also sets the server's connection sweep to one
-  second, since Node's default of thirty would let a 15 s timeout cut anywhere up to 45 s. `helmet` is an optional peer, loaded only when the helper runs. Express only.
+  second (`connectionsCheckingIntervalMs`), since Node's default of thirty would let a 15 s timeout
+  cut anywhere up to 45 s; it throws when the server is already listening. `helmet` is an optional peer, loaded only when the helper runs. Express only.
 - The root bundle's brotli budget moves from 17.25 to 17.75 KiB for the body-depth code; `./http`
   has a budget of 1 KiB.
 

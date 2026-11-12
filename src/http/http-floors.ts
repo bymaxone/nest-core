@@ -43,20 +43,26 @@ export interface HttpFloorsOptions {
    * Default: `30000`.
    */
   readonly requestTimeoutMs?: number
+  /**
+   * How often the server sweeps its open connections for expired timeouts. Positive integer.
+   * Default: `1000`, or `headersTimeoutMs` when that is shorter. Node enforces both timeouts from
+   * this sweep rather than from a timer per connection, and its own default is `30000`, so a
+   * `headersTimeoutMs` of 15 s would cut anywhere between 15 and 45 s. The sweep walks every open
+   * connection each time, so a server holding very many sockets may set it higher, at the cost
+   * of cutting up to that long after the timeout.
+   */
+  readonly connectionsCheckingIntervalMs?: number
 }
 
-/**
- * How often the server sweeps its connections for expired timeouts, at most. Node enforces
- * `headersTimeout` and `requestTimeout` from that sweep and not from a timer per connection, and
- * its default is thirty seconds, so a 15 s floor would cut anywhere between 15 and 45 s.
- */
-const CONNECTIONS_CHECKING_INTERVAL_MS = 1_000
+/** The longest the sweep interval defaults to; a shorter header timeout shortens it further. */
+const DEFAULT_CONNECTIONS_CHECKING_INTERVAL_MS = 1_000
 
 /** The parts of an Express-backed application this helper touches. */
 interface ExpressApplicationShape {
   use(handler: unknown): unknown
   useBodyParser(type: 'json' | 'urlencoded', options: Record<string, unknown>): unknown
   getHttpServer(): {
+    listening: boolean
     headersTimeout: number
     requestTimeout: number
     connectionsCheckingInterval: number
@@ -98,22 +104,35 @@ export async function applyHttpFloors(
       `headersTimeoutMs (${headersTimeoutMs}) must not exceed requestTimeoutMs (${requestTimeoutMs})`
     )
   }
+  const checkingIntervalMs =
+    options.connectionsCheckingIntervalMs ??
+    Math.min(DEFAULT_CONNECTIONS_CHECKING_INTERVAL_MS, headersTimeoutMs)
+  assertPositiveInteger('connectionsCheckingIntervalMs', checkingIntervalMs)
   const express = app as unknown as ExpressApplicationShape
   if (express.getHttpAdapter().getType?.() !== 'express') {
     throw new Error('applyHttpFloors supports the Express adapter only')
   }
-  const helmet = options.helmet === false ? undefined : await loadHelmet()
-  if (helmet !== undefined) {
-    express.use(helmet({ strictTransportSecurity: false, ...options.helmet }))
+  const server = express.getHttpServer()
+  if (server.listening) {
+    throw new Error('applyHttpFloors must run before listen(): the server is already listening')
+  }
+  const given = options.helmet ?? {}
+  if (given !== false) {
+    const helmet = await loadHelmet()
+    // helmet accepts `hsts` as an alias of `strictTransportSecurity` and throws when both are
+    // present, so the default is left out when the caller used the alias. The caller's own
+    // `strictTransportSecurity` needs no such care: it overrides the default by position.
+    express.use(helmet('hsts' in given ? given : { strictTransportSecurity: false, ...given }))
   }
   // A compressed body is refused with 415 on every route and before routing; the size limits and
   // the extended form syntax keep the parsers' defaults.
   express.useBodyParser('json', { inflate: false })
   express.useBodyParser('urlencoded', { inflate: false, extended: true })
-  const server = express.getHttpServer()
   server.headersTimeout = headersTimeoutMs
   server.requestTimeout = requestTimeoutMs
-  // Node reads this when the server starts listening, hence before `listen`. Its typings do not
-  // declare it; the end-to-end suite fails if a Node release stops honouring it.
-  server.connectionsCheckingInterval = Math.min(CONNECTIONS_CHECKING_INTERVAL_MS, headersTimeoutMs)
+  // Node stores this property when the server is built and reads it when the server emits
+  // 'listening' (`setupConnectionsTracking` in `lib/_http_server.js`, Node 24), which is why the
+  // helper must run before `listen`. Its typings do not declare it; the end-to-end suite fails if
+  // a Node release stops honouring it.
+  server.connectionsCheckingInterval = checkingIntervalMs
 }

@@ -1737,13 +1737,15 @@ connection, and the sweep runs every 30 s by default: measured, a 1 s header tim
 dribbled header block open for 30 s. The helper therefore also sets the server's
 `connectionsCheckingInterval` to one second (or the header timeout, if that is shorter), so a
 connection is cut within a second of its timeout expiring. Nest creates the server without
-exposing its options, so this is a property set before `listen()`; that is why the helper has to
-run before it. The cost is one pass over the open connections per second.
+exposing its options, so this is a property set before `listen()`: Node reads it when the server
+starts listening, and the helper throws if the server is already listening. The sweep walks every
+open connection each time, so a server holding very many sockets can set
+`connectionsCheckingIntervalMs` higher, at the cost of cutting up to that long after the timeout.
 
 **Order is part of the contract.** Call it right after `applyAccessLog` from
 `@bymax-one/nest-logger`, and before everything that reads the request: helmet is mounted first,
 so even a request the body parsers refuse carries the headers, and the parsers are registered
-here so Nest's own defaults, which accept gzip, are not. Cookie parsing, the trusted-proxy
+here so Nest's own defaults, which accept gzip, are not (an application that needs a raw body on a route mounts that parser before calling it). Cookie parsing, the trusted-proxy
 setting and `applyBymaxOpenApi` stay with you and go after it:
 `applyAccessLog` → `applyHttpFloors` → cookie parser → trusted proxies → `applyBymaxOpenApi`.
 

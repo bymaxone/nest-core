@@ -88,7 +88,7 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 // Re-derive it when the measurement exceeds it, after checking that the growth is code and not
 // prose (comment text is absent from `dist/index.mjs`), that no module entered the bundle, and
 // that the optional peers stay unloaded with their features off (`pnpm check:runtime`).
-//   `./http` measured 723 B brotli (raw 2164 B) -> budget 1 KiB (1.42x): one helper and a loader.
+//   `./http` measured 787 B brotli (raw 2495 B) -> budget 1 KiB (1.30x): one helper and a loader.
 const BUDGETS = [
   { name: '. (root)', path: 'dist/index.mjs', brotli: 17.75 * 1024 },
   { name: './pagination', path: 'dist/pagination/index.mjs', brotli: 1.5 * 1024 },

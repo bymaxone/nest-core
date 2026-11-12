@@ -144,6 +144,28 @@ describe('applyHttpFloors, options', () => {
     }
   })
 
+  it("accepts helmet's hsts alias to tune or re-enable HSTS", async () => {
+    /* helmet throws when both spellings are present, so the default must not add the other one. */
+    const app = await start({ helmet: { hsts: { maxAge: 5 } } })
+    try {
+      const res = await request(app.getHttpServer()).post('/p/echo').send({})
+      expect(res.headers['strict-transport-security']).toBe('max-age=5; includeSubDomains')
+    } finally {
+      await app.close()
+    }
+  })
+
+  it('accepts hsts: false, which keeps HSTS off', async () => {
+    const app = await start({ helmet: { hsts: false } })
+    try {
+      const res = await request(app.getHttpServer()).post('/p/echo').send({})
+      expect(res.headers['strict-transport-security']).toBeUndefined()
+      expect(res.headers['x-content-type-options']).toBe('nosniff')
+    } finally {
+      await app.close()
+    }
+  })
+
   it('leaves helmet out when asked', async () => {
     const app = await start({ helmet: false })
     try {
@@ -195,6 +217,43 @@ describe('applyHttpFloors, options', () => {
     const app = moduleRef.createNestApplication()
     await expect(applyHttpFloors(app, options)).rejects.toThrow(/headersTimeoutMs|requestTimeoutMs/)
     await app.close()
+  })
+
+  it('applies a custom connection-sweep interval', async () => {
+    /* A server holding very many sockets may want the sweep slower than the default. */
+    const app = await start({ connectionsCheckingIntervalMs: 5_000 })
+    try {
+      const server = app.getHttpServer() as SweepingServer
+      expect(server.connectionsCheckingInterval).toBe(5_000)
+      expect(server.headersTimeout).toBe(15_000)
+    } finally {
+      await app.close()
+    }
+  })
+
+  it.each([0, -1, 1.5, Number.NaN])('rejects a connection-sweep interval of %p', async (value) => {
+    const moduleRef = await Test.createTestingModule({ imports: [EchoModule] }).compile()
+    const app = moduleRef.createNestApplication()
+    await expect(applyHttpFloors(app, { connectionsCheckingIntervalMs: value })).rejects.toThrow(
+      /connectionsCheckingIntervalMs must be a positive integer/
+    )
+    await app.close()
+  })
+
+  it('throws when the server is already listening, and applies nothing', async () => {
+    /* Node reads the sweep interval when the server starts listening, so later is too late. */
+    const moduleRef = await Test.createTestingModule({ imports: [EchoModule] }).compile()
+    const app = moduleRef.createNestApplication()
+    await app.listen(0, '127.0.0.1')
+    try {
+      const server = app.getHttpServer() as SweepingServer
+      const before = server.connectionsCheckingInterval
+      await expect(applyHttpFloors(app)).rejects.toThrow(/before listen/)
+      expect(server.headersTimeout).not.toBe(15_000)
+      expect(server.connectionsCheckingInterval).toBe(before)
+    } finally {
+      await app.close()
+    }
   })
 
   it('rejects an application that is not on Express rather than half-applying', async () => {
