@@ -1369,8 +1369,7 @@ Opt-in integrations attach to that spine rather than adding columns to it: a pro
 `@BymaxHealthIndicator()` joins readiness, one marked `@BymaxMetricsContributor()` publishes on
 the registry, telemetry puts the trace id on the envelope and the timing sample, and `./openapi`
 serves the document in development. No request data is retained: the timing middleware emits
-and forgets, the health service keeps only the last state of each check to report changes, and
-the pagination helpers are functions of their arguments.
+and forgets, and the pagination helpers are functions of their arguments.
 
 ### Design Principles
 
@@ -1614,8 +1613,7 @@ in the sections above.
   nesting, ahead of yours.
 - **It authenticates and authorizes nothing.** The one credential it knows is the optional
   `metrics.authToken`; guards, sessions and roles are yours.
-- **It keeps no request data.** Timing samples go to the sink you register; the only state it
-  retains is the Prometheus registry and the last state of each health check.
+- **It keeps no request data.** Timing samples go to the sink you register.
 - **It does not cover GraphQL or RPC execution contexts.** The error envelope and request timing
   pass those through untouched.
 - **It does not cover Fastify** for the body-depth guard, `applyHttpFloors`, or the fixed messages
