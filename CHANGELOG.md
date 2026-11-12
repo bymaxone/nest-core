@@ -11,6 +11,14 @@ heading here.
 
 ## [Unreleased]
 
+### Changed
+
+- **README rewritten for correctness and length.** The mutation threshold, the subpath and optional-peer
+  counts and the Tech Stack now match the code (`./http` and `helmet` included); the do-it-yourself
+  body-depth guide is replaced by the `bodyDepth` option it described; the OpenAPI configuration and
+  its section are merged; history and measurement narration are removed; and the Compatibility
+  section is now "What This Library Does NOT Do". No API or behaviour change.
+
 ## [1.6.7] - 2026-11-12
 
 A patch release. Two floors that every backend re-implemented move into the library; both are additive
