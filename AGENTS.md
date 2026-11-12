@@ -205,7 +205,7 @@ rewrite published history.
 
 ### The published surface is the barrels, not the file tree
 
-This package ships six subpaths — `.`, `./pagination`, `./health`, `./metrics`, `./openapi`, `./http` — each
+This package ships several subpaths (see `exports` in `package.json`), each
 built as its own bundle. A symbol is public only if a barrel re-exports it: `src/index.ts` or the
 `index.ts` of a subpath. Reachability through a relative path is not API, and neither is presence in
 `dist/`.

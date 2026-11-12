@@ -140,8 +140,8 @@ pnpm add @bymax-one/nest-core @nestjs/common @nestjs/core reflect-metadata rxjs
 
 Add `prom-client` if you enable the metrics feature, `@nestjs/swagger` if you
 enable the OpenAPI feature, `@opentelemetry/api` if you enable trace
-correlation, and `helmet` if you call `applyHttpFloors`. All four are optional peer
-dependencies: none is required, or ever loaded, unless you turn its feature on.
+correlation, and `helmet` if you call `applyHttpFloors`. Each is an optional peer
+dependency: none is required, or ever loaded, unless you turn its feature on.
 
 ```bash
 pnpm add prom-client
