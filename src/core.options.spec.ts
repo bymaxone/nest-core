@@ -21,6 +21,7 @@ describe('normalizeCoreOptions', () => {
     expect(normalizeCoreOptions()).toEqual({
       envelope: { enabled: true, exposeInternals: false },
       timing: { enabled: true },
+      bodyDepth: { enabled: false, maxDepth: 32 },
       health: {
         enabled: true,
         path: 'health',
@@ -87,6 +88,7 @@ describe('normalizeCoreOptions', () => {
     const resolved = normalizeCoreOptions({
       envelope: { enabled: false, exposeInternals: true },
       timing: { enabled: false, slowRequestThresholdMs: 1000 },
+      bodyDepth: { enabled: true, maxDepth: 8 },
       health: {
         enabled: false,
         path: 'hz',
@@ -106,6 +108,7 @@ describe('normalizeCoreOptions', () => {
     expect(resolved).toEqual({
       envelope: { enabled: false, exposeInternals: true },
       timing: { enabled: false, slowRequestThresholdMs: 1000 },
+      bodyDepth: { enabled: true, maxDepth: 8 },
       health: {
         enabled: false,
         path: 'hz',

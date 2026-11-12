@@ -12,6 +12,7 @@ export type {
   BymaxCoreModuleOptions,
   EnvelopeOptions,
   TimingOptions,
+  BodyDepthOptions,
   HealthOptions,
   MetricsOptions,
   TelemetryOptions,
@@ -63,6 +64,7 @@ export type {
 
 export { TimingInterceptor } from './timing/timing.interceptor'
 
+export { BymaxBodyDepthMiddleware } from './body-depth/body-depth.middleware'
 export { BymaxTimingMiddleware } from './timing/timing.middleware'
 
 export { UNMATCHED_ROUTE } from './timing/request-info.accessor'

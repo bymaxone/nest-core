@@ -81,16 +81,21 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 // consumer loads — while leaving room for prose to change without a false
 // alarm. A real leak here is kilobytes, not hundreds of bytes.
 //
-// Root budget 17.25 KiB = 17664 B: measured 17511 B brotli (raw 75126 B) plus 153 B of headroom.
+// Root budget 17.75 KiB = 18176 B: measured 17930 B brotli (raw 76940 B) plus 246 B of headroom.
+// The growth over the previous budget is the opt-in body-depth floor (one middleware class, its
+// depth walk and the option's validation): code, none of it comment text. `helmet` is not in this
+// bundle: it lives in `./http`, whose own budget is below.
 // Re-derive it when the measurement exceeds it, after checking that the growth is code and not
 // prose (comment text is absent from `dist/index.mjs`), that no module entered the bundle, and
 // that the optional peers stay unloaded with their features off (`pnpm check:runtime`).
+//   `./http` measured 787 B brotli (raw 2495 B) -> budget 1 KiB (1.30x): one helper and a loader.
 const BUDGETS = [
-  { name: '. (root)', path: 'dist/index.mjs', brotli: 17.25 * 1024 },
+  { name: '. (root)', path: 'dist/index.mjs', brotli: 17.75 * 1024 },
   { name: './pagination', path: 'dist/pagination/index.mjs', brotli: 1.5 * 1024 },
   { name: './health', path: 'dist/health/index.mjs', brotli: 0.5 * 1024 },
   { name: './openapi', path: 'dist/openapi/index.mjs', brotli: 7.5 * 1024 },
-  { name: './metrics', path: 'dist/metrics/index.mjs', brotli: 0.5 * 1024 }
+  { name: './metrics', path: 'dist/metrics/index.mjs', brotli: 0.5 * 1024 },
+  { name: './http', path: 'dist/http/index.mjs', brotli: 1 * 1024 }
 ]
 
 const fmt = (n) => `${(n / 1024).toFixed(2)} kB`

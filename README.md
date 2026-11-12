@@ -126,6 +126,7 @@ never loads its peer, which the release gate asserts against the packed tarball.
 | `./pagination` | `normalizePageQuery`, `buildPageResult`, `normalizeCursorQuery`, `buildCursorResult`, `encodeCursor`, `decodeCursor` and their types — pure functions, no NestJS provider involved                                                                                  |
 | `./health`     | `IHealthIndicator`, `HealthResponse`, the indicator contracts and the `@BymaxHealthIndicator()` marker, so a package that only implements an indicator does not import the module                                                                                   |
 | `./metrics`    | `IMetricsContributor` and the `@BymaxMetricsContributor()` marker, so a package that only publishes metrics imports neither the module nor its DI tokens. The one subpath whose types name `prom-client`, which anyone implementing the contract already depends on |
+| `./http`       | `applyHttpFloors`, the one bootstrap call for the HTTP-level floors: security headers, compressed request bodies refused, and the header and request timeouts — separate so an application that never calls it never loads `helmet`                                 |
 | `./openapi`    | `applyBymaxOpenApi`, the one bootstrap call that builds and mounts the OpenAPI document — separate so an application that never documents its API never loads the code that does                                                                                    |
 
 Each subpath ships ESM and CommonJS with its own `.d.ts` and `.d.cts`, so
@@ -138,13 +139,14 @@ pnpm add @bymax-one/nest-core @nestjs/common @nestjs/core reflect-metadata rxjs
 ```
 
 Add `prom-client` if you enable the metrics feature, `@nestjs/swagger` if you
-enable the OpenAPI feature, and `@opentelemetry/api` if you enable trace
-correlation. All three are optional peer dependencies: none is required, or ever
-loaded, unless you turn its feature on.
+enable the OpenAPI feature, `@opentelemetry/api` if you enable trace
+correlation, and `helmet` if you call `applyHttpFloors`. Each is an optional peer
+dependency: none is required, or ever loaded, unless you turn its feature on.
 
 ```bash
 pnpm add prom-client
 pnpm add @opentelemetry/api
+pnpm add helmet
 pnpm add -D @nestjs/swagger
 ```
 
@@ -231,6 +233,28 @@ and the classification table: [Production is a closed door](#production-is-a-clo
 | ------------------------ | --------- | ------- | ------------------------------------------------------------------------------ |
 | `enabled`                | `boolean` | `true`  | Applies the request-timing middleware to every route.                          |
 | `slowRequestThresholdMs` | `number`  | unset   | Samples above this duration are flagged `slow: true`. Absent means never slow. |
+
+### `bodyDepth`
+
+| Option     | Type      | Default | Description                                                                                        |
+| ---------- | --------- | ------- | -------------------------------------------------------------------------------------------------- |
+| `enabled`  | `boolean` | `false` | Refuses a request body nested deeper than `maxDepth` with a `400` through the envelope. See below. |
+| `maxDepth` | `number`  | `32`    | The deepest nesting a body may have. A flat object or array is depth 1. A positive safe integer.   |
+
+**Off by default, and worth turning on.** It is off because turning it on rejects bodies that
+are accepted today, and a patch release must not start doing that. Turn it on: a body of about
+2,000 nested arrays is only 4 KB, and the recursion in a validator or transformer
+(`class-validator`, `class-transformer`) overflows the stack on it. The filter then answers
+`500` for a request that was only malformed — measured with Nest's `ValidationPipe` on an
+application route, needing no credential, so it is also a way to make a healthy service look
+broken to a monitor. This package ships no validation of its own, so the limit sits in front of
+yours: the check runs on the body Nest's parsers already produced and answers
+`400 BYMAX_BAD_REQUEST` ("Request body is nested too deeply") before routing, so it protects
+every route, this package's own included, before any pipe runs.
+
+It covers the Express adapter. It does nothing when the application disables Nest's body
+parsers, or parses bodies after module middleware has run, and it is not mounted on Fastify,
+whose middleware runs before the body is parsed.
 
 ### `health`
 
@@ -1681,6 +1705,55 @@ same `@Global()`-module pattern is how every pluggable token in this package
 is overridden: `BYMAX_TIMING_SINK` and `BYMAX_HEALTH_INDICATORS` follow it
 identically.
 
+## 🧱 HTTP Floors
+
+`applyHttpFloors` (from `@bymax-one/nest-core/http`) is the HTTP-level protection that every
+backend wants and none should tune per deployment. One call, before `app.listen()`:
+
+```typescript
+import { NestFactory } from '@nestjs/core'
+import { applyHttpFloors } from '@bymax-one/nest-core/http'
+import { AppModule } from './app.module'
+
+async function bootstrap(): Promise<void> {
+  const app = await NestFactory.create(AppModule)
+  await applyHttpFloors(app)
+  await app.listen(3000)
+}
+void bootstrap()
+```
+
+| What               | Default                                                                                                                                                                                                                                |
+| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Security headers   | `helmet()` with `strictTransportSecurity: false` (TLS is normally ended in front of the app, which owns HSTS). Pass `helmet: { ... }` to tune it, for example the CSP of a browser-serving backend, or `helmet: false` to leave it out |
+| Request bodies     | The JSON and urlencoded parsers refuse a compressed body (`Content-Encoding`) with `415` instead of decompressing it, on every route and before routing. Size limits and the extended form syntax keep the parsers' defaults           |
+| `headersTimeoutMs` | `15000`: the longest a client may take to send its complete header block. Node's own default is 60 s, which leaves a header block sent a byte at a time open as a cheap denial of service                                              |
+| `requestTimeoutMs` | `30000`: the longest a single request, headers and body together, may take. Node's default is 5 minutes. Must not be below `headersTimeoutMs`                                                                                          |
+
+`keepAliveTimeout` is left at Node's 5 s: raising it only lengthens idle-socket retention.
+
+Node enforces both timeouts from a sweep over the open connections, not from a timer per
+connection, and the sweep runs every 30 s by default: measured, a 1 s header timeout left a
+dribbled header block open for 30 s. The helper therefore also sets the server's
+`connectionsCheckingInterval` to one second (or the header timeout, if that is shorter), so a
+connection is cut within a second of its timeout expiring. Nest creates the server without
+exposing its options, so this is a property set before `listen()`: Node reads it when the server
+starts listening, and the helper throws if the server is already listening. The sweep walks every
+open connection each time, so a server holding very many sockets can set
+`connectionsCheckingIntervalMs` higher, at the cost of cutting up to that long after the timeout.
+
+**Order is part of the contract.** Call it right after `applyAccessLog` from
+`@bymax-one/nest-logger`, and before everything that reads the request: helmet is mounted first,
+so even a request the body parsers refuse carries the headers, and the parsers are registered
+here so Nest's own defaults, which accept gzip, are not (an application that needs a raw body on a route mounts that parser before calling it). Cookie parsing, the trusted-proxy
+setting and `applyBymaxOpenApi` stay with you and go after it:
+`applyAccessLog` → `applyHttpFloors` → cookie parser → trusted proxies → `applyBymaxOpenApi`.
+
+Express only; on another adapter it throws before applying anything. `helmet` is an optional
+peer, loaded only when the helper runs, and a missing one fails with the install command. An
+unusable timeout (zero, fractional, or a header timeout above the request timeout) throws
+rather than leaving a socket limit switched off.
+
 ## 🏗️ Architecture
 
 ```
@@ -1836,6 +1909,8 @@ the deployment nobody configured is the one most likely to be exposed.
 | Health output       | The response names which indicator is down and nothing more; the reason goes to the logger. `exposeIndicatorErrors` (default `false`) puts it back in the response for debugging |
 | Slow indicators     | Converted to `down` by the aggregator, so a probe cannot hang on one                                                                                                             |
 | Correlation         | Resolved through `BYMAX_CORRELATION_PROVIDER` — the app decides where the id comes from                                                                                          |
+| Body nesting        | Opt-in `bodyDepth` refuses a body nested deeper than `maxDepth` with a `400`, so a few kilobytes of nested arrays cannot overflow a recursive validator into a `500`             |
+| HTTP floors         | `applyHttpFloors`: compressed request bodies refused with `415`, header and request timeouts of 15 s and 30 s, `helmet` headers without HSTS                                     |
 | Request accounting  | Every closed request is counted, including the ones a guard rejected (`401`/`403`/`429`) and the ones that matched no route (`404`), so an attack in progress moves the graph    |
 | Route labels        | Taken from the matched template; an unmatched request records the constant `<unmatched>`, never the requested path, so a scan cannot grow the metric registry without bound      |
 | Pagination cursors  | Opaque, not authenticated; treated as client-supplied input on the way back in                                                                                                   |
@@ -1909,27 +1984,28 @@ in the sections above.
 
 ### `.` (root)
 
-| Export                                                                                                                                                                                                             | Kind      | Description                                                                                                                                                                                                                                                                                                                                |
-| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `BymaxCoreModule`                                                                                                                                                                                                  | class     | The dynamic module: `forRoot` and `forRootAsync`.                                                                                                                                                                                                                                                                                          |
-| `BymaxCoreModuleOptions`, `EnvelopeOptions`, `TimingOptions`, `HealthOptions`, `MetricsOptions`, `TelemetryOptions`, `OpenApiOptions`, `OpenApiServerDescriptor`, `OpenApiSecurityScheme`, `ResolvedCoreOptions`   | types     | The options surface and its resolved shape.                                                                                                                                                                                                                                                                                                |
-| `OpenApiSecurityRequirement`, `OpenApiHttpMethod`, `OpenApiOperationKey`, `OperationSecurityMap`                                                                                                                   | types     | The operation-key contract a sibling library targets to ship its own security map.                                                                                                                                                                                                                                                         |
-| `OpenApiOperationIdFactory`                                                                                                                                                                                        | type      | Names the operations in the generated document.                                                                                                                                                                                                                                                                                            |
-| `BYMAX_CORE_OPTIONS`, `BYMAX_CORRELATION_PROVIDER`, `BYMAX_TIMING_SINK`, `BYMAX_HEALTH_INDICATORS`, `BYMAX_HEALTH_TRANSITION_SINK`, `BYMAX_UNEXPECTED_ERROR_SINK`, `BYMAX_METRICS_REGISTRY`, `BYMAX_TRACE_CONTEXT` | tokens    | The DI tokens; see the [token table](#-di-tokens).                                                                                                                                                                                                                                                                                         |
-| `IHealthTransitionSink`, `HealthTransition`, `HealthTransitionCause`                                                                                                                                               | types     | The readiness-transition contract; also on `./health`.                                                                                                                                                                                                                                                                                     |
-| `ICorrelationIdProvider`                                                                                                                                                                                           | type      | The correlation-provider contract.                                                                                                                                                                                                                                                                                                         |
-| `ITraceContextProvider`, `TraceContext`                                                                                                                                                                            | types     | The trace-context contract and the identifiers it resolves.                                                                                                                                                                                                                                                                                |
-| `BymaxExceptionFilter`                                                                                                                                                                                             | class     | The envelope exception filter.                                                                                                                                                                                                                                                                                                             |
-| `FilterErrorContext`                                                                                                                                                                                               | type      | The neutral request context passed to the filter's observability seam.                                                                                                                                                                                                                                                                     |
-| `IUnexpectedErrorSink`, `UnexpectedErrorReport`                                                                                                                                                                    | types     | Receives the cause behind each collapsed `500 BYMAX_INTERNAL_ERROR`; see [Recording the cause of a 500](#recording-the-cause-of-a-500).                                                                                                                                                                                                    |
-| `buildErrorEnvelope`                                                                                                                                                                                               | function  | Pure builder assembling an `ErrorEnvelope`.                                                                                                                                                                                                                                                                                                |
-| `ErrorEnvelope`, `ErrorDetails`, `BuildErrorEnvelopeInput`                                                                                                                                                         | types     | The envelope contract and its builder input.                                                                                                                                                                                                                                                                                               |
-| `BymaxTimingMiddleware`                                                                                                                                                                                            | class     | The request-timing middleware, applied to every route when timing is enabled.                                                                                                                                                                                                                                                              |
-| `UNMATCHED_ROUTE`                                                                                                                                                                                                  | constant  | The bounded label recorded when a request matched no route (`<unmatched>`).                                                                                                                                                                                                                                                                |
-| `TimingInterceptor`                                                                                                                                                                                                | class     | **Deprecated, registered nowhere.** `BymaxTimingMiddleware` replaced it as the recorder because guards run before interceptors, so it never saw a request a guard rejected; wiring it by hand next to the middleware records a second sample for every request that reaches a handler. Kept so code that wired it by hand keeps compiling. |
-| `ITimingSink`, `RequestTimingSample`                                                                                                                                                                               | types     | The timing-sink contract and its sample shape.                                                                                                                                                                                                                                                                                             |
-| `BYMAX_BAD_GATEWAY` … `BYMAX_VALIDATION_FAILED`                                                                                                                                                                    | constants | The full error-code catalog (see [Error envelope](#-error-envelope)).                                                                                                                                                                                                                                                                      |
-| `codeForStatus`                                                                                                                                                                                                    | function  | Derives a catalog code from an HTTP status.                                                                                                                                                                                                                                                                                                |
+| Export                                                                                                                                                                                                                               | Kind      | Description                                                                                                                                                                                                                                                                                                                                |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `BymaxCoreModule`                                                                                                                                                                                                                    | class     | The dynamic module: `forRoot` and `forRootAsync`.                                                                                                                                                                                                                                                                                          |
+| `BymaxCoreModuleOptions`, `EnvelopeOptions`, `TimingOptions`, `BodyDepthOptions`, `HealthOptions`, `MetricsOptions`, `TelemetryOptions`, `OpenApiOptions`, `OpenApiServerDescriptor`, `OpenApiSecurityScheme`, `ResolvedCoreOptions` | types     | The options surface and its resolved shape.                                                                                                                                                                                                                                                                                                |
+| `OpenApiSecurityRequirement`, `OpenApiHttpMethod`, `OpenApiOperationKey`, `OperationSecurityMap`                                                                                                                                     | types     | The operation-key contract a sibling library targets to ship its own security map.                                                                                                                                                                                                                                                         |
+| `OpenApiOperationIdFactory`                                                                                                                                                                                                          | type      | Names the operations in the generated document.                                                                                                                                                                                                                                                                                            |
+| `BYMAX_CORE_OPTIONS`, `BYMAX_CORRELATION_PROVIDER`, `BYMAX_TIMING_SINK`, `BYMAX_HEALTH_INDICATORS`, `BYMAX_HEALTH_TRANSITION_SINK`, `BYMAX_UNEXPECTED_ERROR_SINK`, `BYMAX_METRICS_REGISTRY`, `BYMAX_TRACE_CONTEXT`                   | tokens    | The DI tokens; see the [token table](#-di-tokens).                                                                                                                                                                                                                                                                                         |
+| `IHealthTransitionSink`, `HealthTransition`, `HealthTransitionCause`                                                                                                                                                                 | types     | The readiness-transition contract; also on `./health`.                                                                                                                                                                                                                                                                                     |
+| `ICorrelationIdProvider`                                                                                                                                                                                                             | type      | The correlation-provider contract.                                                                                                                                                                                                                                                                                                         |
+| `ITraceContextProvider`, `TraceContext`                                                                                                                                                                                              | types     | The trace-context contract and the identifiers it resolves.                                                                                                                                                                                                                                                                                |
+| `BymaxExceptionFilter`                                                                                                                                                                                                               | class     | The envelope exception filter.                                                                                                                                                                                                                                                                                                             |
+| `FilterErrorContext`                                                                                                                                                                                                                 | type      | The neutral request context passed to the filter's observability seam.                                                                                                                                                                                                                                                                     |
+| `IUnexpectedErrorSink`, `UnexpectedErrorReport`                                                                                                                                                                                      | types     | Receives the cause behind each collapsed `500 BYMAX_INTERNAL_ERROR`; see [Recording the cause of a 500](#recording-the-cause-of-a-500).                                                                                                                                                                                                    |
+| `buildErrorEnvelope`                                                                                                                                                                                                                 | function  | Pure builder assembling an `ErrorEnvelope`.                                                                                                                                                                                                                                                                                                |
+| `ErrorEnvelope`, `ErrorDetails`, `BuildErrorEnvelopeInput`                                                                                                                                                                           | types     | The envelope contract and its builder input.                                                                                                                                                                                                                                                                                               |
+| `BymaxTimingMiddleware`                                                                                                                                                                                                              | class     | The request-timing middleware, applied to every route when timing is enabled.                                                                                                                                                                                                                                                              |
+| `BymaxBodyDepthMiddleware`                                                                                                                                                                                                           | class     | Refuses a body nested deeper than `bodyDepth.maxDepth` with a `400`; applied to every route, after the timing middleware, only when `bodyDepth.enabled` is true.                                                                                                                                                                           |
+| `UNMATCHED_ROUTE`                                                                                                                                                                                                                    | constant  | The bounded label recorded when a request matched no route (`<unmatched>`).                                                                                                                                                                                                                                                                |
+| `TimingInterceptor`                                                                                                                                                                                                                  | class     | **Deprecated, registered nowhere.** `BymaxTimingMiddleware` replaced it as the recorder because guards run before interceptors, so it never saw a request a guard rejected; wiring it by hand next to the middleware records a second sample for every request that reaches a handler. Kept so code that wired it by hand keeps compiling. |
+| `ITimingSink`, `RequestTimingSample`                                                                                                                                                                                                 | types     | The timing-sink contract and its sample shape.                                                                                                                                                                                                                                                                                             |
+| `BYMAX_BAD_GATEWAY` … `BYMAX_VALIDATION_FAILED`                                                                                                                                                                                      | constants | The full error-code catalog (see [Error envelope](#-error-envelope)).                                                                                                                                                                                                                                                                      |
+| `codeForStatus`                                                                                                                                                                                                                      | function  | Derives a catalog code from an HTTP status.                                                                                                                                                                                                                                                                                                |
 
 ### `./pagination`
 
@@ -1962,6 +2038,13 @@ in the sections above.
 | `BYMAX_METRICS_CONTRIBUTOR_METADATA` | constant | The metadata key the marker writes.                          |
 | `IMetricsContributor`                | type     | The contract: `registerMetrics(registry)`.                   |
 | `MetricsRegistry`                    | type     | The `prom-client` registry the scrape endpoint serves.       |
+
+### `./http`
+
+| Export                                         | Kind     | Description                                                                             |
+| ---------------------------------------------- | -------- | --------------------------------------------------------------------------------------- |
+| `applyHttpFloors`                              | function | Applies the headers, the body-parser floor and the timeouts; call it before `listen()`. |
+| `HttpFloorsOptions`, `HttpFloorsHelmetOptions` | types    | The `helmet`, `headersTimeoutMs` and `requestTimeoutMs` options.                        |
 
 ### `./openapi`
 

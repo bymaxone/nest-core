@@ -21,7 +21,8 @@ const config: Config = {
     '^@bymax-one/nest-core/pagination$': '<rootDir>/../../src/pagination/index.ts',
     '^@bymax-one/nest-core/health$': '<rootDir>/../../src/health/index.ts',
     '^@bymax-one/nest-core/openapi$': '<rootDir>/../../src/openapi/index.ts',
-    '^@bymax-one/nest-core/metrics$': '<rootDir>/../../src/metrics/index.ts'
+    '^@bymax-one/nest-core/metrics$': '<rootDir>/../../src/metrics/index.ts',
+    '^@bymax-one/nest-core/http$': '<rootDir>/../../src/http/index.ts'
   },
   transform: {
     '^.+\\.ts$': [
@@ -35,8 +36,7 @@ const config: Config = {
   maxWorkers: '50%',
   clearMocks: true,
   restoreMocks: true,
-  // The test/e2e directory does not exist yet; a real spec lands in a later phase.
-  passWithNoTests: true
+  passWithNoTests: false
 }
 
 export default config

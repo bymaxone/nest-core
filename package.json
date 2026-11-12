@@ -1,6 +1,6 @@
 {
   "name": "@bymax-one/nest-core",
-  "version": "1.6.6",
+  "version": "1.6.7",
   "description": "Zero-dependency NestJS 11 application foundation kit: error-envelope exception filter, request-timing middleware, pagination helpers, health endpoints with indicator discovery, an optional Prometheus metrics endpoint with a contribution contract, OpenAPI documents in development, and OpenTelemetry trace correlation.",
   "author": "Bymax One <support@bymax.one>",
   "license": "MIT",
@@ -63,6 +63,16 @@
         "default": "./dist/metrics/index.cjs"
       }
     },
+    "./http": {
+      "import": {
+        "types": "./dist/http/index.d.ts",
+        "default": "./dist/http/index.mjs"
+      },
+      "require": {
+        "types": "./dist/http/index.d.cts",
+        "default": "./dist/http/index.cjs"
+      }
+    },
     "./openapi": {
       "import": {
         "types": "./dist/openapi/index.d.ts",
@@ -114,6 +124,7 @@
     "@nestjs/core": "^11.1.18",
     "@nestjs/swagger": "^11.0.0",
     "@opentelemetry/api": "^1.9.0",
+    "helmet": "^8.0.0",
     "prom-client": "^15.0.0",
     "reflect-metadata": "^0.2.0",
     "rxjs": "^7.0.0"
@@ -123,6 +134,9 @@
       "optional": true
     },
     "@opentelemetry/api": {
+      "optional": true
+    },
+    "helmet": {
       "optional": true
     },
     "prom-client": {
@@ -151,6 +165,8 @@
     "@types/supertest": "^7.2.0",
     "@typescript-eslint/eslint-plugin": "^8.59.3",
     "@typescript-eslint/parser": "^8.59.3",
+    "class-transformer": "^0.5.1",
+    "class-validator": "^0.15.1",
     "eslint": "^9.39.4",
     "eslint-config-prettier": "^10.1.8",
     "eslint-import-resolver-typescript": "^4.4.4",
@@ -159,6 +175,7 @@
     "eslint-plugin-security": "^4.0.0",
     "fastify": "^5.12.5",
     "globals": "^17.6.0",
+    "helmet": "^8.3.0",
     "husky": "^9.1.7",
     "jest": "^30.4.2",
     "lint-staged": "^17.2.0",
@@ -183,6 +200,7 @@
     "metrics",
     "openapi",
     "swagger",
+    "helmet",
     "opentelemetry",
     "tracing",
     "typescript"
@@ -210,6 +228,9 @@
       ],
       "metrics": [
         "./dist/metrics/index.d.cts"
+      ],
+      "http": [
+        "./dist/http/index.d.cts"
       ]
     }
   }

@@ -31,7 +31,8 @@ const config: Config = {
     '^@bymax-one/nest-core/pagination$': '<rootDir>/src/pagination/index.ts',
     '^@bymax-one/nest-core/health$': '<rootDir>/src/health/index.ts',
     '^@bymax-one/nest-core/openapi$': '<rootDir>/src/openapi/index.ts',
-    '^@bymax-one/nest-core/metrics$': '<rootDir>/src/metrics/index.ts'
+    '^@bymax-one/nest-core/metrics$': '<rootDir>/src/metrics/index.ts',
+    '^@bymax-one/nest-core/http$': '<rootDir>/src/http/index.ts'
   },
   transform: {
     '^.+\\.ts$': [

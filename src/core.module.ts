@@ -19,6 +19,7 @@ import type {
 } from '@nestjs/common'
 import { APP_FILTER, DiscoveryModule, HttpAdapterHost } from '@nestjs/core'
 
+import { BymaxBodyDepthMiddleware } from './body-depth/body-depth.middleware'
 import { DEFAULT_HEALTH_PATH, DEFAULT_METRICS_PATH, normalizeCoreOptions } from './core.options'
 import type { BymaxCoreModuleOptions, ResolvedCoreOptions } from './core.options'
 import {
@@ -302,12 +303,16 @@ export class BymaxCoreModule extends BymaxCoreModuleBase implements NestModule {
    * @param consumer - Nest's middleware consumer.
    */
   configure(consumer: MiddlewareConsumer): void {
-    if (!this.resolved.timing.enabled) {
-      return
-    }
     const adapter = this.adapterHost?.httpAdapter as HttpAdapterShape | undefined
-    const onFastify = bridgeFastifyRouteMetadata(adapter)
-    consumer.apply(BymaxTimingMiddleware).forRoutes(onFastify ? '{*splat}' : '/')
+    if (this.resolved.timing.enabled) {
+      const onFastify = bridgeFastifyRouteMetadata(adapter)
+      consumer.apply(BymaxTimingMiddleware).forRoutes(onFastify ? '{*splat}' : '/')
+    }
+    // After timing, so a refused body is still recorded. Not on Fastify, whose middleware runs
+    // before the body is parsed; the option's documentation says so.
+    if (this.resolved.bodyDepth.enabled && adapter?.getType?.() !== 'fastify') {
+      consumer.apply(BymaxBodyDepthMiddleware).forRoutes('/')
+    }
   }
 
   /**
