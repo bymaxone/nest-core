@@ -39,7 +39,7 @@ Writing it per service is how services end up answering the same failure differe
 client integration breaks when one of them changes its error body.
 
 It ships `"dependencies": {}`. Everything it touches — NestJS, `rxjs`, `reflect-metadata`, and
-the four optional peers behind the features that need them (`prom-client`, `@nestjs/swagger`,
+the optional peers behind the features that need them (`prom-client`, `@nestjs/swagger`,
 `@opentelemetry/api`, `helmet`) — is a peer whose version you already control. A feature you
 leave off never loads its peer, which the release gate asserts against the packed tarball.
 
@@ -1181,7 +1181,7 @@ routes are safe from the filter: it matches this package's paths including a glo
 a tail match counts only when whatever precedes it also precedes every other path in the
 document, so `/tenants/{id}/health/live` is never mistaken for the probe.
 
-This package also documents the security of the three routes it owns, without being asked:
+This package also documents the security of the routes it owns, without being asked:
 
 | Route                               | Documented as                                           |
 | ----------------------------------- | ------------------------------------------------------- |
