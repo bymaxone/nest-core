@@ -61,6 +61,12 @@ const SUBPATHS = [
     exports: ['applyBymaxOpenApi']
   },
   {
+    label: './http',
+    distName: 'http/index',
+    specifier: '@bymax-one/nest-core/http',
+    exports: ['applyHttpFloors']
+  },
+  {
     label: './metrics',
     distName: 'metrics/index',
     specifier: '@bymax-one/nest-core/metrics',

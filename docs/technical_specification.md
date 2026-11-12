@@ -56,7 +56,7 @@ Without a shared foundation, every service reimplements the same bootstrap layer
 | License        | MIT                                                                                                                                            |
 | Runtime        | Node.js 24+                                                                                                                                    |
 | Framework      | NestJS 11+                                                                                                                                     |
-| Subpaths       | `.` (module + envelope + timing + telemetry) + `./pagination` + `./health` + `./metrics` + `./openapi`                                         |
+| Subpaths       | `.` (module + envelope + timing + telemetry) + `./pagination` + `./health` + `./metrics` + `./openapi` + `./http`                              |
 | Optional peers | `prom-client` (metrics), `@nestjs/swagger` (OpenAPI), `@opentelemetry/api` (trace correlation) — each loaded only while its feature is enabled |
 
 ### 1.5 Design Principles
@@ -176,13 +176,14 @@ Nest runs middleware, then guards, then interceptors, then pipes, then the handl
 
 ### 3.2 Subpath Exports
 
-| Subpath        | Content                                                                                                                  |
-| -------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| `.`            | `BymaxCoreModule`, exception filter, timing middleware, tokens, interfaces, error codes                                  |
-| `./pagination` | Offset and cursor DTOs, result builders, cursor codec                                                                    |
-| `./health`     | `IHealthIndicator`, `HealthIndicatorResult`, health response types, `@BymaxHealthIndicator()`                            |
-| `./metrics`    | `IMetricsContributor`, `MetricsRegistry`, `@BymaxMetricsContributor()` — the only subpath whose types name `prom-client` |
-| `./openapi`    | `applyBymaxOpenApi` and its result types — the bootstrap-time OpenAPI mount                                              |
+| Subpath        | Content                                                                                                                             |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `.`            | `BymaxCoreModule`, exception filter, timing middleware, tokens, interfaces, error codes                                             |
+| `./pagination` | Offset and cursor DTOs, result builders, cursor codec                                                                               |
+| `./health`     | `IHealthIndicator`, `HealthIndicatorResult`, health response types, `@BymaxHealthIndicator()`                                       |
+| `./metrics`    | `IMetricsContributor`, `MetricsRegistry`, `@BymaxMetricsContributor()` — the only subpath whose types name `prom-client`            |
+| `./openapi`    | `applyBymaxOpenApi` and its result types — the bootstrap-time OpenAPI mount                                                         |
+| `./http`       | `applyHttpFloors` — security headers, compressed-body refusal and the header and request timeouts (Express; `helmet` optional peer) |
 
 All subpaths ship ESM + CJS + `.d.ts` via tsup. Deep imports into `dist` internals are not part of the public API and are blocked by the `exports` map.
 

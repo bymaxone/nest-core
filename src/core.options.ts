@@ -30,6 +30,26 @@ export interface TimingOptions {
   slowRequestThresholdMs?: number
 }
 
+/** Request-body nesting limit, applied before the application's own validation runs. */
+export interface BodyDepthOptions {
+  /**
+   * Refuse a parsed request body nested deeper than {@link BodyDepthOptions.maxDepth} with a
+   * `400` through the error envelope. Default: `false`.
+   *
+   * Off by default because turning it on rejects bodies that are accepted today. Enable it:
+   * a body of a few thousand nested arrays is only a few kilobytes, and a recursive validator
+   * or transformer overflows the stack on it, so the request is answered `500`, with no
+   * credential needed. The check runs before routing, on the body the parser already produced, so it covers the Express adapter and a body parsed by
+   * Nest's own parsers; it does not cover Fastify.
+   */
+  enabled?: boolean
+  /**
+   * The deepest nesting a body may have: `[[1]]` is depth 2, a flat object or array is depth 1,
+   * and a scalar is depth 0. Must be a positive safe integer. Default: `32`.
+   */
+  maxDepth?: number
+}
+
 /** Liveness and readiness endpoint configuration. */
 export interface HealthOptions {
   /** Register the health controller. Default: `true`. */
@@ -293,6 +313,8 @@ export interface BymaxCoreModuleOptions {
   envelope?: EnvelopeOptions
   /** Request-timing middleware. Default: enabled. */
   timing?: TimingOptions
+  /** Request-body nesting limit. Default: disabled. */
+  bodyDepth?: BodyDepthOptions
   /** Liveness and readiness endpoints. Default: enabled. */
   health?: HealthOptions
   /** Prometheus metrics endpoint. Default: disabled. */
@@ -335,6 +357,12 @@ export interface ResolvedEnvelopeOptions {
 export interface ResolvedTimingOptions {
   enabled: boolean
   slowRequestThresholdMs?: number
+}
+
+/** Fully-resolved body-depth options. */
+export interface ResolvedBodyDepthOptions {
+  enabled: boolean
+  maxDepth: number
 }
 
 /** Fully-resolved health options. */
@@ -398,6 +426,7 @@ export interface ResolvedOpenApiOptions {
 export interface ResolvedCoreOptions {
   envelope: ResolvedEnvelopeOptions
   timing: ResolvedTimingOptions
+  bodyDepth: ResolvedBodyDepthOptions
   health: ResolvedHealthOptions
   metrics: ResolvedMetricsOptions
   openapi: ResolvedOpenApiOptions
@@ -466,6 +495,27 @@ function resolveTiming(raw?: TimingOptions): ResolvedTimingOptions {
   const enabled = raw?.enabled ?? true
   const threshold = raw?.slowRequestThresholdMs
   return threshold === undefined ? { enabled } : { enabled, slowRequestThresholdMs: threshold }
+}
+
+/** The default {@link BodyDepthOptions.maxDepth}. */
+export const DEFAULT_MAX_BODY_DEPTH = 32
+
+/**
+ * Resolve body-depth options against their defaults, failing at boot on a limit that could
+ * never admit a body or never refuse one.
+ *
+ * @param raw - The consumer bodyDepth block, if any.
+ * @returns The fully-populated body-depth options.
+ * @throws Error When `maxDepth` is not a positive safe integer.
+ */
+function resolveBodyDepth(raw?: BodyDepthOptions): ResolvedBodyDepthOptions {
+  const maxDepth = raw?.maxDepth ?? DEFAULT_MAX_BODY_DEPTH
+  if (!Number.isSafeInteger(maxDepth) || maxDepth < 1) {
+    throw new Error(
+      `bodyDepth.maxDepth must be a positive safe integer, received ${String(maxDepth)}`
+    )
+  }
+  return { enabled: raw?.enabled ?? false, maxDepth }
 }
 
 /**
@@ -620,6 +670,7 @@ export function normalizeCoreOptions(raw?: BymaxCoreModuleOptions): ResolvedCore
   return deepFreeze({
     envelope: resolveEnvelope(raw?.envelope),
     timing: resolveTiming(raw?.timing),
+    bodyDepth: resolveBodyDepth(raw?.bodyDepth),
     health: resolveHealth(raw?.health),
     metrics: resolveMetrics(raw?.metrics),
     openapi: resolveOpenApi(raw?.openapi, raw?.environment),

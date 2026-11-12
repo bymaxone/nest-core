@@ -11,6 +11,34 @@ heading here.
 
 ## [Unreleased]
 
+## [1.6.7] - 2026-11-12
+
+A patch release. Two floors that every backend re-implemented move into the library; both are additive
+and nothing changes for an application that does not turn them on.
+
+**Apply to a derived backend:** `pnpm up @bymax-one/nest-core`, then replace a local body-depth
+middleware with `bodyDepth: { enabled: true }` and a local helmet, parser and timeout block with
+`await applyHttpFloors(app)` from `@bymax-one/nest-core/http` (add `helmet`). Call it right after
+`applyAccessLog` and before the cookie parser, trusted proxies and `applyBymaxOpenApi`.
+
+### Added
+
+- **`bodyDepth` refuses a request body nested deeper than a limit with a `400`.** A body of about
+  2,000 nested arrays is 4 KB, and the recursion in a validator or transformer overflows the stack
+  on it, so the filter answered `500` for a request that was only malformed, with no credential
+  needed (measured with Nest's `ValidationPipe`). The new `BymaxBodyDepthMiddleware` checks
+  the body Nest's parsers already produced, before the application's validation, and answers
+  `BYMAX_BAD_REQUEST` ("Request body is nested too deeply"). **Off by default** (`enabled: false`,
+  `maxDepth: 32`) because turning it on rejects bodies that are accepted today. Express only; it is
+  not mounted on Fastify, whose middleware runs before the body is parsed.
+- **`applyHttpFloors` in the new `./http` subpath.** One bootstrap call for `helmet` without HSTS
+  (options pass through, `helmet: false` leaves it out), JSON and urlencoded parsers that refuse a
+  compressed body with `415` instead of decompressing it, and the header and request timeouts
+  (15 s and 30 s), enforced within a second: it also sets the server's connection sweep to one
+  second, since Node's default of thirty would let a 15 s timeout cut anywhere up to 45 s. `helmet` is an optional peer, loaded only when the helper runs. Express only.
+- The root bundle's brotli budget moves from 17.25 to 17.75 KiB for the body-depth code; `./http`
+  has a budget of 1 KiB.
+
 ## [1.6.6] - 2026-11-07
 
 A patch release. The error envelope no longer returns the parser's own text for a request refused before
@@ -1336,4 +1364,5 @@ have regressed from. They are kept because the reasoning is worth having.
 [1.6.4]: https://github.com/bymaxone/nest-core/compare/v1.6.3...v1.6.4
 [1.6.5]: https://github.com/bymaxone/nest-core/compare/v1.6.4...v1.6.5
 [1.6.6]: https://github.com/bymaxone/nest-core/compare/v1.6.5...v1.6.6
-[Unreleased]: https://github.com/bymaxone/nest-core/compare/v1.6.6...HEAD
+[1.6.7]: https://github.com/bymaxone/nest-core/compare/v1.6.6...v1.6.7
+[Unreleased]: https://github.com/bymaxone/nest-core/compare/v1.6.7...HEAD

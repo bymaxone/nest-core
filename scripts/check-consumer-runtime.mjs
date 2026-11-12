@@ -93,6 +93,7 @@ const SUBPATHS = {
     'normalizeCursorQuery'
   ],
   './openapi': ['applyBymaxOpenApi'],
+  './http': ['applyHttpFloors'],
   './metrics': ['BymaxMetricsContributor', 'BYMAX_METRICS_CONTRIBUTOR_METADATA']
 }
 
@@ -106,7 +107,7 @@ const SUBPATHS = {
  * installed here as devDependencies, so a leaked import still resolves and every
  * other gate stays green. This one fails.
  */
-const LAZY_PEERS = ['prom-client', '@nestjs/swagger', '@opentelemetry/api']
+const LAZY_PEERS = ['prom-client', '@nestjs/swagger', '@opentelemetry/api', 'helmet']
 
 const probeBody = `
 const failures = []

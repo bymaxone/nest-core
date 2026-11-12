@@ -1,6 +1,6 @@
 import { defineConfig } from 'tsup'
 
-// Three published subpaths built as ESM + CJS + .d.ts. Peers stay external so
+// Six published entries built as ESM + CJS + .d.ts. Peers stay external so
 // the bundle never inlines a consumer-controlled runtime dependency.
 export default defineConfig({
   entry: {
@@ -8,7 +8,8 @@ export default defineConfig({
     'pagination/index': 'src/pagination/index.ts',
     'health/index': 'src/health/index.ts',
     'openapi/index': 'src/openapi/index.ts',
-    'metrics/index': 'src/metrics/index.ts'
+    'metrics/index': 'src/metrics/index.ts',
+    'http/index': 'src/http/index.ts'
   },
   format: ['esm', 'cjs'],
   dts: true,
@@ -17,7 +18,7 @@ export default defineConfig({
   outExtension: ({ format }) => ({
     js: format === 'esm' ? '.mjs' : '.cjs'
   }),
-  external: [/^@nestjs\//, 'rxjs', 'reflect-metadata', 'prom-client'],
+  external: [/^@nestjs\//, 'rxjs', 'reflect-metadata', 'prom-client', 'helmet'],
   target: 'node24',
   clean: false,
   splitting: false,

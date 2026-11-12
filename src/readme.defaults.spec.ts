@@ -102,7 +102,16 @@ describe('README option tables', () => {
     const blocks = new Set(documented.map((row) => row.block))
 
     expect([...blocks].sort()).toEqual(
-      ['envelope', 'environment', 'health', 'metrics', 'openapi', 'telemetry', 'timing'].sort()
+      [
+        'bodyDepth',
+        'envelope',
+        'environment',
+        'health',
+        'metrics',
+        'openapi',
+        'telemetry',
+        'timing'
+      ].sort()
     )
     expect(documented.length).toBeGreaterThanOrEqual(25)
   })
