@@ -3,7 +3,7 @@
  * tune per deployment: security headers without HSTS, compressed request bodies refused, and
  * timeouts that bound how long a client may hold a socket, enforced to within a second.
  *
- * Order is part of the contract. Call it right after the access log is installed
+ * Order is part of the contract. Call it before `app.init()`, right after the access log is installed
  * (`applyAccessLog` from `@bymax-one/nest-logger`) and before anything that reads the request:
  * helmet is mounted first so even a request the body parsers refuse carries the headers, and the
  * parsers are registered here so Nest's defaults (which accept gzip) are not. Cookie parsing, the
@@ -57,17 +57,21 @@ export interface HttpFloorsOptions {
 /** The longest the sweep interval defaults to; a shorter header timeout shortens it further. */
 const DEFAULT_CONNECTIONS_CHECKING_INTERVAL_MS = 1_000
 
+/** The parts of the Node HTTP server this helper reads or sets. */
+interface FloorsServer {
+  listening: boolean
+  headersTimeout: number
+  requestTimeout: number
+  connectionsCheckingInterval: number
+}
+
 /** The parts of an Express-backed application this helper touches. */
 interface ExpressApplicationShape {
   use(handler: unknown): unknown
   useBodyParser(type: 'json' | 'urlencoded', options: Record<string, unknown>): unknown
-  getHttpServer(): {
-    listening: boolean
-    headersTimeout: number
-    requestTimeout: number
-    connectionsCheckingInterval: number
-  }
+  getHttpServer(): FloorsServer
   getHttpAdapter(): { getType?: () => string }
+  isInitialized?: boolean
 }
 
 /**
@@ -81,6 +85,32 @@ function assertPositiveInteger(name: string, value: number): void {
   if (!Number.isSafeInteger(value) || value < 1) {
     throw new Error(`${name} must be a positive integer, received ${String(value)}`)
   }
+}
+
+/**
+ * Check the application can still take the floors, and return its HTTP server.
+ *
+ * @param express - The application, viewed as the Express-backed shape this helper uses.
+ * @returns The underlying HTTP server.
+ * @throws Error When the adapter is not Express, the server is listening, or the application is
+ * already initialised.
+ */
+function assertBootstrapState(express: ExpressApplicationShape): FloorsServer {
+  if (express.getHttpAdapter().getType?.() !== 'express') {
+    throw new Error('applyHttpFloors supports the Express adapter only')
+  }
+  const server = express.getHttpServer()
+  if (server.listening) {
+    throw new Error('applyHttpFloors must run before listen(): the server is already listening')
+  }
+  if (express.isInitialized === true) {
+    // Nest registers its own parsers and the routes during init, ahead of anything mounted later,
+    // so a late call would apply only the timeouts.
+    throw new Error(
+      'applyHttpFloors must run before app.init(): the application is already initialised'
+    )
+  }
+  return server
 }
 
 /**
@@ -109,13 +139,7 @@ export async function applyHttpFloors(
     Math.min(DEFAULT_CONNECTIONS_CHECKING_INTERVAL_MS, headersTimeoutMs)
   assertPositiveInteger('connectionsCheckingIntervalMs', checkingIntervalMs)
   const express = app as unknown as ExpressApplicationShape
-  if (express.getHttpAdapter().getType?.() !== 'express') {
-    throw new Error('applyHttpFloors supports the Express adapter only')
-  }
-  const server = express.getHttpServer()
-  if (server.listening) {
-    throw new Error('applyHttpFloors must run before listen(): the server is already listening')
-  }
+  const server = assertBootstrapState(express)
   const given = options.helmet ?? {}
   if (given !== false) {
     const helmet = await loadHelmet()

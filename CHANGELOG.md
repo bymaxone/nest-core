@@ -13,9 +13,28 @@ heading here.
 
 ## [1.6.8] - 2026-11-13
 
-A patch release with documentation only. The published code is unchanged.
+A patch release. Two defects in 1.6.7 are fixed and the README is corrected.
+
+**Apply to a derived backend:** `pnpm up @bymax-one/nest-core`. If you call `applyHttpFloors` after
+`app.init()`, move the call before it: it now throws there instead of applying only the timeouts.
+
+### Fixed
+
+- **`bodyDepth` no longer expands a raw body.** A `Buffer` or typed array (a body read with
+  `express.raw()` or `useBodyParser('raw')`) was walked with `Object.values`, which builds one element
+  per byte: a 40 MB body stalled the event loop for about 0.7 s and grew the process by over 1 GB,
+  with no credential needed. The walk now descends only into arrays and plain objects, so a Buffer, a typed
+  array, a `Map` or a class instance is a leaf.
+- **`applyHttpFloors` refuses an already initialised application.** After `app.init()` Nest's own
+  parsers and the routes sit ahead of anything the helper mounts, so only the timeouts took effect
+  while the call returned normally: a gzip body was no longer refused with `415` and no
+  security headers were sent. It now throws "must run before app.init()", as it already did for a listening server.
 
 ### Documentation
+
+- **The README states two limits of `applyHttpFloors`.** Only the JSON and urlencoded parsers refuse
+  a compressed body, so a raw or text parser you add still decompresses; and
+  `strictTransportSecurity: undefined` turns helmet's HSTS default back on.
 
 - **README rewritten for correctness and length.** The mutation threshold, the subpath and optional-peer
   counts and the Tech Stack now match the code (`./http` and `helmet` included); the do-it-yourself

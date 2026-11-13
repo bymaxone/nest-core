@@ -23,6 +23,19 @@ import { BYMAX_BAD_REQUEST } from '../envelope/error-codes'
 const BODY_TOO_DEEP_MESSAGE = 'Request body is nested too deeply'
 
 /**
+ * Whether a parsed value can nest: an array or a plain object. A Buffer or typed array (a raw body),
+ * a Map or a class instance is a leaf, because `Object.values` on a Buffer allocates one element
+ * per byte on the event loop.
+ */
+function isContainer(node: unknown): node is object {
+  if (typeof node !== 'object' || node === null) {
+    return false
+  }
+  const proto = Object.getPrototypeOf(node) as unknown
+  return Array.isArray(node) || proto === Object.prototype || proto === null
+}
+
+/**
  * Whether a value nests objects or arrays deeper than the limit.
  *
  * @param value - A parsed body.
@@ -34,7 +47,7 @@ export function exceedsDepth(value: unknown, maxDepth: number): boolean {
   for (let depth = 0; level.length > 0; depth += 1) {
     const next: unknown[] = []
     for (const node of level) {
-      if (typeof node === 'object' && node !== null) {
+      if (isContainer(node)) {
         if (depth >= maxDepth) {
           return true
         }

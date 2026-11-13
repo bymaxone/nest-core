@@ -1291,7 +1291,7 @@ or later). The same `@Global()`-module pattern overrides every pluggable token i
 ## 🧱 HTTP Floors
 
 `applyHttpFloors` (from `@bymax-one/nest-core/http`) is the HTTP-level protection that every
-backend wants and none should tune per deployment. One call, before `app.listen()`:
+backend wants and none should tune per deployment. One call, before `app.init()` and `app.listen()`:
 
 ```typescript
 import { NestFactory } from '@nestjs/core'
@@ -1306,12 +1306,12 @@ async function bootstrap(): Promise<void> {
 void bootstrap()
 ```
 
-| What               | Default                                                                                                                                                                                                                                |
-| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Security headers   | `helmet()` with `strictTransportSecurity: false` (TLS is normally ended in front of the app, which owns HSTS). Pass `helmet: { ... }` to tune it, for example the CSP of a browser-serving backend, or `helmet: false` to leave it out |
-| Request bodies     | The JSON and urlencoded parsers refuse a compressed body (`Content-Encoding`) with `415` instead of decompressing it, on every route and before routing. Size limits and the extended form syntax keep the parsers' defaults           |
-| `headersTimeoutMs` | `15000`: the longest a client may take to send its complete header block. Node's own default is 60 s, which leaves a header block sent a byte at a time open as a cheap denial of service                                              |
-| `requestTimeoutMs` | `30000`: the longest a single request, headers and body together, may take. Node's default is 5 minutes. Must not be below `headersTimeoutMs`                                                                                          |
+| What               | Default                                                                                                                                                                                                                                                                                                                             |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Security headers   | `helmet()` with `strictTransportSecurity: false` (TLS is normally ended in front of the app, which owns HSTS). Pass `helmet: { ... }` to tune it, for example the CSP of a browser-serving backend, or `helmet: false` to leave it out. `strictTransportSecurity: undefined` is not `false`: it turns helmet's HSTS default back on |
+| Request bodies     | The JSON and urlencoded parsers refuse a compressed body (`Content-Encoding`) with `415` instead of decompressing it, on every route and before routing. Only these two parsers: a raw or text parser you add yourself still decompresses. Size limits and the extended form syntax keep the parsers' defaults                      |
+| `headersTimeoutMs` | `15000`: the longest a client may take to send its complete header block. Node's own default is 60 s, which leaves a header block sent a byte at a time open as a cheap denial of service                                                                                                                                           |
+| `requestTimeoutMs` | `30000`: the longest a single request, headers and body together, may take. Node's default is 5 minutes. Must not be below `headersTimeoutMs`                                                                                                                                                                                       |
 
 `keepAliveTimeout` is left at Node's 5 s: raising it only lengthens idle-socket retention.
 
@@ -1325,11 +1325,11 @@ starts listening, and the helper throws if the server is already listening. The 
 open connection each time, so a server holding very many sockets can set
 `connectionsCheckingIntervalMs` higher, at the cost of cutting up to that long after the timeout.
 
-**Order is part of the contract.** Call it right after `applyAccessLog` from
+**Order is part of the contract.** Call it before `app.init()` and right after `applyAccessLog` from
 `@bymax-one/nest-logger`, and before everything that reads the request: helmet is mounted first,
 so even a request the body parsers refuse carries the headers, and the parsers are registered
 here so Nest's own defaults, which accept gzip, are not (an application that needs a raw body on a route mounts that parser before calling it). Cookie parsing, the trusted-proxy
-setting and `applyBymaxOpenApi` stay with you and go after it:
+setting and `applyBymaxOpenApi` stay with you and go after it. On an application that is already initialised the helper throws, because Nest's own parsers and the routes are registered ahead of anything mounted later:
 `applyAccessLog` → `applyHttpFloors` → cookie parser → trusted proxies → `applyBymaxOpenApi`.
 
 Express only; on another adapter it throws before applying anything. `helmet` is an optional
@@ -1589,10 +1589,10 @@ in the sections above.
 
 ### `./http`
 
-| Export                                         | Kind     | Description                                                                             |
-| ---------------------------------------------- | -------- | --------------------------------------------------------------------------------------- |
-| `applyHttpFloors`                              | function | Applies the headers, the body-parser floor and the timeouts; call it before `listen()`. |
-| `HttpFloorsOptions`, `HttpFloorsHelmetOptions` | types    | The `helmet`, `headersTimeoutMs` and `requestTimeoutMs` options.                        |
+| Export                                         | Kind     | Description                                                                               |
+| ---------------------------------------------- | -------- | ----------------------------------------------------------------------------------------- |
+| `applyHttpFloors`                              | function | Applies the headers, the body-parser floor and the timeouts; call it before `app.init()`. |
+| `HttpFloorsOptions`, `HttpFloorsHelmetOptions` | types    | The `helmet`, `headersTimeoutMs` and `requestTimeoutMs` options.                          |
 
 ### `./openapi`
 

@@ -41,6 +41,31 @@ describe('exceedsDepth', () => {
     expect(exceedsDepth(body, 32)).toBe(true)
   })
 
+  it('treats a Buffer or typed array as a leaf and never expands it', () => {
+    /* A raw body is a Buffer; Object.values on it builds one element per byte on the event loop. */
+    const values = jest.spyOn(Object, 'values')
+    try {
+      expect(exceedsDepth(Buffer.alloc(8_000_000), 1)).toBe(false)
+      expect(exceedsDepth({ file: new Uint8Array(1_000_000) }, 1)).toBe(false)
+      expect(exceedsDepth([new Float64Array(10), Buffer.from('x')], 1)).toBe(false)
+      const expanded = values.mock.calls.filter(([arg]) =>
+        ArrayBuffer.isView(arg as unknown as ArrayBufferView)
+      )
+      expect(expanded).toEqual([])
+    } finally {
+      values.mockRestore()
+    }
+  })
+
+  it('descends only into arrays and plain objects', () => {
+    /* A Map, a Date and a class instance carry no JSON nesting: they are leaves. */
+    class Holder {
+      readonly inner = [[[1]]]
+    }
+    expect(exceedsDepth([new Holder(), new Map([[1, [[1]]]]), new Date()], 1)).toBe(false)
+    expect(exceedsDepth(Object.assign(Object.create(null), { a: [[1]] }), 2)).toBe(true)
+  })
+
   it('finds depth under a wide level', () => {
     const wide = Array.from({ length: 200_000 }, () => 1)
     expect(exceedsDepth([wide, [[[0]]]], 3)).toBe(true)
