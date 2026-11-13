@@ -166,13 +166,7 @@ describe('BymaxCoreModule.forRoot, all features enabled', () => {
     const down = await request(app?.getHttpServer()).get('/health/ready').expect(503)
     expect(down.body).toEqual({
       status: 'error',
-      checks: [
-        {
-          name: 'fixture-dependency',
-          status: 'down',
-          details: { reason: 'fixture indicator forced down' }
-        }
-      ]
+      checks: [{ name: 'fixture-dependency', status: 'down' }]
     })
   })
 

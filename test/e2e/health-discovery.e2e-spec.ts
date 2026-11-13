@@ -130,7 +130,10 @@ describe('health indicator discovery', () => {
    * defined; the explicit registration keeps both the name and its result.
    */
   it('keeps the explicitly registered indicator when the names collide', async () => {
-    app = await bootApp({ health: { autoDiscover: true } }, [ApplicationIndicatorsModule])
+    // The details are what tells the two indicators apart, so they are switched on here.
+    app = await bootApp({ health: { autoDiscover: true, exposeIndicatorErrors: true } }, [
+      ApplicationIndicatorsModule
+    ])
 
     const response = await request(app.getHttpServer()).get('/health/ready')
 
