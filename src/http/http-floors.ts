@@ -3,7 +3,7 @@
  * tune per deployment: security headers without HSTS, compressed request bodies refused, and
  * timeouts that bound how long a client may hold a socket, enforced to within a second.
  *
- * Order is part of the contract. Call it right after the access log is installed
+ * Order is part of the contract. Call it before `app.init()`, right after the access log is installed
  * (`applyAccessLog` from `@bymax-one/nest-logger`) and before anything that reads the request:
  * helmet is mounted first so even a request the body parsers refuse carries the headers, and the
  * parsers are registered here so Nest's defaults (which accept gzip) are not. Cookie parsing, the
@@ -68,6 +68,7 @@ interface ExpressApplicationShape {
     connectionsCheckingInterval: number
   }
   getHttpAdapter(): { getType?: () => string }
+  isInitialized?: boolean
 }
 
 /**
@@ -115,6 +116,13 @@ export async function applyHttpFloors(
   const server = express.getHttpServer()
   if (server.listening) {
     throw new Error('applyHttpFloors must run before listen(): the server is already listening')
+  }
+  if (express.isInitialized === true) {
+    // Nest registers its own parsers and the routes during init, ahead of anything mounted later,
+    // so a late call would apply only the timeouts.
+    throw new Error(
+      'applyHttpFloors must run before app.init(): the application is already initialised'
+    )
   }
   const given = options.helmet ?? {}
   if (given !== false) {

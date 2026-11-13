@@ -265,6 +265,26 @@ describe('applyHttpFloors, options', () => {
 })
 
 describe('applyHttpFloors, order', () => {
+  it('refuses an application that is already initialised and applies nothing', async () => {
+    /* After init Nest's own parsers and the routes sit ahead of anything mounted now, so a
+       partial application would succeed while only the timeouts took effect. */
+    const moduleRef = await Test.createTestingModule({
+      imports: [BymaxCoreModule.forRoot(), EchoModule]
+    }).compile()
+    const late = moduleRef.createNestApplication()
+    await late.init()
+    const server = late.getHttpServer() as SweepingServer
+    const before = { headers: server.headersTimeout, request: server.requestTimeout }
+    try {
+      await expect(applyHttpFloors(late, { headersTimeoutMs: 1_000 })).rejects.toThrow(
+        /before app\.init\(\)/
+      )
+      expect({ headers: server.headersTimeout, request: server.requestTimeout }).toEqual(before)
+    } finally {
+      await late.close()
+    }
+  })
+
   it('lets middleware mounted after it read cookies and see the parsed body', async () => {
     /* cookie-parser and the trusted-proxy wiring stay with the caller, after this helper. */
     const seen: { cookie?: string | undefined; body?: unknown } = {}
