@@ -233,10 +233,10 @@ and the classification table: [Production is a closed door](#production-is-a-clo
 
 ### `timing`
 
-| Option                   | Type      | Default | Description                                                                    |
-| ------------------------ | --------- | ------- | ------------------------------------------------------------------------------ |
-| `enabled`                | `boolean` | `true`  | Applies the request-timing middleware to every route.                          |
-| `slowRequestThresholdMs` | `number`  | unset   | Samples above this duration are flagged `slow: true`. Absent means never slow. |
+| Option                   | Type      | Default | Description                                                                                                       |
+| ------------------------ | --------- | ------- | ----------------------------------------------------------------------------------------------------------------- |
+| `enabled`                | `boolean` | `true`  | Applies the request-timing middleware to every route.                                                             |
+| `slowRequestThresholdMs` | `number`  | unset   | Samples above this duration are flagged `slow: true`. Absent means never slow; a positive integer, or boot fails. |
 
 ### `bodyDepth`
 
@@ -264,7 +264,7 @@ whose middleware runs before the body is parsed.
 | ----------------------- | --------- | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `enabled`               | `boolean` | `true`     | Registers the health controller.                                                                                                                   |
 | `path`                  | `string`  | `'health'` | Route prefix: `GET /<path>/live`, `GET /<path>/ready`.                                                                                             |
-| `indicatorTimeoutMs`    | `number`  | `5000`     | Per-indicator timeout before a check reports down.                                                                                                 |
+| `indicatorTimeoutMs`    | `number`  | `5000`     | Per-indicator timeout before a check reports down; a positive integer up to `2147483647`, or boot fails.                                           |
 | `readinessCacheMs`      | `number`  | `1000`     | How long a finished readiness answer is reused; `0` turns the cache off. Probes already in flight always share one run.                            |
 | `exposeIndicatorErrors` | `boolean` | `false`    | Serves what an indicator returned in `details`, and the failing indicator's message under `details.error`. Never enable in production — see below. |
 | `autoDiscover`          | `boolean` | `false`    | Also aggregates every provider marked `@BymaxHealthIndicator()`, anywhere in the application.                                                      |
