@@ -831,8 +831,7 @@ at boot with a descriptive error naming the missing package and the install
 command, rather than a cryptic resolution failure at the first scrape.
 
 npm marks `prom-client` 15.x deprecated in favour of `@prometheus-io/client`. This library stays on
-`prom-client` `^15`: the collectors you register and the `MetricsRegistry` must come from one package,
-so it moves together with the packages that share that registry rather than ahead of them.
+`prom-client` `^15`: the collectors you register and the `MetricsRegistry` must come from one package.
 
 When timing and metrics are both enabled, an internal bridge feeds two
 default HTTP metrics with a bounded label set:
