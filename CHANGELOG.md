@@ -13,10 +13,42 @@ heading here.
 
 ## [1.6.8] - 2026-11-13
 
-A patch release. Two defects in 1.6.7 are fixed and the README is corrected.
+A patch release. Two defects in 1.6.7 are fixed, readiness stops amplifying probe traffic and stops
+serving what an indicator returned, and the README is corrected.
 
-**Apply to a derived backend:** `pnpm up @bymax-one/nest-core`. If you call `applyHttpFloors` after
-`app.init()`, move the call before it: it now throws there instead of applying only the timeouts.
+**Apply to a derived backend:** `pnpm up @bymax-one/nest-core`, then:
+
+- If you call `applyHttpFloors` after `app.init()`, move the call before it: it now throws there
+  instead of applying only the timeouts.
+- Readiness answers can be up to one second old. Set `health.readinessCacheMs: 0` to keep every
+  probe fresh; probes that overlap still share one run.
+- Readiness no longer serves the `details` an indicator returns. If a dashboard or probe reads
+  them, set `health.exposeIndicatorErrors: true` (development only) or move that data to the logger
+  or a protected endpoint.
+- Call `app.enableShutdownHooks()` if a `SIGTERM` should flip readiness to `503`; `app.close()`
+  always does.
+- `health.indicatorTimeoutMs` and `timing.slowRequestThresholdMs` must be positive integers, and the
+  timeout at most `2147483647`, or the boot fails. A zero, negative or fractional value was accepted
+  before and misbehaved silently.
+- An indicator that can cancel its query should pass on the `signal` its `check()` now receives.
+
+### Security
+
+- **Readiness no longer fans out one run per probe.** `GET /<health.path>/ready` is usually
+  reachable without credentials, and every probe ran every indicator: 200 concurrent probes made
+  200 database and cache calls at once, and a check that timed out kept running. Probes that arrive
+  while a run is in progress now share it, a finished answer is reused for
+  `health.readinessCacheMs` (default `1000`, `0` turns it off, and the window is timed on a
+  monotonic clock), and the signal passed to `check()` is aborted at the timeout. A run that throws is
+  never cached.
+- **Readiness no longer serves what an indicator returned.** An indicator's `details` were served
+  verbatim even with `health.exposeIndicatorErrors` off. Each check now carries only its `name` and
+  `status`; the timeout the aggregator itself reports is unchanged.
+
+### Added
+
+- **`health.readinessCacheMs`** and an optional `AbortSignal` argument to `IHealthIndicator.check()`.
+  Existing indicators compile unchanged.
 
 ### Fixed
 
@@ -29,12 +61,27 @@ A patch release. Two defects in 1.6.7 are fixed and the README is corrected.
   parsers and the routes sit ahead of anything the helper mounts, so only the timeouts took effect
   while the call returned normally: a gzip body was no longer refused with `415` and no
   security headers were sent. It now throws "must run before app.init()", as it already did for a listening server.
+- **Readiness answers not ready as soon as shutdown begins.** It kept returning the last healthy
+  answer while the process drained, so a load balancer kept routing to it. From
+  `beforeApplicationShutdown` it answers `503` with a `shutdown` check `down`, before it reads the
+  cache or a run in progress and without running an indicator. Liveness is unchanged.
+- **`health.indicatorTimeoutMs` and `timing.slowRequestThresholdMs` are validated.** A zero made
+  every indicator report down with a timeout, or every request slow; `NaN` flagged none. A timeout
+  above `2147483647` was clamped by Node to one millisecond and did the same. All three now fail the
+  boot, naming the option.
 
 ### Documentation
 
 - **The README states two limits of `applyHttpFloors`.** Only the JSON and urlencoded parsers refuse
   a compressed body, so a raw or text parser you add still decompresses; and
   `strictTransportSecurity: undefined` turns helmet's HSTS default back on.
+- **The README says to raise `keepAliveTimeout` behind a load balancer.** It must exceed the
+  balancer's idle timeout, or the balancer reuses a connection Node has closed and answers an
+  intermittent `502`. On Node 24 a shorter `headersTimeout` did not close an idle keep-alive socket,
+  so the two need no particular order.
+- **The README states what `prom-client` leaves behind.** Its default collectors keep an unreferenced
+  garbage-collection observer and event-loop histogram for the life of the process, which matters only
+  to a host that creates many applications in one process.
 
 - **README rewritten for correctness and length.** The mutation threshold, the subpath and optional-peer
   counts and the Tech Stack now match the code (`./http` and `helmet` included); the do-it-yourself
