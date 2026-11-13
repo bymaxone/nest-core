@@ -26,6 +26,7 @@ describe('normalizeCoreOptions', () => {
         enabled: true,
         path: 'health',
         indicatorTimeoutMs: 5000,
+        readinessCacheMs: 1000,
         exposeIndicatorErrors: false,
         autoDiscover: false
       },
@@ -71,6 +72,7 @@ describe('normalizeCoreOptions', () => {
       enabled: true,
       path: 'status',
       indicatorTimeoutMs: 5000,
+      readinessCacheMs: 1000,
       exposeIndicatorErrors: false,
       autoDiscover: false
     })
@@ -93,6 +95,7 @@ describe('normalizeCoreOptions', () => {
         enabled: false,
         path: 'hz',
         indicatorTimeoutMs: 250,
+        readinessCacheMs: 400,
         exposeIndicatorErrors: true,
         autoDiscover: true
       },
@@ -113,6 +116,7 @@ describe('normalizeCoreOptions', () => {
         enabled: false,
         path: 'hz',
         indicatorTimeoutMs: 250,
+        readinessCacheMs: 400,
         exposeIndicatorErrors: true,
         autoDiscover: true
       },
@@ -468,4 +472,21 @@ describe('normalizeCoreOptions, openapi block', () => {
 
     expect(resolved.openapi.servers[0]).not.toHaveProperty('description')
   })
+})
+
+describe('health.readinessCacheMs', () => {
+  it.each([0, 1, 1000])('accepts %p', (readinessCacheMs) => {
+    expect(normalizeCoreOptions({ health: { readinessCacheMs } }).health.readinessCacheMs).toBe(
+      readinessCacheMs
+    )
+  })
+
+  it.each([-1, 1.5, Number.NaN, Number.POSITIVE_INFINITY, 2 ** 53])(
+    'rejects %p at boot',
+    (readinessCacheMs) => {
+      expect(() => normalizeCoreOptions({ health: { readinessCacheMs } })).toThrow(
+        /health\.readinessCacheMs must be a non-negative safe integer/
+      )
+    }
+  )
 })

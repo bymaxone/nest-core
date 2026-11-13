@@ -115,7 +115,7 @@ const hangs = (): Promise<HealthIndicatorResult> => new Promise(() => {})
  * @returns The resolved snapshot.
  */
 function optionsWithTimeout(indicatorTimeoutMs: number): ResolvedCoreOptions {
-  return normalizeCoreOptions({ health: { indicatorTimeoutMs } })
+  return normalizeCoreOptions({ health: { indicatorTimeoutMs, readinessCacheMs: 0 } })
 }
 
 /**
@@ -127,7 +127,7 @@ function optionsWithTimeout(indicatorTimeoutMs: number): ResolvedCoreOptions {
  */
 function serviceWithSink(
   indicators: readonly IHealthIndicator[],
-  options: ResolvedCoreOptions = normalizeCoreOptions()
+  options: ResolvedCoreOptions = normalizeCoreOptions({ health: { readinessCacheMs: 0 } })
 ): { service: HealthService; sink: RecordingSink } {
   const sink = new RecordingSink()
   const service = new HealthService(indicators, options, undefined, undefined, sink)
@@ -352,7 +352,7 @@ describe('HealthService readiness transitions', () => {
     }
     const service = new HealthService(
       [new ScriptedIndicator('redis', down)],
-      normalizeCoreOptions(),
+      normalizeCoreOptions({ health: { readinessCacheMs: 0 } }),
       undefined,
       undefined,
       throwing
@@ -367,19 +367,17 @@ describe('HealthService readiness transitions', () => {
   })
 
   /**
-   * A probe that started earlier cannot overwrite one that started later.
+   * Overlapping probes share one run, so a slow one cannot land behind a later one.
    *
-   * Readiness is not called one at a time — an orchestrator's probe and a load
-   * balancer's health check reach it concurrently — and a dependency that hangs
-   * until the bound elapses is exactly what makes the earlier probe finish last.
-   * Comparing states alone would then write the outage backwards: the newer
-   * probe reports the recovery, and the older one's timeout lands behind it and
-   * reports the dependency down again, on evidence that is already stale.
+   * An orchestrator's probe and a load balancer's health check reach readiness
+   * concurrently, and a dependency that hangs until the bound elapses would
+   * otherwise let the earlier probe finish last and report the dependency down
+   * again after the recovery was written. One run per overlap leaves nothing to
+   * reorder; the sequence check still orders the runs themselves.
    */
-  it('drops an outcome from a probe older than the one already recorded', async () => {
-    // Scripted per call rather than reassigned between probes: `runIndicator`
-    // defers `check()` onto a microtask, so a behaviour swapped after the call
-    // returns would still be the one the "slow" probe reads.
+  it('writes an outage forwards when probes overlap, because they share one run', async () => {
+    // Scripted per call: a second run would read the next behaviour, so the script also proves
+    // that overlapping probes started exactly one.
     const script = [down, hangs, up]
     let call = 0
     const indicator = new ScriptedIndicator('database', () => {
@@ -392,11 +390,12 @@ describe('HealthService readiness transitions', () => {
     // Establish the outage, so the next healthy observation is a real recovery.
     await service.checkReadiness()
 
-    // The slow probe starts first and will resolve last, by timing out.
+    // Both overlap the hanging check: neither can finish ahead of the other's observation.
     const slow = service.checkReadiness()
-    // The fast probe starts second, sees the dependency answering, finishes first.
+    const fast = service.checkReadiness()
+    await Promise.all([slow, fast])
+    expect(call).toBe(2)
     await service.checkReadiness()
-    await slow
 
     expect(sink.transitions).toEqual([
       { name: 'database', isUp: false, cause: { kind: 'reported-down' } },
@@ -445,7 +444,7 @@ describe('HealthService readiness transitions', () => {
     }
     const service = new HealthService(
       [new ScriptedIndicator('redis', down)],
-      normalizeCoreOptions(),
+      normalizeCoreOptions({ health: { readinessCacheMs: 0 } }),
       undefined,
       undefined,
       rejectingSink
@@ -483,7 +482,7 @@ describe('HealthService readiness transitions', () => {
     }
     const service = new HealthService(
       [new ScriptedIndicator('redis', down)],
-      normalizeCoreOptions(),
+      normalizeCoreOptions({ health: { readinessCacheMs: 0 } }),
       undefined,
       undefined,
       thenableSink
@@ -517,7 +516,7 @@ describe('HealthService readiness transitions', () => {
     }
     const service = new HealthService(
       [new ScriptedIndicator('redis', down)],
-      normalizeCoreOptions(),
+      normalizeCoreOptions({ health: { readinessCacheMs: 0 } }),
       undefined,
       undefined,
       foreignSink
@@ -552,7 +551,7 @@ describe('HealthService readiness transitions', () => {
     }
     const service = new HealthService(
       [new ScriptedIndicator('redis', down)],
-      normalizeCoreOptions(),
+      normalizeCoreOptions({ health: { readinessCacheMs: 0 } }),
       undefined,
       undefined,
       brokenSink
@@ -581,7 +580,7 @@ describe('HealthService readiness transitions', () => {
   ])('accepts a sink returning %s without reporting a failure', async (_label, returns) => {
     const service = new HealthService(
       [new ScriptedIndicator('redis', down)],
-      normalizeCoreOptions(),
+      normalizeCoreOptions({ health: { readinessCacheMs: 0 } }),
       undefined,
       undefined,
       { record: returns }
@@ -611,7 +610,7 @@ describe('HealthService readiness transitions', () => {
     })
     const service = new HealthService(
       [new ScriptedIndicator('redis', down)],
-      normalizeCoreOptions()
+      normalizeCoreOptions({ health: { readinessCacheMs: 0 } })
     )
 
     const result = await service.checkReadiness()
@@ -642,7 +641,7 @@ describe('HealthService readiness transitions', () => {
     })
     const service = new HealthService(
       [new ScriptedIndicator('redis', down)],
-      normalizeCoreOptions(),
+      normalizeCoreOptions({ health: { readinessCacheMs: 0 } }),
       undefined,
       undefined,
       { record }
@@ -667,7 +666,10 @@ describe('HealthService readiness transitions', () => {
    */
   it('logs transitions with no sink bound', async () => {
     const indicator = new ScriptedIndicator('redis', down)
-    const service = new HealthService([indicator], normalizeCoreOptions())
+    const service = new HealthService(
+      [indicator],
+      normalizeCoreOptions({ health: { readinessCacheMs: 0 } })
+    )
 
     await service.checkReadiness()
     indicator.setBehaviour(up)
@@ -692,7 +694,7 @@ describe('HealthService readiness transitions', () => {
   it('names a rejection in the logged line', async () => {
     const service = new HealthService(
       [new ScriptedIndicator('database', rejects('connection refused'))],
-      normalizeCoreOptions()
+      normalizeCoreOptions({ health: { readinessCacheMs: 0 } })
     )
 
     await service.checkReadiness()

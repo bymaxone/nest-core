@@ -120,8 +120,10 @@ async function runIndicator(
   exposeErrors: boolean
 ): Promise<IndicatorOutcome> {
   let timer: ReturnType<typeof setTimeout> | undefined
+  const controller = new AbortController()
   const timedOut = new Promise<IndicatorOutcome>((resolve) => {
     timer = setTimeout(() => {
+      controller.abort()
       resolve({
         entry: { name: indicator.name, status: 'down', details: { timedOutAfterMs: timeoutMs } },
         isUp: false,
@@ -136,7 +138,7 @@ async function runIndicator(
   // function and rejecting the outer `Promise.all` in `checkReadiness`, which
   // would hide every other indicator's result.
   const checked = Promise.resolve()
-    .then(() => indicator.check())
+    .then(() => indicator.check(controller.signal))
     // Spread the result first, then set the name, so a misbehaving indicator
     // that returns its own `name` cannot spoof the declared check name.
     .then((result): IndicatorOutcome => {
@@ -222,6 +224,12 @@ export class HealthService implements OnApplicationBootstrap {
    * Comparing states alone would then let the stale observation win.
    */
   private probeSequence = 0
+
+  /** The readiness run in progress, shared by every probe that arrives while it lasts. */
+  private inflight: Promise<HealthResponse> | undefined
+
+  /** The last finished readiness answer and when it finished, reused for `readinessCacheMs`. */
+  private cached: { readonly at: number; readonly response: HealthResponse } | undefined
 
   /**
    * @param indicators - Every explicitly registered indicator; empty when none
@@ -469,9 +477,30 @@ export class HealthService implements OnApplicationBootstrap {
    * aggregate the results. `status` is `'ok'` only when every indicator
    * reports `up`; an empty indicator list is vacuously `'ok'`.
    *
+   * Probes share the work: one that arrives while a run is in progress awaits it, and for
+   * `health.readinessCacheMs` after it ends the answer is returned without running anything.
+   * The endpoint is usually unauthenticated, so probe volume must not set dependency volume.
+   * The returned object is shared between callers and must not be mutated.
+   *
    * @returns The aggregated health response.
    */
-  async checkReadiness(): Promise<HealthResponse> {
+  checkReadiness(): Promise<HealthResponse> {
+    const cached = this.cached
+    if (cached !== undefined && Date.now() - cached.at < this.options.health.readinessCacheMs) {
+      return Promise.resolve(cached.response)
+    }
+    this.inflight ??= this.runReadiness().finally(() => {
+      this.inflight = undefined
+    })
+    return this.inflight
+  }
+
+  /**
+   * Run every indicator once and record the answer.
+   *
+   * @returns The aggregated health response.
+   */
+  private async runReadiness(): Promise<HealthResponse> {
     const timeoutMs = this.options.health.indicatorTimeoutMs
     const exposeErrors = this.options.health.exposeIndicatorErrors
     // Taken before the probes run, so an outcome is ordered by when its probe
@@ -488,6 +517,8 @@ export class HealthService implements OnApplicationBootstrap {
     }
     const checks = outcomes.map((outcome) => outcome.entry)
     const status = checks.every((check) => check.status === 'up') ? 'ok' : 'error'
-    return { status, checks }
+    const response: HealthResponse = { status, checks }
+    this.cached = { at: Date.now(), response }
+    return response
   }
 }

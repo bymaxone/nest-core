@@ -88,9 +88,12 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 // Re-derive it when the measurement exceeds it, after checking that the growth is code and not
 // prose (comment text is absent from `dist/index.mjs`), that no module entered the bundle, and
 // that the optional peers stay unloaded with their features off (`pnpm check:runtime`).
+// Root budget 18 KiB = 18432 B: measured 18294 B brotli (raw 78460 B) plus 138 B of headroom. The
+// growth over 17.75 KiB is the readiness sharing in `HealthService` (one shared run, the result
+// window, the abort signal) and the validation of its option: code, none of it comment text.
 //   `./http` measured 787 B brotli (raw 2495 B) -> budget 1 KiB (1.30x): one helper and a loader.
 const BUDGETS = [
-  { name: '. (root)', path: 'dist/index.mjs', brotli: 17.75 * 1024 },
+  { name: '. (root)', path: 'dist/index.mjs', brotli: 18 * 1024 },
   { name: './pagination', path: 'dist/pagination/index.mjs', brotli: 1.5 * 1024 },
   { name: './health', path: 'dist/health/index.mjs', brotli: 0.5 * 1024 },
   { name: './openapi', path: 'dist/openapi/index.mjs', brotli: 7.5 * 1024 },

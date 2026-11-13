@@ -35,11 +35,13 @@ export interface IHealthIndicator {
   /**
    * Perform the check.
    *
+   * @param signal - Aborted when the aggregator stops waiting for this check. An indicator that
+   *   can cancel its query should pass it on; one that cannot may ignore it.
    * @returns The indicator's outcome.
    * @throws Any error; a rejection is converted to a `down` entry by the
    *   aggregator and never propagates to the caller.
    */
-  check(): Promise<HealthIndicatorResult>
+  check(signal?: AbortSignal): Promise<HealthIndicatorResult>
 }
 
 /**
