@@ -56,7 +56,7 @@ export interface HealthOptions {
   enabled?: boolean
   /** Route prefix for the health endpoints. Default: `'health'`. */
   path?: string
-  /** Per-indicator timeout before a check is reported as down. Positive integer. Default: `5000`. */
+  /** Per-indicator timeout before a check is reported as down. Positive integer up to 2147483647. Default: `5000`. */
   indicatorTimeoutMs?: number
   /**
    * How long a finished readiness answer is reused, in milliseconds. `0` turns the cache off.
@@ -453,6 +453,9 @@ export interface ResolvedCoreOptions {
 /** Default per-indicator timeout in milliseconds. */
 const DEFAULT_INDICATOR_TIMEOUT_MS = 5000
 
+/** The longest delay `setTimeout` honours; a longer one fires after a millisecond. */
+const MAX_TIMER_DELAY_MS = 2 ** 31 - 1
+
 /** The default {@link HealthOptions.readinessCacheMs}. */
 const DEFAULT_READINESS_CACHE_MS = 1000
 
@@ -506,12 +509,17 @@ function resolveEnvelope(raw?: EnvelopeOptions): ResolvedEnvelopeOptions {
  *
  * @param name - The dotted option name, for the message.
  * @param value - The value to check.
+ * @param max - The largest accepted value, for a limit that feeds a timer: Node clamps a delay
+ *   above 2**31 - 1 to one millisecond.
  * @returns The value, unchanged.
- * @throws Error When `value` is not a positive safe integer.
+ * @throws Error When `value` is not a positive safe integer, or is above `max`.
  */
-function positiveSafeInteger(name: string, value: number): number {
+function positiveSafeInteger(name: string, value: number, max?: number): number {
   if (!Number.isSafeInteger(value) || value < 1) {
     throw new Error(`${name} must be a positive safe integer, received ${String(value)}`)
+  }
+  if (max !== undefined && value > max) {
+    throw new Error(`${name} must be a positive integer of at most ${max}, received ${value}`)
   }
   return value
 }
@@ -573,7 +581,8 @@ function resolveHealth(raw?: HealthOptions): ResolvedHealthOptions {
     exposeIndicatorErrors: raw?.exposeIndicatorErrors ?? false,
     indicatorTimeoutMs: positiveSafeInteger(
       'health.indicatorTimeoutMs',
-      raw?.indicatorTimeoutMs ?? DEFAULT_INDICATOR_TIMEOUT_MS
+      raw?.indicatorTimeoutMs ?? DEFAULT_INDICATOR_TIMEOUT_MS,
+      MAX_TIMER_DELAY_MS
     ),
     autoDiscover: raw?.autoDiscover ?? false
   }

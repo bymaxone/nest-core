@@ -513,7 +513,7 @@ describe('limits that must be positive safe integers', () => {
       }
     )
 
-    it.each([1, 250, Number.MAX_SAFE_INTEGER])('accepts %p', (value) => {
+    it.each([1, 250, 2 ** 31 - 1])('accepts %p', (value) => {
       expect(() => build(value)).not.toThrow()
     })
   })
@@ -521,4 +521,25 @@ describe('limits that must be positive safe integers', () => {
   it('keeps timing.slowRequestThresholdMs unset by default', () => {
     expect(normalizeCoreOptions().timing).toEqual({ enabled: true })
   })
+})
+
+describe('health.indicatorTimeoutMs feeds a timer', () => {
+  /* Node clamps a delay above 2**31 - 1 to 1 ms, so the indicator would time out at once. */
+  const MAX_TIMER_DELAY = 2 ** 31 - 1
+
+  it('accepts the longest delay a timer honours', () => {
+    expect(
+      normalizeCoreOptions({ health: { indicatorTimeoutMs: MAX_TIMER_DELAY } }).health
+        .indicatorTimeoutMs
+    ).toBe(MAX_TIMER_DELAY)
+  })
+
+  it.each([MAX_TIMER_DELAY + 1, Number.MAX_SAFE_INTEGER])(
+    'refuses %p at boot, naming the option',
+    (value) => {
+      expect(() => normalizeCoreOptions({ health: { indicatorTimeoutMs: value } })).toThrow(
+        `health.indicatorTimeoutMs must be a positive integer of at most ${MAX_TIMER_DELAY}, received ${value}`
+      )
+    }
+  )
 })
