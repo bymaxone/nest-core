@@ -228,7 +228,11 @@ export class HealthService implements OnApplicationBootstrap {
   /** The readiness run in progress, shared by every probe that arrives while it lasts. */
   private inflight: Promise<HealthResponse> | undefined
 
-  /** The last finished readiness answer and when it finished, reused for `readinessCacheMs`. */
+  /**
+   * The last finished readiness answer and when it finished, reused for `readinessCacheMs`. The time is
+   * monotonic: a wall clock stepped backwards would otherwise keep a stale answer, and make a
+   * window of `0` reuse one.
+   */
   private cached: { readonly at: number; readonly response: HealthResponse } | undefined
 
   /**
@@ -486,7 +490,10 @@ export class HealthService implements OnApplicationBootstrap {
    */
   checkReadiness(): Promise<HealthResponse> {
     const cached = this.cached
-    if (cached !== undefined && Date.now() - cached.at < this.options.health.readinessCacheMs) {
+    if (
+      cached !== undefined &&
+      performance.now() - cached.at < this.options.health.readinessCacheMs
+    ) {
       return Promise.resolve(cached.response)
     }
     this.inflight ??= this.runReadiness().finally(() => {
@@ -518,7 +525,7 @@ export class HealthService implements OnApplicationBootstrap {
     const checks = outcomes.map((outcome) => outcome.entry)
     const status = checks.every((check) => check.status === 'up') ? 'ok' : 'error'
     const response: HealthResponse = { status, checks }
-    this.cached = { at: Date.now(), response }
+    this.cached = { at: performance.now(), response }
     return response
   }
 }

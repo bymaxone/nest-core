@@ -5,7 +5,7 @@
  * Goal: pin that probe volume does not set dependency volume: probes in flight share one run, a
  * finished answer is reused for `readinessCacheMs`, a hung indicator is cancelled and cannot stack
  * up, and a failed run is never cached.
- * Mocks: indicators are stubs; the clock is a spy on `Date.now`.
+ * Mocks: indicators are stubs; the clock is a spy on `performance.now`.
  */
 import { normalizeCoreOptions } from '../core.options'
 import type { HealthIndicatorResult, IHealthIndicator } from './health.interfaces'
@@ -78,7 +78,7 @@ describe('HealthService readiness sharing', () => {
   it('reuses a finished answer inside the window and runs again after it', async () => {
     const gate = gatedIndicator()
     const service = serviceFor(gate.indicator, { readinessCacheMs: 1000 })
-    const now = jest.spyOn(Date, 'now').mockReturnValue(10_000)
+    const now = jest.spyOn(performance, 'now').mockReturnValue(10_000)
     const first = service.checkReadiness()
     await Promise.resolve()
     gate.release()
@@ -105,7 +105,7 @@ describe('HealthService readiness sharing', () => {
     expect(gate.calls()).toBe(1)
   })
 
-  it('aborts the signal of a check that outlives the timeout, and does not stack a hung one', async () => {
+  it('shares one run among concurrent probes of a hung check, and aborts its signal at the timeout', async () => {
     const gate = gatedIndicator()
     const service = serviceFor(gate.indicator, { readinessCacheMs: 0, indicatorTimeoutMs: 20 })
     const probes = Array.from({ length: 200 }, () => service.checkReadiness())
@@ -114,11 +114,33 @@ describe('HealthService readiness sharing', () => {
     expect(gate.signals).toHaveLength(1)
     expect(gate.signals[0]?.aborted).toBe(true)
     expect(answers[0]).toMatchObject({ status: 'error' })
-    /* The hung check never settles; the next probe must still run its own. */
+    /* The hung check never settles; once the shared run has ended, the next probe starts its own. */
     const next = service.checkReadiness()
     await expect(next).resolves.toMatchObject({ status: 'error' })
     expect(gate.calls()).toBe(2)
   })
+
+  it.each([0, 1000])(
+    'ignores a wall clock stepped backwards, with a window of %p ms',
+    async (readinessCacheMs) => {
+      /* Elapsed wall time goes negative after a step back, which is below any window. */
+      const gate = gatedIndicator()
+      const service = serviceFor(gate.indicator, { readinessCacheMs })
+      const wall = jest.spyOn(Date, 'now').mockReturnValue(10_000)
+      const mono = jest.spyOn(performance, 'now').mockReturnValue(5_000)
+      const first = service.checkReadiness()
+      await Promise.resolve()
+      gate.release()
+      await first
+      wall.mockReturnValue(5_000)
+      mono.mockReturnValue(5_000 + readinessCacheMs + 1)
+      const second = service.checkReadiness()
+      await Promise.resolve()
+      gate.release({ status: 'down' })
+      await expect(second).resolves.toMatchObject({ status: 'error' })
+      expect(gate.calls()).toBe(2)
+    }
+  )
 
   it('does not abort the signal of a check that answered in time', async () => {
     const gate = gatedIndicator()
