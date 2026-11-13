@@ -17,8 +17,9 @@ export interface HealthIndicatorResult {
   /** Whether the checked dependency is reachable and healthy. */
   status: 'up' | 'down'
   /**
-   * Optional diagnostic detail. Must never include secrets, connection
-   * strings, credentials, or a raw internal error object: only safe,
+   * Optional diagnostic detail, served in the readiness response only when
+   * `health.exposeIndicatorErrors` is on. Must never include secrets,
+   * connection strings, credentials, or a raw internal error object: only safe,
    * human-readable fields belong here.
    */
   details?: Record<string, unknown>

@@ -159,7 +159,11 @@ async function runIndicator(
     // Spread the result first, then set the name, so a misbehaving indicator
     // that returns its own `name` cannot spoof the declared check name.
     .then((result): IndicatorOutcome => {
-      const entry = { ...result, name: indicator.name }
+      // The details are whatever the indicator chose to return, and the response is usually
+      // reachable without credentials, so they are served only with the diagnostics switch on.
+      const entry = exposeErrors
+        ? { ...result, name: indicator.name }
+        : { name: indicator.name, status: result.status }
       // Anything that is not `up` counts as down, matching how the aggregate
       // status below reads the same field, so a misbehaving indicator cannot
       // be down in the response and up in the log.

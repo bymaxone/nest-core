@@ -80,15 +80,16 @@ export interface HealthOptions {
    */
   autoDiscover?: boolean
   /**
-   * Include the failing indicator's message in the readiness response under
-   * `details.error`. Never enable in production. Default: `false`.
+   * Serve what an indicator returned in `details`, and the failing indicator's
+   * message under `details.error`, in the readiness response. Never enable in
+   * production. Default: `false`.
    *
    * Readiness is typically unauthenticated and reachable by whatever probes it,
    * and an indicator usually does not author its own failure message — it lets a
    * driver's error propagate, and driver errors carry hosts, ports and sometimes
-   * credentials. With this off, the response names which indicator is down and
-   * nothing else; the message goes to the logger, where access is already
-   * controlled.
+   * credentials. With this off, the response carries each indicator's name and
+   * status and nothing else, except the timeout the aggregator itself reports;
+   * the message goes to the logger, where access is already controlled.
    */
   exposeIndicatorErrors?: boolean
 }
