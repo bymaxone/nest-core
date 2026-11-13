@@ -26,7 +26,7 @@ export interface EnvelopeOptions {
 export interface TimingOptions {
   /** Register the request-timing middleware (`BymaxTimingMiddleware`). Default: `true`. */
   enabled?: boolean
-  /** Samples above this threshold are flagged as slow. No default (unset). */
+  /** Samples above this threshold are flagged as slow. Positive integer. No default (unset). */
   slowRequestThresholdMs?: number
 }
 
@@ -56,7 +56,7 @@ export interface HealthOptions {
   enabled?: boolean
   /** Route prefix for the health endpoints. Default: `'health'`. */
   path?: string
-  /** Per-indicator timeout before a check is reported as down. Default: `5000`. */
+  /** Per-indicator timeout before a check is reported as down. Positive integer. Default: `5000`. */
   indicatorTimeoutMs?: number
   /**
    * How long a finished readiness answer is reused, in milliseconds. `0` turns the cache off.
@@ -499,6 +499,24 @@ function resolveEnvelope(raw?: EnvelopeOptions): ResolvedEnvelopeOptions {
 }
 
 /**
+ * Fail at boot on a number that is not a positive safe integer.
+ *
+ * A zero, negative or non-finite limit does not disable what it limits: it makes every check time
+ * out, every request slow, or compares false for ever, and does so silently.
+ *
+ * @param name - The dotted option name, for the message.
+ * @param value - The value to check.
+ * @returns The value, unchanged.
+ * @throws Error When `value` is not a positive safe integer.
+ */
+function positiveSafeInteger(name: string, value: number): number {
+  if (!Number.isSafeInteger(value) || value < 1) {
+    throw new Error(`${name} must be a positive safe integer, received ${String(value)}`)
+  }
+  return value
+}
+
+/**
  * Resolve timing options against their defaults. `slowRequestThresholdMs` is
  * only present when the consumer supplied it, honoring exact optional typing.
  *
@@ -508,7 +526,12 @@ function resolveEnvelope(raw?: EnvelopeOptions): ResolvedEnvelopeOptions {
 function resolveTiming(raw?: TimingOptions): ResolvedTimingOptions {
   const enabled = raw?.enabled ?? true
   const threshold = raw?.slowRequestThresholdMs
-  return threshold === undefined ? { enabled } : { enabled, slowRequestThresholdMs: threshold }
+  return threshold === undefined
+    ? { enabled }
+    : {
+        enabled,
+        slowRequestThresholdMs: positiveSafeInteger('timing.slowRequestThresholdMs', threshold)
+      }
 }
 
 /** The default {@link BodyDepthOptions.maxDepth}. */
@@ -523,12 +546,10 @@ export const DEFAULT_MAX_BODY_DEPTH = 32
  * @throws Error When `maxDepth` is not a positive safe integer.
  */
 function resolveBodyDepth(raw?: BodyDepthOptions): ResolvedBodyDepthOptions {
-  const maxDepth = raw?.maxDepth ?? DEFAULT_MAX_BODY_DEPTH
-  if (!Number.isSafeInteger(maxDepth) || maxDepth < 1) {
-    throw new Error(
-      `bodyDepth.maxDepth must be a positive safe integer, received ${String(maxDepth)}`
-    )
-  }
+  const maxDepth = positiveSafeInteger(
+    'bodyDepth.maxDepth',
+    raw?.maxDepth ?? DEFAULT_MAX_BODY_DEPTH
+  )
   return { enabled: raw?.enabled ?? false, maxDepth }
 }
 
@@ -550,7 +571,10 @@ function resolveHealth(raw?: HealthOptions): ResolvedHealthOptions {
     enabled: raw?.enabled ?? true,
     path: raw?.path ?? DEFAULT_HEALTH_PATH,
     exposeIndicatorErrors: raw?.exposeIndicatorErrors ?? false,
-    indicatorTimeoutMs: raw?.indicatorTimeoutMs ?? DEFAULT_INDICATOR_TIMEOUT_MS,
+    indicatorTimeoutMs: positiveSafeInteger(
+      'health.indicatorTimeoutMs',
+      raw?.indicatorTimeoutMs ?? DEFAULT_INDICATOR_TIMEOUT_MS
+    ),
     autoDiscover: raw?.autoDiscover ?? false
   }
 }

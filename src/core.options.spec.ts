@@ -490,3 +490,35 @@ describe('health.readinessCacheMs', () => {
     }
   )
 })
+
+describe('limits that must be positive safe integers', () => {
+  const cases: Array<[string, (value: number) => unknown]> = [
+    [
+      'health.indicatorTimeoutMs',
+      (value) => normalizeCoreOptions({ health: { indicatorTimeoutMs: value } })
+    ],
+    [
+      'timing.slowRequestThresholdMs',
+      (value) => normalizeCoreOptions({ timing: { slowRequestThresholdMs: value } })
+    ]
+  ]
+
+  describe.each(cases)('%s', (name, build) => {
+    it.each([0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY, 2 ** 53])(
+      'rejects %p at boot, naming the option',
+      (value) => {
+        expect(() => build(value)).toThrow(
+          `${name} must be a positive safe integer, received ${String(value)}`
+        )
+      }
+    )
+
+    it.each([1, 250, Number.MAX_SAFE_INTEGER])('accepts %p', (value) => {
+      expect(() => build(value)).not.toThrow()
+    })
+  })
+
+  it('keeps timing.slowRequestThresholdMs unset by default', () => {
+    expect(normalizeCoreOptions().timing).toEqual({ enabled: true })
+  })
+})
