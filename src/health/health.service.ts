@@ -98,6 +98,34 @@ type IndicatorOutcome =
     }
 
 /**
+ * Start the per-indicator timeout. Its promise resolves to the `down` outcome when the time is up,
+ * and by then the signal handed to the indicator is already aborted, so a check that can cancel its
+ * query is told to stop.
+ *
+ * @param indicator - The indicator the timeout belongs to.
+ * @param timeoutMs - The per-indicator timeout, in milliseconds.
+ * @returns The signal to pass to `check()`, the timeout outcome, and the call that clears the timer.
+ */
+function startTimeout(
+  indicator: IHealthIndicator,
+  timeoutMs: number
+): { signal: AbortSignal; timedOut: Promise<IndicatorOutcome>; clear: () => void } {
+  const controller = new AbortController()
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const timedOut = new Promise<IndicatorOutcome>((resolve) => {
+    timer = setTimeout(() => {
+      controller.abort()
+      resolve({
+        entry: { name: indicator.name, status: 'down', details: { timedOutAfterMs: timeoutMs } },
+        isUp: false,
+        cause: { kind: 'timed-out', timeoutMs }
+      })
+    }, timeoutMs)
+  })
+  return { signal: controller.signal, timedOut, clear: () => clearTimeout(timer) }
+}
+
+/**
  * Run one indicator racing a per-indicator timeout. A rejection or a timeout
  * both resolve (never reject) to a `down` entry, and the timeout's timer is
  * always cleared once the race settles, whichever side wins, so no timer
@@ -119,18 +147,7 @@ async function runIndicator(
   timeoutMs: number,
   exposeErrors: boolean
 ): Promise<IndicatorOutcome> {
-  let timer: ReturnType<typeof setTimeout> | undefined
-  const controller = new AbortController()
-  const timedOut = new Promise<IndicatorOutcome>((resolve) => {
-    timer = setTimeout(() => {
-      controller.abort()
-      resolve({
-        entry: { name: indicator.name, status: 'down', details: { timedOutAfterMs: timeoutMs } },
-        isUp: false,
-        cause: { kind: 'timed-out', timeoutMs }
-      })
-    }, timeoutMs)
-  })
+  const { signal, timedOut, clear } = startTimeout(indicator, timeoutMs)
   // `Promise.resolve().then(...)` defers the actual `indicator.check()` call
   // into a `.then()` callback, so a misbehaving indicator that throws
   // synchronously (instead of returning a rejected promise) is caught by the
@@ -138,7 +155,7 @@ async function runIndicator(
   // function and rejecting the outer `Promise.all` in `checkReadiness`, which
   // would hide every other indicator's result.
   const checked = Promise.resolve()
-    .then(() => indicator.check(controller.signal))
+    .then(() => indicator.check(signal))
     // Spread the result first, then set the name, so a misbehaving indicator
     // that returns its own `name` cannot spoof the declared check name.
     .then((result): IndicatorOutcome => {
@@ -163,7 +180,7 @@ async function runIndicator(
   try {
     return await Promise.race([checked, timedOut])
   } finally {
-    clearTimeout(timer)
+    clear()
   }
 }
 
