@@ -11,13 +11,20 @@ heading here.
 
 ## [Unreleased]
 
-### Changed
+## [1.6.8] - 2026-11-13
+
+A patch release with documentation only. The published code is unchanged.
+
+### Documentation
 
 - **README rewritten for correctness and length.** The mutation threshold, the subpath and optional-peer
   counts and the Tech Stack now match the code (`./http` and `helmet` included); the do-it-yourself
   body-depth guide is replaced by the `bodyDepth` option it described; the OpenAPI configuration and
   its section are merged; history and measurement narration are removed; and the Compatibility
   section is now "What This Library Does NOT Do". No API or behaviour change.
+- **The README states the `prom-client` position.** npm marks `prom-client` 15.x deprecated in favour of
+  `@prometheus-io/client`; this library stays on `prom-client` `^15` because collectors and the
+  `MetricsRegistry` must come from one package. No API or behaviour change.
 
 ## [1.6.7] - 2026-11-12
 
@@ -1374,4 +1381,5 @@ have regressed from. They are kept because the reasoning is worth having.
 [1.6.5]: https://github.com/bymaxone/nest-core/compare/v1.6.4...v1.6.5
 [1.6.6]: https://github.com/bymaxone/nest-core/compare/v1.6.5...v1.6.6
 [1.6.7]: https://github.com/bymaxone/nest-core/compare/v1.6.6...v1.6.7
-[Unreleased]: https://github.com/bymaxone/nest-core/compare/v1.6.7...HEAD
+[1.6.8]: https://github.com/bymaxone/nest-core/compare/v1.6.7...v1.6.8
+[Unreleased]: https://github.com/bymaxone/nest-core/compare/v1.6.8...HEAD
