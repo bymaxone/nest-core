@@ -13,14 +13,15 @@ heading here.
 
 ## [1.6.8] - 2026-11-13
 
-A patch release. Two defects in 1.6.7 are fixed, readiness stops amplifying probe traffic and stops
-serving what an indicator returned, and the README is corrected.
+A patch release. Readiness stops amplifying probe traffic, stops serving what an indicator returned,
+and answers not ready once shutdown begins; invalid timing options now fail the boot; the README is
+corrected.
 
 **Apply to a derived backend:** `pnpm up @bymax-one/nest-core`, then:
 
 - If you call `applyHttpFloors` after `app.init()`, move the call before it: it now throws there
   instead of applying only the timeouts.
-- Readiness answers can be up to one second old. Set `health.readinessCacheMs: 0` to keep every
+- By default readiness answers can be up to one second old. Set `health.readinessCacheMs: 0` to keep every
   probe fresh; probes that overlap still share one run.
 - Readiness no longer serves the `details` an indicator returns. If a dashboard or probe reads
   them, set `health.exposeIndicatorErrors: true` (development only) or move that data to the logger
@@ -67,7 +68,7 @@ serving what an indicator returned, and the README is corrected.
   cache or a run in progress and without running an indicator. Liveness is unchanged.
 - **`health.indicatorTimeoutMs` and `timing.slowRequestThresholdMs` are validated.** A zero made
   every indicator report down with a timeout, or every request slow; `NaN` flagged none. A timeout
-  above `2147483647` was clamped by Node to one millisecond and did the same. All three now fail the
+  above `2147483647` was clamped by Node to one millisecond and did the same. Each now fails the
   boot, naming the option.
 
 ### Documentation
