@@ -723,8 +723,8 @@ export class HealthIndicatorsModule {}
 ```
 
 A rejecting, throwing, or slow indicator (past `indicatorTimeoutMs`) is
-converted to a `down` entry with a safe, bounded diagnostic detail; it never
-hides the results of the other registered indicators.
+converted to a `down` entry; it never hides the results of the other registered
+indicators.
 
 Readiness is usually reachable without credentials, so probe volume does not set dependency
 volume: probes that arrive while a run is in progress share it, and its answer is reused for
