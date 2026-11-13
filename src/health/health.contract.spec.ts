@@ -79,8 +79,8 @@ describe('health contract', () => {
   /**
    * All-up readiness, exact JSON.
    *
-   * Every indicator up must reply 200 with status ok and every check's name,
-   * status, and details carried through.
+   * Every indicator up must reply 200 with status ok and every check's name and
+   * status; the details an indicator returned are not served by default.
    */
   it('pins the JSON for all-up readiness', async () => {
     app = await bootAppWithIndicators([
@@ -93,7 +93,7 @@ describe('health contract', () => {
     expect(response.body).toEqual({
       status: 'ok',
       checks: [
-        { name: 'redis', status: 'up', details: { latencyMs: 2 } },
+        { name: 'redis', status: 'up' },
         { name: 'database', status: 'up' }
       ]
     })
@@ -103,7 +103,7 @@ describe('health contract', () => {
    * One-down readiness, exact JSON and 503.
    *
    * A single down indicator must reply 503, naming the failing check while
-   * still listing every other check's real, unhidden result.
+   * still listing every other check's real result, without the details an indicator returned.
    */
   it('pins the JSON for one-down readiness and replies 503', async () => {
     app = await bootAppWithIndicators([
@@ -117,7 +117,7 @@ describe('health contract', () => {
       status: 'error',
       checks: [
         { name: 'redis', status: 'up' },
-        { name: 'database', status: 'down', details: { error: 'connection refused' } }
+        { name: 'database', status: 'down' }
       ]
     })
   })

@@ -260,14 +260,14 @@ whose middleware runs before the body is parsed.
 
 ### `health`
 
-| Option                  | Type      | Default    | Description                                                                                                             |
-| ----------------------- | --------- | ---------- | ----------------------------------------------------------------------------------------------------------------------- |
-| `enabled`               | `boolean` | `true`     | Registers the health controller.                                                                                        |
-| `path`                  | `string`  | `'health'` | Route prefix: `GET /<path>/live`, `GET /<path>/ready`.                                                                  |
-| `indicatorTimeoutMs`    | `number`  | `5000`     | Per-indicator timeout before a check reports down.                                                                      |
-| `readinessCacheMs`      | `number`  | `1000`     | How long a finished readiness answer is reused; `0` turns the cache off. Probes already in flight always share one run. |
-| `exposeIndicatorErrors` | `boolean` | `false`    | Includes the failing indicator's message in the response under `details.error`. Never enable in production — see below. |
-| `autoDiscover`          | `boolean` | `false`    | Also aggregates every provider marked `@BymaxHealthIndicator()`, anywhere in the application.                           |
+| Option                  | Type      | Default    | Description                                                                                                                                        |
+| ----------------------- | --------- | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `enabled`               | `boolean` | `true`     | Registers the health controller.                                                                                                                   |
+| `path`                  | `string`  | `'health'` | Route prefix: `GET /<path>/live`, `GET /<path>/ready`.                                                                                             |
+| `indicatorTimeoutMs`    | `number`  | `5000`     | Per-indicator timeout before a check reports down.                                                                                                 |
+| `readinessCacheMs`      | `number`  | `1000`     | How long a finished readiness answer is reused; `0` turns the cache off. Probes already in flight always share one run.                            |
+| `exposeIndicatorErrors` | `boolean` | `false`    | Serves what an indicator returned in `details`, and the failing indicator's message under `details.error`. Never enable in production — see below. |
+| `autoDiscover`          | `boolean` | `false`    | Also aggregates every provider marked `@BymaxHealthIndicator()`, anywhere in the application.                                                      |
 
 On `forRoot`, `enabled` and `path` are applied at module-definition time: a
 disabled feature registers no controller, and a custom `path` mounts the routes.
@@ -670,11 +670,12 @@ Liveness always replies `200` with an empty checks array; readiness runs
 every registered indicator concurrently and replies `200` only when every
 indicator reports `up`, `503` otherwise, naming every check either way.
 
-A failing indicator is named but not quoted: the response says which check is
-down, and the reason goes to the logger. See
+A check is named but not quoted: the response carries each indicator's name and
+status, never the `details` it returned, and a failing indicator's reason goes to
+the logger. See
 [the security model](#-security-model) for why, and
-`health.exposeIndicatorErrors` if you want the message in the response while
-debugging locally.
+`health.exposeIndicatorErrors` if you want the details and the message in the
+response while debugging locally.
 
 ```json
 { "status": "ok", "checks": [{ "name": "redis", "status": "up" }] }
@@ -1459,24 +1460,24 @@ otherwise.
 
 ## 🛡️ Security Table
 
-| Layer               | Implementation                                                                                                                                                                   |
-| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Error responses     | One shape for everything; unknown errors become a generic 500                                                                                                                    |
-| Internals           | Message and stack handed to the unexpected-error sink when bound, in the body only under `exposeInternals` (default `false`)                                                     |
-| Health output       | The response names which indicator is down and nothing more; the reason goes to the logger. `exposeIndicatorErrors` (default `false`) puts it back in the response for debugging |
-| Slow indicators     | Converted to `down` by the aggregator, so a probe cannot hang on one                                                                                                             |
-| Correlation         | Resolved through `BYMAX_CORRELATION_PROVIDER` — the app decides where the id comes from                                                                                          |
-| Body nesting        | Opt-in `bodyDepth` refuses a body nested deeper than `maxDepth` with a `400`, so a few kilobytes of nested arrays cannot overflow a recursive validator into a `500`             |
-| HTTP floors         | `applyHttpFloors`: compressed request bodies refused with `415`, header and request timeouts of 15 s and 30 s, `helmet` headers without HSTS                                     |
-| Request accounting  | Every closed request is counted, including the ones a guard rejected (`401`/`403`/`429`) and the ones that matched no route (`404`), so an attack in progress moves the graph    |
-| Route labels        | Taken from the matched template; an unmatched request records the constant `<unmatched>`, never the requested path, so a scan cannot grow the metric registry without bound      |
-| Pagination cursors  | Opaque, not authenticated; treated as client-supplied input on the way back in                                                                                                   |
-| Metrics             | Opt-in; `prom-client` never imported while it is off                                                                                                                             |
-| OpenAPI             | Opt-in and development-only; refused in production by two independent guards, `@nestjs/swagger` never imported while it is off                                                   |
-| Discovered checks   | Matched by an explicit marker, never by shape; off by default, because it lets an imported library fail your readiness probe                                                     |
-| Contributed metrics | Called only when marked; a name collision fails the boot naming the contributor rather than half-populating a scrape                                                             |
-| Trace ids           | Read-only, never used as a metric label; published in a response body only under `telemetry.exposeTraceId` (default off)                                                         |
-| Supply chain        | `dependencies: {}`; third-party Actions pinned by commit SHA (org-internal reusables by tag); CodeQL and OpenSSF Scorecard                                                       |
+| Layer               | Implementation                                                                                                                                                                                                                |
+| ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Error responses     | One shape for everything; unknown errors become a generic 500                                                                                                                                                                 |
+| Internals           | Message and stack handed to the unexpected-error sink when bound, in the body only under `exposeInternals` (default `false`)                                                                                                  |
+| Health output       | The response carries each indicator's name and status, never the `details` it returned; a failing indicator's reason goes to the logger. `exposeIndicatorErrors` (default `false`) puts it back in the response for debugging |
+| Slow indicators     | Converted to `down` by the aggregator, so a probe cannot hang on one                                                                                                                                                          |
+| Correlation         | Resolved through `BYMAX_CORRELATION_PROVIDER` — the app decides where the id comes from                                                                                                                                       |
+| Body nesting        | Opt-in `bodyDepth` refuses a body nested deeper than `maxDepth` with a `400`, so a few kilobytes of nested arrays cannot overflow a recursive validator into a `500`                                                          |
+| HTTP floors         | `applyHttpFloors`: compressed request bodies refused with `415`, header and request timeouts of 15 s and 30 s, `helmet` headers without HSTS                                                                                  |
+| Request accounting  | Every closed request is counted, including the ones a guard rejected (`401`/`403`/`429`) and the ones that matched no route (`404`), so an attack in progress moves the graph                                                 |
+| Route labels        | Taken from the matched template; an unmatched request records the constant `<unmatched>`, never the requested path, so a scan cannot grow the metric registry without bound                                                   |
+| Pagination cursors  | Opaque, not authenticated; treated as client-supplied input on the way back in                                                                                                                                                |
+| Metrics             | Opt-in; `prom-client` never imported while it is off                                                                                                                                                                          |
+| OpenAPI             | Opt-in and development-only; refused in production by two independent guards, `@nestjs/swagger` never imported while it is off                                                                                                |
+| Discovered checks   | Matched by an explicit marker, never by shape; off by default, because it lets an imported library fail your readiness probe                                                                                                  |
+| Contributed metrics | Called only when marked; a name collision fails the boot naming the contributor rather than half-populating a scrape                                                                                                          |
+| Trace ids           | Read-only, never used as a metric label; published in a response body only under `telemetry.exposeTraceId` (default off)                                                                                                      |
+| Supply chain        | `dependencies: {}`; third-party Actions pinned by commit SHA (org-internal reusables by tag); CodeQL and OpenSSF Scorecard                                                                                                    |
 
 > [!IMPORTANT]
 > **`exposeInternals` is a debugging switch, not a verbosity setting.** With it on,

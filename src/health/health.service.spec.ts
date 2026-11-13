@@ -120,12 +120,13 @@ describe('HealthService', () => {
    * All-up aggregation.
    *
    * When every indicator reports up, the aggregate status is ok and every
-   * check is carried through with its name and details intact.
+   * check is carried through with its name and details intact, with the
+   * diagnostics switch on.
    */
   it('aggregates readiness as ok when every indicator is up', async () => {
     const redis = stubIndicator('redis', { status: 'up', details: { latencyMs: 2 } })
     const database = stubIndicator('database', { status: 'up' })
-    const service = new HealthService([redis, database], normalizeCoreOptions())
+    const service = new HealthService([redis, database], optionsExposingErrors())
 
     const result = await service.checkReadiness()
 
@@ -169,6 +170,30 @@ describe('HealthService', () => {
   })
 
   /**
+   * Details stay out of the response by default.
+   *
+   * An indicator's details are whatever it chose to return, and readiness is
+   * usually reachable without credentials, so only the name and the status are
+   * served unless `exposeIndicatorErrors` is on.
+   */
+  it('serves only the name and status of an indicator by default, up or down', async () => {
+    const up = stubIndicator('redis', { status: 'up', details: { host: 'redis.internal:6379' } })
+    const down = stubIndicator('db', { status: 'down', details: { dsn: 'postgres://u:p@h/db' } })
+    const service = new HealthService([up, down], normalizeCoreOptions())
+
+    const result = await service.checkReadiness()
+
+    expect(result).toEqual({
+      status: 'error',
+      checks: [
+        { name: 'redis', status: 'up' },
+        { name: 'db', status: 'down' }
+      ]
+    })
+    expect(JSON.stringify(result)).not.toMatch(/redis\.internal|postgres/)
+  })
+
+  /**
    * One down among ups.
    *
    * A single down indicator must flip the aggregate status to error while
@@ -178,7 +203,7 @@ describe('HealthService', () => {
     const redis = stubIndicator('redis', { status: 'up' })
     const database = stubIndicator('database', { status: 'down', details: { reason: 'timeout' } })
     const queue = stubIndicator('queue', { status: 'up' })
-    const service = new HealthService([redis, database, queue], normalizeCoreOptions())
+    const service = new HealthService([redis, database, queue], optionsExposingErrors())
 
     const result = await service.checkReadiness()
 
