@@ -220,6 +220,10 @@ export interface BymaxCoreModuleOptions {
     path?: string
     /** Per-indicator timeout before a check is reported as down. Default: 5000. */
     indicatorTimeoutMs?: number
+    /** How long a finished readiness answer is reused; 0 turns the cache off. Default: 1000. */
+    readinessCacheMs?: number
+    /** Serve the details an indicator returns and a failure's message. Default: false. */
+    exposeIndicatorErrors?: boolean
   }
 
   /** Prometheus metrics endpoint. Default: disabled. */
@@ -503,7 +507,7 @@ Response contract (stable, versioned with the package):
 }
 ```
 
-`status` is `"ok"` when all checks are `up`, `"error"` otherwise. Liveness returns `{ "status": "ok", "checks": [] }` and runs no indicators.
+The example is the response with `health.exposeIndicatorErrors` on. By default each check carries only its `name` and `status`: the `details` an indicator returns are served only with that option on. `status` is `"ok"` when all checks are `up`, `"error"` otherwise. Liveness returns `{ "status": "ok", "checks": [] }` and runs no indicators.
 
 ### 8.2 Indicator Contract
 
@@ -516,8 +520,11 @@ export interface HealthIndicatorResult {
 export interface IHealthIndicator {
   /** Unique name reported in the checks array. */
   readonly name: string
-  /** Performs the check. Rejections and timeouts are reported as down. */
-  check(): Promise<HealthIndicatorResult>
+  /**
+   * Performs the check. Rejections and timeouts are reported as down. The signal is aborted
+   * at the timeout; an indicator that can cancel its query should pass it on.
+   */
+  check(signal?: AbortSignal): Promise<HealthIndicatorResult>
 }
 ```
 
@@ -538,7 +545,9 @@ export class RedisHealthIndicator implements IHealthIndicator {
 }
 ```
 
-The aggregation service runs all indicators concurrently, applies `indicatorTimeoutMs` per indicator, and converts rejections and timeouts into `down` entries with a diagnostic detail. One failing indicator never hides the results of the others.
+The aggregation service runs all indicators concurrently, applies `indicatorTimeoutMs` per indicator, and converts rejections and timeouts into `down` entries. The rejection's message goes to the logger and is served in `details.error` only with `exposeIndicatorErrors` on; a timeout entry carries `details.timedOutAfterMs`. One failing indicator never hides the results of the others.
+
+Probes share the work. A probe that arrives while a run is in progress awaits it, and for `readinessCacheMs` after it ends its answer is returned without running anything, so probe volume does not set dependency volume. When shutdown begins (`beforeApplicationShutdown`), readiness answers `503` with a `shutdown` check `down` before it reads the cache or a run in progress, and runs no indicator.
 
 ### 8.3 Transition Reporting
 
