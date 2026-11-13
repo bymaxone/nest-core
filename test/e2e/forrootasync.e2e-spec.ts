@@ -23,12 +23,12 @@ import type { Fixture } from './fixture/app.fixture'
 const ALL_ON_FACTORY = (): {
   envelope: { enabled: boolean }
   timing: { enabled: boolean }
-  health: { enabled: boolean }
+  health: { enabled: boolean; readinessCacheMs?: number }
   metrics: { enabled: boolean }
 } => ({
   envelope: { enabled: true },
   timing: { enabled: true },
-  health: { enabled: true },
+  health: { enabled: true, readinessCacheMs: 0 },
   metrics: { enabled: true }
 })
 

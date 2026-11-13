@@ -27,7 +27,7 @@ import type { Fixture } from './fixture/app.fixture'
 const ALL_ON = {
   envelope: { enabled: true },
   timing: { enabled: true },
-  health: { enabled: true },
+  health: { enabled: true, readinessCacheMs: 0 },
   metrics: { enabled: true }
 }
 
