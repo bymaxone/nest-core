@@ -29,8 +29,8 @@ corrected.
 - Call `app.enableShutdownHooks()` if a `SIGTERM` should flip readiness to `503`; `app.close()`
   always does.
 - `health.indicatorTimeoutMs` and `timing.slowRequestThresholdMs` must be positive integers, and the
-  timeout at most `2147483647`, or the boot fails. A zero, negative or fractional value was accepted
-  before and misbehaved silently.
+  timeout at most `2147483647`, or the boot fails. A zero or negative value was accepted before and
+  misbehaved silently; a fractional one was accepted too, and now has to be rounded.
 - An indicator that can cancel its query should pass on the `signal` its `check()` now receives.
 
 ### Security
