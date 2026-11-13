@@ -730,6 +730,10 @@ volume: probes that arrive while a run is in progress share it, and its answer i
 `readinessCacheMs`. `check()` receives an `AbortSignal` that is aborted when the indicator times
 out, so an indicator that can cancel its query should pass the signal on.
 
+When shutdown begins, readiness answers `503` at once, without running an indicator and whatever
+is cached, so a load balancer stops routing to an instance that is draining. Nest only runs
+`beforeApplicationShutdown` on `app.close()` or, for a signal, after `app.enableShutdownHooks()`.
+
 ### A failing check leaves a record
 
 Probe paths are usually excluded from the HTTP log, and a well-written indicator returns

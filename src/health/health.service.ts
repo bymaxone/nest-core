@@ -15,7 +15,7 @@
  * @layer Service
  */
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common'
-import type { OnApplicationBootstrap } from '@nestjs/common'
+import type { BeforeApplicationShutdown, OnApplicationBootstrap } from '@nestjs/common'
 import { DiscoveryService, Reflector } from '@nestjs/core'
 
 import { containRejection } from '../contain-rejection'
@@ -207,7 +207,7 @@ function describeCause(cause: HealthTransitionCause): string {
  * `health.indicatorTimeoutMs`.
  */
 @Injectable()
-export class HealthService implements OnApplicationBootstrap {
+export class HealthService implements OnApplicationBootstrap, BeforeApplicationShutdown {
   /**
    * Nest's own logger, scoped to this class. The failure reason of a `down`
    * indicator is written here rather than into the HTTP response, so the
@@ -241,6 +241,9 @@ export class HealthService implements OnApplicationBootstrap {
    * Comparing states alone would then let the stale observation win.
    */
   private probeSequence = 0
+
+  /** Set once shutdown begins, after which readiness answers not ready without running anything. */
+  private draining = false
 
   /** The readiness run in progress, shared by every probe that arrives while it lasts. */
   private inflight: Promise<HealthResponse> | undefined
@@ -484,6 +487,15 @@ export class HealthService implements OnApplicationBootstrap {
   }
 
   /**
+   * Stop reporting ready the moment shutdown begins, so a load balancer stops routing here while
+   * the process drains. Nothing cached or in progress is consulted again: every later probe is answered
+   * before either is read.
+   */
+  beforeApplicationShutdown(): void {
+    this.draining = true
+  }
+
+  /**
    * Liveness check: the process is up and able to respond. Runs no
    * indicators, so it never depends on the health of anything else.
    *
@@ -501,11 +513,15 @@ export class HealthService implements OnApplicationBootstrap {
    * Probes share the work: one that arrives while a run is in progress awaits it, and for
    * `health.readinessCacheMs` after it ends the answer is returned without running anything.
    * The endpoint is usually unauthenticated, so probe volume must not set dependency volume.
-   * The returned object is shared between callers and must not be mutated.
+   * Once shutdown has begun the answer is always not ready. The returned object is shared between
+   * callers and must not be mutated.
    *
    * @returns The aggregated health response.
    */
   checkReadiness(): Promise<HealthResponse> {
+    if (this.draining) {
+      return Promise.resolve({ status: 'error', checks: [{ name: 'shutdown', status: 'down' }] })
+    }
     const cached = this.cached
     if (
       cached !== undefined &&
