@@ -59,6 +59,15 @@ export interface HealthOptions {
   /** Per-indicator timeout before a check is reported as down. Default: `5000`. */
   indicatorTimeoutMs?: number
   /**
+   * How long a finished readiness answer is reused, in milliseconds. `0` turns the cache off.
+   * Default: `1000`.
+   *
+   * Readiness is usually reachable without credentials, and every probe would otherwise reach
+   * every dependency. Probes that arrive while one is running always share it, whatever this is set to;
+   * this is only how long its answer outlives it.
+   */
+  readinessCacheMs?: number
+  /**
    * Aggregate every provider marked with `@BymaxHealthIndicator()`, anywhere in
    * the application, in addition to those registered under
    * `BYMAX_HEALTH_INDICATORS`. Default: `false`.
@@ -370,6 +379,7 @@ export interface ResolvedHealthOptions {
   enabled: boolean
   path: string
   indicatorTimeoutMs: number
+  readinessCacheMs: number
   exposeIndicatorErrors: boolean
   autoDiscover: boolean
 }
@@ -441,6 +451,9 @@ export interface ResolvedCoreOptions {
 
 /** Default per-indicator timeout in milliseconds. */
 const DEFAULT_INDICATOR_TIMEOUT_MS = 5000
+
+/** The default {@link HealthOptions.readinessCacheMs}. */
+const DEFAULT_READINESS_CACHE_MS = 1000
 
 /** Default route for the interactive OpenAPI UI. */
 const DEFAULT_OPENAPI_PATH = 'docs'
@@ -525,7 +538,14 @@ function resolveBodyDepth(raw?: BodyDepthOptions): ResolvedBodyDepthOptions {
  * @returns The fully-populated health options.
  */
 function resolveHealth(raw?: HealthOptions): ResolvedHealthOptions {
+  const readinessCacheMs = raw?.readinessCacheMs ?? DEFAULT_READINESS_CACHE_MS
+  if (!Number.isSafeInteger(readinessCacheMs) || readinessCacheMs < 0) {
+    throw new Error(
+      `health.readinessCacheMs must be a non-negative safe integer, received ${String(readinessCacheMs)}`
+    )
+  }
   return {
+    readinessCacheMs,
     enabled: raw?.enabled ?? true,
     path: raw?.path ?? DEFAULT_HEALTH_PATH,
     exposeIndicatorErrors: raw?.exposeIndicatorErrors ?? false,

@@ -265,6 +265,7 @@ whose middleware runs before the body is parsed.
 | `enabled`               | `boolean` | `true`     | Registers the health controller.                                                                                        |
 | `path`                  | `string`  | `'health'` | Route prefix: `GET /<path>/live`, `GET /<path>/ready`.                                                                  |
 | `indicatorTimeoutMs`    | `number`  | `5000`     | Per-indicator timeout before a check reports down.                                                                      |
+| `readinessCacheMs`      | `number`  | `1000`     | How long a finished readiness answer is reused; `0` turns the cache off. Probes already in flight always share one run. |
 | `exposeIndicatorErrors` | `boolean` | `false`    | Includes the failing indicator's message in the response under `details.error`. Never enable in production — see below. |
 | `autoDiscover`          | `boolean` | `false`    | Also aggregates every provider marked `@BymaxHealthIndicator()`, anywhere in the application.                           |
 
@@ -723,6 +724,11 @@ export class HealthIndicatorsModule {}
 A rejecting, throwing, or slow indicator (past `indicatorTimeoutMs`) is
 converted to a `down` entry with a safe, bounded diagnostic detail; it never
 hides the results of the other registered indicators.
+
+Readiness is usually reachable without credentials, so probe volume does not set dependency
+volume: probes that arrive while a run is in progress share it, and its answer is reused for
+`readinessCacheMs`. `check()` receives an `AbortSignal` that is aborted when the indicator times
+out, so an indicator that can cancel its query should pass the signal on.
 
 ### A failing check leaves a record
 
