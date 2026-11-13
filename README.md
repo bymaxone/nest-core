@@ -731,8 +731,8 @@ volume: probes that arrive while a run is in progress share it, and its answer i
 out, so an indicator that can cancel its query should pass the signal on.
 
 When shutdown begins, readiness answers `503` at once, without running an indicator and whatever
-is cached, so a load balancer stops routing to an instance that is draining. Nest only runs that
-hook on `app.close()` or, for a signal, after `app.enableShutdownHooks()`.
+is cached, so a load balancer stops routing to an instance that is draining. Nest only runs
+`beforeApplicationShutdown` on `app.close()` or, for a signal, after `app.enableShutdownHooks()`.
 
 ### A failing check leaves a record
 
