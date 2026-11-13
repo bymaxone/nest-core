@@ -488,12 +488,11 @@ export class HealthService implements OnApplicationBootstrap, BeforeApplicationS
 
   /**
    * Stop reporting ready the moment shutdown begins, so a load balancer stops routing here while
-   * the process drains. A cached `ok` or a run in progress is dropped rather than waited for.
+   * the process drains. Nothing cached or in progress is consulted again: every later probe is answered
+   * before either is read.
    */
   beforeApplicationShutdown(): void {
     this.draining = true
-    this.cached = undefined
-    this.inflight = undefined
   }
 
   /**
@@ -559,9 +558,7 @@ export class HealthService implements OnApplicationBootstrap, BeforeApplicationS
     const checks = outcomes.map((outcome) => outcome.entry)
     const status = checks.every((check) => check.status === 'up') ? 'ok' : 'error'
     const response: HealthResponse = { status, checks }
-    if (!this.draining) {
-      this.cached = { at: performance.now(), response }
-    }
+    this.cached = { at: performance.now(), response }
     return response
   }
 }

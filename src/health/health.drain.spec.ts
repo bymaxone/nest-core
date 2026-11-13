@@ -46,7 +46,7 @@ describe('HealthService during shutdown', () => {
     expect(probe.calls()).toBe(1)
   })
 
-  it('does not wait for a run in progress, and does not cache what it finds', async () => {
+  it('does not wait for a run in progress, and stays not ready once that run finishes', async () => {
     let release: (result: HealthIndicatorResult) => void = () => undefined
     const slow: IHealthIndicator = {
       name: 'db',
