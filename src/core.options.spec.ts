@@ -518,6 +518,27 @@ describe('limits that must be positive safe integers', () => {
     })
   })
 
+  it.each([
+    [
+      'timing.slowRequestThresholdMs',
+      () =>
+        normalizeCoreOptions({ timing: { slowRequestThresholdMs: Number.MAX_SAFE_INTEGER } }).timing
+          .slowRequestThresholdMs
+    ],
+    [
+      'bodyDepth.maxDepth',
+      () =>
+        normalizeCoreOptions({ bodyDepth: { maxDepth: Number.MAX_SAFE_INTEGER } }).bodyDepth
+          .maxDepth
+    ]
+  ])(
+    '%s is a comparison, not a timer, so it accepts the largest safe integer',
+    (_name, resolve) => {
+      /* Only the option that feeds setTimeout is capped at 2**31 - 1. */
+      expect(resolve()).toBe(Number.MAX_SAFE_INTEGER)
+    }
+  )
+
   it('keeps timing.slowRequestThresholdMs unset by default', () => {
     expect(normalizeCoreOptions().timing).toEqual({ enabled: true })
   })

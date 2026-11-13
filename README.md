@@ -844,6 +844,11 @@ command, rather than a cryptic resolution failure at the first scrape.
 npm marks `prom-client` 15.x deprecated in favour of `@prometheus-io/client`. This library stays on
 `prom-client` `^15`: the collectors you register and the `MetricsRegistry` must come from one package.
 
+`prom-client`'s default collectors keep a garbage-collection observer and an event-loop histogram for
+the life of the process, and it offers no way to stop them. Neither keeps the process alive, so
+`app.close()` still lets it exit. It matters only to a host that creates many applications in one
+process, a test runner or a hot reload, where each application leaves a small observer behind.
+
 When timing and metrics are both enabled, an internal bridge feeds two
 default HTTP metrics with a bounded label set:
 
@@ -1324,7 +1329,12 @@ void bootstrap()
 | `headersTimeoutMs` | `15000`: the longest a client may take to send its complete header block. Node's own default is 60 s, which leaves a header block sent a byte at a time open as a cheap denial of service                                                                                                                                           |
 | `requestTimeoutMs` | `30000`: the longest a single request, headers and body together, may take. Node's default is 5 minutes. Must not be below `headersTimeoutMs`                                                                                                                                                                                       |
 
-`keepAliveTimeout` is left at Node's 5 s: raising it only lengthens idle-socket retention.
+`keepAliveTimeout` is left at Node's 5 s, which is too short behind a load balancer. A balancer whose
+idle timeout is longer than the server's reuses a connection Node has just closed and answers an
+intermittent `502`, so set it above the balancer's idle timeout, for example 61 s behind a 60 s one:
+`app.getHttpServer().keepAliveTimeout = 61_000`. The cost is that an idle socket is kept that much
+longer. Measured on Node 24, a `headersTimeoutMs` shorter than `keepAliveTimeout` (500 ms and 1 s
+against 3 s and 5 s) did not close an idle keep-alive socket, so the two need no particular order.
 
 Node enforces both timeouts from a sweep over the open connections, not from a timer per
 connection, and the sweep runs every 30 s by default: measured, a 1 s header timeout left a

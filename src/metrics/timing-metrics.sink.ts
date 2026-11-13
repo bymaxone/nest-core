@@ -5,12 +5,10 @@
  * `http_request_duration_seconds` (histogram). Both carry a deliberately
  * bounded label set, `method`, `route`, and `status_code` only, where `route`
  * is the sample's route template rather than the full URL with its query string.
- * Cardinality is bounded for matched routes; an unmatched request has no
- * template and falls back to its query-stripped path, so an endpoint exposed to
- * unmatched traffic can see `route` cardinality grow and should bound or drop
- * those series at the scraper. `prom-client` is never imported at the top level here: the loaded
- * module is passed in by the registry factory seam, keeping the optional-peer
- * boundary intact.
+ * Cardinality is bounded: an unmatched request has no template and records the
+ * constant `<unmatched>`, never the requested path. `prom-client` is never
+ * imported at the top level here: the loaded module is passed in by the
+ * registry factory seam, keeping the optional-peer boundary intact.
  * @layer Provider
  */
 import type { Counter, Histogram } from 'prom-client'
