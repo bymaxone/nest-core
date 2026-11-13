@@ -27,8 +27,8 @@ A patch release. Two defects in 1.6.7 are fixed and the README is corrected.
   array, a `Map` or a class instance is a leaf.
 - **`applyHttpFloors` refuses an already initialised application.** After `app.init()` Nest's own
   parsers and the routes sit ahead of anything the helper mounts, so only the timeouts took effect
-  while the call returned normally: gzip bodies were still decompressed and no security headers
-  were sent. It now throws "must run before app.init()", as it already did for a listening server.
+  while the call returned normally: a gzip body was no longer refused with `415` and no
+  security headers were sent. It now throws "must run before app.init()", as it already did for a listening server.
 
 ### Documentation
 
