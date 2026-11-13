@@ -727,8 +727,8 @@ hides the results of the other registered indicators.
 
 Readiness is usually reachable without credentials, so probe volume does not set dependency
 volume: probes that arrive while a run is in progress share it, and its answer is reused for
-`readinessCacheMs` (a second by default). `check()` receives an `AbortSignal` that is aborted when
-the aggregator stops waiting, so an indicator that can cancel its query should pass the signal on.
+`readinessCacheMs`. `check()` receives an `AbortSignal` that is aborted when the indicator times
+out, so an indicator that can cancel its query should pass the signal on.
 
 ### A failing check leaves a record
 
