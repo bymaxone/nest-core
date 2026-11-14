@@ -13,8 +13,7 @@ heading here.
 
 ## [1.6.9] - 2026-11-14
 
-A patch release. Documentation and metadata only: no runtime behaviour changes, and no `.js` file in
-the package differs from 1.6.8.
+A patch release. Documentation and metadata only: no runtime behaviour changes.
 
 **Apply to a derived backend:** `pnpm up @bymax-one/nest-core`. Nothing to change in your code. If
 you rely on `applyHttpFloors`' `requestTimeoutMs` to cap how long a request takes, read the first
@@ -29,13 +28,10 @@ item below: it bounds receiving the request, not serving it.
   2510 ms. Handler time and response writing are not bounded (`server.timeout` stays `0`), so bound
   them with a per-route timeout interceptor or at the edge. The helper leaves `server.timeout` and any
   socket idle timeout alone on purpose, because they would cut server-sent events and long-poll streams.
-- **A "What the floors do not set" section** lists `maxConnections`, `maxRequestsPerSocket`,
-  `maxHeaderSize`, a slow-read limit and a body size limit among what `applyHttpFloors` leaves to the
+- **A "What the floors do not set" section** in the README says what `applyHttpFloors` leaves to the
   deployment.
-- **A "Production Checklist" section** collects what a backend sets before it takes traffic: the
-  `applyHttpFloors` order, `enableShutdownHooks`, `keepAliveTimeout` above the balancer's idle timeout,
-  bounding handler time, `metrics.authToken`, `exposeIndicatorErrors` off, `bodyDepth`, and bounded
-  `check()` and `collect()`.
+- **A "Production Checklist" section** in the README collects what a backend sets before it takes
+  traffic.
 - **The metrics section states the scrape cost** (about 0.4 ms per scrape with the default
   collectors, so an open endpoint is cheap but not free) and that a contributor's `collect()` that
   never settles keeps the scrape open.
@@ -47,7 +43,6 @@ item below: it bounds receiving the request, not serving it.
 - **The release workflow follows the org npm-release template.** The job that holds the publish
   credential installs nothing and runs no package code: it checks one tarball, packed once by a
   credential-free job, against the digest that job reported and publishes that file with provenance.
-  The workflow name, trigger, concurrency and the `npm-publish` environment are unchanged.
 
 ## [1.6.8] - 2026-11-13
 
