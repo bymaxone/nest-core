@@ -9,7 +9,7 @@
  * Mocks: a hand-built registry stub and a hand-built `HttpAdapterHost` capturing
  * the header and reply (family convention, no supertest at this layer).
  */
-import { UnauthorizedException } from '@nestjs/common'
+import { Logger, UnauthorizedException } from '@nestjs/common'
 import type { HttpAdapterHost } from '@nestjs/core'
 
 import { normalizeCoreOptions } from '../core.options'
@@ -283,5 +283,92 @@ describe('createMetricsController', () => {
     await controller.scrape({}, { headers: {} })
 
     expect(captured.status).toBe(200)
+  })
+})
+
+describe('createMetricsController, scrape deadline', () => {
+  beforeEach(() => {
+    jest.useFakeTimers()
+  })
+
+  afterEach(() => {
+    jest.useRealTimers()
+    jest.restoreAllMocks()
+  })
+
+  /** A controller whose registry never finishes collecting, with the given scrape timeout. */
+  function hungController(
+    scrapeTimeoutMs: number,
+    authToken?: string
+  ): ReturnType<typeof buildController> {
+    const built = buildController({
+      path: 'metrics',
+      options: normalizeCoreOptions({
+        metrics: {
+          enabled: true,
+          path: 'metrics',
+          scrapeTimeoutMs,
+          ...(authToken ? { authToken } : {})
+        }
+      })
+    })
+    jest
+      .spyOn(built.registry, 'metrics')
+      .mockImplementation(() => new Promise<string>(() => undefined))
+    return built
+  }
+
+  it('answers 503 when the collection outlives scrapeTimeoutMs, and replies with nothing', async () => {
+    const { controller, captured } = hungController(2_000)
+    const scrape = controller.scrape({})
+    scrape.catch(() => undefined)
+
+    jest.advanceTimersByTime(2_000)
+
+    await expect(scrape).rejects.toMatchObject({ status: 503 })
+    expect(captured.body).toBeUndefined()
+  })
+
+  it('starts one collection for concurrent scrapes while it hangs, and none for the scrapes after', async () => {
+    const { controller, registry } = hungController(2_000)
+    const first = [controller.scrape({}), controller.scrape({}), controller.scrape({})]
+    jest.advanceTimersByTime(2_000)
+    await Promise.allSettled(first)
+
+    await Promise.allSettled([controller.scrape({}), controller.scrape({})])
+
+    expect(registry.metrics).toHaveBeenCalledTimes(1)
+  })
+
+  it("warns once, under the controller's name, that the collection is past its deadline", async () => {
+    const warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined)
+    const { controller } = hungController(2_000)
+    const scrapes = [controller.scrape({}), controller.scrape({})]
+    jest.advanceTimersByTime(2_000)
+    await Promise.allSettled(scrapes)
+    await Promise.allSettled([controller.scrape({})])
+
+    expect(warn).toHaveBeenCalledTimes(1)
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('2000 ms'))
+    expect((warn.mock.contexts[0] as { context?: string }).context).toBe('MetricsController')
+  })
+
+  it('refuses a wrong token with 401 before it looks at the collection', async () => {
+    const { controller, registry } = hungController(2_000, 's3cret')
+
+    await expect(
+      controller.scrape({}, { headers: { authorization: 'Bearer wrong' } })
+    ).rejects.toBeInstanceOf(UnauthorizedException)
+    expect(registry.metrics).not.toHaveBeenCalled()
+  })
+
+  it('serves a collection that finishes within the deadline, and the next scrape collects again', async () => {
+    const { controller, registry, captured } = buildController({ path: 'metrics' })
+
+    await controller.scrape({})
+    await controller.scrape({})
+
+    expect(captured.status).toBe(200)
+    expect(registry.metrics).toHaveBeenCalledTimes(2)
   })
 })

@@ -30,7 +30,13 @@ describe('normalizeCoreOptions', () => {
         exposeIndicatorErrors: false,
         autoDiscover: false
       },
-      metrics: { enabled: false, path: 'metrics', collectDefaultMetrics: true, defaultLabels: {} },
+      metrics: {
+        enabled: false,
+        path: 'metrics',
+        collectDefaultMetrics: true,
+        defaultLabels: {},
+        scrapeTimeoutMs: 5000
+      },
       openapi: {
         enabled: false,
         suppressedInProduction: false,
@@ -103,7 +109,8 @@ describe('normalizeCoreOptions', () => {
         enabled: true,
         path: 'prom',
         collectDefaultMetrics: false,
-        defaultLabels: { app: 'api' }
+        defaultLabels: { app: 'api' },
+        scrapeTimeoutMs: 2500
       },
       telemetry: { enabled: true, exposeTraceId: true }
     })
@@ -124,7 +131,8 @@ describe('normalizeCoreOptions', () => {
         enabled: true,
         path: 'prom',
         collectDefaultMetrics: false,
-        defaultLabels: { app: 'api' }
+        defaultLabels: { app: 'api' },
+        scrapeTimeoutMs: 2500
       },
       openapi: {
         enabled: false,
@@ -588,6 +596,38 @@ describe('health.indicatorTimeoutMs feeds a timer', () => {
     (value) => {
       expect(() => normalizeCoreOptions({ health: { indicatorTimeoutMs: value } })).toThrow(
         `health.indicatorTimeoutMs must be a positive integer of at most ${MAX_TIMER_DELAY}, received ${value}`
+      )
+    }
+  )
+})
+
+describe('metrics.scrapeTimeoutMs', () => {
+  const MAX_TIMER_DELAY = 2 ** 31 - 1
+
+  it('defaults to 5000', () => {
+    expect(normalizeCoreOptions().metrics.scrapeTimeoutMs).toBe(5000)
+  })
+
+  it.each([1, 5000, MAX_TIMER_DELAY])('accepts %p', (scrapeTimeoutMs) => {
+    expect(normalizeCoreOptions({ metrics: { scrapeTimeoutMs } }).metrics.scrapeTimeoutMs).toBe(
+      scrapeTimeoutMs
+    )
+  })
+
+  it.each([0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY, 2 ** 53])(
+    'rejects %p at boot, naming the option',
+    (scrapeTimeoutMs) => {
+      expect(() => normalizeCoreOptions({ metrics: { scrapeTimeoutMs } })).toThrow(
+        `metrics.scrapeTimeoutMs must be a positive safe integer, received ${String(scrapeTimeoutMs)}`
+      )
+    }
+  )
+
+  it.each([MAX_TIMER_DELAY + 1, Number.MAX_SAFE_INTEGER])(
+    'refuses %p, which a timer would clamp to one millisecond',
+    (scrapeTimeoutMs) => {
+      expect(() => normalizeCoreOptions({ metrics: { scrapeTimeoutMs } })).toThrow(
+        `metrics.scrapeTimeoutMs must be a positive integer of at most ${MAX_TIMER_DELAY}, received ${scrapeTimeoutMs}`
       )
     }
   )

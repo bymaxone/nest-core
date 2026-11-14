@@ -279,13 +279,14 @@ configuration fails fast at the route rather than at boot.
 
 ### `metrics`
 
-| Option                  | Type                     | Default     | Description                                                                                      |
-| ----------------------- | ------------------------ | ----------- | ------------------------------------------------------------------------------------------------ |
-| `enabled`               | `boolean`                | `false`     | Registers the metrics controller and the registry.                                               |
-| `path`                  | `string`                 | `'metrics'` | Route serving the Prometheus scrape.                                                             |
-| `defaultLabels`         | `Record<string, string>` | `{}`        | Static labels attached to every metric.                                                          |
-| `collectDefaultMetrics` | `boolean`                | `true`      | Collects `prom-client`'s process CPU, memory, and event-loop metrics.                            |
-| `authToken`             | `string`                 | _(unset)_   | Bearer required to scrape. Unset leaves the endpoint open; empty/whitespace is rejected at boot. |
+| Option                  | Type                     | Default     | Description                                                                                                                             |
+| ----------------------- | ------------------------ | ----------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `enabled`               | `boolean`                | `false`     | Registers the metrics controller and the registry.                                                                                      |
+| `path`                  | `string`                 | `'metrics'` | Route serving the Prometheus scrape.                                                                                                    |
+| `defaultLabels`         | `Record<string, string>` | `{}`        | Static labels attached to every metric.                                                                                                 |
+| `collectDefaultMetrics` | `boolean`                | `true`      | Collects `prom-client`'s process CPU, memory, and event-loop metrics.                                                                   |
+| `authToken`             | `string`                 | _(unset)_   | Bearer required to scrape. Unset leaves the endpoint open; empty/whitespace is rejected at boot.                                        |
+| `scrapeTimeoutMs`       | `number`                 | `5000`      | How long a scrape waits for the collection; past it every scrape answers `503` until it settles. A positive integer up to `2147483647`. |
 
 As with `health`, `enabled` and `path` register conditionally on `forRoot`. On
 `forRootAsync` the metrics controller is always registered at the default path
@@ -874,8 +875,16 @@ Inject `BYMAX_METRICS_REGISTRY` to register your own application metrics
 against the same registry the endpoint scrapes.
 
 Every scrape recomputes the registry, which costs about 0.4 ms with the default collectors, so an open
-endpoint is cheap but not free: set `metrics.authToken` or restrict the route at the edge. A contributor's
-`collect()` that never settles keeps the scrape open, so bound your collectors.
+endpoint is cheap but not free: set `metrics.authToken` or restrict the route at the edge.
+
+Scrapes that arrive while a collection runs share it, and a scrape waits at most
+`metrics.scrapeTimeoutMs`. A collection still
+running after that is left to finish, because `prom-client` cannot cancel a collector, and every scrape
+answers `503` at once until it settles; no second collection starts meanwhile, and a line in the log
+says so once. A contributor whose `collect()` never settles therefore makes `/metrics` answer `503`
+for ever, which is visible rather than a scrape held open. The deadline starts after the
+token check, so a caller without the token still gets `401`. Bound your collectors anyway: the
+deadline protects the endpoint, not the dependency.
 
 ### Contributed metrics
 
@@ -1409,8 +1418,9 @@ explained.
   test needs every probe fresh.
 - Turn on [`bodyDepth`](#bodydepth) for routes whose bodies reach a validator, and mind the raw
   parsers you add.
-- Keep every metrics contributor's `collect()` bounded: the scrape waits on it. An indicator's
-  `check()` is cut at `health.indicatorTimeoutMs`, but pass the `signal` on so the work stops too.
+- Keep every metrics contributor's `collect()` bounded: past `metrics.scrapeTimeoutMs` the scrape
+  answers `503`, but the collection keeps running. An indicator's `check()` is cut at
+  `health.indicatorTimeoutMs`, but pass the `signal` on so the work stops too.
 - Leave the OpenAPI document off in production; it is refused there anyway.
 
 ## 🏗️ Architecture

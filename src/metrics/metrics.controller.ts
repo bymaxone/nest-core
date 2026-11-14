@@ -22,6 +22,7 @@ import {
   Get,
   HttpStatus,
   Inject,
+  Logger,
   Req,
   Res,
   UnauthorizedException
@@ -33,6 +34,7 @@ import type { ResolvedCoreOptions } from '../core.options'
 import { BYMAX_CORE_OPTIONS, BYMAX_METRICS_REGISTRY } from '../core.tokens'
 import { assertAsyncFeatureEnabled } from '../passthrough.providers'
 import type { MetricsRegistry } from './metrics.registry'
+import { ScrapeRun } from './scrape-run'
 
 /**
  * Guard every request against the resolved options being inconsistent with how
@@ -96,6 +98,20 @@ function bearerMatches(authorization: unknown, expected: string): boolean {
 }
 
 /**
+ * A `ScrapeRun` that warns once, under the controller's name, when a collection passes its deadline.
+ *
+ * @param scrapeTimeoutMs - The deadline, from `metrics.scrapeTimeoutMs`.
+ * @returns The run the controller scrapes through.
+ */
+function newScrapeRun(scrapeTimeoutMs: number): ScrapeRun {
+  return new ScrapeRun(scrapeTimeoutMs, () => {
+    new Logger('MetricsController').warn(
+      `Metrics collection is past ${scrapeTimeoutMs} ms: scrapes answer 503 until it finishes`
+    )
+  })
+}
+
+/**
  * Build a `MetricsController` class bound to `registeredPath`. The route is
  * baked into the class's `@Controller` metadata, so calling this factory twice
  * with different routes yields two independently routable controller classes.
@@ -106,6 +122,8 @@ function bearerMatches(authorization: unknown, expected: string): boolean {
 export function createMetricsController(registeredPath: string): Type<object> {
   @Controller(registeredPath)
   class MetricsController {
+    private readonly scrapes: ScrapeRun
+
     /**
      * @param registry - The dedicated `prom-client` registry to scrape.
      * @param options - Resolved core options, used to guard consistency at request time.
@@ -115,7 +133,9 @@ export function createMetricsController(registeredPath: string): Type<object> {
       @Inject(BYMAX_METRICS_REGISTRY) private readonly registry: MetricsRegistry,
       @Inject(BYMAX_CORE_OPTIONS) private readonly options: ResolvedCoreOptions,
       @Inject(HttpAdapterHost) private readonly adapterHost: HttpAdapterHost
-    ) {}
+    ) {
+      this.scrapes = newScrapeRun(options.metrics.scrapeTimeoutMs)
+    }
 
     /**
      * Scrape endpoint: serve the registry's Prometheus text exposition with the
@@ -142,7 +162,7 @@ export function createMetricsController(registeredPath: string): Type<object> {
       ) {
         throw new UnauthorizedException()
       }
-      const body = await this.registry.metrics()
+      const body = await this.scrapes.run(() => this.registry.metrics())
       this.adapterHost.httpAdapter.setHeader(response, 'Content-Type', this.registry.contentType)
       this.adapterHost.httpAdapter.reply(response, body, HttpStatus.OK)
     }
