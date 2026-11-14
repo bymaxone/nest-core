@@ -160,7 +160,11 @@ describe('ScrapeRun', () => {
     await Promise.resolve()
     failing.reject(new Error('registry broke'))
 
-    await expect(Promise.all(together)).rejects.toThrow('registry broke')
+    const outcomes = await Promise.allSettled(together)
+    expect(outcomes).toHaveLength(2)
+    for (const outcome of outcomes) {
+      expect(outcome).toMatchObject({ status: 'rejected', reason: new Error('registry broke') })
+    }
     expect(jest.getTimerCount()).toBe(0)
     await expect(scrapes.run(() => Promise.resolve('recovered'))).resolves.toBe('recovered')
   })
