@@ -17,8 +17,9 @@
  * while Jest loads this file once per test file, so the patch is installed once, behind a
  * registered symbol, and the original method stays reachable for a control.
  *
- * supertest needs no patch of its own: from 7.3.1 it binds the server it starts itself to
- * `127.0.0.1`, so what this file covers is the application a suite starts with `app.listen(0)`.
+ * supertest needs no patch of its own: it binds the server it starts itself to `127.0.0.1`, so
+ * what this file covers is the application a suite starts with `app.listen(0)`. The minimum
+ * supertest version that does so is the one `package.json` requires.
  */
 import { Server } from 'node:net'
 

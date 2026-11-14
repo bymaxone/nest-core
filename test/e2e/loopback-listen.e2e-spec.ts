@@ -153,8 +153,8 @@ describe('Loopback listen (e2e)', () => {
    * supertest scenario.
    *
    * A request against a server that is not listening reaches it on `127.0.0.1`. supertest binds that
-   * listener itself from 7.3.1, and the patch above would give it the same host if it stopped, so
-   * the case holds either way: it checks the outcome, not which of the two did the binding.
+   * listener itself, and the patch above would give it the same host if it stopped, so the case
+   * holds either way: it checks the outcome, not which of the two did the binding.
    */
   it('lets supertest start a loopback listener and reach it', async () => {
     const target = server()
