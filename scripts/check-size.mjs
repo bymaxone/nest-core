@@ -94,9 +94,13 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 // Root budget 18.25 KiB = 18688 B: measured 18508 B brotli (raw 79333 B) plus 180 B of headroom. The
 // growth over 18 KiB is the shutdown drain in `HealthService` (one flag, one hook, the early
 // answer): code, none of it comment text.
+// Root budget 18.97 KiB = 19425 B: measured 19367 B brotli (raw 82613 B) plus 58 B of headroom. The
+// growth over 18.25 KiB is the repeat window (a map of open windows, an unreferenced timer per key,
+// the summary and the flush) and the filter's reporting of a 5xx `HttpException`: code, none of it
+// comment text.
 //   `./http` measured 787 B brotli (raw 2495 B) -> budget 1 KiB (1.30x): one helper and a loader.
 const BUDGETS = [
-  { name: '. (root)', path: 'dist/index.mjs', brotli: 18.25 * 1024 },
+  { name: '. (root)', path: 'dist/index.mjs', brotli: 18.97 * 1024 },
   { name: './pagination', path: 'dist/pagination/index.mjs', brotli: 1.5 * 1024 },
   { name: './health', path: 'dist/health/index.mjs', brotli: 0.5 * 1024 },
   { name: './openapi', path: 'dist/openapi/index.mjs', brotli: 7.5 * 1024 },
