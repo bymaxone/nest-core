@@ -248,11 +248,12 @@ describe('BymaxExceptionFilter, server failures as HttpException', () => {
     expect(repeat).toEqual({ ...reported, timestamp: repeat.timestamp })
   })
 
-  it('keeps the sink out of the way when none is bound, and holds no timer for it to read', () => {
+  it('answers a 5xx without a sink bound, and the window ending raises nothing', () => {
     const { fail } = harness()
 
-    expect(() => fail(serviceDown('x'))).not.toThrow()
-    jest.advanceTimersByTime(WINDOW_MS)
+    expect(fail(serviceDown('x'))).toMatchObject({ statusCode: 503 })
+    fail(serviceDown('y'))
+    expect(() => jest.advanceTimersByTime(WINDOW_MS)).not.toThrow()
   })
 
   /**
