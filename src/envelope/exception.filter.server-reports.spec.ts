@@ -366,6 +366,7 @@ describe('BymaxExceptionFilter, server failures in a running application', () =>
 
     expect(sink.reports).toHaveLength(1)
     expect(bodies[0]).toEqual(bodies[1])
+    expect(bodies[0]).toEqual(bodies[2])
     expect(JSON.stringify(bodies)).not.toMatch(/hunter2|ECONNREFUSED/)
     await app.close()
     expect(sink.reports).toHaveLength(2)
