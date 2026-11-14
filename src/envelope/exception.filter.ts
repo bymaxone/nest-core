@@ -36,7 +36,7 @@
  * @layer Filter
  */
 import { Catch, HttpException, Inject, Optional } from '@nestjs/common'
-import type { ArgumentsHost, ExceptionFilter } from '@nestjs/common'
+import type { ArgumentsHost, ExceptionFilter, OnModuleDestroy } from '@nestjs/common'
 import { HttpAdapterHost } from '@nestjs/core'
 
 import { containRejection } from '../contain-rejection'
@@ -52,6 +52,7 @@ import type { ICorrelationIdProvider } from './correlation.interfaces'
 import { BYMAX_INTERNAL_ERROR, BYMAX_VALIDATION_FAILED, codeForStatus } from './error-codes'
 import { buildErrorEnvelope } from './error-envelope'
 import type { ErrorDetails, ErrorEnvelope } from './error-envelope'
+import { RepeatWindow } from './repeat-window'
 import type { IUnexpectedErrorSink, UnexpectedErrorReport } from './unexpected-error.sink'
 import type { ITraceContextProvider } from '../telemetry/trace-context'
 import { NoopTraceContextProvider } from '../telemetry/trace-context'
@@ -219,6 +220,16 @@ const CLIENT_ERROR_MIN = 400
 /** Exclusive upper bound of the HTTP client-error range, and the first server-error status. */
 const CLIENT_ERROR_MAX = 500
 
+/** One server failure held for the summary that closes its window. */
+interface ServerErrorOccurrence {
+  /** The exception, whose cause a sink can write. */
+  readonly exception: HttpException
+  /** The request context it was raised under. */
+  readonly context: FilterErrorContext
+  /** The route template it was raised on. */
+  readonly route: string
+}
+
 /** The client-error status and safe message read off an exposed non-`HttpException` error. */
 interface ExposedClientError {
   /** The 4xx status the error reported. */
@@ -377,7 +388,7 @@ function buildInternalDetails(exception: unknown): ErrorDetails {
  * every error that escapes a handler, including those thrown by other filters.
  */
 @Catch()
-export class BymaxExceptionFilter implements ExceptionFilter {
+export class BymaxExceptionFilter implements ExceptionFilter, OnModuleDestroy {
   /** Clock used to stamp the envelope timestamp; overridable in tests via fake timers. */
   private readonly now: () => Date = (): Date => new Date()
 
@@ -386,6 +397,9 @@ export class BymaxExceptionFilter implements ExceptionFilter {
 
   /** The resolved trace-context provider, or the no-op fallback when none is bound. */
   private readonly traceContext: ITraceContextProvider
+
+  /** Bounds how often the same server failure is reported; see {@link reportServerError}. */
+  private readonly serverErrors: RepeatWindow<ServerErrorOccurrence>
 
   /**
    * @param options - Resolved core options; drives the `exposeInternals` switch.
@@ -409,6 +423,17 @@ export class BymaxExceptionFilter implements ExceptionFilter {
   ) {
     this.correlation = correlation ?? new NoopCorrelationIdProvider()
     this.traceContext = traceContext ?? new NoopTraceContextProvider()
+    this.serverErrors = new RepeatWindow(
+      options.envelope.serverErrorWindowMs,
+      (latest, repeated) => {
+        this.notify(latest.exception, latest.context, latest.route, repeated)
+      }
+    )
+  }
+
+  /** Report the summaries still due. */
+  onModuleDestroy(): void {
+    this.serverErrors.flush()
   }
 
   /**
@@ -485,7 +510,9 @@ export class BymaxExceptionFilter implements ExceptionFilter {
     request: unknown
   ): ErrorEnvelope {
     if (exception instanceof HttpException) {
-      return this.mapHttpException(exception, context, request)
+      const mapped = this.mapHttpException(exception, context, request)
+      this.reportServerError(exception, mapped, context, request)
+      return mapped
     }
     const exposed = resolveExposedClientError(exception)
     if (exposed !== undefined) {
@@ -504,14 +531,45 @@ export class BymaxExceptionFilter implements ExceptionFilter {
     // hook that redacts or enriches the error in place must find the response
     // already formed.
     const envelope = this.mapUnknown(exception, context)
+    this.notify(exception, context, readRequestInfo(request as RequestShape).route)
+    return envelope
+  }
+
+  /** Report a 5xx `HttpException` once per status and code in each window; see `RepeatWindow`. */
+  private reportServerError(
+    exception: HttpException,
+    mapped: ErrorEnvelope,
+    context: FilterErrorContext,
+    request: unknown
+  ): void {
+    if (mapped.statusCode < CLIENT_ERROR_MAX) {
+      return
+    }
+    const route = readRequestInfo(request as RequestShape).route
+    const admitted = this.serverErrors.admit(`${mapped.statusCode} ${mapped.code}`, {
+      exception,
+      context,
+      route
+    })
+    if (admitted) {
+      this.notify(exception, context, route)
+    }
+  }
+
+  /** Hand an error to the hook, then the sink; neither can change the response. */
+  private notify(
+    error: unknown,
+    context: FilterErrorContext,
+    route: string,
+    repeated?: number
+  ): void {
     try {
-      this.onUnexpectedError(exception, context)
+      this.onUnexpectedError(error, context, repeated)
     } catch {
       // The observability hook must never break error formatting; a throwing
       // override is swallowed so the envelope is still delivered.
     }
-    this.reportUnexpected(exception, context, request)
-    return envelope
+    this.reportUnexpected(error, context, route, repeated)
   }
 
   /**
@@ -521,9 +579,15 @@ export class BymaxExceptionFilter implements ExceptionFilter {
    *
    * @param error - The original thrown value.
    * @param context - The neutral request context.
-   * @param request - The framework request, read for its route template only.
+   * @param route - The route template, or `UNMATCHED_ROUTE`.
+   * @param repeated - On a summary, how many occurrences were withheld.
    */
-  private reportUnexpected(error: unknown, context: FilterErrorContext, request: unknown): void {
+  private reportUnexpected(
+    error: unknown,
+    context: FilterErrorContext,
+    route: string,
+    repeated?: number
+  ): void {
     const sink = this.unexpectedErrorSink
     if (sink === undefined) {
       return
@@ -532,9 +596,10 @@ export class BymaxExceptionFilter implements ExceptionFilter {
       const report: UnexpectedErrorReport = {
         error,
         method: context.method,
-        route: readRequestInfo(request as RequestShape).route,
+        route,
         ...(context.correlationId !== undefined ? { correlationId: context.correlationId } : {}),
-        ...(context.traceId !== undefined ? { traceId: context.traceId } : {})
+        ...(context.traceId !== undefined ? { traceId: context.traceId } : {}),
+        ...(repeated !== undefined ? { repeated } : {})
       }
       containRejection(sink.record(report), () => undefined)
     } catch {
@@ -660,7 +725,8 @@ export class BymaxExceptionFilter implements ExceptionFilter {
 
   /**
    * Observability seam invoked for every unexpected (non-`HttpException`) error
-   * collapsed to the generic 500. The base implementation is a no-op:
+   * collapsed to the generic 500, and for a 5xx `HttpException` (see `UnexpectedErrorReport`).
+   * The base implementation is a no-op:
    * this library owns no logger. An integration (for example
    * `@bymax-one/nest-logger`) subclasses the filter and overrides this to record
    * the original error with the current request context and correlation id.
@@ -668,8 +734,13 @@ export class BymaxExceptionFilter implements ExceptionFilter {
    *
    * @param _error - The original thrown value.
    * @param _context - The neutral request context.
+   * @param _repeated - On a summary, how many occurrences were withheld.
    */
-  protected onUnexpectedError(_error: unknown, _context: FilterErrorContext): void {
+  protected onUnexpectedError(
+    _error: unknown,
+    _context: FilterErrorContext,
+    _repeated?: number
+  ): void {
     // Intentionally empty: the base filter emits no logs. Subclasses override
     // this to forward the original error to a correlation-aware logging pipeline.
   }

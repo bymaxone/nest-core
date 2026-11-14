@@ -56,6 +56,19 @@ export interface UnexpectedErrorReport {
    * option controls the response body and the sink is not the response.
    */
   readonly traceId?: string
+  /**
+   * How many further occurrences of the same server failure were withheld in the window that just
+   * ended; present only on the summary that closes a window, whose `error` is the latest of them.
+   * Absent on a report of one occurrence.
+   *
+   * A `5xx` `HttpException` is reported with the exception as thrown, so a sink can write its
+   * `cause`, which the response never carries. While a dependency is down every request fails the
+   * same way, so the first occurrence of each status and code is reported at once, the repeats inside
+   * `envelope.serverErrorWindowMs` are counted, and one summary closes the window; a shutdown reports
+   * the summaries still due. A `4xx` `HttpException` is never reported. The response is the same either
+   * way.
+   */
+  readonly repeated?: number
 }
 
 /**
@@ -65,10 +78,11 @@ export interface UnexpectedErrorReport {
  * your own marked `@Global()`. Nothing is bound by default, and with no sink the
  * filter records nothing: this package owns no logger.
  *
- * Called once per unexpected error, never for an `HttpException` and never for
- * a 4xx the framework's body pipeline raised (a malformed JSON body, a payload
- * over the limit) — those are not unexpected, and a sink would otherwise get a
- * flood of client mistakes mixed in with server failures.
+ * Called once per unexpected error, and for a `5xx` `HttpException` once per status and code in
+ * each window (see `UnexpectedErrorReport.repeated`). Never for an `HttpException` below 500 and
+ * never for a 4xx the framework's body pipeline raised (a malformed JSON body, a payload over the
+ * limit) — those are not unexpected, and a sink would otherwise get a flood of client mistakes
+ * mixed in with server failures.
  *
  * Called synchronously from the exception filter, before the response is
  * written, so an implementation must be cheap and must not block: hand the
