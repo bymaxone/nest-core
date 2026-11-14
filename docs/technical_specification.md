@@ -64,7 +64,7 @@ Without a shared foundation, every service reimplements the same bootstrap layer
 1. **Configuration over convention.** Everything goes through `forRoot`/`forRootAsync`. Sensible defaults when applicable.
 2. **Zero opinion on environment.** The lib does not read `process.env`; the app injects the options.
 3. **Opt-in features.** Envelope, timing, health, and metrics are individually switchable. Disabled features add nothing to the container.
-4. **Stable contracts.** The error envelope and the health response are versioned public contracts. Breaking either is a major release.
+4. **Stable contracts.** The error envelope and the health response are public contracts a consumer depends on. Breaking either is a breaking change: it ships with an Apply note in `CHANGELOG.md` that says what a derived backend must change.
 5. **Integration by contract.** Correlation ids, timing sinks, and health indicators are interfaces bound to Symbol tokens. Any implementation satisfying the interface plugs in; no hard dependency on any sibling library.
 6. **ORM-agnostic.** Pagination helpers build shapes and cursors; the consumer's repository executes the query with the persistence technology of its choice.
 7. **Production-safe by default.** Unknown errors collapse to a generic 500 in production; internals are exposed only when explicitly enabled for development.
@@ -307,7 +307,7 @@ export class ObservabilityModule {}
 
 ### 5.1 Contract
 
-Every error that leaves the application has this exact shape. The contract is versioned with the package: adding an optional field is a minor release, changing or removing a field is a major release.
+Every error that leaves the application has this exact shape. Adding an optional field needs no Apply note; changing or removing a field needs one in `CHANGELOG.md`.
 
 ```json
 {
