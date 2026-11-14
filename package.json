@@ -7,7 +7,7 @@
   "homepage": "https://github.com/bymaxone/nest-core#readme",
   "repository": {
     "type": "git",
-    "url": "https://github.com/bymaxone/nest-core.git"
+    "url": "git+https://github.com/bymaxone/nest-core.git"
   },
   "bugs": {
     "url": "https://github.com/bymaxone/nest-core/issues"

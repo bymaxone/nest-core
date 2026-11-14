@@ -27,7 +27,8 @@
  * it. On Windows, run it from a shell that provides `tar` (Git Bash, WSL, or
  * Windows 10 1803+, which ships bsdtar).
  *
- * Usage: `node scripts/check-consumer-runtime.mjs` (run after `pnpm build`).
+ * Usage: `node scripts/check-consumer-runtime.mjs` (run after `pnpm build`), or with
+ * `PACKAGE_TARBALL=/path/to/package.tgz` to inspect a tarball that was packed already.
  */
 import { execFileSync } from 'node:child_process'
 import {
@@ -287,7 +288,8 @@ function cleanup() {
 
 console.log('Consumer load gate')
 
-if (!existsSync(join(rootDir, 'dist'))) {
+// With `PACKAGE_TARBALL` the gate inspects that file, so a working tree without `dist/` is fine.
+if (!process.env['PACKAGE_TARBALL'] && !existsSync(join(rootDir, 'dist'))) {
   console.error('✗ dist/ is missing — run `pnpm build` first')
   process.exit(1)
 }
@@ -297,32 +299,37 @@ const packDir = mkdtempSync(join(tmpdir(), 'pack-'))
 let failed = false
 
 try {
-  // `--ignore-scripts` keeps `prepublishOnly` from rebuilding underneath the
-  // artifact this gate is meant to inspect.
-  // The tarball is located by reading the directory it was packed into, not by
-  // parsing `npm pack`'s stdout. Inside a publish, npm writes notices around the
-  // filename, so taking the last line yields a path with trailing text and `tar`
-  // fails on a name that does not exist. The directory is freshly created and
-  // holds exactly one archive.
-  // `npm_config_dry_run` is cleared for the child: a `npm publish --dry-run`
-  // pre-flight exports it, the nested pack inherits it, and a dry pack writes no
-  // file — so the gate would report a missing tarball for a reason that has
-  // nothing to do with the package. Cleared, the gate means the same thing in
-  // every context it can be invoked from.
-  const packEnv = { ...process.env }
-  delete packEnv['npm_config_dry_run']
-  // `cwd: rootDir`: the package to pack is this repository's, whatever directory
-  // the script was invoked from. Without it the gate would inspect whichever
-  // package npm resolved from the caller's cwd.
-  run('npm', ['pack', '--ignore-scripts', '--silent', '--pack-destination', packDir], {
-    cwd: rootDir,
-    env: packEnv
-  })
-  const packed = readdirSync(packDir).filter((name) => name.endsWith('.tgz'))
-  if (packed.length !== 1) {
-    throw new Error(`expected one tarball in ${packDir}, found ${packed.length}`)
+  // `PACKAGE_TARBALL` names the tarball a release gate has already packed, so the file inspected
+  // here is the file that is published. Without it the gate packs one itself.
+  let tarball = process.env['PACKAGE_TARBALL']
+  if (tarball === undefined || tarball === '') {
+    // `--ignore-scripts` keeps `prepublishOnly` from rebuilding underneath the
+    // artifact this gate is meant to inspect.
+    // The tarball is located by reading the directory it was packed into, not by
+    // parsing `npm pack`'s stdout. Inside a publish, npm writes notices around the
+    // filename, so taking the last line yields a path with trailing text and `tar`
+    // fails on a name that does not exist. The directory is freshly created and
+    // holds exactly one archive.
+    // `npm_config_dry_run` is cleared for the child: a `npm publish --dry-run`
+    // pre-flight exports it, the nested pack inherits it, and a dry pack writes no
+    // file — so the gate would report a missing tarball for a reason that has
+    // nothing to do with the package. Cleared, the gate means the same thing in
+    // every context it can be invoked from.
+    const packEnv = { ...process.env }
+    delete packEnv['npm_config_dry_run']
+    // `cwd: rootDir`: the package to pack is this repository's, whatever directory
+    // the script was invoked from. Without it the gate would inspect whichever
+    // package npm resolved from the caller's cwd.
+    run('npm', ['pack', '--ignore-scripts', '--silent', '--pack-destination', packDir], {
+      cwd: rootDir,
+      env: packEnv
+    })
+    const packed = readdirSync(packDir).filter((name) => name.endsWith('.tgz'))
+    if (packed.length !== 1) {
+      throw new Error(`expected one tarball in ${packDir}, found ${packed.length}`)
+    }
+    tarball = join(packDir, packed[0])
   }
-  const tarball = join(packDir, packed[0])
 
   const packageDir = join(consumerDir, 'node_modules', packageName)
   mkdirSync(packageDir, { recursive: true })
