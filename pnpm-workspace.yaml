@@ -71,6 +71,14 @@ overrides:
   # the jest and eslint toolchains.
   'js-yaml@3': '^3.15.2'
   'js-yaml@4': '^4.3.2'
+  # glob >=9 <14.0.2 carries GHSA-3g3m-2fjr-6pw4 and minimatch >=7 <11.0.1 carries
+  # GHSA-g3hv-75wg-m249. Both are reached only through test, mutation and lint tooling
+  # (jest's test-exclude, Stryker, the eslint and commitlint toolchains); none is in the published
+  # package. Drop these entries when the parents' own ranges are above the floors.
+  'glob@10': '^14.0.2'
+  'glob@13': '^14.0.2'
+  'minimatch@9': '^11.0.1'
+  'minimatch@10': '^11.0.1'
   # handlebars below 4.7.10 carries GHSA-8r5x-fm3f-whwj and GHSA-p8wg-vrv2-v86f
   # (critical) and GHSA-xw65-4hp5-5hc7, reached as a dependency of ts-jest.
   'handlebars': '^4.7.10'
