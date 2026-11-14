@@ -1,7 +1,7 @@
 /**
- * The loopback default for the end-to-end suite's listeners, and its installers.
+ * The loopback default for the test suites' listeners, and its installers.
  *
- * Layer: e2e support. `test/jest.loopback-listen.ts` installs both patches for every e2e file; this
+ * Layer: test support. `test/jest.loopback-listen.ts` installs both patches for every test file; this
  * module only defines them, so a suite can import it without installing anything.
  *
  * `server.listen(port)` with no host binds the unspecified IPv6 address `::`, and supertest then

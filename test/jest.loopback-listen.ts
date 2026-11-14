@@ -1,8 +1,9 @@
 /**
- * Binds every port-only `listen` of the end-to-end suite to the IPv4 loopback address, and makes
+ * Binds every port-only `listen` of the test suites to the IPv4 loopback address, and makes
  * supertest wait for a listener it starts itself.
  *
- * Layer: e2e support, loaded through `setupFiles` in `jest.e2e.config.ts`.
+ * Layer: test support, loaded through `setupFiles` in `jest.config.ts`, `jest.e2e.config.ts` and
+ * `jest.coverage.config.ts`, so every spec that uses supertest runs under it.
  *
  * The reasoning, the patches and their limits are in `test/support/loopback-listen.ts`.
  */
