@@ -11,6 +11,46 @@ heading here.
 
 ## [Unreleased]
 
+## [1.6.10] - 2026-11-14
+
+A patch release. A `5xx` `HttpException` now reaches the unexpected-error sink, bounded so an outage
+cannot become a log storm, and a `/metrics` scrape is bounded by a deadline.
+
+**Apply to a derived backend:** `pnpm up @bymax-one/nest-core`, then:
+
+- If you bind an `IUnexpectedErrorSink`, it now also receives a `5xx` `HttpException` (a library's
+  `503`, say), once per status and code per window (default 60 s), and one summary with `repeated: N`
+  when the window ends. The exception can carry a driver message with a host and a port in its `cause`:
+  redact in your logger. Set `envelope.serverErrorWindowMs` to change the window.
+- A scrape that is still collecting after `metrics.scrapeTimeoutMs` (default `5000`) now answers `503`
+  instead of staying open. Set the option if your collectors legitimately take longer.
+
+### Added
+
+- **A `5xx` `HttpException` reaches the sink with its cause.** The exception filter answered it with
+  a fixed body and never reported it, so the cause of a dependency outage was lost. The sink and the
+  protected `onUnexpectedError` hook now receive it as thrown; a `4xx` never does, and a
+  non-`HttpException` unexpected error is still reported every time. The response is unchanged: the
+  same status, code and message, no cause and no repeat count in any body.
+- **`envelope.serverErrorWindowMs`**, default `60000`, an integer in `1..2147483647`, refused at boot
+  otherwise. The first occurrence of a `(status, code)` is reported at once, the repeats inside the
+  window are counted, and one summary carries `repeated` and the latest exception. Shutdown reports
+  the summaries still due.
+- **`UnexpectedErrorReport.repeated`**, optional, present only on a summary.
+- **`metrics.scrapeTimeoutMs`**, default `5000`, an integer in `1..2147483647`, refused at boot
+  otherwise.
+
+### Changed
+
+- **Concurrent scrapes share one collection, and a scrape past the deadline answers `503`.**
+  `prom-client` cannot cancel a collector or return a partial result, so a collection that is past
+  its deadline stays in flight: every scrape answers `503` at once, one warning is logged, no second
+  collection starts, and nothing is cached. When the collection settles, the next scrape starts a
+  fresh one. A scrape no longer waits on a `collect()` that never settles.
+- **Development dependencies.** `glob` and `minimatch` are lifted past their advisories, and the
+  `brace-expansion` 2.x override, which nothing resolved, is removed. Nothing in the published package
+  changes.
+
 ## [1.6.9] - 2026-11-14
 
 A patch release. Documentation and metadata only: no runtime behaviour changes.
@@ -1483,4 +1523,5 @@ have regressed from. They are kept because the reasoning is worth having.
 [1.6.7]: https://github.com/bymaxone/nest-core/compare/v1.6.6...v1.6.7
 [1.6.8]: https://github.com/bymaxone/nest-core/compare/v1.6.7...v1.6.8
 [1.6.9]: https://github.com/bymaxone/nest-core/compare/v1.6.8...v1.6.9
-[Unreleased]: https://github.com/bymaxone/nest-core/compare/v1.6.9...HEAD
+[1.6.10]: https://github.com/bymaxone/nest-core/compare/v1.6.9...v1.6.10
+[Unreleased]: https://github.com/bymaxone/nest-core/compare/v1.6.10...HEAD
