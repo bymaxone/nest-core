@@ -186,14 +186,17 @@ describe('BymaxExceptionFilter, server failures as HttpException', () => {
     }
   )
 
-  it('uses the status and the derived code when the exception carries none', () => {
+  it('windows an exception with no code under its status-derived code, apart from one with its own', () => {
     const sink = new RecordingSink()
     const { fail } = harness({ sink })
 
-    fail(new HttpException('Service Unavailable', 503))
+    const derived = fail(new HttpException('Service Unavailable', 503))
     fail(new HttpException('Service Unavailable', 503))
 
+    expect(derived.code).toBe('BYMAX_SERVICE_UNAVAILABLE')
     expect(sink.reports).toHaveLength(1)
+    fail(serviceDown('own code'))
+    expect(sink.reports).toHaveLength(2)
   })
 
   it('honours the configured window', () => {
@@ -369,7 +372,7 @@ describe('BymaxExceptionFilter, server failures in a running application', () =>
     expect(sink.reports[1]).toMatchObject({ repeated: 2, route: '/down' })
   })
 
-  it('does the same on the asynchronous registration path, where the filter comes from a factory', async () => {
+  it('answers 503, reports once and flushes the summary on close when the filter comes from a factory', async () => {
     const sink = applicationSink
     sink.reports.length = 0
     const moduleRef = await Test.createTestingModule({
