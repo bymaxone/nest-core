@@ -54,9 +54,9 @@ const config: Config = {
     }
   },
   coverageReporters: ['text', 'lcov', 'clover'],
-  // Binds every port-only `listen` to the IPv4 loopback address and makes supertest wait for a
-  // listener it starts itself, so a request is never answered by another process's server on the
-  // same port (macOS). The reasoning is in test/support/loopback-listen.ts.
+  // Binds every port-only `listen` to the IPv4 loopback address, so a request is never answered by
+  // another process's server on the same port (macOS). The reasoning is in
+  // test/support/loopback-listen.ts.
   setupFiles: ['<rootDir>/../test/jest.loopback-listen.ts'],
   maxWorkers: '50%',
   clearMocks: true,
