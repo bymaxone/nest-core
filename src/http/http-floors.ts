@@ -42,7 +42,8 @@ export interface HttpFloorsOptions {
    */
   readonly headersTimeoutMs?: number
   /**
-   * Longest a single request may take, headers and body together. Positive integer.
+   * Longest the server takes to receive a request, headers and body together; the handler and the
+   * response are not bounded. Positive integer.
    * Default: `30000`.
    */
   readonly requestTimeoutMs?: number
