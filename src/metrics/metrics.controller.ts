@@ -98,6 +98,20 @@ function bearerMatches(authorization: unknown, expected: string): boolean {
 }
 
 /**
+ * A `ScrapeRun` that warns once, under the controller's name, when a collection passes its deadline.
+ *
+ * @param scrapeTimeoutMs - The deadline, from `metrics.scrapeTimeoutMs`.
+ * @returns The run the controller scrapes through.
+ */
+function newScrapeRun(scrapeTimeoutMs: number): ScrapeRun {
+  return new ScrapeRun(scrapeTimeoutMs, () => {
+    new Logger('MetricsController').warn(
+      `Metrics collection is past ${scrapeTimeoutMs} ms: scrapes answer 503 until it finishes`
+    )
+  })
+}
+
+/**
  * Build a `MetricsController` class bound to `registeredPath`. The route is
  * baked into the class's `@Controller` metadata, so calling this factory twice
  * with different routes yields two independently routable controller classes.
@@ -120,12 +134,7 @@ export function createMetricsController(registeredPath: string): Type<object> {
       @Inject(BYMAX_CORE_OPTIONS) private readonly options: ResolvedCoreOptions,
       @Inject(HttpAdapterHost) private readonly adapterHost: HttpAdapterHost
     ) {
-      const { scrapeTimeoutMs } = options.metrics
-      this.scrapes = new ScrapeRun(scrapeTimeoutMs, () => {
-        new Logger(MetricsController.name).warn(
-          `Metrics collection is past ${scrapeTimeoutMs} ms: scrapes answer 503 until it finishes`
-        )
-      })
+      this.scrapes = newScrapeRun(options.metrics.scrapeTimeoutMs)
     }
 
     /**

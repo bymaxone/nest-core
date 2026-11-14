@@ -59,6 +59,20 @@ describe('ScrapeRun', () => {
     expect(collect).toHaveBeenCalledTimes(1)
   })
 
+  it('hands every scrape the same promise while a collection is in flight, and after its deadline', async () => {
+    const scrapes = new ScrapeRun(DEADLINE_MS, jest.fn())
+    const { collect } = controlled()
+    const first = scrapes.run(collect)
+    const second = scrapes.run(collect)
+    jest.advanceTimersByTime(DEADLINE_MS)
+    await Promise.allSettled([first, second])
+    const later = scrapes.run(collect)
+    await Promise.allSettled([later])
+
+    expect(second).toBe(first)
+    expect(later).toBe(first)
+  })
+
   it('starts a new collection for each scrape that arrives after the last one settled', async () => {
     const scrapes = new ScrapeRun(DEADLINE_MS, jest.fn())
     const collect = jest.fn().mockResolvedValueOnce('first').mockResolvedValueOnce('second')
