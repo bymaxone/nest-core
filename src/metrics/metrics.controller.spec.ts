@@ -340,7 +340,7 @@ describe('createMetricsController, scrape deadline', () => {
     expect(registry.metrics).toHaveBeenCalledTimes(1)
   })
 
-  it('warns once that the collection is past its deadline', async () => {
+  it("warns once, under the controller's name, that the collection is past its deadline", async () => {
     const warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined)
     const { controller } = hungController(2_000)
     const scrapes = [controller.scrape({}), controller.scrape({})]
@@ -350,6 +350,7 @@ describe('createMetricsController, scrape deadline', () => {
 
     expect(warn).toHaveBeenCalledTimes(1)
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('2000 ms'))
+    expect((warn.mock.contexts[0] as { context?: string }).context).toBe('MetricsController')
   })
 
   it('refuses a wrong token with 401 before it looks at the collection', async () => {
