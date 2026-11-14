@@ -226,11 +226,11 @@ and the classification table: [Production is a closed door](#production-is-a-clo
 
 ### `envelope`
 
-| Option                | Type      | Default | Description                                                                                                                                             |
-| --------------------- | --------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `enabled`             | `boolean` | `true`  | Registers the global exception filter.                                                                                                                  |
-| `exposeInternals`     | `boolean` | `false` | Includes the original message and stack of unknown errors, and the `details` of a 5xx. Development only, never production.                              |
-| `serverErrorWindowMs` | `number`  | `60000` | How long repeats of the same `5xx` `HttpException` are counted instead of reported to the unexpected-error sink. A positive integer up to `2147483647`. |
+| Option                | Type      | Default | Description                                                                                                                                                                       |
+| --------------------- | --------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `enabled`             | `boolean` | `true`  | Registers the global exception filter.                                                                                                                                            |
+| `exposeInternals`     | `boolean` | `false` | Includes the original message and stack of unknown errors, and the `details` of a 5xx. Development only, never production.                                                        |
+| `serverErrorWindowMs` | `number`  | `60000` | How long repeats of the same `5xx` `HttpException` are counted and summarised instead of each being reported to the unexpected-error sink. A positive integer up to `2147483647`. |
 
 ### `timing`
 
@@ -490,17 +490,17 @@ export class UnexpectedErrorLogger implements IUnexpectedErrorSink {
 export class ErrorReportingModule {}
 ```
 
-The sink is called, on both registration paths, for two things and nothing else. Every unexpected
-error that collapses to a `500` is reported, once each. A `5xx` `HttpException` (a library's `503`
-for a dependency that is down, say) is reported with the exception as thrown, so the sink can write
+The sink is called, on both registration paths, for every unexpected error that collapses to a
+`500`, once each, and for a `5xx` `HttpException`. A library's `503`
+for a dependency that is down, say, is reported with the exception as thrown, so the sink can write
 its `cause`, which the response never carries; an `HttpException` below `500` is a deliberate answer
 and an exposed `4xx` from the body pipeline is a client mistake, and neither is reported.
 
 While a dependency is down every request fails the same way, and a line with a stack per request
 would be a storm of its own. A `5xx` `HttpException` is therefore reported once per status and code
-in each `envelope.serverErrorWindowMs` window (`60000` by default), and the repeats are counted. When
+in each `envelope.serverErrorWindowMs` window, and the repeats are counted. When
 the window ends, one more report carries the number withheld in `repeated` and the latest exception;
-a shutdown reports the summaries still due. A report of a single occurrence has no `repeated`. The
+a shutdown reports the summaries still due. The
 response is the same whether or not it is reported.
 
 What the sink receives can carry a host and a port, because a driver puts them in its message: redact
