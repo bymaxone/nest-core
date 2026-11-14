@@ -98,9 +98,12 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 // growth over 18.25 KiB is the repeat window (a map of open windows, an unreferenced timer per key,
 // the summary and the flush) and the filter's reporting of a 5xx `HttpException`: code, none of it
 // comment text.
+// Root budget 19.34 KiB = 19804 B: measured 19740 B brotli (raw 84253 B) plus 64 B of headroom. The
+// growth over 18.97 KiB is the scrape deadline (one shared collection, an unreferenced deadline timer
+// and its option's validation): code, none of it comment text.
 //   `./http` measured 787 B brotli (raw 2495 B) -> budget 1 KiB (1.30x): one helper and a loader.
 const BUDGETS = [
-  { name: '. (root)', path: 'dist/index.mjs', brotli: 18.97 * 1024 },
+  { name: '. (root)', path: 'dist/index.mjs', brotli: 19.34 * 1024 },
   { name: './pagination', path: 'dist/pagination/index.mjs', brotli: 1.5 * 1024 },
   { name: './health', path: 'dist/health/index.mjs', brotli: 0.5 * 1024 },
   { name: './openapi', path: 'dist/openapi/index.mjs', brotli: 7.5 * 1024 },
