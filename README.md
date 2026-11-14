@@ -860,6 +860,10 @@ default HTTP metrics with a bounded label set:
 Inject `BYMAX_METRICS_REGISTRY` to register your own application metrics
 against the same registry the endpoint scrapes.
 
+Every scrape recomputes the registry, which costs about 0.4 ms with the default collectors, so an open
+endpoint is cheap but not free: set `metrics.authToken` or restrict the route at the edge. A contributor's
+`collect()` that never settles keeps the scrape open, so bound your collectors.
+
 ### Contributed metrics
 
 Injecting the token works for your own code, but it makes a library depend on
@@ -1327,7 +1331,7 @@ void bootstrap()
 | Security headers   | `helmet()` with `strictTransportSecurity: false` (TLS is normally ended in front of the app, which owns HSTS). Pass `helmet: { ... }` to tune it, for example the CSP of a browser-serving backend, or `helmet: false` to leave it out. `strictTransportSecurity: undefined` is not `false`: it turns helmet's HSTS default back on |
 | Request bodies     | The JSON and urlencoded parsers refuse a compressed body (`Content-Encoding`) with `415` instead of decompressing it, on every route and before routing. Only these two parsers: a raw or text parser you add yourself still decompresses. Size limits and the extended form syntax keep the parsers' defaults                      |
 | `headersTimeoutMs` | `15000`: the longest a client may take to send its complete header block. Node's own default is 60 s, which leaves a header block sent a byte at a time open as a cheap denial of service                                                                                                                                           |
-| `requestTimeoutMs` | `30000`: the longest a single request, headers and body together, may take. Node's default is 5 minutes. Must not be below `headersTimeoutMs`                                                                                                                                                                                       |
+| `requestTimeoutMs` | `30000`: the longest the server takes to receive a request, headers and body together. It does not bound the handler or the response. Node's default is 5 minutes. Must not be below `headersTimeoutMs`                                                                                                                             |
 
 `keepAliveTimeout` is left at Node's 5 s, which is too short behind a load balancer. A balancer whose
 idle timeout is longer than the server's reuses a connection Node has just closed and answers an
@@ -1335,6 +1339,23 @@ intermittent `502`, so set it above the balancer's idle timeout, for example 61 
 `app.getHttpServer().keepAliveTimeout = 61_000`. The cost is that an idle socket is kept that much
 longer. Measured on Node 24, a `headersTimeoutMs` shorter than `keepAliveTimeout` (500 ms and 1 s
 against 3 s and 5 s) did not close an idle keep-alive socket, so the two need no particular order.
+
+### What the floors do not set
+
+`requestTimeoutMs` bounds receiving the request, not serving it. Measured on Node 24 with
+`requestTimeoutMs: 1000` and a handler that takes 2.5 s, the response came back `200` after 2510 ms.
+Handler time and response writing are not bounded (`server.timeout` stays `0`), and bounding them is
+the application's job: a per-route timeout interceptor, or the edge. The helper deliberately leaves
+`server.timeout` and any socket idle timeout alone, because either would cut server-sent events and
+long-poll streams.
+
+It also sets none of these, so a deployment that needs them sets them itself or relies on the edge:
+
+- a connection cap (`maxConnections`) and `maxRequestsPerSocket`, both unlimited;
+- `maxHeaderSize`, left at Node's default;
+- a slow-read limit on the response;
+- a request body size limit: the JSON and urlencoded parsers keep their defaults, so a 200 KB JSON
+  body is refused with `413`, and a raw or text parser you add has its own.
 
 Node enforces both timeouts from a sweep over the open connections, not from a timer per
 connection, and the sweep runs every 30 s by default: measured, a 1 s header timeout left a
@@ -1357,6 +1378,27 @@ Express only; on another adapter it throws before applying anything. `helmet` is
 peer, loaded only when the helper runs, and a missing one fails with the install command. An
 unusable timeout (zero, fractional, or a header timeout above the request timeout) throws
 rather than leaving a socket limit switched off.
+
+## 🚀 Production Checklist
+
+What a backend built on this library sets before it takes traffic. Each line links to where it is
+explained.
+
+- Call [`applyHttpFloors`](#-http-floors) before `app.init()`, after the access log and before
+  anything that reads the request; it throws on an initialised or listening application.
+- Call `app.enableShutdownHooks()` so a `SIGTERM` flips readiness to `503`; `app.close()`
+  always does.
+- Set `server.keepAliveTimeout` above the load balancer's idle timeout, for example 61 s behind a
+  60 s one.
+- Bound handler time and slow reads yourself or at the edge: `requestTimeoutMs` does not.
+- Set `metrics.authToken`, or restrict `/metrics` at the edge, when [metrics](#-metrics) are on.
+- Leave `health.exposeIndicatorErrors` off, and keep `health.readinessCacheMs` at its default unless a
+  test needs every probe fresh.
+- Turn on [`bodyDepth`](#bodydepth) for routes whose bodies reach a validator, and mind the raw
+  parsers you add.
+- Keep every metrics contributor's `collect()` bounded: the scrape waits on it. An indicator's
+  `check()` is cut at `health.indicatorTimeoutMs`, but pass the `signal` on so the work stops too.
+- Leave the OpenAPI document off in production; it is refused there anyway.
 
 ## 🏗️ Architecture
 

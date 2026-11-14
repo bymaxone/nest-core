@@ -19,7 +19,10 @@ import { loadHelmet } from './http.loader'
 /** Longest a client may take to send its complete header block. */
 const DEFAULT_HEADERS_TIMEOUT_MS = 15_000
 
-/** Longest a single request, headers and body together, may take end to end. */
+/**
+ * Longest the server takes to receive a request, headers and body together. It does not bound the
+ * handler or the response: `server.timeout` stays zero so streams are not cut.
+ */
 const DEFAULT_REQUEST_TIMEOUT_MS = 30_000
 
 /** The `helmet()` options object; any option `helmet` accepts. */
@@ -39,7 +42,8 @@ export interface HttpFloorsOptions {
    */
   readonly headersTimeoutMs?: number
   /**
-   * Longest a single request may take, headers and body together. Positive integer.
+   * Longest the server takes to receive a request, headers and body together; the handler and the
+   * response are not bounded. Positive integer.
    * Default: `30000`.
    */
   readonly requestTimeoutMs?: number
