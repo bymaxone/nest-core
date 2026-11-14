@@ -74,8 +74,8 @@ describe('Sequential requests and listeners (e2e)', () => {
    * Restart scenario, the control.
    *
    * A server that is not listening is started for each request and closed after it, so the same
-   * number of requests binds that many listeners. This is the measured behaviour of supertest 7.3
-   * that the helper avoids; a failure here means supertest changed and the helper can go.
+   * number of requests binds that many listeners. This is the behaviour the helper avoids; a failure
+   * here means supertest changed and the helper can go.
    */
   it('starts one listener per sequential request on a server that is not listening', async () => {
     const server = createServer((_incoming, response) => {
