@@ -322,6 +322,16 @@ export interface MetricsOptions {
    * mistyped secret fails loud instead of silently leaving the endpoint open.
    */
   authToken?: string
+  /**
+   * How long a scrape waits for the metrics collection, in milliseconds. Positive integer up to
+   * 2147483647. Default: `5000`.
+   *
+   * Concurrent scrapes share one collection. One still running after this long is left to finish,
+   * because `prom-client` cannot cancel a collector, and every scrape answers `503` at once until it
+   * settles. A contributor whose `collect()` never settles therefore makes `/metrics` answer `503`
+   * for ever, which is visible, instead of holding every scrape open.
+   */
+  scrapeTimeoutMs?: number
 }
 
 /**
@@ -408,6 +418,7 @@ export interface ResolvedMetricsOptions {
   path: string
   collectDefaultMetrics: boolean
   defaultLabels: Record<string, string>
+  scrapeTimeoutMs: number
   authToken?: string
 }
 
@@ -463,6 +474,9 @@ export interface ResolvedCoreOptions {
 
 /** Default per-indicator timeout in milliseconds. */
 const DEFAULT_INDICATOR_TIMEOUT_MS = 5000
+
+/** The default {@link MetricsOptions.scrapeTimeoutMs}. */
+const DEFAULT_SCRAPE_TIMEOUT_MS = 5000
 
 /** The default {@link EnvelopeOptions.serverErrorWindowMs}. */
 const DEFAULT_SERVER_ERROR_WINDOW_MS = 60_000
@@ -650,6 +664,11 @@ function resolveMetrics(raw?: MetricsOptions): ResolvedMetricsOptions {
     path: raw?.path ?? DEFAULT_METRICS_PATH,
     collectDefaultMetrics: raw?.collectDefaultMetrics ?? true,
     defaultLabels: { ...(raw?.defaultLabels ?? {}) },
+    scrapeTimeoutMs: positiveSafeInteger(
+      'metrics.scrapeTimeoutMs',
+      raw?.scrapeTimeoutMs ?? DEFAULT_SCRAPE_TIMEOUT_MS,
+      MAX_TIMER_DELAY_MS
+    ),
     ...(authToken !== undefined ? { authToken } : {})
   }
 }
