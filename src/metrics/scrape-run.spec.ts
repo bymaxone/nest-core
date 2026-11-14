@@ -100,7 +100,14 @@ describe('ScrapeRun', () => {
       scrapes.run(collect)
     ])
 
-    expect(later.every((result) => result.status === 'rejected')).toBe(true)
+    expect(later).toHaveLength(3)
+    for (const result of later) {
+      expect(result).toMatchObject({
+        status: 'rejected',
+        reason: expect.any(ServiceUnavailableException) as unknown
+      })
+      expect((result as PromiseRejectedResult).reason).toMatchObject({ status: 503 })
+    }
     expect(collect).toHaveBeenCalledTimes(1)
   })
 
