@@ -7,7 +7,6 @@ import { ServiceUnavailableException } from '@nestjs/common'
 interface Run {
   readonly settled: Promise<string>
   readonly expiry: Promise<never>
-  expired: boolean
 }
 
 function unavailable(): ServiceUnavailableException {
@@ -26,9 +25,6 @@ export class ScrapeRun {
   /** The text of the shared collection, or `503` once it is past its deadline. */
   async run(collect: () => Promise<string>): Promise<string> {
     const run = this.current ?? this.start(collect)
-    if (run.expired) {
-      throw unavailable()
-    }
     return Promise.race([run.settled, run.expiry])
   }
 
@@ -37,7 +33,6 @@ export class ScrapeRun {
     let timer: ReturnType<typeof setTimeout> | undefined
     const expiry = new Promise<never>((_resolve, reject) => {
       timer = setTimeout(() => {
-        run.expired = true
         this.onExpired()
         reject(unavailable())
       }, this.deadlineMs)
@@ -45,7 +40,7 @@ export class ScrapeRun {
     })
     // A rejection nobody is racing any more is not an unhandled one.
     expiry.catch(() => undefined)
-    const run: Run = { settled, expiry, expired: false }
+    const run: Run = { settled, expiry }
     const end = (): void => {
       clearTimeout(timer)
       this.current = undefined
