@@ -1396,8 +1396,8 @@ explained.
   test needs every probe fresh.
 - Turn on [`bodyDepth`](#bodydepth) for routes whose bodies reach a validator, and mind the raw
   parsers you add.
-- Keep every indicator's `check()` and every metrics contributor's `collect()` bounded: pass the
-  `signal` on, and do not return a promise that never settles.
+- Keep every metrics contributor's `collect()` bounded: the scrape waits on it. An indicator's
+  `check()` is cut at `health.indicatorTimeoutMs`, but pass the `signal` on so the work stops too.
 - Leave the OpenAPI document off in production; it is refused there anyway.
 
 ## 🏗️ Architecture
