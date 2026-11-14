@@ -35,8 +35,7 @@ cannot become a log storm, and a `/metrics` scrape is bounded by a deadline.
 - **`envelope.serverErrorWindowMs`**, default `60000`, an integer in `1..2147483647`, refused at boot
   otherwise. The first occurrence of a `(status, code)` is reported at once, the repeats inside the
   window are counted, and one summary carries `repeated` and the latest exception. Shutdown reports
-  the summaries still due, on the synchronous and the `forRootAsync` path. At most 64 keys are
-  tracked; the rest share one overflow slot.
+  the summaries still due.
 - **`UnexpectedErrorReport.repeated`**, optional, present only on a summary.
 - **`metrics.scrapeTimeoutMs`**, default `5000`, an integer in `1..2147483647`, refused at boot
   otherwise.
