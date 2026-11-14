@@ -342,6 +342,7 @@ class SinkModule {}
 describe('BymaxExceptionFilter, server failures in a running application', () => {
   it('reports a 503 once, answers every request unchanged, and flushes the summary on close', async () => {
     const sink = applicationSink
+    sink.reports.length = 0
     const moduleRef = await Test.createTestingModule({
       imports: [
         SinkModule,
@@ -362,6 +363,31 @@ describe('BymaxExceptionFilter, server failures in a running application', () =>
     expect(sink.reports).toHaveLength(1)
     expect(bodies[0]).toEqual(bodies[1])
     expect(JSON.stringify(bodies)).not.toMatch(/hunter2|ECONNREFUSED/)
+    await app.close()
+    expect(sink.reports).toHaveLength(2)
+    expect(sink.reports[1]).toMatchObject({ repeated: 2, route: '/down' })
+  })
+
+  it('does the same on the asynchronous registration path, where the filter comes from a factory', async () => {
+    const sink = applicationSink
+    sink.reports.length = 0
+    const moduleRef = await Test.createTestingModule({
+      imports: [
+        SinkModule,
+        BymaxCoreModule.forRootAsync({
+          useFactory: () => ({ envelope: { serverErrorWindowMs: 60_000 } })
+        }),
+        DownModule
+      ]
+    }).compile()
+    const app = moduleRef.createNestApplication()
+    await app.init()
+
+    for (let index = 0; index < 3; index += 1) {
+      await request(app.getHttpServer()).get('/down').expect(503)
+    }
+
+    expect(sink.reports).toHaveLength(1)
     await app.close()
     expect(sink.reports).toHaveLength(2)
     expect(sink.reports[1]).toMatchObject({ repeated: 2, route: '/down' })
