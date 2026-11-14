@@ -548,9 +548,12 @@ describe('HealthService', () => {
 describe('HealthService, indicator discovery', () => {
   const reflector = new Reflector()
 
-  /** Options with discovery on and everything else at its default. */
+  /**
+   * Options with discovery on and everything else at its default, except that no answer is
+   * reused: a probe that did not run would never reach the readiness set.
+   */
   function withDiscovery(autoDiscover: boolean): ResolvedCoreOptions {
-    return normalizeCoreOptions({ health: { autoDiscover } })
+    return normalizeCoreOptions({ health: { autoDiscover, readinessCacheMs: 0 } })
   }
 
   /** A provider graph exposing exactly the given marked indicator classes. */
@@ -624,7 +627,8 @@ describe('HealthService, indicator discovery', () => {
    *
    * Readiness is polled continuously; walking the whole provider graph on every
    * request would put that cost on the probe's path for a result that cannot
-   * change after bootstrap.
+   * change after bootstrap. The cache is off here, so each of the three probes
+   * really runs and the memo is what keeps the scan to one.
    */
   it('scans the provider graph only once across many probes', async () => {
     const getProviders = jest.fn(() => [
