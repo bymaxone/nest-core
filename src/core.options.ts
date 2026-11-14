@@ -20,6 +20,16 @@ export interface EnvelopeOptions {
    * otherwise withheld from the body. Never enable in production. Default: `false`.
    */
   exposeInternals?: boolean
+  /**
+   * How long, in milliseconds, repeats of the same server failure are withheld from the
+   * unexpected-error sink after the first one is reported. Positive integer up to 2147483647.
+   * Default: `60000`.
+   *
+   * A `5xx` `HttpException` is reported to the sink once per status and code, and the repeats inside
+   * this window are counted and reported once when it ends. A dependency that is down fails every
+   * request, and a report per request would be a log storm of its own.
+   */
+  serverErrorWindowMs?: number
 }
 
 /** Request-timing middleware configuration. */
@@ -361,6 +371,7 @@ export interface BymaxCoreModuleOptions {
 export interface ResolvedEnvelopeOptions {
   enabled: boolean
   exposeInternals: boolean
+  serverErrorWindowMs: number
 }
 
 /** Fully-resolved timing options. `slowRequestThresholdMs` stays absent when unset. */
@@ -453,6 +464,9 @@ export interface ResolvedCoreOptions {
 /** Default per-indicator timeout in milliseconds. */
 const DEFAULT_INDICATOR_TIMEOUT_MS = 5000
 
+/** The default {@link EnvelopeOptions.serverErrorWindowMs}. */
+const DEFAULT_SERVER_ERROR_WINDOW_MS = 60_000
+
 /** The longest delay `setTimeout` honours; a longer one fires after a millisecond. */
 const MAX_TIMER_DELAY_MS = 2 ** 31 - 1
 
@@ -497,7 +511,12 @@ function deepFreeze<T>(value: T): T {
 function resolveEnvelope(raw?: EnvelopeOptions): ResolvedEnvelopeOptions {
   return {
     enabled: raw?.enabled ?? true,
-    exposeInternals: raw?.exposeInternals ?? false
+    exposeInternals: raw?.exposeInternals ?? false,
+    serverErrorWindowMs: positiveSafeInteger(
+      'envelope.serverErrorWindowMs',
+      raw?.serverErrorWindowMs ?? DEFAULT_SERVER_ERROR_WINDOW_MS,
+      MAX_TIMER_DELAY_MS
+    )
   }
 }
 

@@ -19,7 +19,7 @@ describe('normalizeCoreOptions', () => {
    */
   it('applies the documented defaults for empty input', () => {
     expect(normalizeCoreOptions()).toEqual({
-      envelope: { enabled: true, exposeInternals: false },
+      envelope: { enabled: true, exposeInternals: false, serverErrorWindowMs: 60000 },
       timing: { enabled: true },
       bodyDepth: { enabled: false, maxDepth: 32 },
       health: {
@@ -88,7 +88,7 @@ describe('normalizeCoreOptions', () => {
    */
   it('honors every explicitly provided field', () => {
     const resolved = normalizeCoreOptions({
-      envelope: { enabled: false, exposeInternals: true },
+      envelope: { enabled: false, exposeInternals: true, serverErrorWindowMs: 5000 },
       timing: { enabled: false, slowRequestThresholdMs: 1000 },
       bodyDepth: { enabled: true, maxDepth: 8 },
       health: {
@@ -109,7 +109,7 @@ describe('normalizeCoreOptions', () => {
     })
 
     expect(resolved).toEqual({
-      envelope: { enabled: false, exposeInternals: true },
+      envelope: { enabled: false, exposeInternals: true, serverErrorWindowMs: 5000 },
       timing: { enabled: false, slowRequestThresholdMs: 1000 },
       bodyDepth: { enabled: true, maxDepth: 8 },
       health: {
@@ -472,6 +472,34 @@ describe('normalizeCoreOptions, openapi block', () => {
 
     expect(resolved.openapi.servers[0]).not.toHaveProperty('description')
   })
+})
+
+describe('envelope.serverErrorWindowMs', () => {
+  const MAX_TIMER_DELAY = 2 ** 31 - 1
+
+  it.each([1, 60_000, MAX_TIMER_DELAY])('accepts %p', (serverErrorWindowMs) => {
+    expect(
+      normalizeCoreOptions({ envelope: { serverErrorWindowMs } }).envelope.serverErrorWindowMs
+    ).toBe(serverErrorWindowMs)
+  })
+
+  it.each([0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY, 2 ** 53])(
+    'rejects %p at boot, naming the option',
+    (serverErrorWindowMs) => {
+      expect(() => normalizeCoreOptions({ envelope: { serverErrorWindowMs } })).toThrow(
+        `envelope.serverErrorWindowMs must be a positive safe integer, received ${String(serverErrorWindowMs)}`
+      )
+    }
+  )
+
+  it.each([MAX_TIMER_DELAY + 1, Number.MAX_SAFE_INTEGER])(
+    'refuses %p, which a timer would clamp to one millisecond',
+    (serverErrorWindowMs) => {
+      expect(() => normalizeCoreOptions({ envelope: { serverErrorWindowMs } })).toThrow(
+        `envelope.serverErrorWindowMs must be a positive integer of at most ${MAX_TIMER_DELAY}, received ${serverErrorWindowMs}`
+      )
+    }
+  )
 })
 
 describe('health.readinessCacheMs', () => {
