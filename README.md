@@ -878,11 +878,11 @@ Every scrape recomputes the registry, which costs about 0.4 ms with the default 
 endpoint is cheap but not free: set `metrics.authToken` or restrict the route at the edge.
 
 Scrapes that arrive while a collection runs share it, and a scrape waits at most
-`metrics.scrapeTimeoutMs` (`5000` by default, a positive integer up to `2147483647`). A collection still
+`metrics.scrapeTimeoutMs`. A collection still
 running after that is left to finish, because `prom-client` cannot cancel a collector, and every scrape
 answers `503` at once until it settles; no second collection starts meanwhile, and a line in the log
 says so once. A contributor whose `collect()` never settles therefore makes `/metrics` answer `503`
-for ever, which is visible, where it used to hold every scrape open. The deadline starts after the
+for ever, which is visible rather than a scrape held open. The deadline starts after the
 token check, so a caller without the token still gets `401`. Bound your collectors anyway: the
 deadline protects the endpoint, not the dependency.
 
