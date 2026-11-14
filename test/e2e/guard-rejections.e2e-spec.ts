@@ -37,6 +37,8 @@ import request from 'supertest'
 
 import { BymaxCoreModule } from '@bymax-one/nest-core'
 
+import { listeningServer } from '../support/listening-server'
+
 /** How long the abort probe's route stays in the handler, in milliseconds. */
 const ABORT_PROBE_DELAY_MS = 100
 
@@ -163,7 +165,7 @@ describe('requests that never reach a handler', () => {
    * into a memory-exhaustion vector.
    */
   it('counts guard rejections, throttling and unmatched paths exactly once each', async () => {
-    const server = app?.getHttpServer()
+    const server = await listeningServer(app as INestApplication)
 
     await request(server).get('/open').expect(200)
     await request(server).get('/items/42').expect(200)
@@ -247,7 +249,7 @@ describe('requests that never reach a handler', () => {
    * five probes, one series, count five.
    */
   it('collapses distinct unmatched paths onto a single series', async () => {
-    const server = app?.getHttpServer()
+    const server = await listeningServer(app as INestApplication)
     const probes = ['/.env', '/.git/config', '/wp-admin', '/admin.php', '/../../etc/passwd']
 
     for (const probe of probes) {
