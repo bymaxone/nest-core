@@ -174,6 +174,18 @@ describe('BymaxExceptionFilter, server failures as HttpException', () => {
     expect(sink.reports).toHaveLength(3)
   })
 
+  it.each([500, 502, 503, 599])(
+    'reports an HttpException of status %p, the first one of the server range',
+    (status) => {
+      const sink = new RecordingSink()
+      const { fail } = harness({ sink })
+
+      fail(new HttpException('server failure', status))
+
+      expect(sink.reports).toHaveLength(1)
+    }
+  )
+
   it('uses the status and the derived code when the exception carries none', () => {
     const sink = new RecordingSink()
     const { fail } = harness({ sink })

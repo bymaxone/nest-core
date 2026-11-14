@@ -116,6 +116,15 @@ describe('RepeatWindow', () => {
     expect(onSummary.mock.calls).toEqual([['c', 2]])
   })
 
+  it('keeps the overflow slot apart from every real key, an empty one included', () => {
+    const window = new RepeatWindow<string>(WINDOW_MS, jest.fn())
+    window.admit('', 'empty')
+    Array.from({ length: 63 }, (_, index) => window.admit(`key-${index}`, 'x'))
+
+    expect(window.admit('extra', 'overflow')).toBe(true)
+    expect(window.admit('', 'empty again')).toBe(false)
+  })
+
   it('does not hold the process open', () => {
     const spy = jest.spyOn(globalThis, 'setTimeout')
     const window = new RepeatWindow<string>(WINDOW_MS, jest.fn())
