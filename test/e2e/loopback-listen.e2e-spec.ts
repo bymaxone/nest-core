@@ -20,10 +20,8 @@ import request from 'supertest'
 
 import {
   installLoopbackListen,
-  installSupertestWait,
   LOOPBACK_HOST,
   ORIGINAL_LISTEN,
-  SUPERTEST_METHODS,
   withLoopbackHost
 } from '../support/loopback-listen'
 
@@ -154,55 +152,29 @@ describe('Loopback listen (e2e)', () => {
   /**
    * supertest scenario.
    *
-   * A request against a server that is not listening binds it to `127.0.0.1` and reaches it
-   * there. Requests sent together, and the ones after, share that listener, which stays open for
-   * the server's owner to close.
+   * A request against a server that is not listening reaches it on `127.0.0.1`. supertest binds that
+   * listener itself from 7.3.1, so this fails if a release stops doing so, which is what the
+   * patch above no longer covers.
    */
-  it('lets supertest start one loopback listener and reach it', async () => {
+  it('lets supertest start a loopback listener and reach it', async () => {
     const target = server()
 
-    const together = await Promise.all([request(target).get('/a'), request(target).get('/b')])
-    const port = addressOf(target).port
-    const after = await request(target).get('/c')
+    const response = await request(target).get('/a')
 
-    expect(together.map((response) => response.text)).toEqual([LOOPBACK_HOST, LOOPBACK_HOST])
-    expect(after.text).toBe(LOOPBACK_HOST)
-    expect(target.listening).toBe(true)
-    expect(addressOf(target)).toEqual({ address: LOOPBACK_HOST, family: 'IPv4', port })
-  })
-
-  /**
-   * Coupling scenario.
-   *
-   * The installed supertest still has both methods the patch replaces, and an install on a
-   * prototype that lacks either one refuses rather than leaving the suite unpatched.
-   */
-  it('finds the supertest methods it patches and refuses without them', () => {
-    for (const name of SUPERTEST_METHODS) {
-      expect(typeof Reflect.get(request.Test.prototype, name)).toBe('function')
-      const missing: Record<string, unknown> = { serverAddress() {}, end() {} }
-      delete missing[name]
-      expect(() => installSupertestWait(missing)).toThrow(`supertest's Test has no ${name}()`)
-    }
+    expect(response.text).toBe(LOOPBACK_HOST)
   })
 
   /**
    * Single-install scenario.
    *
-   * Installing either patch again changes nothing, so the per-file setup load never wraps the
-   * method twice.
+   * Installing the patch again changes nothing, so the per-file setup load never wraps the method
+   * twice.
    */
-  it('installs each patch once', () => {
+  it('installs the patch once', () => {
     const listen = Reflect.get(NetServer.prototype, 'listen') as unknown
-    const { serverAddress, end } = request.Test.prototype as unknown as Record<string, unknown>
 
     installLoopbackListen()
-    installSupertestWait()
 
     expect(Reflect.get(NetServer.prototype, 'listen')).toBe(listen)
-    expect((request.Test.prototype as unknown as Record<string, unknown>).serverAddress).toBe(
-      serverAddress
-    )
-    expect((request.Test.prototype as unknown as Record<string, unknown>).end).toBe(end)
   })
 })
