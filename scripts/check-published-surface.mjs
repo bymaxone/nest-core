@@ -402,9 +402,8 @@ async function checkLinks() {
     ...[...README_PROSE.matchAll(/<a\s+href="(#[^"]+)"/g)].map((m) => m[1].toLowerCase())
   ])
 
-  // Relative links are the ones most likely to rot — a file gets renamed and
-  // nothing outside the README notices. They cost no network to verify, and the
-  // section above claims to check every link, so it has to mean every link.
+  // Relative links rot when a file is renamed and nothing outside the README notices.
+  // They cost no network to verify, so every one is checked.
   const relative = new Set(
     [
       ...[...clickable.matchAll(/\[[^\]]*\]\((?!https?:|#|mailto:)([^)\s]+)\)/g)].map((m) => m[1]),
@@ -478,6 +477,16 @@ async function checkLinks() {
         // failing here would block the very release that makes the link true.
         if (res.status === 404 && probe !== url) {
           console.log(`  note: ${url} is not live yet — expected until the first publish`)
+          return null
+        }
+        // A host that answers 5xx, or 429 again after the GET above, is in trouble of its own, and a link
+        // check cannot tell that from a dead link. Reported like a transport error, never fatal: this gate
+        // also guards `prepublishOnly`, and someone else's outage must not block a release. 404, 410 and the
+        // other client errors still fail.
+        if (res.status >= 500 || res.status === 429) {
+          console.log(
+            `  note: ${url} answered HTTP ${res.status}, the host's trouble and not proof that the link is dead`
+          )
           return null
         }
         return `${url} → HTTP ${res.status}`
