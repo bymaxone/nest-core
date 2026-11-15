@@ -402,9 +402,8 @@ async function checkLinks() {
     ...[...README_PROSE.matchAll(/<a\s+href="(#[^"]+)"/g)].map((m) => m[1].toLowerCase())
   ])
 
-  // Relative links are the ones most likely to rot — a file gets renamed and
-  // nothing outside the README notices. They cost no network to verify, and the
-  // section above claims to check every link, so it has to mean every link.
+  // Relative links rot when a file is renamed and nothing outside the README notices.
+  // They cost no network to verify, so every one is checked.
   const relative = new Set(
     [
       ...[...clickable.matchAll(/\[[^\]]*\]\((?!https?:|#|mailto:)([^)\s]+)\)/g)].map((m) => m[1]),
