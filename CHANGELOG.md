@@ -12,6 +12,11 @@ heading here.
 
 ## [Unreleased]
 
+## [1.6.12] - 2026-11-17
+
+A patch release. An open `/metrics` is refused in production unless the deployment says its edge
+protects it, and `applyHttpFloors` takes an opt-in CORS allowlist.
+
 **Apply to a derived backend:**
 
 - **Metrics in production now needs a token or a stated edge.** `BymaxCoreModule.forRoot` and
@@ -1564,4 +1569,5 @@ have regressed from. They are kept because the reasoning is worth having.
 [1.6.9]: https://github.com/bymaxone/nest-core/compare/v1.6.8...v1.6.9
 [1.6.10]: https://github.com/bymaxone/nest-core/compare/v1.6.9...v1.6.10
 [1.6.11]: https://github.com/bymaxone/nest-core/compare/v1.6.10...v1.6.11
-[Unreleased]: https://github.com/bymaxone/nest-core/compare/v1.6.11...HEAD
+[1.6.12]: https://github.com/bymaxone/nest-core/compare/v1.6.11...v1.6.12
+[Unreleased]: https://github.com/bymaxone/nest-core/compare/v1.6.12...HEAD
