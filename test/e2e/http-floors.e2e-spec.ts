@@ -98,3 +98,39 @@ describe('applyHttpFloors on a listening server', () => {
     expect(response.headers.get('strict-transport-security')).toBeNull()
   })
 })
+
+describe('applyHttpFloors keep-alive timeout on a listening server', () => {
+  /** Opens a connection, makes one keep-alive request, and reports when the server closed it idle. */
+  function idleCloseMs(port: number): Promise<number> {
+    return new Promise((resolve) => {
+      const socket = connect(port, '127.0.0.1')
+      const started = Date.now()
+      socket.on('error', () => undefined)
+      socket.on('close', () => resolve(Date.now() - started))
+      // Read and discard the response: a socket nobody reads from never reports the close.
+      socket.resume()
+      socket.write('GET /nowhere HTTP/1.1\r\nHost: x\r\nConnection: keep-alive\r\n\r\n')
+    })
+  }
+
+  /**
+   * An idle keep-alive connection is closed about one second after the configured timeout, which is
+   * what lets a deployment set it above a load balancer's idle timeout.
+   */
+  it('closes an idle connection after the configured timeout and not before', async () => {
+    const moduleRef = await Test.createTestingModule({
+      imports: [BymaxCoreModule.forRoot(), EchoModule]
+    }).compile()
+    const app = moduleRef.createNestApplication()
+    await applyHttpFloors(app, { keepAliveTimeoutMs: 1_500 })
+    await app.listen(0, '127.0.0.1')
+    try {
+      const port = (app.getHttpServer().address() as AddressInfo).port
+      const closedAfter = await idleCloseMs(port)
+      expect(closedAfter).toBeGreaterThanOrEqual(1_400)
+      expect(closedAfter).toBeLessThanOrEqual(1_500 + 1_000 + 1_000)
+    } finally {
+      await app.close()
+    }
+  }, 10_000)
+})

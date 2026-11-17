@@ -1348,19 +1348,21 @@ async function bootstrap(): Promise<void> {
 void bootstrap()
 ```
 
-| What               | Default                                                                                                                                                                                                                                                                                                                             |
-| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Security headers   | `helmet()` with `strictTransportSecurity: false` (TLS is normally ended in front of the app, which owns HSTS). Pass `helmet: { ... }` to tune it, for example the CSP of a browser-serving backend, or `helmet: false` to leave it out. `strictTransportSecurity: undefined` is not `false`: it turns helmet's HSTS default back on |
-| Request bodies     | The JSON and urlencoded parsers refuse a compressed body (`Content-Encoding`) with `415` instead of decompressing it, on every route and before routing. Only these two parsers: a raw or text parser you add yourself still decompresses. Size limits and the extended form syntax keep the parsers' defaults                      |
-| `headersTimeoutMs` | `15000`: the longest a client may take to send its complete header block. Node's own default is 60 s, which leaves a header block sent a byte at a time open as a cheap denial of service                                                                                                                                           |
-| `requestTimeoutMs` | `30000`: the longest the server takes to receive a request, headers and body together. It does not bound the handler or the response. Node's default is 5 minutes. Must not be below `headersTimeoutMs`                                                                                                                             |
+| What                 | Default                                                                                                                                                                                                                                                                                                                                              |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Security headers     | `helmet()` with `strictTransportSecurity: false` (TLS is normally ended in front of the app, which owns HSTS). Pass `helmet: { ... }` to tune it, for example the CSP of a browser-serving backend, or `helmet: false` to leave it out. `strictTransportSecurity: undefined` is not `false`: it turns helmet's HSTS default back on                  |
+| Request bodies       | The JSON and urlencoded parsers refuse a compressed body (`Content-Encoding`) with `415` instead of decompressing it, on every route and before routing. Only these two parsers: a raw or text parser you add yourself still decompresses. Each parser has its own explicit size limit (`bodyLimit`, below) and keeps the extended form syntax       |
+| `headersTimeoutMs`   | `15000`: the longest a client may take to send its complete header block. Node's own default is 60 s, which leaves a header block sent a byte at a time open as a cheap denial of service                                                                                                                                                            |
+| `requestTimeoutMs`   | `30000`: the longest the server takes to receive a request, headers and body together. It does not bound the handler or the response. Node's default is 5 minutes. Must not be below `headersTimeoutMs`                                                                                                                                              |
+| `keepAliveTimeoutMs` | `65000`: how long an idle keep-alive connection is held open. Node's default is 5 s, which is below the 60 s idle timeout of the common load balancers and makes them reuse a socket Node has just closed, an intermittent `502`. Set it above your balancer's own idle timeout, for example `620000` behind a Google Cloud HTTP(S) balancer (600 s) |
+| `bodyLimit`          | `{ json: '100kb', urlencoded: '100kb' }`: the largest body each parser accepts, a byte count or a size such as `'1mb'`. A larger body is refused with `413` in the error envelope. The default is what Express applies when nothing is set, stated so it is a decision                                                                               |
 
-`keepAliveTimeout` is left at Node's 5 s, which is too short behind a load balancer. A balancer whose
-idle timeout is longer than the server's reuses a connection Node has just closed and answers an
-intermittent `502`, so set it above the balancer's idle timeout, for example 61 s behind a 60 s one:
-`app.getHttpServer().keepAliveTimeout = 61_000`. The cost is that an idle socket is kept that much
-longer. Measured on Node 24, a `headersTimeoutMs` shorter than `keepAliveTimeout` (500 ms and 1 s
-against 3 s and 5 s) did not close an idle keep-alive socket, so the two need no particular order.
+`keepAliveTimeoutMs` is the setting behind the `502` a load balancer answers when it reuses a
+connection Node has just closed. Measured on Node 24, an idle keep-alive socket is closed about one
+second after `keepAliveTimeout`, whatever `headersTimeout` is (3 s with a 1 s header timeout closed at
+4.0 s; 5 s with a 15 s one closed at 6.0 s), so the two need no particular order, and closing the
+server with an idle keep-alive socket open finished in 1 ms, so a long value does not delay shutdown.
+The cost of the longer default is that an idle socket is kept that much longer.
 
 ### What the floors do not set
 
@@ -1376,8 +1378,8 @@ It also sets none of these, so a deployment that needs them sets them itself or 
 - a connection cap (`maxConnections`) and `maxRequestsPerSocket`, both unlimited;
 - `maxHeaderSize`, left at Node's default;
 - a slow-read limit on the response;
-- a request body size limit: the JSON and urlencoded parsers keep their defaults, so a 200 KB JSON
-  body is refused with `413`, and a raw or text parser you add has its own.
+- a body size limit on a raw or text parser you add yourself, which has its own default; `bodyLimit`
+  covers the JSON and urlencoded parsers only.
 
 Node enforces both timeouts from a sweep over the open connections, not from a timer per
 connection, and the sweep runs every 30 s by default: measured, a 1 s header timeout left a
