@@ -13,6 +13,7 @@ import { APP_FILTER, APP_INTERCEPTOR, DiscoveryModule } from '@nestjs/core'
 import { Test } from '@nestjs/testing'
 
 import { normalizeCoreOptions } from './core.options'
+import type { ResolvedCoreOptions } from './core.options'
 import { augmentModule, BymaxCoreModule } from './core.module'
 import {
   BYMAX_CORE_OPTIONS,
@@ -158,6 +159,23 @@ describe('BymaxCoreModule.forRoot', () => {
    * The extra must flow through `setExtras` to `DynamicModule.global` so a
    * consumer can scope the module explicitly.
    */
+  /**
+   * The options object is read like every block: an unset one is the defaults, and an option defined
+   * as a getter on a class is honoured.
+   */
+  it('reads null options as unset and an options object built as a class instance', () => {
+    expect(() => BymaxCoreModule.forRoot(null as never)).not.toThrow()
+    class Given {
+      get handlerTimeout(): { enabled: boolean } {
+        return { enabled: true }
+      }
+    }
+    const provider = BymaxCoreModule.forRoot(new Given() as never).providers?.find(
+      (entry) => (entry as { provide?: unknown }).provide === BYMAX_CORE_OPTIONS
+    ) as { useValue: ResolvedCoreOptions }
+    expect(provider.useValue.handlerTimeout.enabled).toBe(true)
+  })
+
   it('produces a non-global module when isGlobal is false', () => {
     expect(BymaxCoreModule.forRoot({ isGlobal: false }).global).toBe(false)
   })

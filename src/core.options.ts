@@ -5,15 +5,31 @@
  * from the resolved snapshot, never from the raw consumer input.
  * @layer Config
  */
+import {
+  BODY_DEPTH_KEYS,
+  ENVELOPE_KEYS,
+  HEALTH_KEYS,
+  METRICS_KEYS,
+  OPTION_KEYS,
+  TELEMETRY_KEYS,
+  TIMING_KEYS
+} from './core.options.keys'
 import { assertMetricsProtected } from './core.options.metrics-guard'
+import { resolveOpenApi } from './core.options.openapi'
 import { resolveHandlerTimeout } from './handler-timeout/handler-timeout.options'
 import type {
   HandlerTimeoutOptions,
   ResolvedHandlerTimeoutOptions
 } from './handler-timeout/handler-timeout.options'
+import {
+  booleanOption,
+  checkedBlock,
+  refusal,
+  routeOption,
+  stringOption
+} from './option-validation'
 import { MAX_TIMER_DELAY_MS, positiveSafeInteger } from './positive-integer'
 import { DEFAULT_HEALTH_PATH, DEFAULT_METRICS_PATH } from './route-defaults'
-import { isProductionRuntime, runtimeEnvironmentName } from './runtime.environment'
 import { resolveShutdown } from './shutdown/shutdown.options'
 import type { ResolvedShutdownOptions, ShutdownOptions } from './shutdown/shutdown.options'
 
@@ -516,18 +532,6 @@ const DEFAULT_SERVER_ERROR_WINDOW_MS = 60_000
 /** The default {@link HealthOptions.readinessCacheMs}. */
 const DEFAULT_READINESS_CACHE_MS = 1000
 
-/** Default route for the interactive OpenAPI UI. */
-const DEFAULT_OPENAPI_PATH = 'docs'
-
-/** Default route for the raw OpenAPI JSON document. */
-const DEFAULT_OPENAPI_JSON_PATH = 'docs-json'
-
-/** Default OpenAPI document title. */
-const DEFAULT_OPENAPI_TITLE = 'API'
-
-/** Default OpenAPI document version, independent of the package version. */
-const DEFAULT_OPENAPI_VERSION = '1.0.0'
-
 /**
  * Recursively freeze an object graph so no consumer can mutate the resolved
  * configuration after the module is built.
@@ -551,10 +555,11 @@ function deepFreeze<T>(value: T): T {
  * @param raw - The consumer envelope block, if any.
  * @returns The fully-populated envelope options.
  */
-function resolveEnvelope(raw?: EnvelopeOptions): ResolvedEnvelopeOptions {
+function resolveEnvelope(given: unknown): ResolvedEnvelopeOptions {
+  const raw = checkedBlock<EnvelopeOptions>('envelope', given, ENVELOPE_KEYS)
   return {
-    enabled: raw?.enabled ?? true,
-    exposeInternals: raw?.exposeInternals ?? false,
+    enabled: booleanOption('envelope.enabled', raw?.enabled, true),
+    exposeInternals: booleanOption('envelope.exposeInternals', raw?.exposeInternals, false),
     serverErrorWindowMs: positiveSafeInteger(
       'envelope.serverErrorWindowMs',
       raw?.serverErrorWindowMs ?? DEFAULT_SERVER_ERROR_WINDOW_MS,
@@ -570,8 +575,9 @@ function resolveEnvelope(raw?: EnvelopeOptions): ResolvedEnvelopeOptions {
  * @param raw - The consumer timing block, if any.
  * @returns The fully-populated timing options.
  */
-function resolveTiming(raw?: TimingOptions): ResolvedTimingOptions {
-  const enabled = raw?.enabled ?? true
+function resolveTiming(given: unknown): ResolvedTimingOptions {
+  const raw = checkedBlock<TimingOptions>('timing', given, TIMING_KEYS)
+  const enabled = booleanOption('timing.enabled', raw?.enabled, true)
   const threshold = raw?.slowRequestThresholdMs ?? undefined
   return threshold === undefined
     ? { enabled }
@@ -592,12 +598,13 @@ export const DEFAULT_MAX_BODY_DEPTH = 32
  * @returns The fully-populated body-depth options.
  * @throws Error When `maxDepth` is not a positive safe integer.
  */
-function resolveBodyDepth(raw?: BodyDepthOptions): ResolvedBodyDepthOptions {
+function resolveBodyDepth(given: unknown): ResolvedBodyDepthOptions {
+  const raw = checkedBlock<BodyDepthOptions>('bodyDepth', given, BODY_DEPTH_KEYS)
   const maxDepth = positiveSafeInteger(
     'bodyDepth.maxDepth',
     raw?.maxDepth ?? DEFAULT_MAX_BODY_DEPTH
   )
-  return { enabled: raw?.enabled ?? false, maxDepth }
+  return { enabled: booleanOption('bodyDepth.enabled', raw?.enabled, false), maxDepth }
 }
 
 /**
@@ -606,24 +613,27 @@ function resolveBodyDepth(raw?: BodyDepthOptions): ResolvedBodyDepthOptions {
  * @param raw - The consumer health block, if any.
  * @returns The fully-populated health options.
  */
-function resolveHealth(raw?: HealthOptions): ResolvedHealthOptions {
+function resolveHealth(given: unknown): ResolvedHealthOptions {
+  const raw = checkedBlock<HealthOptions>('health', given, HEALTH_KEYS)
   const readinessCacheMs = raw?.readinessCacheMs ?? DEFAULT_READINESS_CACHE_MS
   if (!Number.isSafeInteger(readinessCacheMs) || readinessCacheMs < 0) {
-    throw new Error(
-      `health.readinessCacheMs must be a non-negative safe integer, received ${String(readinessCacheMs)}`
-    )
+    throw refusal('health.readinessCacheMs', 'a non-negative safe integer', readinessCacheMs)
   }
   return {
     readinessCacheMs,
-    enabled: raw?.enabled ?? true,
-    path: raw?.path ?? DEFAULT_HEALTH_PATH,
-    exposeIndicatorErrors: raw?.exposeIndicatorErrors ?? false,
+    enabled: booleanOption('health.enabled', raw?.enabled, true),
+    path: routeOption('health.path', raw?.path, DEFAULT_HEALTH_PATH),
+    exposeIndicatorErrors: booleanOption(
+      'health.exposeIndicatorErrors',
+      raw?.exposeIndicatorErrors,
+      false
+    ),
     indicatorTimeoutMs: positiveSafeInteger(
       'health.indicatorTimeoutMs',
       raw?.indicatorTimeoutMs ?? DEFAULT_INDICATOR_TIMEOUT_MS,
       MAX_TIMER_DELAY_MS
     ),
-    autoDiscover: raw?.autoDiscover ?? false
+    autoDiscover: booleanOption('health.autoDiscover', raw?.autoDiscover, false)
   }
 }
 
@@ -641,8 +651,8 @@ function resolveHealth(raw?: HealthOptions): ResolvedHealthOptions {
  * @returns The bearer to enforce, or `undefined` when authentication is not configured.
  * @throws Error When a token is configured but empty or whitespace-only.
  */
-function resolveMetricsAuthToken(given?: string): string | undefined {
-  const raw = given ?? undefined
+function resolveMetricsAuthToken(given: unknown): string | undefined {
+  const raw = stringOption('metrics.authToken', given, undefined)
   if (raw === undefined) {
     return undefined
   }
@@ -667,17 +677,21 @@ function resolveMetricsAuthToken(given?: string): string | undefined {
  * @throws Error When `authToken` is configured empty or whitespace-only, or metrics are enabled in
  *   production with neither a token nor `edgeProtected`.
  */
-function resolveMetrics(
-  raw?: MetricsOptions,
-  declaredEnvironment?: string
-): ResolvedMetricsOptions {
+function resolveMetrics(given: unknown, declaredEnvironment?: string): ResolvedMetricsOptions {
+  const raw = checkedBlock<MetricsOptions>('metrics', given, METRICS_KEYS)
+  const enabled = booleanOption('metrics.enabled', raw?.enabled, false)
+  const edgeProtected = booleanOption('metrics.edgeProtected', raw?.edgeProtected, false)
   const authToken = resolveMetricsAuthToken(raw?.authToken)
-  assertMetricsProtected(raw ?? {}, authToken, declaredEnvironment)
+  assertMetricsProtected({ enabled, edgeProtected }, authToken, declaredEnvironment)
   return {
-    enabled: raw?.enabled ?? false,
-    path: raw?.path ?? DEFAULT_METRICS_PATH,
-    collectDefaultMetrics: raw?.collectDefaultMetrics ?? true,
-    defaultLabels: { ...(raw?.defaultLabels ?? {}) },
+    enabled,
+    path: routeOption('metrics.path', raw?.path, DEFAULT_METRICS_PATH),
+    collectDefaultMetrics: booleanOption(
+      'metrics.collectDefaultMetrics',
+      raw?.collectDefaultMetrics,
+      true
+    ),
+    defaultLabels: resolveDefaultLabels(raw?.defaultLabels),
     scrapeTimeoutMs: positiveSafeInteger(
       'metrics.scrapeTimeoutMs',
       raw?.scrapeTimeoutMs ?? DEFAULT_SCRAPE_TIMEOUT_MS,
@@ -687,68 +701,31 @@ function resolveMetrics(
   }
 }
 
-/**
- * Copy the consumer's server list into objects this module owns. Cloning is
- * what keeps the deep-freeze below from freezing a consumer-owned object, and
- * the field-by-field rebuild (rather than a spread) is what keeps an absent
- * `description` absent instead of present-and-`undefined`.
- *
- * @param raw - The consumer's server list, if any.
- * @returns An independently-owned copy, empty when none was supplied.
- */
-function cloneServers(
-  raw?: readonly OpenApiServerDescriptor[]
-): readonly OpenApiServerDescriptor[] {
-  return (raw ?? []).map((server) =>
-    server.description === undefined
-      ? { url: server.url }
-      : { url: server.url, description: server.description }
-  )
-}
+/** What Prometheus accepts as a label name. */
+const LABEL_NAME = /^[a-zA-Z_][a-zA-Z0-9_]*$/
 
 /**
- * Resolve OpenAPI options against their defaults, then intersect the consumer's
- * request with the runtime: in production the feature is off no matter what was
- * asked for, and the refusal is recorded rather than silently applied. This is
- * the first of the two independent production guards; the second lives in the
- * bootstrap helper, which never trusts this one.
+ * The static labels as an object this module owns, so freezing the snapshot never freezes the
+ * consumer's.
  *
- * @param raw - The consumer OpenAPI block, if any.
- * @param declaredEnvironment - The environment the application declared, used
- *   only where `NODE_ENV` declares nothing. See `runtimeEnvironmentName`.
- * @returns The fully-populated OpenAPI options.
+ * @throws Error When the labels are not an object, a name is not a Prometheus label name, or a value
+ *   is not a string.
  */
-function resolveOpenApi(
-  raw: OpenApiOptions | undefined,
-  declaredEnvironment?: string
-): ResolvedOpenApiOptions {
-  const requested = raw?.enabled ?? false
-  const production = isProductionRuntime(runtimeEnvironmentName(declaredEnvironment))
-  return {
-    enabled: requested && !production,
-    suppressedInProduction: requested && production,
-    path: raw?.path ?? DEFAULT_OPENAPI_PATH,
-    jsonPath: raw?.jsonPath ?? DEFAULT_OPENAPI_JSON_PATH,
-    title: raw?.title ?? DEFAULT_OPENAPI_TITLE,
-    description: raw?.description ?? '',
-    version: raw?.version ?? DEFAULT_OPENAPI_VERSION,
-    servers: cloneServers(raw?.servers),
-    // Structured-cloned rather than shallow-copied: the values are
-    // consumer-owned nested objects, and the deep-freeze below would otherwise
-    // reach into them.
-    securitySchemes: structuredClone(raw?.securitySchemes ?? {}),
-    // Cloned for the same reason as the schemes above: both are consumer-owned
-    // nested structures, and the deep-freeze applied to the snapshot would
-    // otherwise reach into objects the consumer still holds a reference to.
-    security: structuredClone(raw?.security ?? []),
-    operationSecurity: structuredClone(raw?.operationSecurity ?? {}),
-    // Carried by reference, not cloned: it is a function the consumer owns, and
-    // `structuredClone` cannot copy one at all.
-    ...(raw?.operationIdFactory === undefined
-      ? {}
-      : { operationIdFactory: raw.operationIdFactory }),
-    includeCoreSchemas: raw?.includeCoreSchemas ?? true
+function resolveDefaultLabels(given: unknown): Record<string, string> {
+  if (given === undefined || given === null) return {}
+  if (typeof given !== 'object' || Array.isArray(given)) {
+    throw refusal('metrics.defaultLabels', 'an object', given)
   }
+  return Object.fromEntries(
+    Object.entries(given).map(([name, value]) => {
+      if (!LABEL_NAME.test(name)) {
+        throw new Error('metrics.defaultLabels has an invalid label name')
+      }
+      if (typeof value !== 'string')
+        throw refusal(`metrics.defaultLabels.${name}`, 'a string', value)
+      return [name, value]
+    })
+  ) as Record<string, string>
 }
 
 /**
@@ -757,10 +734,11 @@ function resolveOpenApi(
  * @param raw - The consumer telemetry block, if any.
  * @returns The fully-populated telemetry options.
  */
-function resolveTelemetry(raw?: TelemetryOptions): ResolvedTelemetryOptions {
+function resolveTelemetry(given: unknown): ResolvedTelemetryOptions {
+  const raw = checkedBlock<TelemetryOptions>('telemetry', given, TELEMETRY_KEYS)
   return {
-    enabled: raw?.enabled ?? false,
-    exposeTraceId: raw?.exposeTraceId ?? false
+    enabled: booleanOption('telemetry.enabled', raw?.enabled, false),
+    exposeTraceId: booleanOption('telemetry.exposeTraceId', raw?.exposeTraceId, false)
   }
 }
 
@@ -772,21 +750,23 @@ function resolveTelemetry(raw?: TelemetryOptions): ResolvedTelemetryOptions {
  * @param raw - The consumer options, or `undefined` for all defaults.
  * @returns A fully-populated, deep-frozen options snapshot.
  */
-export function normalizeCoreOptions(raw?: BymaxCoreModuleOptions): ResolvedCoreOptions {
+export function normalizeCoreOptions(given?: BymaxCoreModuleOptions): ResolvedCoreOptions {
+  const raw = checkedBlock<BymaxCoreModuleOptions>('options', given, OPTION_KEYS)
+  const environment = stringOption('environment', raw?.environment, undefined)
   return deepFreeze({
     envelope: resolveEnvelope(raw?.envelope),
     timing: resolveTiming(raw?.timing),
     bodyDepth: resolveBodyDepth(raw?.bodyDepth),
     health: resolveHealth(raw?.health),
-    metrics: resolveMetrics(raw?.metrics, raw?.environment),
+    metrics: resolveMetrics(raw?.metrics, environment),
     handlerTimeout: resolveHandlerTimeout(raw?.handlerTimeout),
     shutdown: resolveShutdown(raw?.shutdown),
-    openapi: resolveOpenApi(raw?.openapi, raw?.environment),
+    openapi: resolveOpenApi(raw?.openapi, environment),
     telemetry: resolveTelemetry(raw?.telemetry),
     // Spread rather than assigned so an application that declared nothing has
     // no `environment` member at all, matching every other optional member on
     // this snapshot under `exactOptionalPropertyTypes`.
-    ...(raw?.environment === undefined ? {} : { environment: raw.environment })
+    ...(environment === undefined ? {} : { environment })
   })
 }
 

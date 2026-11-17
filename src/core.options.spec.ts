@@ -440,7 +440,7 @@ describe('normalizeCoreOptions, openapi block', () => {
   it('clones servers and security schemes instead of freezing the consumer objects', () => {
     process.env['NODE_ENV'] = 'test'
     const servers = [{ url: 'https://api.example.com' }]
-    const securitySchemes = { bearer: { type: 'http' } }
+    const securitySchemes = { bearer: { type: 'http', scheme: 'bearer' } }
 
     const resolved = normalizeCoreOptions({ openapi: { servers, securitySchemes } })
 

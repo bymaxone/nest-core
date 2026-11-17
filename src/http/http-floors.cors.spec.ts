@@ -334,12 +334,12 @@ describe('applyHttpFloors, CORS refusals', () => {
     [
       'a list with one blank entry among valid ones',
       { origins: [ALLOWED], allowedHeaders: ['x-a', ' '] },
-      /cors\.allowedHeaders must be a list of non-empty strings/
+      /cors\.allowedHeaders entry 2 must be a non-empty string/
     ],
     [
       'a list with a non-string entry',
       { origins: [ALLOWED], exposedHeaders: [42] },
-      /cors\.exposedHeaders must be a list of non-empty strings/
+      /cors\.exposedHeaders entry 1 must be a non-empty string/
     ],
     ['a wildcard in the host', { origins: ['https://*.example.com'] }, /cors\.origins.*wildcard/],
     ['a duplicated origin', { origins: [ALLOWED, ALLOWED] }, /cors\.origins.*more than once/],
@@ -353,26 +353,25 @@ describe('applyHttpFloors, CORS refusals', () => {
     [
       'an unknown method',
       { origins: [ALLOWED], methods: ['FETCH'] },
-      /cors\.methods entry "FETCH" is not one of GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS/
+      /cors\.methods entry 1 is not one of GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS/
     ],
     ['a lower-case method', { origins: [ALLOWED], methods: ['get'] }, /cors\.methods/],
     ['a cors value that is not an object', 'https://a.example.com', /cors must be an object/],
     ['a cors value that is a list', [ALLOWED], /cors must be an object/],
-    ['a null cors value', null, /cors must be an object/],
     [
       'a sparse origins list',
       { origins: sparse([ALLOWED]) },
-      /cors\.origins entry undefined is not an exact origin/
+      /cors\.origins entry 2 is not an exact origin/
     ],
     [
       'a sparse methods list',
       { origins: [ALLOWED], methods: sparse(['GET']) },
-      /cors\.methods must be a list of non-empty strings/
+      /cors\.methods entry 2 must be a non-empty string/
     ],
     [
       'a sparse exposedHeaders list',
       { origins: [ALLOWED], exposedHeaders: sparse(['x-id']) },
-      /cors\.exposedHeaders must be a list of non-empty strings/
+      /cors\.exposedHeaders entry 2 must be a non-empty string/
     ],
     [
       'a CRLF in allowedHeaders',

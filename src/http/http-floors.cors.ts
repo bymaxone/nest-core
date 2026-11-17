@@ -8,6 +8,9 @@ import type {
   CorsOptionsDelegate
 } from '@nestjs/common/interfaces/external/cors-options.interface'
 
+import { booleanOption, checkedBlock, refusal } from '../option-validation'
+import { positiveSafeInteger } from '../positive-integer'
+
 /** The CORS allowlist. Cross-origin access is off unless this is given. */
 export interface HttpFloorsCorsOptions {
   /**
@@ -37,26 +40,18 @@ export interface HttpFloorsCorsOptions {
 
 const WILDCARD = '*'
 
-/** The keys {@link HttpFloorsCorsOptions} has; anything else is a typo that would silently do nothing. */
-const CORS_KEYS: ReadonlySet<string> = new Set([
-  'origins',
-  'credentials',
-  'methods',
-  'allowedHeaders',
-  'exposedHeaders',
-  'maxAgeSeconds'
-])
+/** The options of {@link HttpFloorsCorsOptions}; the compiler keeps this table complete. */
+const CORS_KEYS = {
+  origins: 0,
+  credentials: 0,
+  methods: 0,
+  allowedHeaders: 0,
+  exposedHeaders: 0,
+  maxAgeSeconds: 0
+} satisfies Record<keyof HttpFloorsCorsOptions, 0>
 
 /** The methods `cors.methods` may list, in the exact case a browser compares them. */
-const HTTP_METHODS: ReadonlySet<string> = new Set([
-  'GET',
-  'HEAD',
-  'POST',
-  'PUT',
-  'PATCH',
-  'DELETE',
-  'OPTIONS'
-])
+const HTTP_METHODS: readonly string[] = ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS']
 
 /** The parts of an Express request the delegate reads and writes. */
 interface CorsRequest {
@@ -91,73 +86,61 @@ function withoutUndefined<T extends object>(
 const HEADER_NAME = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/
 
 /**
- * Throws unless `value` is a list of non-blank strings. An empty slot of a sparse list counts as an
- * entry that is not a string: `some` and `find` would skip it and let it become an empty item of a
- * header.
+ * The list an option holds, or `undefined` when it is unset. An empty slot of a sparse list counts as
+ * an entry that is not a string: `some` and `find` would skip it and let it become an empty item of a
+ * header. An entry is named by its position and never shown.
+ *
+ * @throws Error When the value is set and is not a list of non-empty strings.
  */
-function assertNames(name: string, value: readonly string[]): void {
-  if (
-    !Array.isArray(value) ||
-    Array.from(value).some((item) => typeof item !== 'string' || item.trim() === '')
-  ) {
-    throw new Error(`cors.${name} must be a list of non-empty strings`)
-  }
+function namesOf(name: string, value: unknown): readonly string[] | undefined {
+  if (value === undefined || value === null) return undefined
+  if (!Array.isArray(value)) throw refusal(`cors.${name}`, 'a list of strings', value)
+  const list = Array.from(value as readonly unknown[])
+  list.forEach((entry, index) => {
+    if (typeof entry !== 'string' || entry.trim() === '') {
+      throw new Error(`cors.${name} entry ${index + 1} must be a non-empty string`)
+    }
+  })
+  return list as readonly string[]
 }
 
-/** Throws unless every entry of a header list is a header name. */
-function assertHeaderNames(name: string, value: readonly string[]): void {
-  const bad = value.find((item) => !HEADER_NAME.test(item))
-  if (bad !== undefined) {
-    throw new Error(`cors.${name} entry ${JSON.stringify(bad)} is not a header name`)
-  }
+/** Throws at the first entry of `list` that `isValid` refuses, naming the entry by position. */
+function assertEntries(
+  name: string,
+  list: readonly string[] | undefined,
+  isValid: (entry: string) => boolean,
+  expected: string
+): void {
+  const bad = list?.findIndex((entry) => !isValid(entry)) ?? -1
+  if (bad >= 0) throw new Error(`cors.${name} entry ${bad + 1} is not ${expected}`)
 }
 
 /** Throws unless every origin is an exact origin, listed once, with no wildcard in its host. */
-function assertOrigins(origins: readonly string[]): void {
-  const entries = Array.from(origins)
-  for (const origin of entries) {
+function assertOrigins(origins: readonly unknown[]): void {
+  origins.forEach((origin, index) => {
     if (!isExactOrigin(origin)) {
       throw new Error(
-        `cors.origins entry ${JSON.stringify(origin)} is not an exact origin such as "https://app.example.com"`
+        `cors.origins entry ${index + 1} is not an exact origin such as "https://app.example.com"`
       )
     }
-  }
-  const wild = entries.find((origin) => new URL(origin).hostname.includes(WILDCARD))
-  if (wild !== undefined) {
-    throw new Error(
-      `cors.origins entry ${JSON.stringify(wild)} has a wildcard in its host: a pattern is not matched, list each origin`
-    )
-  }
-  if (new Set(entries).size !== entries.length) {
+    if (new URL(origin).hostname.includes(WILDCARD)) {
+      throw new Error(
+        `cors.origins entry ${index + 1} has a wildcard in its host: a pattern is not matched, list each origin`
+      )
+    }
+  })
+  if (new Set(origins).size !== origins.length) {
     throw new Error('cors.origins lists an origin more than once')
   }
 }
 
-/** Throws on a key that is not an option, a `methods` entry that is not an HTTP method, or a bad max age. */
-function assertShape(cors: HttpFloorsCorsOptions): void {
-  const unknown = Object.keys(cors).find((key) => !CORS_KEYS.has(key))
-  if (unknown !== undefined) {
-    throw new Error(`cors has an unknown key ${JSON.stringify(unknown)}`)
+/** The origins of the allowlist as a list, or throws when there is none or it is not a list. */
+function originsOf(value: unknown): readonly unknown[] {
+  if (value === undefined || (Array.isArray(value) && value.length === 0)) {
+    throw new Error('cors.origins must list at least one origin')
   }
-  for (const [name, list] of [
-    ['methods', cors.methods],
-    ['allowedHeaders', cors.allowedHeaders],
-    ['exposedHeaders', cors.exposedHeaders]
-  ] as const) {
-    if (list !== undefined) assertNames(name, list)
-  }
-  if (cors.allowedHeaders !== undefined) assertHeaderNames('allowedHeaders', cors.allowedHeaders)
-  if (cors.exposedHeaders !== undefined) assertHeaderNames('exposedHeaders', cors.exposedHeaders)
-  const method = cors.methods?.find((name) => !HTTP_METHODS.has(name))
-  if (method !== undefined) {
-    throw new Error(
-      `cors.methods entry ${JSON.stringify(method)} is not one of ${[...HTTP_METHODS].join(', ')}`
-    )
-  }
-  const age = cors.maxAgeSeconds ?? undefined
-  if (age !== undefined && (!Number.isSafeInteger(age) || age < 1)) {
-    throw new Error(`cors.maxAgeSeconds must be a positive integer, received ${String(age)}`)
-  }
+  if (!Array.isArray(value)) throw refusal('cors.origins', 'a list of origins', value)
+  return Array.from(value as readonly unknown[])
 }
 
 /**
@@ -169,26 +152,33 @@ function assertShape(cors: HttpFloorsCorsOptions): void {
  * With a list of origins `Vary: Origin` is set on every response, so a cache does not serve one
  * origin's answer to another.
  *
- * @param cors - The caller's CORS options.
+ * @param given - The caller's CORS options.
  * @returns The delegate to register.
  * @throws Error When `cors` is not an object, has an unknown key, lists no origin or one twice, an
  *   entry is not an exact origin or has a wildcard in its host, a wildcard is mixed with other
  *   origins or with credentials, `credentials` is not a boolean, `methods` names no HTTP method, or a
  *   list or the max age is unusable.
  */
-export function resolveCors(cors: HttpFloorsCorsOptions): CorsOptionsDelegate<CorsRequest> {
-  if (typeof cors !== 'object' || cors === null || Array.isArray(cors)) {
+export function resolveCors(given: unknown): CorsOptionsDelegate<CorsRequest> {
+  const cors = checkedBlock<HttpFloorsCorsOptions>('cors', given, CORS_KEYS)
+  if (cors === undefined) {
     throw new Error('cors must be an object such as { origins: ["https://app.example.com"] }')
   }
-  assertShape(cors)
-  const { origins } = cors
-  const credentials = cors.credentials ?? false
-  if (typeof credentials !== 'boolean') {
-    throw new Error(`cors.credentials must be true or false, received ${String(credentials)}`)
-  }
-  if (!Array.isArray(origins) || origins.length === 0) {
-    throw new Error('cors.origins must list at least one origin')
-  }
+  const origins = originsOf(cors.origins)
+  const credentials = booleanOption('cors.credentials', cors.credentials, false)
+  const methods = namesOf('methods', cors.methods)
+  const allowedHeaders = namesOf('allowedHeaders', cors.allowedHeaders)
+  const exposedHeaders = namesOf('exposedHeaders', cors.exposedHeaders)
+  assertEntries('allowedHeaders', allowedHeaders, (name) => HEADER_NAME.test(name), 'a header name')
+  assertEntries('exposedHeaders', exposedHeaders, (name) => HEADER_NAME.test(name), 'a header name')
+  assertEntries(
+    'methods',
+    methods,
+    (name) => HTTP_METHODS.includes(name),
+    `one of ${HTTP_METHODS.join(', ')}`
+  )
+  const maxAge = cors.maxAgeSeconds ?? undefined
+  if (maxAge !== undefined) positiveSafeInteger('cors.maxAgeSeconds', maxAge)
   const wildcard = origins.includes(WILDCARD)
   if (wildcard && origins.length > 1) {
     throw new Error(`cors.origins: "${WILDCARD}" must stand alone, not beside listed origins`)
@@ -200,13 +190,13 @@ export function resolveCors(cors: HttpFloorsCorsOptions): CorsOptionsDelegate<Co
   const offers: CorsOptions = {
     credentials,
     ...withoutUndefined({
-      methods: cors.methods?.slice(),
-      allowedHeaders: cors.allowedHeaders?.slice(),
-      exposedHeaders: cors.exposedHeaders?.slice(),
-      maxAge: cors.maxAgeSeconds ?? undefined
+      methods: methods?.slice(),
+      allowedHeaders: allowedHeaders?.slice(),
+      exposedHeaders: exposedHeaders?.slice(),
+      maxAge
     })
   }
-  const listed: ReadonlySet<string> = new Set(origins)
+  const listed: ReadonlySet<string> = new Set(origins as readonly string[])
   return (request, callback) => {
     if (wildcard) return callback(null, { ...offers, origin: WILDCARD })
     request.res?.vary?.('Origin')

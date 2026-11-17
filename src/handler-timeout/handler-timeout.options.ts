@@ -2,6 +2,7 @@
  * @fileoverview The options of the handler timeout and their resolution against the defaults.
  * @layer Configuration
  */
+import { booleanOption, checkedBlock, refusal } from '../option-validation'
 import { MAX_TIMER_DELAY_MS, positiveSafeInteger } from '../positive-integer'
 
 /** The default {@link HandlerTimeoutOptions.timeoutMs}. */
@@ -30,7 +31,8 @@ export interface HandlerTimeoutOptions {
    * method) cannot be cancelled: it runs to its end unless it takes the abort signal
    * (`@HandlerSignal()`) and stops on it, and a database connection it holds is released only when it
    * does. Either kind of handler is held for one more `timeoutMs` after the `504`, so that an error it
-   * throws meanwhile is logged and not lost; an `Observable` is then unsubscribed, so its teardown
+   * throws meanwhile is logged and not lost (best effort: the hold does not keep the process alive, so a
+   * process that closes right after the `504` with nothing else open can exit first); an `Observable` is then unsubscribed, so its teardown
    * runs; a client that goes away before the `504` releases it at once. The longest a handler is held is
    * twice `timeoutMs`.
    *
@@ -56,11 +58,17 @@ export interface ResolvedHandlerTimeoutOptions {
   readonly excludePaths: readonly string[]
 }
 
+/** The options of {@link HandlerTimeoutOptions}; the compiler keeps this table complete. */
+const HANDLER_TIMEOUT_KEYS = { enabled: 0, timeoutMs: 0, excludePaths: 0 } satisfies Record<
+  keyof HandlerTimeoutOptions,
+  0
+>
+
 /** Throws unless `path` is a path prefix: a string that starts with `/` and has no query or fragment. */
-function assertPathPrefix(path: unknown): asserts path is string {
+function assertPathPrefix(path: unknown, index: number): asserts path is string {
   if (typeof path !== 'string' || !path.startsWith('/') || /[?#\s]/.test(path)) {
     throw new Error(
-      `handlerTimeout.excludePaths entry ${JSON.stringify(path)} must be a path starting with "/", with no query, fragment or space`
+      `handlerTimeout.excludePaths entry ${index + 1} must be a path starting with "/", with no query, fragment or space`
     )
   }
 }
@@ -68,21 +76,24 @@ function assertPathPrefix(path: unknown): asserts path is string {
 /**
  * Resolve the handler-timeout options against their defaults.
  *
- * @param raw - The consumer's handler-timeout block, if any.
+ * @param given - The consumer's handler-timeout block, if any.
  * @returns The fully-populated options.
- * @throws Error When the timeout is not a positive timer-safe integer or an excluded path is not a
- *   path prefix.
+ * @throws Error When a value has the wrong type, the block has an option it does not document, the
+ *   timeout is not a positive timer-safe integer, or an excluded path is not a path prefix.
  */
-export function resolveHandlerTimeout(raw?: HandlerTimeoutOptions): ResolvedHandlerTimeoutOptions {
-  const excludePaths = [...(raw?.excludePaths ?? [])]
+export function resolveHandlerTimeout(given?: unknown): ResolvedHandlerTimeoutOptions {
+  const raw = checkedBlock<HandlerTimeoutOptions>('handlerTimeout', given, HANDLER_TIMEOUT_KEYS)
+  const listed = raw?.excludePaths ?? []
+  if (!Array.isArray(listed)) throw refusal('handlerTimeout.excludePaths', 'an array', listed)
+  const excludePaths = Array.from(listed as readonly unknown[])
   excludePaths.forEach(assertPathPrefix)
   return {
-    enabled: raw?.enabled ?? false,
+    enabled: booleanOption('handlerTimeout.enabled', raw?.enabled, false),
     timeoutMs: positiveSafeInteger(
       'handlerTimeout.timeoutMs',
       raw?.timeoutMs ?? DEFAULT_HANDLER_TIMEOUT_MS,
       MAX_TIMER_DELAY_MS
     ),
-    excludePaths
+    excludePaths: excludePaths as string[]
   }
 }

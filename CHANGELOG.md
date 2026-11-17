@@ -12,6 +12,45 @@ heading here.
 
 ## [Unreleased]
 
+**Apply to a derived backend:** options are now checked more strictly, so a configuration that was
+silently wrong fails at boot.
+
+- A **boolean option** must be `true` or `false` (or unset): `exposeInternals: 'false'` was kept as a
+  truthy string and switched the feature on, and is now refused. This covers every `enabled`,
+  `exposeInternals`, `autoDiscover`, `exposeIndicatorErrors`, `collectDefaultMetrics`, `edgeProtected`,
+  `includeCoreSchemas`, `exposeTraceId` and `cors.credentials`.
+- A **block, and the options object, refuse a key they do not document** (`envelope`, `timing`,
+  `bodyDepth`, `health`, `metrics`, `handlerTimeout`, `shutdown`, `openapi`, `telemetry`, and the
+  options of `applyHttpFloors` with `bodyLimit` and `cors`): a misspelt option used to do nothing.
+  Check for options you pass that this package never read.
+- **`helmet`** is an object or `false`, and an option name `helmet` does not have is refused (`helmet`
+  ignores it, so a misspelt `contentSecurityPolcy` left the header on its default). An option given as
+  `undefined` is dropped, so `{ strictTransportSecurity: undefined }` now keeps HSTS off as the
+  default does; it used to turn helmet's own default back on. An option given as `null` is refused,
+  so a `null` from configuration never silently switches a header off.
+- **`openapi`** declarations are checked at boot and not when the document is first built: `servers`
+  need a `url`, a security scheme needs a `type` of the specification (`http` a `scheme`, `apiKey` an
+  `in` of `header`, `query` or `cookie` and a `name`), requirements map scheme names to lists of
+  strings, an `operationSecurity` key is `"<METHOD> /path"` with an upper-case method,
+  `operationIdFactory` is a function, and `path` and `jsonPath` are routes with no space, query or
+  fragment. A scheme such as `{ type: 'http' }` with no `scheme` is refused.
+- **`metrics.defaultLabels`** must map Prometheus label names to strings; `metrics.authToken` must be a
+  string; `health.path` and `metrics.path` are routes; `environment` is a string; `handlerTimeout.excludePaths`
+  is a list.
+- An option, or a whole block, given as `undefined` or `null` is read as unset and takes its default,
+  in every block, except an option of `helmet` (see above), where `null` is refused:
+  `applyHttpFloors({ cors: null })` is now CORS off, where it was refused.
+
+### Changed
+
+- **Refusals name the option and the type of the value, and never the value.** A message used to echo
+  what it was given (a string for `keepAliveTimeoutMs`, a `cors.origins` entry, an `excludePaths` entry,
+  a path) and a bigint origin threw a `TypeError` from the message itself. A list entry is now named by
+  its position, and only a number is shown as itself.
+- The late-error log of a handler that threw after its `504` is best effort: the hold that keeps the
+  handler for one more `timeoutMs` does not keep the process alive, so a process that closes its
+  application with nothing else open can exit before the error is logged.
+
 ## [1.6.13] - 2026-11-17
 
 A patch release. `applyHttpFloors` holds idle keep-alive connections for longer than a load balancer's

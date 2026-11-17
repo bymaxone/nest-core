@@ -88,7 +88,7 @@ describe('metrics production guard', () => {
   })
 
   /**
-   * A token given as `null` is read as unset, as every other option given as `null` is, and not as a
+   * A token given as `null` is read as unset, as the other options of the core are, and not as a
    * TypeError from reading a property of it.
    */
   it('reads a null token as unset: no token in the options, and the production guard applies', () => {

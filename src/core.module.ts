@@ -369,7 +369,8 @@ export class BymaxCoreModule extends BymaxCoreModuleBase implements NestModule {
       resolved.openapi.enabled
     const imports = scansProviders ? [DiscoveryModule] : []
     return augmentModule(
-      super.forRoot(options),
+      // The builder destructures what it is given, so an unset input is an empty one.
+      super.forRoot(options ?? {}),
       providers,
       buildControllers(resolved),
       exportTokens,

@@ -14,7 +14,8 @@
  */
 import type { INestApplication } from '@nestjs/common'
 
-import { MAX_TIMER_DELAY_MS } from '../positive-integer'
+import { checkedBlock, describeValue, refusal } from '../option-validation'
+import { MAX_TIMER_DELAY_MS, positiveSafeInteger } from '../positive-integer'
 import { resolveCors } from './http-floors.cors'
 import type { HttpFloorsCorsOptions } from './http-floors.cors'
 import { loadHelmet } from './http.loader'
@@ -128,22 +129,6 @@ interface ExpressApplicationShape {
 }
 
 /**
- * Check a timeout is a positive integer.
- *
- * @param name - The option name, for the message.
- * @param value - The configured value.
- * @throws Error When the value is not a positive safe integer.
- */
-function assertPositiveInteger(name: string, value: number, max?: number): void {
-  if (!Number.isSafeInteger(value) || value < 1) {
-    throw new Error(`${name} must be a positive integer, received ${String(value)}`)
-  }
-  if (max !== undefined && value > max) {
-    throw new Error(`${name} must be a positive integer of at most ${max}, received ${value}`)
-  }
-}
-
-/**
  * The largest body limit accepted: 256 MiB, half of V8's longest string (`MAX_STRING_LENGTH`,
  * 536870888 characters on Node 24). The JSON parser holds the whole body as one string, so a limit
  * beyond that cannot be honoured, and nothing sent as JSON or urlencoded form is meant to be that
@@ -159,30 +144,89 @@ const SIZE_UNITS = ['b', 'kb', 'mb', 'gb']
  * string of its own: its reading rounds a fraction down and lets an enormous value through.
  * Throws unless that is a positive safe integer.
  */
-function limitInBytes(name: string, value: HttpBodyLimit): number {
-  const bytes = typeof value === 'number' ? value : sizeInBytes(value)
+function limitInBytes(name: string, value: unknown): number {
+  const bytes =
+    typeof value === 'number' ? value : typeof value === 'string' ? sizeInBytes(value) : Number.NaN
   if (!Number.isSafeInteger(bytes) || bytes < 1) {
     throw new Error(
-      `${name} must be a positive byte count or a size such as '100kb', received ${String(value)}`
+      `${name} must be a positive byte count or a size such as '100kb', received ${describeValue(value)}`
     )
   }
   if (bytes > MAX_BODY_LIMIT_BYTES) {
-    throw new Error(`${name} must be at most 256mb, received ${String(value)}`)
+    throw new Error(`${name} must be at most 256mb`)
   }
   return bytes
 }
 
-/** Throws unless `bodyLimit` is an object with only the keys of {@link HttpFloorsBodyLimit}. */
-function assertBodyLimitShape(bodyLimit: unknown): void {
-  if (typeof bodyLimit !== 'object' || bodyLimit === null) {
-    throw new Error("bodyLimit must be an object such as { json: '1mb', urlencoded: '100kb' }")
+/** The options of {@link HttpFloorsBodyLimit}; the compiler keeps this table complete. */
+const BODY_LIMIT_KEYS = { json: 0, urlencoded: 0 } satisfies Record<keyof HttpFloorsBodyLimit, 0>
+
+/** The options of {@link HttpFloorsOptions}; the compiler keeps this table complete. */
+const FLOORS_KEYS = {
+  helmet: 0,
+  headersTimeoutMs: 0,
+  requestTimeoutMs: 0,
+  connectionsCheckingIntervalMs: 0,
+  keepAliveTimeoutMs: 0,
+  bodyLimit: 0,
+  cors: 0
+} satisfies Record<keyof HttpFloorsOptions, 0>
+
+/**
+ * The names `helmet` documents as options, aliases included. `helmet` ignores a name it does not
+ * know, so a misspelt one would silently leave a header on its default; a test pins this list to
+ * the installed `helmet`.
+ */
+export const HELMET_OPTION_NAMES: readonly string[] = [
+  'contentSecurityPolicy',
+  'crossOriginEmbedderPolicy',
+  'crossOriginOpenerPolicy',
+  'crossOriginResourcePolicy',
+  'dnsPrefetchControl',
+  'frameguard',
+  'hidePoweredBy',
+  'hsts',
+  'ieNoOpen',
+  'noSniff',
+  'originAgentCluster',
+  'permittedCrossDomainPolicies',
+  'referrerPolicy',
+  'strictTransportSecurity',
+  'xContentTypeOptions',
+  'xDnsPrefetchControl',
+  'xDownloadOptions',
+  'xFrameOptions',
+  'xPermittedCrossDomainPolicies',
+  'xPoweredBy',
+  'xXssProtection',
+  'xssFilter'
+]
+
+/**
+ * The options handed to `helmet`: an object of helmet's own option names, or `false` to leave it out.
+ * An option left `undefined` is dropped, so it reads as unset and not as a value; `null` is refused,
+ * because a `null` that comes from configuration must not silently switch a header off.
+ *
+ * @throws Error When the value is not an object or `false`, or names an option `helmet` does not have.
+ */
+function resolveHelmet(given: unknown): Record<string, unknown> | false {
+  if (given === false) return false
+  if (given === undefined || given === null) return {}
+  if (typeof given !== 'object' || Array.isArray(given)) {
+    throw refusal('helmet', 'an object or false', given)
   }
-  const unknown = Object.keys(bodyLimit).find((key) => key !== 'json' && key !== 'urlencoded')
-  if (unknown !== undefined) {
-    throw new Error(
-      `bodyLimit has an unknown key ${JSON.stringify(unknown)}; use json and urlencoded`
-    )
-  }
+  checkedBlock('helmet', given, Object.fromEntries(HELMET_OPTION_NAMES.map((name) => [name, 0])))
+  return Object.fromEntries(
+    HELMET_OPTION_NAMES.flatMap((name) => {
+      const value: unknown = Reflect.get(given, name)
+      if (value === null) {
+        throw new Error(
+          `helmet.${name} must not be null: leave it out, or give an object, true or false`
+        )
+      }
+      return value === undefined ? [] : [[name, value]]
+    })
+  )
 }
 
 /** The whole number of bytes a size string comes to, or `NaN` when it is not one. */
@@ -202,14 +246,20 @@ interface ResolvedFloors {
   readonly jsonLimit: number
   readonly urlencodedLimit: number
   readonly cors: ReturnType<typeof resolveCors> | undefined
+  readonly helmet: Record<string, unknown> | false
 }
 
 /** Applies the defaults and checks every value, so nothing is applied on a bad one. */
-function resolveFloors(options: HttpFloorsOptions): ResolvedFloors {
+function resolveFloors(given: unknown): ResolvedFloors {
+  const options = checkedBlock<HttpFloorsOptions>(
+    'options',
+    given ?? {},
+    FLOORS_KEYS
+  ) as HttpFloorsOptions
   const headersTimeoutMs = options.headersTimeoutMs ?? DEFAULT_HEADERS_TIMEOUT_MS
   const requestTimeoutMs = options.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS
-  assertPositiveInteger('headersTimeoutMs', headersTimeoutMs)
-  assertPositiveInteger('requestTimeoutMs', requestTimeoutMs)
+  positiveSafeInteger('headersTimeoutMs', headersTimeoutMs)
+  positiveSafeInteger('requestTimeoutMs', requestTimeoutMs)
   if (headersTimeoutMs > requestTimeoutMs) {
     throw new Error(
       `headersTimeoutMs (${headersTimeoutMs}) must not exceed requestTimeoutMs (${requestTimeoutMs})`
@@ -218,19 +268,24 @@ function resolveFloors(options: HttpFloorsOptions): ResolvedFloors {
   const checkingIntervalMs =
     options.connectionsCheckingIntervalMs ??
     Math.min(DEFAULT_CONNECTIONS_CHECKING_INTERVAL_MS, headersTimeoutMs)
-  assertPositiveInteger('connectionsCheckingIntervalMs', checkingIntervalMs, MAX_TIMER_DELAY_MS)
+  positiveSafeInteger('connectionsCheckingIntervalMs', checkingIntervalMs, MAX_TIMER_DELAY_MS)
   const keepAliveTimeoutMs = options.keepAliveTimeoutMs ?? DEFAULT_KEEP_ALIVE_TIMEOUT_MS
-  assertPositiveInteger('keepAliveTimeoutMs', keepAliveTimeoutMs, MAX_TIMER_DELAY_MS)
-  const bodyLimit = options.bodyLimit ?? undefined
-  if (bodyLimit !== undefined) assertBodyLimitShape(bodyLimit)
+  positiveSafeInteger('keepAliveTimeoutMs', keepAliveTimeoutMs, MAX_TIMER_DELAY_MS)
+  const bodyLimit = checkedBlock<HttpFloorsBodyLimit>(
+    'bodyLimit',
+    options.bodyLimit,
+    BODY_LIMIT_KEYS
+  )
   const jsonLimit = limitInBytes('bodyLimit.json', bodyLimit?.json ?? DEFAULT_BODY_LIMIT)
   const urlencodedLimit = limitInBytes(
     'bodyLimit.urlencoded',
     bodyLimit?.urlencoded ?? DEFAULT_BODY_LIMIT
   )
-  const cors = options.cors === undefined ? undefined : resolveCors(options.cors)
+  const cors =
+    options.cors === undefined || options.cors === null ? undefined : resolveCors(options.cors)
   return {
     cors,
+    helmet: resolveHelmet(options.helmet),
     headersTimeoutMs,
     requestTimeoutMs,
     checkingIntervalMs,
@@ -281,7 +336,7 @@ export async function applyHttpFloors(
   const floors = resolveFloors(options)
   const express = app as unknown as ExpressApplicationShape
   const server = assertBootstrapState(express)
-  const given = options.helmet ?? {}
+  const given = floors.helmet
   if (given !== false) {
     const helmet = await loadHelmet()
     // helmet accepts `hsts` as an alias of `strictTransportSecurity` and throws when both are
