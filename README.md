@@ -368,6 +368,13 @@ module or in a provider of the root module, is covered on a signal; on a program
 reached before this module's hook and the deadline is not armed, so give that call its own timeout. A
 signal that nothing handles keeps Node's default of ending the process, and no listener is added for it.
 
+Two consequences to know. With `deadlineMs` set, any `SIGTERM` or `SIGINT` that reaches a process that already
+handles it arms the deadline, even one the application handles for something other than shutdown (a CLI that
+cancels a task on Ctrl-C and keeps running): that process exits with code `1` after `deadlineMs`. And the timer
+outlives `app.close()` on purpose, which is how it catches a handle that leaks, so a process that keeps running
+after `app.close()`, typically a Jest end-to-end suite that closes the application and runs more tests, exits
+with code `1` `deadlineMs` later. Leave `deadlineMs` unset in test processes.
+
 ### `telemetry`
 
 | Option          | Type      | Default | Description                                                                     |

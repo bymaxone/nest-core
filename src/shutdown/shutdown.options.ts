@@ -23,6 +23,11 @@ export interface ShutdownOptions {
    * or in the root module's providers is reached first and the deadline is not armed; a never-settling
    * `beforeApplicationShutdown` or `onApplicationShutdown` anywhere is covered. A signal nothing
    * handles keeps Node's default of ending the process, and no listener is added for it.
+   *
+   * A `SIGTERM` or `SIGINT` the application handles for another purpose also arms it, and the process
+   * then exits with code `1` after `deadlineMs`. The timer outlives `app.close()` on purpose, so a
+   * process that keeps running after it, such as a Jest end-to-end suite, exits with code `1` too:
+   * leave `deadlineMs` unset in test processes.
    */
   deadlineMs?: number
 }
