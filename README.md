@@ -331,7 +331,7 @@ returns a promise, which is every `async` method: measured with one that takes 4
 bound, the client got the `504` at about 100 ms and the handler ran on to its end. A handler that returns
 an `Observable` is unsubscribed one more `timeoutMs` after the `504`, so its teardown runs, and at once
 when the client goes away before the `504`; until then an error either kind of handler throws is logged, and after that it
-is not. The bound is the handler's whole duration, so an `Observable` that emits and never completes is
+is not. The longest this holds a handler is therefore twice `timeoutMs`: the bound, then the one more. The bound is the handler's whole duration, so an `Observable` that emits and never completes is
 answered `504` too. A promise handler stops early, and releases what it holds, only if it takes the
 signal and acts on it: `@HandlerSignal()` gives it an `AbortSignal` that is aborted when the bound
 expires and when the client goes away, to pass to a driver, a `fetch` or an `await` that accepts one. The

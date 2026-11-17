@@ -7,7 +7,7 @@
  * the handler ends, and a class-level opt-out is honoured.
  * Mocks: a fake context and response, a real Reflector, and fake timers.
  */
-import { GatewayTimeoutException } from '@nestjs/common'
+import { GatewayTimeoutException, Logger } from '@nestjs/common'
 import type { CallHandler, ExecutionContext } from '@nestjs/common'
 import { Reflector } from '@nestjs/core'
 import { NEVER, Observable, of, Subject } from 'rxjs'
@@ -229,5 +229,86 @@ describe('handler timeout metadata key', () => {
    */
   it('is a string and not a symbol', () => {
     expect(typeof NO_HANDLER_TIMEOUT_KEY).toBe('string')
+  })
+})
+
+describe('handler timeout interceptor, what the handler does around the bound', () => {
+  beforeEach(() => jest.useFakeTimers())
+  afterEach(() => {
+    jest.useRealTimers()
+    jest.restoreAllMocks()
+  })
+
+  /** Subscribes to the intercepted handler and returns what the client side received. */
+  function observe(handled: Subject<string>): {
+    values: string[]
+    errors: unknown[]
+    done: () => boolean
+  } {
+    const seenByClient = { values: [] as string[], errors: [] as unknown[], completed: false }
+    interceptor()
+      .intercept(contextFor(PlainController, new FakeResponse()), { handle: () => handled })
+      .subscribe({
+        next: (value) => seenByClient.values.push(value as string),
+        error: (error: unknown) => seenByClient.errors.push(error),
+        complete: () => {
+          seenByClient.completed = true
+        }
+      })
+    return {
+      values: seenByClient.values,
+      errors: seenByClient.errors,
+      done: () => seenByClient.completed
+    }
+  }
+
+  it('passes a value and the completion on before the bound', () => {
+    const handled = new Subject<string>()
+    const client = observe(handled)
+    handled.next('a')
+    handled.complete()
+    expect(client.values).toEqual(['a'])
+    expect(client.done()).toBe(true)
+  })
+
+  it('passes an error on before the bound, and logs nothing', () => {
+    const logged = jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined)
+    const handled = new Subject<string>()
+    const client = observe(handled)
+    const boom = new Error('boom')
+    handled.error(boom)
+    expect(client.errors).toEqual([boom])
+    expect(logged).not.toHaveBeenCalled()
+  })
+
+  it('drops a value and a completion that come after the 504', () => {
+    const handled = new Subject<string>()
+    const client = observe(handled)
+    jest.advanceTimersByTime(1_000)
+    expect(client.errors).toHaveLength(1)
+    handled.next('late')
+    handled.complete()
+    expect(client.values).toEqual([])
+    expect(client.done()).toBe(false)
+  })
+
+  it('logs the message of an Error thrown after the 504, and the text of anything else', () => {
+    const logged = jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined)
+    const first = new Subject<string>()
+    observe(first)
+    jest.advanceTimersByTime(1_000)
+    first.error(new Error('after the bound'))
+    const second = new Subject<string>()
+    observe(second)
+    jest.advanceTimersByTime(1_000)
+    second.error('a plain string')
+    expect(logged).toHaveBeenNthCalledWith(
+      1,
+      'A handler threw after its request was answered 504: after the bound'
+    )
+    expect(logged).toHaveBeenNthCalledWith(
+      2,
+      'A handler threw after its request was answered 504: a plain string'
+    )
   })
 })

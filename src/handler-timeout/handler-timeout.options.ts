@@ -31,7 +31,8 @@ export interface HandlerTimeoutOptions {
    * (`@HandlerSignal()`) and stops on it, and a database connection it holds is released only when it
    * does. Either kind of handler is held for one more `timeoutMs` after the `504`, so that an error it
    * throws meanwhile is logged and not lost; an `Observable` is then unsubscribed, so its teardown
-   * runs; a client that goes away before the `504` releases it at once.
+   * runs; a client that goes away before the `504` releases it at once. The longest a handler is held is
+   * twice `timeoutMs`.
    *
    * The bound covers every route the interceptor sees, the health and metrics endpoints included: a
    * `timeoutMs` below `health.indicatorTimeoutMs` or `metrics.scrapeTimeoutMs` makes a slow probe or
