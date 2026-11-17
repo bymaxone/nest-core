@@ -20,10 +20,11 @@ changes unless you set the new options.
   twice, a `credentials` that is not a boolean, an unknown key, a `methods` entry that is not an upper-case
   HTTP method, and a `cors` that is not an object are now refused. They were accepted before and did
   nothing useful (a `*` in a host matched only the literal string).
-- With a list of origins, a request from an origin that is not listed, or with no `Origin`, now gets none of the CORS headers
-  (before, it still got the credentials header and, on a preflight, the allowed methods, headers and max
-  age), and an `OPTIONS` request that is not a preflight from a listed origin reaches your application
-  instead of being answered `204`. `Vary: Origin` is set on every response.
+- With a list of origins, a request from an origin that is not listed, or with no `Origin`, now gets
+  none of the CORS headers (before, it still got the credentials header and, on a preflight, the allowed
+  methods, headers and max age), and an `OPTIONS` request from such an origin, or with no `Origin`,
+  reaches your application instead of being answered `204`. A listed origin is unchanged: its `OPTIONS`
+  requests are still answered by the CORS middleware. `Vary: Origin` is set on every response to a list.
 - `keepAliveTimeoutMs` and `connectionsCheckingIntervalMs` above `2147483647` are refused: Node would
   read them as one millisecond. `bodyLimit` must be an object with only `json` and `urlencoded`, each at most
   `256mb`; a bare size string and an unknown key are refused.
