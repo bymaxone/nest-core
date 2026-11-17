@@ -93,7 +93,7 @@ const DEFAULT_BODY_LIMIT = '100kb'
 const DEFAULT_KEEP_ALIVE_TIMEOUT_MS = 65_000
 
 /** A size string the body parsers read: a number and one of these units. */
-const SIZE_STRING = /^(\d+(?:\.\d+)?)\s*(?:b|kb|mb|gb)$/i
+const SIZE_STRING = /^(\d+(?:\.\d+)?)\s*(b|kb|mb|gb)$/i
 
 /** The longest the sweep interval defaults to; a shorter header timeout shortens it further. */
 const DEFAULT_CONNECTIONS_CHECKING_INTERVAL_MS = 1_000
@@ -129,18 +129,24 @@ function assertPositiveInteger(name: string, value: number): void {
   }
 }
 
-/** Throws unless the limit is a positive byte count or a positive size string. */
-function assertBodyLimit(name: string, value: HttpBodyLimit): void {
+/** The units a size string may use, each 1024 times the one before. */
+const SIZE_UNITS = ['b', 'kb', 'mb', 'gb']
+
+/**
+ * The whole number of bytes a limit comes to, so the parser is handed a number and never reads a
+ * string of its own: its reading rounds a fraction down and lets an enormous value through.
+ * Throws unless that is a positive safe integer.
+ */
+function limitInBytes(name: string, value: HttpBodyLimit): number {
   const size = typeof value === 'string' ? SIZE_STRING.exec(value) : null
-  const positive =
-    typeof value === 'number'
-      ? Number.isSafeInteger(value) && value >= 1
-      : size !== null && Number(size[1]) > 0
-  if (!positive) {
+  const power = SIZE_UNITS.indexOf((size?.[2] ?? '').toLowerCase())
+  const bytes = typeof value === 'number' ? value : Math.floor(Number(size?.[1]) * 1024 ** power)
+  if (!Number.isSafeInteger(bytes) || bytes < 1) {
     throw new Error(
       `${name} must be a positive byte count or a size such as '100kb', received ${String(value)}`
     )
   }
+  return bytes
 }
 
 /** The settings of one call, every default applied and every value checked. */
@@ -149,8 +155,8 @@ interface ResolvedFloors {
   readonly requestTimeoutMs: number
   readonly checkingIntervalMs: number
   readonly keepAliveTimeoutMs: number
-  readonly jsonLimit: HttpBodyLimit
-  readonly urlencodedLimit: HttpBodyLimit
+  readonly jsonLimit: number
+  readonly urlencodedLimit: number
 }
 
 /** Applies the defaults and checks every value, so nothing is applied on a bad one. */
@@ -170,10 +176,11 @@ function resolveFloors(options: HttpFloorsOptions): ResolvedFloors {
   assertPositiveInteger('connectionsCheckingIntervalMs', checkingIntervalMs)
   const keepAliveTimeoutMs = options.keepAliveTimeoutMs ?? DEFAULT_KEEP_ALIVE_TIMEOUT_MS
   assertPositiveInteger('keepAliveTimeoutMs', keepAliveTimeoutMs)
-  const jsonLimit = options.bodyLimit?.json ?? DEFAULT_BODY_LIMIT
-  const urlencodedLimit = options.bodyLimit?.urlencoded ?? DEFAULT_BODY_LIMIT
-  assertBodyLimit('bodyLimit.json', jsonLimit)
-  assertBodyLimit('bodyLimit.urlencoded', urlencodedLimit)
+  const jsonLimit = limitInBytes('bodyLimit.json', options.bodyLimit?.json ?? DEFAULT_BODY_LIMIT)
+  const urlencodedLimit = limitInBytes(
+    'bodyLimit.urlencoded',
+    options.bodyLimit?.urlencoded ?? DEFAULT_BODY_LIMIT
+  )
   return {
     headersTimeoutMs,
     requestTimeoutMs,

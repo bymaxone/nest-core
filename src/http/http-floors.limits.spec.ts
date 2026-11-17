@@ -116,6 +116,28 @@ describe('applyHttpFloors, body limits', () => {
     }
   })
 
+  it('counts a kilobyte as 1024 bytes, whatever the case of the unit', async () => {
+    const app = await start({ bodyLimit: { json: '1kb', urlencoded: '2 KB' } })
+    try {
+      expect((await post(app, 'json', json(1_024))).status).toBe(201)
+      expect((await post(app, 'json', json(1_025))).status).toBe(413)
+      expect((await post(app, 'form', form(2_048))).status).toBe(201)
+      expect((await post(app, 'form', form(2_049))).status).toBe(413)
+    } finally {
+      await app.close()
+    }
+  })
+
+  it('reads a fractional size by the whole number of bytes it comes to', async () => {
+    const app = await start({ bodyLimit: { json: '1.5kb' } })
+    try {
+      expect((await post(app, 'json', json(1_500))).status).toBe(201)
+      expect((await post(app, 'json', json(1_600))).status).toBe(413)
+    } finally {
+      await app.close()
+    }
+  })
+
   it('changes one parser and leaves the other at 100 kb', async () => {
     const app = await start({ bodyLimit: { json: '1mb' } })
     try {
@@ -132,7 +154,11 @@ describe('applyHttpFloors, body limits', () => {
     ['a negative byte count', { json: -5 }],
     ['a size with no unit', { json: 'big' }],
     ['a zero size', { urlencoded: '0kb' }],
-    ['an unknown unit', { json: '5 parsecs' }]
+    ['an unknown unit', { json: '5 parsecs' }],
+    ['a size under one byte', { json: '0.5b' }],
+    ['a size that rounds down to no bytes', { urlencoded: '0.0009kb' }],
+    ['a size beyond a safe byte count', { json: '999999999999999999999999gb' }],
+    ['a byte count beyond a safe integer', { json: Number.MAX_SAFE_INTEGER + 2 }]
   ])('rejects %s and applies nothing', async (_name, bodyLimit) => {
     const moduleRef = await Test.createTestingModule({ imports: [EchoModule] }).compile()
     const app = moduleRef.createNestApplication()

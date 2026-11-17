@@ -102,17 +102,17 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 // growth over 18.97 KiB is the scrape deadline (one shared collection, an unreferenced deadline timer
 // and its option's validation): code, none of it comment text.
 //   `./http` measured 787 B brotli (raw 2495 B) -> budget 1 KiB (1.30x): one helper and a loader.
-// `./http` budget 1.2 KiB = 1229 B: measured 1195 B brotli (raw 4072 B) plus 34 B of headroom. The
+// `./http` budget 1.25 KiB = 1280 B: measured 1242 B brotli (raw 4170 B) plus 38 B of headroom. The
 // growth over 1 KiB is the keep-alive timeout and the two body limits: their validation, the size-string
-// pattern and the messages: code, none of it comment text (the bundle carries none of the source's
-// comments, which `dist/http/index.mjs` shows).
+// pattern and the conversion to a byte count: code, none of it comment text (the bundle carries none
+// of the source's comments, which `dist/http/index.mjs` shows).
 const BUDGETS = [
   { name: '. (root)', path: 'dist/index.mjs', brotli: 19.34 * 1024 },
   { name: './pagination', path: 'dist/pagination/index.mjs', brotli: 1.5 * 1024 },
   { name: './health', path: 'dist/health/index.mjs', brotli: 0.5 * 1024 },
   { name: './openapi', path: 'dist/openapi/index.mjs', brotli: 7.5 * 1024 },
   { name: './metrics', path: 'dist/metrics/index.mjs', brotli: 0.5 * 1024 },
-  { name: './http', path: 'dist/http/index.mjs', brotli: 1.2 * 1024 }
+  { name: './http', path: 'dist/http/index.mjs', brotli: 1.25 * 1024 }
 ]
 
 const fmt = (n) => `${(n / 1024).toFixed(2)} kB`
