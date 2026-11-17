@@ -8,7 +8,7 @@
  * runtime.
  * Mocks: none (pure function).
  */
-import { DEFAULT_CORE_OPTIONS, normalizeCoreOptions } from './core.options'
+import { BymaxCoreModuleOptions, DEFAULT_CORE_OPTIONS, normalizeCoreOptions } from './core.options'
 
 describe('normalizeCoreOptions', () => {
   /**
@@ -93,7 +93,8 @@ describe('normalizeCoreOptions', () => {
    * actually overridable (guards against a hard-coded value ignoring input).
    */
   it('honors every explicitly provided field', () => {
-    const resolved = normalizeCoreOptions({
+    // Built twice, so the result cannot pass by being the very object it was given.
+    const given = (): BymaxCoreModuleOptions => ({
       envelope: { enabled: false, exposeInternals: true, serverErrorWindowMs: 5000 },
       timing: { enabled: false, slowRequestThresholdMs: 1000 },
       bodyDepth: { enabled: true, maxDepth: 8 },
@@ -115,25 +116,8 @@ describe('normalizeCoreOptions', () => {
       telemetry: { enabled: true, exposeTraceId: true }
     })
 
-    expect(resolved).toEqual({
-      envelope: { enabled: false, exposeInternals: true, serverErrorWindowMs: 5000 },
-      timing: { enabled: false, slowRequestThresholdMs: 1000 },
-      bodyDepth: { enabled: true, maxDepth: 8 },
-      health: {
-        enabled: false,
-        path: 'hz',
-        indicatorTimeoutMs: 250,
-        readinessCacheMs: 400,
-        exposeIndicatorErrors: true,
-        autoDiscover: true
-      },
-      metrics: {
-        enabled: true,
-        path: 'prom',
-        collectDefaultMetrics: false,
-        defaultLabels: { app: 'api' },
-        scrapeTimeoutMs: 2500
-      },
+    expect(normalizeCoreOptions(given())).toEqual({
+      ...given(),
       openapi: {
         enabled: false,
         suppressedInProduction: false,
@@ -147,8 +131,7 @@ describe('normalizeCoreOptions', () => {
         security: [],
         operationSecurity: {},
         includeCoreSchemas: true
-      },
-      telemetry: { enabled: true, exposeTraceId: true }
+      }
     })
   })
 

@@ -1,0 +1,18 @@
+{
+  "functions": {
+    "scripts/check-mutation-directives.mjs": {
+      "inspect": 66,
+      "inspect > (anonymous)": 59
+    },
+    "scripts/check-published-surface.mjs": {
+      "unroutableReason": 53,
+      "checkLinks": 131,
+      "checkLinks > (anonymous) #9": 73,
+      "checkChangelog": 98,
+      "checkSnippets": 107
+    },
+    "src/openapi/openapi.document.ts": {
+      "augmentDocument": 98
+    }
+  }
+}

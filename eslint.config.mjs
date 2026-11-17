@@ -6,6 +6,14 @@ import importPlugin from 'eslint-plugin-import'
 import prettier from 'eslint-plugin-prettier'
 import security from 'eslint-plugin-security'
 import globals from 'globals'
+import { readFileSync } from 'node:fs'
+
+import fileHeader from './scripts/eslint-file-header.mjs'
+import maxUnitLines from './scripts/eslint-max-unit-lines.mjs'
+
+const functionLengthBaseline = JSON.parse(
+  readFileSync(new URL('./scripts/function-length-baseline.json', import.meta.url), 'utf8')
+)
 
 export default [
   // Global ignores. Only build artifacts and coverage, not config files.
@@ -243,6 +251,27 @@ export default [
       'no-undef': 'off',
       'no-console': 'off'
     }
+  },
+
+  // The 50-line function limit of AGENTS.md. Functions already over it are listed in the baseline,
+  // which can only shrink (see the rule's header). The TypeScript block names the parser itself
+  // because test helpers outside the spec patterns are matched by no other block.
+  {
+    files: ['src/**/*.ts', 'test/**/*.ts'],
+    languageOptions: { parser: tsParser },
+    plugins: { bymax: { rules: { 'max-unit-lines': maxUnitLines, 'file-header': fileHeader } } },
+    rules: {
+      // Off for TypeScript in every other block, for the same reason: they misread its syntax.
+      'no-undef': 'off',
+      'no-unused-vars': 'off',
+      'bymax/max-unit-lines': ['error', { baseline: functionLengthBaseline }],
+      'bymax/file-header': 'error'
+    }
+  },
+  {
+    files: ['scripts/**/*.mjs'],
+    plugins: { bymax: { rules: { 'max-unit-lines': maxUnitLines } } },
+    rules: { 'bymax/max-unit-lines': ['error', { baseline: functionLengthBaseline }] }
   },
 
   // Prettier disables conflicting formatting rules; must stay last.
