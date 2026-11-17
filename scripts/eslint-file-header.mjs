@@ -4,7 +4,7 @@
  *
  * The header is the first thing a reader sees and says what the file is for and where it sits, so it
  * must come before any code (a shebang line may precede it) and be a `/** ... *\/` block that names a
- * layer, either as the tag `@layer` or as a `Layer:` line. A file shorter than {@link TRIVIAL} lines
+ * layer, either as the tag `@layer` or as a `Layer:` line, each followed by the name. A file shorter than {@link TRIVIAL} lines
  * is exempt.
  *
  * Plain ESM with no dependencies.
@@ -13,7 +13,8 @@
 /** Files with fewer lines than this are exempt. */
 export const TRIVIAL = 10
 
-const LAYER = /(?:@layer|\bLayer:)/
+/** A layer tag followed, on its line, by the layer's name. */
+const LAYER = /(?:@layer|\bLayer:)[ \t]+[^\s*]/
 
 export default {
   meta: { type: 'problem', schema: [] },
@@ -22,7 +23,7 @@ export default {
       Program(program) {
         const source = context.sourceCode
         if (source.lines.length < TRIVIAL) return
-        const first = source.getAllComments()[0]
+        const first = source.getAllComments().find((comment) => comment.type !== 'Shebang')
         const opensFile =
           first !== undefined &&
           (program.body[0] === undefined || first.range[0] < program.body[0].range[0])

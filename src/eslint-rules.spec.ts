@@ -173,9 +173,14 @@ describe('file-header', () => {
     'none.ts': body,
     'plain-block.ts': `/* Layer: unit */\n${body}`,
     'line-comment.ts': `// Layer: unit\n${body}`,
+    'line-star.ts': `//* Layer: unit\n${body}`,
     'no-layer.ts': `/**\n * Purpose only.\n */\n${body}`,
     'after-code.ts': `${body}/**\n * @layer util\n */\n`,
-    'tiny.ts': 'export const x = 1\n'
+    'tiny.ts': 'export const x = 1\n',
+    'shebang.ts': `#!/usr/bin/env node\n/**\n * Purpose.\n * @layer util\n */\n${body}`,
+    'empty-tag.ts': `/**\n * Purpose.\n * @layer\n */\n${body}`,
+    'empty-line.ts': `/**\n * Purpose.\n * Layer:\n */\n${body}`,
+    'empty-inline.ts': `/** @layer */\n${body}`
   }
   const FAILS =
     'The file must open with a `/** ... */` header that states its layer (`@layer` or `Layer:`).'
@@ -197,16 +202,27 @@ describe('file-header', () => {
   })
 
   /**
-   * Anything else fails: no header, a header that is not a doc block, one without a layer, or one
-   * that comes after code.
+   * A shebang line may precede the header.
    */
-  it('refuses a missing, plain, layerless or late header', () => {
+  it('accepts a header that follows a shebang line', () => {
+    expect(said.get('shebang.ts')).toEqual([])
+  })
+
+  /**
+   * Anything else fails: no header, a header that is not a doc block, one without a layer, one whose
+   * layer tag names nothing, or one that comes after code.
+   */
+  it('refuses a missing, plain, layerless, nameless or late header', () => {
     for (const name of [
       'none.ts',
       'plain-block.ts',
       'line-comment.ts',
+      'line-star.ts',
       'no-layer.ts',
-      'after-code.ts'
+      'after-code.ts',
+      'empty-tag.ts',
+      'empty-line.ts',
+      'empty-inline.ts'
     ]) {
       expect([name, said.get(name)]).toEqual([name, [FAILS]])
     }
