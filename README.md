@@ -336,8 +336,6 @@ promise or observable: a handler that takes the response with `@Res()`, returns,
 finished as far as this can see, and one that has already sent its headers when the bound expires has its
 connection cut, because a `504` can no longer be sent.
 
-On `forRootAsync` the interceptor is always registered and reads the resolved options on each request.
-
 ### `shutdown`
 
 | Option       | Type     | Default   | Description                                                                                                                         |

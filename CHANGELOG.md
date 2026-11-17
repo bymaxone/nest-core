@@ -19,8 +19,8 @@ heading here.
   run long (uploads, long polls) with `@NoHandlerTimeout()` or `excludePaths`; an `@Sse()` route is never
   bounded. The `504` frees the client and the connection, not the handler: a handler that takes
   `@HandlerSignal()` and acts on it stops early, any other runs to its end.
-- A numeric option given as `null` is now read as unset, as `undefined` was already by most of them;
-  `timing.slowRequestThresholdMs` and `cors.maxAgeSeconds` used to refuse it.
+- A numeric option given as `null` is now read as unset; `timing.slowRequestThresholdMs` and
+  `cors.maxAgeSeconds` used to refuse it.
 
 ### Added
 
