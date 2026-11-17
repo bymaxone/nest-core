@@ -62,5 +62,7 @@ export const OPTION_KEYS = {
   shutdown: 0,
   openapi: 0,
   telemetry: 0,
-  environment: 0
-} satisfies Record<keyof BymaxCoreModuleOptions, 0>
+  environment: 0,
+  // An extra of the module that `forRoot` hands over with the options; it is not read here.
+  isGlobal: 0
+} satisfies Record<keyof BymaxCoreModuleOptions | 'isGlobal', 0>

@@ -338,9 +338,7 @@ export class BymaxCoreModule extends BymaxCoreModuleBase implements NestModule {
    *   BymaxCoreModule.forRoot({ metrics: { enabled: true } })
    */
   static override forRoot(options: typeof OPTIONS_TYPE = {}): DynamicModule {
-    // `isGlobal` is an extra of the module, not an option of the core: resolve what is left.
-    const { isGlobal: _isGlobal, ...own } = options
-    const resolved = normalizeCoreOptions(own)
+    const resolved = normalizeCoreOptions(options)
     const providers: Provider[] = [
       { provide: BYMAX_CORE_OPTIONS, useValue: resolved },
       ...buildDefaultProviders(),
@@ -371,7 +369,8 @@ export class BymaxCoreModule extends BymaxCoreModuleBase implements NestModule {
       resolved.openapi.enabled
     const imports = scansProviders ? [DiscoveryModule] : []
     return augmentModule(
-      super.forRoot(options),
+      // The builder destructures what it is given, so an unset input is an empty one.
+      super.forRoot(options ?? {}),
       providers,
       buildControllers(resolved),
       exportTokens,
