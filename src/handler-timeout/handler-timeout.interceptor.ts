@@ -80,9 +80,10 @@ export class BymaxHandlerTimeoutInterceptor implements NestInterceptor {
     )
       return true
     const request = context.switchToHttp().getRequest<{ originalUrl?: string; url?: string }>()
-    const url = request.originalUrl ?? request.url ?? ''
-    const query = url.indexOf('?')
-    const path = query === -1 ? url : url.slice(0, query)
-    return this.options.handlerTimeout.excludePaths.some((prefix) => isUnder(path, prefix))
+    const path = (request.originalUrl ?? request.url)?.split('?', 1)[0]
+    return (
+      path !== undefined &&
+      this.options.handlerTimeout.excludePaths.some((prefix) => isUnder(path, prefix))
+    )
   }
 }

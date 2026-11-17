@@ -16,6 +16,7 @@ import request from 'supertest'
 
 import { BymaxCoreModule } from '../core.module'
 import { applyHttpFloors } from './http-floors'
+import { resolveCors } from './http-floors.cors'
 import type { HttpFloorsOptions } from './http-floors'
 
 @Controller('p')
@@ -284,6 +285,30 @@ describe('applyHttpFloors, CORS wildcard', () => {
   })
 })
 
+describe('applyHttpFloors, CORS methods', () => {
+  it.each(['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'])(
+    'accepts %s in methods',
+    (method) => {
+      expect(() => resolveCors({ origins: [ALLOWED], methods: [method] })).not.toThrow()
+    }
+  )
+
+  it('lets a wildcard list honour the methods and max age it is given', async () => {
+    await withApp(
+      { cors: { origins: ['*'], methods: ['GET'], maxAgeSeconds: 5 } },
+      async (server) => {
+        const res = await request(server)
+          .options('/p/echo')
+          .set('origin', 'https://anywhere.test')
+          .set('access-control-request-method', 'GET')
+        expect(res.headers['access-control-allow-origin']).toBe('*')
+        expect(res.headers['access-control-allow-methods']).toBe('GET')
+        expect(res.headers['access-control-max-age']).toBe('5')
+      }
+    )
+  })
+})
+
 describe('applyHttpFloors, CORS refusals', () => {
   it.each([
     ['an empty list', { origins: [] }, /cors\.origins must list at least one origin/],
@@ -318,10 +343,15 @@ describe('applyHttpFloors, CORS refusals', () => {
     ],
     ['a credentials of 1', { origins: [ALLOWED], credentials: 1 }, /cors\.credentials/],
     ['an unknown key', { origins: [ALLOWED], allowedOrigins: ['x'] }, /cors.*allowedOrigins/],
-    ['an unknown method', { origins: [ALLOWED], methods: ['FETCH'] }, /cors\.methods.*FETCH/],
+    [
+      'an unknown method',
+      { origins: [ALLOWED], methods: ['FETCH'] },
+      /cors\.methods entry "FETCH" is not one of GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS/
+    ],
     ['a lower-case method', { origins: [ALLOWED], methods: ['get'] }, /cors\.methods/],
     ['a cors value that is not an object', 'https://a.example.com', /cors must be an object/],
     ['a cors value that is a list', [ALLOWED], /cors must be an object/],
+    ['a null cors value', null, /cors must be an object/],
     ['a zero max age', { origins: [ALLOWED], maxAgeSeconds: 0 }, /cors\.maxAgeSeconds/],
     ['a fractional max age', { origins: [ALLOWED], maxAgeSeconds: 1.5 }, /cors\.maxAgeSeconds/],
     ['an empty method', { origins: [ALLOWED], methods: [''] }, /cors\.methods/],
