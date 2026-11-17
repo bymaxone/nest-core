@@ -106,13 +106,19 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 // growth over 1 KiB is the keep-alive timeout and the two body limits: their validation, the size-string
 // pattern and the conversion to a byte count: code, none of it comment text (the bundle carries none
 // of the source's comments, which `dist/http/index.mjs` shows).
+// Root budget 19.44 KiB = 19907 B: measured 19868 B brotli (raw 84972 B) plus 39 B of headroom. The
+// growth over 19.34 KiB is the metrics production guard (one function and its refusal message, in
+// its own module): code, none of it comment text.
+// `./http` budget 1.81 KiB = 1853 B: measured 1821 B brotli (raw 6472 B) plus 32 B of headroom. The
+// growth over 1.25 KiB is the CORS allowlist: the validation of the origins and lists, and the
+// refusal messages: code, none of it comment text.
 const BUDGETS = [
-  { name: '. (root)', path: 'dist/index.mjs', brotli: 19.34 * 1024 },
+  { name: '. (root)', path: 'dist/index.mjs', brotli: 19.44 * 1024 },
   { name: './pagination', path: 'dist/pagination/index.mjs', brotli: 1.5 * 1024 },
   { name: './health', path: 'dist/health/index.mjs', brotli: 0.5 * 1024 },
   { name: './openapi', path: 'dist/openapi/index.mjs', brotli: 7.5 * 1024 },
   { name: './metrics', path: 'dist/metrics/index.mjs', brotli: 0.5 * 1024 },
-  { name: './http', path: 'dist/http/index.mjs', brotli: 1.25 * 1024 }
+  { name: './http', path: 'dist/http/index.mjs', brotli: 1.81 * 1024 }
 ]
 
 const fmt = (n) => `${(n / 1024).toFixed(2)} kB`

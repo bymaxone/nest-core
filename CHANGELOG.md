@@ -12,6 +12,25 @@ heading here.
 
 ## [Unreleased]
 
+**Apply to a derived backend:**
+
+- **Metrics in production now needs a token or a stated edge.** `BymaxCoreModule.forRoot` and
+  `forRootAsync` refuse, at boot, `metrics.enabled: true` in production with no `metrics.authToken`.
+  Production is what the module already decides for the OpenAPI document: `NODE_ENV` wins, and an
+  unset `NODE_ENV` is production unless `environment` declares `development` or `test`. If the route
+  is protected at your edge, set `metrics.edgeProtected: true`; otherwise set `metrics.authToken`. An
+  application that runs with metrics on, in production, with neither, fails to start after this
+  upgrade.
+- `applyHttpFloors` gains an opt-in `cors` allowlist; nothing changes unless you set it.
+
+### Added
+
+- `metrics.edgeProtected`, and the boot refusal above.
+- `applyHttpFloors({ cors })`: an exact-match origin allowlist (`origins`), `credentials` off unless
+  asked, and `methods`, `allowedHeaders`, `exposedHeaders` and `maxAgeSeconds`. A wildcard together with
+  credentials, an empty list and an entry that is not an exact origin are refused at boot. It is mounted
+  after helmet and ahead of the body parsers, so a preflight and a parser refusal carry the headers.
+
 ## [1.6.11] - 2026-11-17
 
 A patch release. `applyHttpFloors` holds idle keep-alive connections for longer than a load balancer's

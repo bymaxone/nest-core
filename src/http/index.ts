@@ -6,6 +6,7 @@
  */
 export { applyHttpFloors } from './http-floors'
 
+export type { HttpFloorsCorsOptions } from './http-floors.cors'
 export type {
   HttpBodyLimit,
   HttpFloorsBodyLimit,

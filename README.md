@@ -279,27 +279,32 @@ configuration fails fast at the route rather than at boot.
 
 ### `metrics`
 
-| Option                  | Type                     | Default     | Description                                                                                                                             |
-| ----------------------- | ------------------------ | ----------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| `enabled`               | `boolean`                | `false`     | Registers the metrics controller and the registry.                                                                                      |
-| `path`                  | `string`                 | `'metrics'` | Route serving the Prometheus scrape.                                                                                                    |
-| `defaultLabels`         | `Record<string, string>` | `{}`        | Static labels attached to every metric.                                                                                                 |
-| `collectDefaultMetrics` | `boolean`                | `true`      | Collects `prom-client`'s process CPU, memory, and event-loop metrics.                                                                   |
-| `authToken`             | `string`                 | _(unset)_   | Bearer required to scrape. Unset leaves the endpoint open; empty/whitespace is rejected at boot.                                        |
-| `scrapeTimeoutMs`       | `number`                 | `5000`      | How long a scrape waits for the collection; past it every scrape answers `503` until it settles. A positive integer up to `2147483647`. |
+| Option                  | Type                     | Default     | Description                                                                                                                                      |
+| ----------------------- | ------------------------ | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `enabled`               | `boolean`                | `false`     | Registers the metrics controller and the registry.                                                                                               |
+| `path`                  | `string`                 | `'metrics'` | Route serving the Prometheus scrape.                                                                                                             |
+| `defaultLabels`         | `Record<string, string>` | `{}`        | Static labels attached to every metric.                                                                                                          |
+| `collectDefaultMetrics` | `boolean`                | `true`      | Collects `prom-client`'s process CPU, memory, and event-loop metrics.                                                                            |
+| `authToken`             | `string`                 | _(unset)_   | Bearer required to scrape. Unset leaves the endpoint open; empty/whitespace is rejected at boot.                                                 |
+| `edgeProtected`         | `boolean`                | `false`     | States that the scrape route is protected at the edge. Enabling metrics in production with neither `authToken` nor this flag is refused at boot. |
+| `scrapeTimeoutMs`       | `number`                 | `5000`      | How long a scrape waits for the collection; past it every scrape answers `503` until it settles. A positive integer up to `2147483647`.          |
 
 As with `health`, `enabled` and `path` register conditionally on `forRoot`. On
 `forRootAsync` the metrics controller is always registered at the default path
 and enforces `enabled` and the default path with a request-time guard, so a
 disabled or custom-path async configuration fails fast at the route.
 
-By default the scrape endpoint is **open** — the exposition publishes the route
-inventory and, with `collectDefaultMetrics`, process internals to any caller. Set
-`authToken` to require `Authorization: Bearer <token>` (the scheme is matched
-case-insensitively; the token is compared in constant time), or protect the route at
-your edge (network policy, ingress auth). A token configured empty or whitespace-only
-is rejected at boot rather than silently ignored, so a mistyped secret fails loud
-instead of leaving the endpoint open:
+Outside production the scrape endpoint is **open** unless you set `authToken` — the
+exposition publishes the route inventory and, with `collectDefaultMetrics`, process
+internals to any caller. In production, `enabled: true` with no `authToken` is refused at
+boot, unless `edgeProtected: true` states that the route is protected at your edge
+(network policy, ingress auth); the flag protects nothing, it records that something
+does. Production is decided as for the OpenAPI document: `NODE_ENV` wins, and an unset
+`NODE_ENV` is production unless the module's `environment` option declares development or
+test. Set `authToken` to require `Authorization: Bearer <token>` (the scheme is matched
+case-insensitively; the token is compared in constant time). A token configured empty or
+whitespace-only is rejected at boot rather than silently ignored, so a mistyped secret
+fails loud instead of leaving the endpoint open:
 
 ```ts
 const token = process.env.METRICS_TOKEN
@@ -1348,14 +1353,15 @@ async function bootstrap(): Promise<void> {
 void bootstrap()
 ```
 
-| What                 | Default                                                                                                                                                                                                                                                                                                                                              |
-| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Security headers     | `helmet()` with `strictTransportSecurity: false` (TLS is normally ended in front of the app, which owns HSTS). Pass `helmet: { ... }` to tune it, for example the CSP of a browser-serving backend, or `helmet: false` to leave it out. `strictTransportSecurity: undefined` is not `false`: it turns helmet's HSTS default back on                  |
-| Request bodies       | The JSON and urlencoded parsers refuse a compressed body (`Content-Encoding`) with `415` instead of decompressing it, on every route and before routing. Only these two parsers: a raw or text parser you add yourself still decompresses. Each parser has its own explicit size limit (`bodyLimit`, below) and keeps the extended form syntax       |
-| `headersTimeoutMs`   | `15000`: the longest a client may take to send its complete header block. Node's own default is 60 s, which leaves a header block sent a byte at a time open as a cheap denial of service                                                                                                                                                            |
-| `requestTimeoutMs`   | `30000`: the longest the server takes to receive a request, headers and body together. It does not bound the handler or the response. Node's default is 5 minutes. Must not be below `headersTimeoutMs`                                                                                                                                              |
-| `keepAliveTimeoutMs` | `65000`: how long an idle keep-alive connection is held open. Node's default is 5 s, which is below the 60 s idle timeout of the common load balancers and makes them reuse a socket Node has just closed, an intermittent `502`. Set it above your balancer's own idle timeout, for example `620000` behind a Google Cloud HTTP(S) balancer (600 s) |
-| `bodyLimit`          | `{ json: '100kb', urlencoded: '100kb' }`: the largest body each parser accepts, a byte count or a size such as `'1mb'`. A larger body is refused with `413` in the error envelope. The default is what Express applies when nothing is set, stated so it is a decision                                                                               |
+| What                 | Default                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Security headers     | `helmet()` with `strictTransportSecurity: false` (TLS is normally ended in front of the app, which owns HSTS). Pass `helmet: { ... }` to tune it, for example the CSP of a browser-serving backend, or `helmet: false` to leave it out. `strictTransportSecurity: undefined` is not `false`: it turns helmet's HSTS default back on                                                                                                                                                                                                                                                                                                                                                                           |
+| Request bodies       | The JSON and urlencoded parsers refuse a compressed body (`Content-Encoding`) with `415` instead of decompressing it, on every route and before routing. Only these two parsers: a raw or text parser you add yourself still decompresses. Each parser has its own explicit size limit (`bodyLimit`, below) and keeps the extended form syntax                                                                                                                                                                                                                                                                                                                                                                |
+| `headersTimeoutMs`   | `15000`: the longest a client may take to send its complete header block. Node's own default is 60 s, which leaves a header block sent a byte at a time open as a cheap denial of service                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| `requestTimeoutMs`   | `30000`: the longest the server takes to receive a request, headers and body together. It does not bound the handler or the response. Node's default is 5 minutes. Must not be below `headersTimeoutMs`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| `keepAliveTimeoutMs` | `65000`: how long an idle keep-alive connection is held open. Node's default is 5 s, which is below the 60 s idle timeout of the common load balancers and makes them reuse a socket Node has just closed, an intermittent `502`. Set it above your balancer's own idle timeout, for example `620000` behind a Google Cloud HTTP(S) balancer (600 s)                                                                                                                                                                                                                                                                                                                                                          |
+| `bodyLimit`          | `{ json: '100kb', urlencoded: '100kb' }`: the largest body each parser accepts, a byte count or a size such as `'1mb'`. A larger body is refused with `413` in the error envelope. The default is what Express applies when nothing is set, stated so it is a decision                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| `cors`               | _(unset)_: cross-origin access is off. `{ origins: ['https://app.example.com'] }` allows exactly those origins (no path, no trailing slash, lower-case host; `https://app.example.com` does not admit another port or a longer host), `credentials: true` lets a browser send cookies and `Authorization` (off unless asked), `methods`, `allowedHeaders`, `exposedHeaders` and `maxAgeSeconds` tune the preflight. `['*']` alone allows every origin and is refused at boot together with `credentials`, as is an empty list or an entry that is not an exact origin. The middleware is mounted right after helmet, ahead of the body parsers, so a preflight and a `413` or `415` refusal carry the headers |
 
 Measured on Node 24, an idle keep-alive socket is closed about one second after `keepAliveTimeout`,
 whatever `headersTimeout` is, so the two need no particular order, and closing the server with an
@@ -1412,7 +1418,8 @@ explained.
 - Set `server.keepAliveTimeout` above the load balancer's idle timeout, for example 61 s behind a
   60 s one.
 - Bound handler time and slow reads yourself or at the edge: `requestTimeoutMs` does not.
-- Set `metrics.authToken`, or restrict `/metrics` at the edge, when [metrics](#-metrics) are on.
+- Set `metrics.authToken`, or restrict `/metrics` at the edge and set `metrics.edgeProtected: true`,
+  when [metrics](#-metrics) are on: production refuses to boot with neither.
 - Leave `health.exposeIndicatorErrors` off, and keep `health.readinessCacheMs` at its default unless a
   test needs every probe fresh.
 - Turn on [`bodyDepth`](#bodydepth) for routes whose bodies reach a validator, and mind the raw

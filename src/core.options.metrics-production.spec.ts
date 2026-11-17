@@ -6,6 +6,9 @@
  * deployment states that the route is protected at the edge; every other combination is accepted.
  * Mocks: none (pure function); the runtime environment is set per case and restored.
  */
+import { Test } from '@nestjs/testing'
+
+import { BymaxCoreModule } from './core.module'
 import { normalizeCoreOptions } from './core.options'
 import type { MetricsOptions } from './core.options'
 
@@ -86,5 +89,33 @@ describe('metrics production guard', () => {
 
   it('keeps an empty token a boot error, ahead of the production guard', () => {
     expect(() => resolve('production', { enabled: true, authToken: ' ' })).toThrow(/authToken/)
+  })
+})
+
+describe('metrics production guard, at the module entry points', () => {
+  it('refuses at forRoot, before the module is built', () => {
+    expect(() =>
+      withNodeEnv('production', () => BymaxCoreModule.forRoot({ metrics: { enabled: true } }))
+    ).toThrow(/metrics\.edgeProtected/)
+  })
+
+  it('refuses at forRootAsync, when the factory result is resolved', async () => {
+    const compile = async (metrics: MetricsOptions): Promise<unknown> => {
+      const before = process.env['NODE_ENV']
+      process.env['NODE_ENV'] = 'production'
+      try {
+        return await Test.createTestingModule({
+          imports: [BymaxCoreModule.forRootAsync({ useFactory: () => ({ metrics }) })]
+        }).compile()
+      } finally {
+        if (before === undefined) {
+          delete process.env['NODE_ENV']
+        } else {
+          process.env['NODE_ENV'] = before
+        }
+      }
+    }
+    await expect(compile({ enabled: true })).rejects.toThrow(/metrics\.edgeProtected/)
+    await expect(compile({ enabled: true, edgeProtected: true })).resolves.toBeDefined()
   })
 })
