@@ -207,3 +207,45 @@ describe('openapi declarations that are accepted', () => {
     expect(refusal({ servers: sparse })).toContain('openapi.servers[1] must be an object')
   })
 })
+
+describe('openapi refusals carry exact messages', () => {
+  it.each([
+    [
+      'a scheme that is null',
+      { securitySchemes: { a: null } },
+      'openapi.securitySchemes.a must be an object, received null'
+    ],
+    [
+      'an http scheme with no scheme',
+      { securitySchemes: { a: { type: 'http' } } },
+      'openapi.securitySchemes.a.scheme must be a non-empty string, received undefined'
+    ],
+    [
+      'an http scheme that is empty',
+      { securitySchemes: { a: { type: 'http', scheme: '' } } },
+      'openapi.securitySchemes.a.scheme must be a non-empty string, received a string'
+    ],
+    [
+      'an api key with no name',
+      { securitySchemes: { a: { type: 'apiKey', in: 'header' } } },
+      'openapi.securitySchemes.a.name must be a non-empty string, received undefined'
+    ],
+    [
+      'an api key with an empty name',
+      { securitySchemes: { a: { type: 'apiKey', in: 'header', name: '' } } },
+      'openapi.securitySchemes.a.name must be a non-empty string, received a string'
+    ],
+    [
+      'an operation key with something before the method',
+      { operationSecurity: { 'xGET /a': [] } },
+      'openapi.operationSecurity key number 1 must be "<METHOD> /path"'
+    ],
+    [
+      'an operation key with a space in the path',
+      { operationSecurity: { 'GET /a b': [] } },
+      'openapi.operationSecurity key number 1 must be "<METHOD> /path"'
+    ]
+  ])('%s', (_name, openapi, message) => {
+    expect(refusal(openapi)).toBe(message)
+  })
+})

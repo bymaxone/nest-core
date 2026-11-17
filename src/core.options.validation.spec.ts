@@ -239,7 +239,10 @@ describe('metrics.defaultLabels', () => {
     expect(Object.isFrozen(labels)).toBe(false)
   })
 
-  it('refuses labels that are a list, or a value that is not a string', () => {
+  it('refuses labels that are a string, a list, or a value that is not a string', () => {
+    expect(refusal(given('metrics', 'defaultLabels', 'x'))).toBe(
+      'metrics.defaultLabels must be an object, received a string'
+    )
     expect(refusal(given('metrics', 'defaultLabels', []))).toContain('must be an object')
     expect(refusal(given('metrics', 'defaultLabels', { a: 1 }))).toBe(
       'metrics.defaultLabels.a must be a string, received 1'

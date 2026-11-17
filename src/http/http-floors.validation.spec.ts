@@ -241,3 +241,29 @@ describe('helmet is an object of helmet option names, or false', () => {
     )
   })
 })
+
+describe('cors refusals carry exact messages', () => {
+  const ok = 'https://app.example.com'
+
+  it.each([
+    [
+      'a list that is a string',
+      { origins: [ok], methods: 'GET' },
+      'cors.methods must be a list of strings, received a string'
+    ],
+    [
+      'origins that are a string',
+      { origins: ok },
+      'cors.origins must be a list of origins, received a string'
+    ],
+    ['origins left out', {}, 'cors.origins must list at least one origin'],
+    ['origins that are empty', { origins: [] }, 'cors.origins must list at least one origin'],
+    [
+      'a wildcard in the second origin',
+      { origins: [ok, 'https://*.example.com'] },
+      'cors.origins entry 2 has a wildcard in its host: a pattern is not matched, list each origin'
+    ]
+  ])('%s', async (_name, cors, message) => {
+    expect(await refusal({ cors } as never)).toBe(message)
+  })
+})
