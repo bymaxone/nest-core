@@ -211,7 +211,7 @@ Every block is optional; an omitted block, or an omitted field within it,
 falls back to the documented default. Pass only what you want to change.
 
 Options are checked at boot, and a refusal names the option and the _type_ of what it got, never the
-value (a value may be a secret, and a message reaches logs); a finite number is the one exception. A
+value (a value may be a secret, and a message reaches logs); a number is the one exception. A
 boolean must be `true` or `false`, so `'false'` is refused and not read as truthy. A block, and the
 options object itself, refuses a key it does not document, so a misspelt option fails instead of doing
 nothing. An option, or a whole block, given as `undefined` or `null` reads as unset and takes its
