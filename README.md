@@ -1357,12 +1357,9 @@ void bootstrap()
 | `keepAliveTimeoutMs` | `65000`: how long an idle keep-alive connection is held open. Node's default is 5 s, which is below the 60 s idle timeout of the common load balancers and makes them reuse a socket Node has just closed, an intermittent `502`. Set it above your balancer's own idle timeout, for example `620000` behind a Google Cloud HTTP(S) balancer (600 s) |
 | `bodyLimit`          | `{ json: '100kb', urlencoded: '100kb' }`: the largest body each parser accepts, a byte count or a size such as `'1mb'`. A larger body is refused with `413` in the error envelope. The default is what Express applies when nothing is set, stated so it is a decision                                                                               |
 
-`keepAliveTimeoutMs` is the setting behind the `502` a load balancer answers when it reuses a
-connection Node has just closed. Measured on Node 24, an idle keep-alive socket is closed about one
-second after `keepAliveTimeout`, whatever `headersTimeout` is (3 s with a 1 s header timeout closed at
-4.0 s; 5 s with a 15 s one closed at 6.0 s), so the two need no particular order, and closing the
-server with an idle keep-alive socket open finished in 1 ms, so a long value does not delay shutdown.
-The cost of the longer default is that an idle socket is kept that much longer.
+Measured on Node 24, an idle keep-alive socket is closed about one second after `keepAliveTimeout`,
+whatever `headersTimeout` is, so the two need no particular order, and closing the server with an
+idle keep-alive socket open does not wait for it, so a long value does not delay shutdown.
 
 ### What the floors do not set
 
