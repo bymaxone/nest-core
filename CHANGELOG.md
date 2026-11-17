@@ -24,7 +24,7 @@ changes unless you set the new options.
   none of the CORS headers (before, it still got the credentials header and, on a preflight, the allowed
   methods, headers and max age), and an `OPTIONS` request from such an origin, or with no `Origin`,
   reaches your application instead of being answered `204`. A listed origin is unchanged: its `OPTIONS`
-  requests are still answered by the CORS middleware. `Vary: Origin` is set on every response to a list.
+  requests are still answered by the CORS middleware. `Vary: Origin` is set on every response to a list of exact origins.
 - `keepAliveTimeoutMs` and `connectionsCheckingIntervalMs` above `2147483647` are refused: Node would
   read them as one millisecond. `bodyLimit` must be an object with only `json` and `urlencoded`, each at most
   `256mb`; a bare size string and an unknown key are refused.
