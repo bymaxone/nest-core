@@ -109,6 +109,27 @@ describe('applyHttpFloors, keep-alive timeout', () => {
   )
 })
 
+describe('applyHttpFloors, timers and the body ceiling', () => {
+  it.each(['keepAliveTimeoutMs', 'connectionsCheckingIntervalMs'])(
+    'refuses %s above the largest delay a timer honours, which would fire at once',
+    async (field) => {
+      await expectRefusedUntouched({ [field]: 2 ** 31 } as never, new RegExp(field))
+    }
+  )
+
+  it('accepts the largest timer-safe keep-alive timeout and the largest body limit', async () => {
+    const app = await start({
+      keepAliveTimeoutMs: 2 ** 31 - 1,
+      bodyLimit: { json: '256mb', urlencoded: 256 * 1024 ** 2 }
+    })
+    try {
+      expect((app.getHttpServer() as Server).keepAliveTimeout).toBe(2 ** 31 - 1)
+    } finally {
+      await app.close()
+    }
+  })
+})
+
 describe('applyHttpFloors, body limits', () => {
   it('keeps 100 kb for both parsers by default, and refuses above it with a typed 413', async () => {
     const app = await start()
@@ -148,6 +169,25 @@ describe('applyHttpFloors, body limits', () => {
     }
   })
 
+  it('counts a fraction of a kilobyte to the byte, and a byte as a byte', async () => {
+    const app = await start({ bodyLimit: { json: '1.25kb', urlencoded: '1000b' } })
+    try {
+      expect((await post(app, 'json', json(1_280))).status).toBe(201)
+      expect((await post(app, 'json', json(1_281))).status).toBe(413)
+      expect((await post(app, 'form', form(1_000))).status).toBe(201)
+      expect((await post(app, 'form', form(1_001))).status).toBe(413)
+    } finally {
+      await app.close()
+    }
+  })
+
+  it('accepts the ceiling written in gigabytes, and a limit of one byte', async () => {
+    const ceiling = await start({ bodyLimit: { json: '0.25gb' } })
+    const tiny = await start({ bodyLimit: { json: 1, urlencoded: '1b' } })
+    await ceiling.close()
+    await tiny.close()
+  })
+
   it('reads a fractional size by the whole number of bytes it comes to', async () => {
     const app = await start({ bodyLimit: { json: '1.5kb' } })
     try {
@@ -178,8 +218,16 @@ describe('applyHttpFloors, body limits', () => {
     ['a size under one byte', { json: '0.5b' }],
     ['a size that rounds down to no bytes', { urlencoded: '0.0009kb' }],
     ['a size beyond a safe byte count', { json: '999999999999999999999999gb' }],
-    ['a byte count beyond a safe integer', { json: Number.MAX_SAFE_INTEGER + 2 }]
+    ['a byte count beyond a safe integer', { json: Number.MAX_SAFE_INTEGER + 2 }],
+    ['a size with text before it', { json: 'x1kb' }],
+    ['a size with text after it', { json: '1kbx' }],
+    ['a size just above the ceiling in gigabytes', { json: '0.26gb' }],
+    ['a size above the ceiling', { json: '257mb' }],
+    ['a byte count above the ceiling', { urlencoded: 256 * 1024 ** 2 + 1 }],
+    ['an unknown key', { jsn: '1mb' }],
+    ['a bare size string', '1mb'],
+    ['a list', ['1mb']]
   ])('rejects %s and registers and sets nothing', async (_name, bodyLimit) => {
-    await expectRefusedUntouched({ bodyLimit }, /bodyLimit\.(json|urlencoded)/)
+    await expectRefusedUntouched({ bodyLimit: bodyLimit as never }, /bodyLimit/)
   })
 })

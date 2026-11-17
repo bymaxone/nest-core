@@ -116,13 +116,18 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 // growth over 19.44 KiB is the handler timeout (its interceptor, the two decorators and the option's
 // validation) and the shutdown deadline (a provider and the option's validation): code, none of it
 // comment text, and `rxjs` stays external.
+// `./http` budget 2.52 KiB = 2580 B: measured 2543 B brotli (raw 9299 B) plus 37 B of headroom. The
+// growth over 1.81 KiB is the strict validation of the CORS options (the key list, the method list, the
+// origin checks, the delegate that offers nothing to an origin that is not listed, the helper that keeps
+// an unset option out of the middleware's options) and of the body-limit shape and ceiling: code and
+// refusal messages, none of it comment text.
 const BUDGETS = [
   { name: '. (root)', path: 'dist/index.mjs', brotli: 20.65 * 1024 },
   { name: './pagination', path: 'dist/pagination/index.mjs', brotli: 1.5 * 1024 },
   { name: './health', path: 'dist/health/index.mjs', brotli: 0.5 * 1024 },
   { name: './openapi', path: 'dist/openapi/index.mjs', brotli: 7.5 * 1024 },
   { name: './metrics', path: 'dist/metrics/index.mjs', brotli: 0.5 * 1024 },
-  { name: './http', path: 'dist/http/index.mjs', brotli: 1.81 * 1024 }
+  { name: './http', path: 'dist/http/index.mjs', brotli: 2.52 * 1024 }
 ]
 
 const fmt = (n) => `${(n / 1024).toFixed(2)} kB`

@@ -14,6 +14,7 @@
  */
 import type { INestApplication } from '@nestjs/common'
 
+import { MAX_TIMER_DELAY_MS } from '../positive-integer'
 import { resolveCors } from './http-floors.cors'
 import type { HttpFloorsCorsOptions } from './http-floors.cors'
 import { loadHelmet } from './http.loader'
@@ -98,7 +99,7 @@ export interface HttpFloorsBodyLimit {
 /** What Express's body parsers accept when no limit is configured. */
 const DEFAULT_BODY_LIMIT = '100kb'
 
-/** The longest idle keep-alive default: above the 60 s idle timeout of the common load balancers. */
+/** The idle keep-alive default: above the 60 s idle timeout of the common load balancers. */
 const DEFAULT_KEEP_ALIVE_TIMEOUT_MS = 65_000
 
 /** A size string: a number, optionally fractional, and one of the units in {@link SIZE_UNITS}. */
@@ -133,11 +134,22 @@ interface ExpressApplicationShape {
  * @param value - The configured value.
  * @throws Error When the value is not a positive safe integer.
  */
-function assertPositiveInteger(name: string, value: number): void {
+function assertPositiveInteger(name: string, value: number, max?: number): void {
   if (!Number.isSafeInteger(value) || value < 1) {
     throw new Error(`${name} must be a positive integer, received ${String(value)}`)
   }
+  if (max !== undefined && value > max) {
+    throw new Error(`${name} must be a positive integer of at most ${max}, received ${value}`)
+  }
 }
+
+/**
+ * The largest body limit accepted: 256 MiB, half of V8's longest string (`MAX_STRING_LENGTH`,
+ * 536870888 characters on Node 24). The JSON parser holds the whole body as one string, so a limit
+ * beyond that cannot be honoured, and nothing sent as JSON or urlencoded form is meant to be that
+ * large: an upload of that size is streamed, not parsed.
+ */
+const MAX_BODY_LIMIT_BYTES = 256 * 1024 ** 2
 
 /** The units a size string may use, each 1024 times the one before. */
 const SIZE_UNITS = ['b', 'kb', 'mb', 'gb']
@@ -148,15 +160,37 @@ const SIZE_UNITS = ['b', 'kb', 'mb', 'gb']
  * Throws unless that is a positive safe integer.
  */
 function limitInBytes(name: string, value: HttpBodyLimit): number {
-  const size = typeof value === 'string' ? SIZE_STRING.exec(value) : null
-  const power = SIZE_UNITS.indexOf((size?.[2] ?? '').toLowerCase())
-  const bytes = typeof value === 'number' ? value : Math.floor(Number(size?.[1]) * 1024 ** power)
+  const bytes = typeof value === 'number' ? value : sizeInBytes(value)
   if (!Number.isSafeInteger(bytes) || bytes < 1) {
     throw new Error(
       `${name} must be a positive byte count or a size such as '100kb', received ${String(value)}`
     )
   }
+  if (bytes > MAX_BODY_LIMIT_BYTES) {
+    throw new Error(`${name} must be at most 256mb, received ${String(value)}`)
+  }
   return bytes
+}
+
+/** Throws unless `bodyLimit` is an object with only the keys of {@link HttpFloorsBodyLimit}. */
+function assertBodyLimitShape(bodyLimit: unknown): void {
+  if (typeof bodyLimit !== 'object' || bodyLimit === null) {
+    throw new Error("bodyLimit must be an object such as { json: '1mb', urlencoded: '100kb' }")
+  }
+  const unknown = Object.keys(bodyLimit).find((key) => key !== 'json' && key !== 'urlencoded')
+  if (unknown !== undefined) {
+    throw new Error(
+      `bodyLimit has an unknown key ${JSON.stringify(unknown)}; use json and urlencoded`
+    )
+  }
+}
+
+/** The whole number of bytes a size string comes to, or `NaN` when it is not one. */
+function sizeInBytes(value: string): number {
+  const size = SIZE_STRING.exec(value)
+  // Stryker disable next-line StringLiteral: equivalent — the pattern always captures a unit, and with no match the amount is `NaN` whatever the power, so the fallback is never read and only satisfies the index type.
+  const power = SIZE_UNITS.indexOf((size?.[2] ?? '').toLowerCase())
+  return Math.floor(Number(size?.[1]) * 1024 ** power)
 }
 
 /** The settings of one call, every default applied and every value checked. */
@@ -184,13 +218,15 @@ function resolveFloors(options: HttpFloorsOptions): ResolvedFloors {
   const checkingIntervalMs =
     options.connectionsCheckingIntervalMs ??
     Math.min(DEFAULT_CONNECTIONS_CHECKING_INTERVAL_MS, headersTimeoutMs)
-  assertPositiveInteger('connectionsCheckingIntervalMs', checkingIntervalMs)
+  assertPositiveInteger('connectionsCheckingIntervalMs', checkingIntervalMs, MAX_TIMER_DELAY_MS)
   const keepAliveTimeoutMs = options.keepAliveTimeoutMs ?? DEFAULT_KEEP_ALIVE_TIMEOUT_MS
-  assertPositiveInteger('keepAliveTimeoutMs', keepAliveTimeoutMs)
-  const jsonLimit = limitInBytes('bodyLimit.json', options.bodyLimit?.json ?? DEFAULT_BODY_LIMIT)
+  assertPositiveInteger('keepAliveTimeoutMs', keepAliveTimeoutMs, MAX_TIMER_DELAY_MS)
+  const bodyLimit = options.bodyLimit ?? undefined
+  if (bodyLimit !== undefined) assertBodyLimitShape(bodyLimit)
+  const jsonLimit = limitInBytes('bodyLimit.json', bodyLimit?.json ?? DEFAULT_BODY_LIMIT)
   const urlencodedLimit = limitInBytes(
     'bodyLimit.urlencoded',
-    options.bodyLimit?.urlencoded ?? DEFAULT_BODY_LIMIT
+    bodyLimit?.urlencoded ?? DEFAULT_BODY_LIMIT
   )
   const cors = options.cors === undefined ? undefined : resolveCors(options.cors)
   return {

@@ -131,6 +131,24 @@ describe('applyHttpFloors, CORS allowlist', () => {
     })
   })
 
+  it('offers the middleware defaults for what is not configured, and a max age of 1 second', async () => {
+    await withApp({ cors: { origins: [ALLOWED] } }, async (server) => {
+      const res = await request(server)
+        .options('/p/echo')
+        .set('origin', ALLOWED)
+        .set('access-control-request-method', 'POST')
+      expect(res.headers['access-control-allow-methods']).toBe('GET,HEAD,PUT,PATCH,POST,DELETE')
+      expect(res.headers['access-control-max-age']).toBeUndefined()
+    })
+    await withApp({ cors: { origins: [ALLOWED], maxAgeSeconds: 1 } }, async (server) => {
+      const res = await request(server)
+        .options('/p/echo')
+        .set('origin', ALLOWED)
+        .set('access-control-request-method', 'POST')
+      expect(res.headers['access-control-max-age']).toBe('1')
+    })
+  })
+
   it('reflects only the listed request headers when allowedHeaders is set', async () => {
     await withApp({ cors: { ...cors, allowedHeaders: ['x-trace'] } }, async (server) => {
       const res = await request(server)
@@ -166,6 +184,81 @@ describe('applyHttpFloors, CORS allowlist', () => {
         .send(JSON.stringify({ a: 'x'.repeat(500) }))
       expect(res.status).toBe(413)
       expect(res.headers['access-control-allow-origin']).toBe(ALLOWED)
+    })
+  })
+})
+
+describe('applyHttpFloors, CORS for an origin that is not allowed', () => {
+  const cors = {
+    origins: [ALLOWED],
+    credentials: true,
+    methods: ['GET', 'POST'],
+    allowedHeaders: ['x-trace'],
+    exposedHeaders: ['x-request-id'],
+    maxAgeSeconds: 600
+  }
+  /** Every header only an allowed origin should be offered. */
+  const OFFERS = [
+    'access-control-allow-origin',
+    'access-control-allow-credentials',
+    'access-control-allow-methods',
+    'access-control-allow-headers',
+    'access-control-expose-headers',
+    'access-control-max-age'
+  ]
+
+  /** The offers present on `res`. */
+  const offered = (headers: Record<string, unknown>): string[] =>
+    OFFERS.filter((name) => headers[name] !== undefined)
+
+  it('sends none of the CORS offers to an origin that is not listed', async () => {
+    await withApp({ cors }, async (server) => {
+      const res = await request(server).post('/p/echo').set('origin', 'https://evil.example.com')
+      expect(offered(res.headers)).toEqual([])
+      expect(res.headers['vary']).toMatch(/Origin/i)
+    })
+  })
+
+  it('sends none of the CORS offers to a request with no Origin', async () => {
+    await withApp({ cors }, async (server) => {
+      const res = await request(server).post('/p/echo')
+      expect(offered(res.headers)).toEqual([])
+      expect(res.headers['vary']).toMatch(/Origin/i)
+    })
+  })
+
+  it('answers a preflight from an origin that is not listed with none of the offers', async () => {
+    await withApp({ cors }, async (server) => {
+      const res = await request(server)
+        .options('/p/echo')
+        .set('origin', 'https://evil.example.com')
+        .set('access-control-request-method', 'POST')
+      expect(offered(res.headers)).toEqual([])
+      expect(res.status).not.toBe(204)
+    })
+  })
+
+  /**
+   * An OPTIONS request with no Origin is not a preflight: it is the application's to answer.
+   */
+  it('leaves an OPTIONS request with no Origin to the application', async () => {
+    await withApp({ cors }, async (server) => {
+      const res = await request(server).options('/p/echo')
+      expect(res.status).not.toBe(204)
+      expect(offered(res.headers)).toEqual([])
+    })
+  })
+
+  it('still offers everything to the listed origin', async () => {
+    await withApp({ cors }, async (server) => {
+      const res = await request(server)
+        .options('/p/echo')
+        .set('origin', ALLOWED)
+        .set('access-control-request-method', 'POST')
+      expect(res.status).toBe(204)
+      expect(offered(res.headers)).toEqual(OFFERS)
+      const simple = await request(server).post('/p/echo').set('origin', ALLOWED)
+      expect(simple.headers['access-control-expose-headers']).toBe('x-request-id')
     })
   })
 })
@@ -206,6 +299,29 @@ describe('applyHttpFloors, CORS refusals', () => {
     ['userinfo', { origins: ['https://user@app.example.com'] }, /cors\.origins/],
     ['the string null', { origins: ['null'] }, /cors\.origins/],
     ['a non-string entry', { origins: [42 as unknown as string] }, /cors\.origins/],
+    [
+      'a list with one blank entry among valid ones',
+      { origins: [ALLOWED], allowedHeaders: ['x-a', ' '] },
+      /cors\.allowedHeaders must be a list of non-empty strings/
+    ],
+    [
+      'a list with a non-string entry',
+      { origins: [ALLOWED], exposedHeaders: [42] },
+      /cors\.exposedHeaders must be a list of non-empty strings/
+    ],
+    ['a wildcard in the host', { origins: ['https://*.example.com'] }, /cors\.origins.*wildcard/],
+    ['a duplicated origin', { origins: [ALLOWED, ALLOWED] }, /cors\.origins.*more than once/],
+    [
+      'a credentials that is not a boolean',
+      { origins: [ALLOWED], credentials: 'yes' },
+      /cors\.credentials/
+    ],
+    ['a credentials of 1', { origins: [ALLOWED], credentials: 1 }, /cors\.credentials/],
+    ['an unknown key', { origins: [ALLOWED], allowedOrigins: ['x'] }, /cors.*allowedOrigins/],
+    ['an unknown method', { origins: [ALLOWED], methods: ['FETCH'] }, /cors\.methods.*FETCH/],
+    ['a lower-case method', { origins: [ALLOWED], methods: ['get'] }, /cors\.methods/],
+    ['a cors value that is not an object', 'https://a.example.com', /cors must be an object/],
+    ['a cors value that is a list', [ALLOWED], /cors must be an object/],
     ['a zero max age', { origins: [ALLOWED], maxAgeSeconds: 0 }, /cors\.maxAgeSeconds/],
     ['a fractional max age', { origins: [ALLOWED], maxAgeSeconds: 1.5 }, /cors\.maxAgeSeconds/],
     ['an empty method', { origins: [ALLOWED], methods: [''] }, /cors\.methods/],
@@ -215,6 +331,6 @@ describe('applyHttpFloors, CORS refusals', () => {
       /cors\.allowedHeaders/
     ]
   ])('refuses %s and registers nothing', async (_name, cors, message) => {
-    await expectRefused({ cors }, message)
+    await expectRefused({ cors: cors as never }, message)
   })
 })
