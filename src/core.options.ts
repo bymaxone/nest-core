@@ -616,11 +616,7 @@ function resolveBodyDepth(given: unknown): ResolvedBodyDepthOptions {
 function resolveHealth(given: unknown): ResolvedHealthOptions {
   const raw = checkedBlock<HealthOptions>('health', given, HEALTH_KEYS)
   const readinessCacheMs = raw?.readinessCacheMs ?? DEFAULT_READINESS_CACHE_MS
-  if (!(
-    typeof readinessCacheMs === 'number' &&
-    Number.isSafeInteger(readinessCacheMs) &&
-    readinessCacheMs >= 0
-  )) {
+  if (!Number.isSafeInteger(readinessCacheMs) || readinessCacheMs < 0) {
     throw refusal('health.readinessCacheMs', 'a non-negative safe integer', readinessCacheMs)
   }
   return {
