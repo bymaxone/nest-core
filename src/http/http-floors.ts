@@ -14,6 +14,8 @@
  */
 import type { INestApplication } from '@nestjs/common'
 
+import { resolveCors } from './http-floors.cors'
+import type { HttpFloorsCorsOptions } from './http-floors.cors'
 import { loadHelmet } from './http.loader'
 
 /** Longest a client may take to send its complete header block. */
@@ -73,6 +75,13 @@ export interface HttpFloorsOptions {
    * parsers apply when nothing is set, stated here so the limit is a decision and not an accident.
    */
   readonly bodyLimit?: HttpFloorsBodyLimit
+  /**
+   * The CORS allowlist. Cross-origin access is off unless this is given: a browser from another
+   * origin is refused by default and nothing is added to the response. See
+   * {@link HttpFloorsCorsOptions}. The middleware is mounted right after helmet, ahead of the body
+   * parsers, so a preflight and a refusal raised by a parser both carry the CORS headers.
+   */
+  readonly cors?: HttpFloorsCorsOptions
 }
 
 /** A body-size limit: bytes, or a size string such as `'100kb'`. */
@@ -110,6 +119,7 @@ interface FloorsServer {
 /** The parts of an Express-backed application this helper touches. */
 interface ExpressApplicationShape {
   use(handler: unknown): unknown
+  enableCors(options: unknown): unknown
   useBodyParser(type: 'json' | 'urlencoded', options: Record<string, unknown>): unknown
   getHttpServer(): FloorsServer
   getHttpAdapter(): { getType?: () => string }
@@ -157,6 +167,7 @@ interface ResolvedFloors {
   readonly keepAliveTimeoutMs: number
   readonly jsonLimit: number
   readonly urlencodedLimit: number
+  readonly cors: ReturnType<typeof resolveCors> | undefined
 }
 
 /** Applies the defaults and checks every value, so nothing is applied on a bad one. */
@@ -181,7 +192,9 @@ function resolveFloors(options: HttpFloorsOptions): ResolvedFloors {
     'bodyLimit.urlencoded',
     options.bodyLimit?.urlencoded ?? DEFAULT_BODY_LIMIT
   )
+  const cors = options.cors === undefined ? undefined : resolveCors(options.cors)
   return {
+    cors,
     headersTimeoutMs,
     requestTimeoutMs,
     checkingIntervalMs,
@@ -239,6 +252,9 @@ export async function applyHttpFloors(
     // present, so the default is left out when the caller used the alias. The caller's own
     // `strictTransportSecurity` needs no such care: it overrides the default by position.
     express.use(helmet('hsts' in given ? given : { strictTransportSecurity: false, ...given }))
+  }
+  if (floors.cors !== undefined) {
+    express.enableCors(floors.cors)
   }
   // A compressed body is refused with 415 on every route and before routing; the extended form
   // syntax is kept, and each parser has its own explicit size limit.

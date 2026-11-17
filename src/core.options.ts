@@ -5,6 +5,7 @@
  * from the resolved snapshot, never from the raw consumer input.
  * @layer Config
  */
+import { assertMetricsProtected } from './core.options.metrics-guard'
 import { DEFAULT_HEALTH_PATH, DEFAULT_METRICS_PATH } from './route-defaults'
 import { isProductionRuntime, runtimeEnvironmentName } from './runtime.environment'
 
@@ -322,6 +323,16 @@ export interface MetricsOptions {
    * mistyped secret fails loud instead of silently leaving the endpoint open.
    */
   authToken?: string
+  /**
+   * States that the scrape route is protected at the edge (a private network, an ingress rule, an
+   * authenticating proxy), so an open endpoint in production is a decision and not an oversight.
+   * Default: `false`.
+   *
+   * Enabling metrics in production with neither `authToken` nor this flag is refused at boot,
+   * because the exposition publishes the route inventory and process internals to any caller. The
+   * flag changes nothing else: it does not protect the route, it only records that something does.
+   */
+  edgeProtected?: boolean
   /**
    * How long a scrape waits for the metrics collection, in milliseconds. Positive integer up to
    * 2147483647. Default: `5000`.
@@ -654,11 +665,18 @@ function resolveMetricsAuthToken(raw?: string): string | undefined {
  * freezing the resolved snapshot never freezes a consumer-owned object.
  *
  * @param raw - The consumer metrics block, if any.
+ * @param declaredEnvironment - The environment the application declared, used only where
+ *   `NODE_ENV` declares nothing.
  * @returns The fully-populated metrics options.
- * @throws Error When `authToken` is configured empty or whitespace-only.
+ * @throws Error When `authToken` is configured empty or whitespace-only, or metrics are enabled in
+ *   production with neither a token nor `edgeProtected`.
  */
-function resolveMetrics(raw?: MetricsOptions): ResolvedMetricsOptions {
+function resolveMetrics(
+  raw?: MetricsOptions,
+  declaredEnvironment?: string
+): ResolvedMetricsOptions {
   const authToken = resolveMetricsAuthToken(raw?.authToken)
+  assertMetricsProtected(raw ?? {}, authToken, declaredEnvironment)
   return {
     enabled: raw?.enabled ?? false,
     path: raw?.path ?? DEFAULT_METRICS_PATH,
@@ -764,7 +782,7 @@ export function normalizeCoreOptions(raw?: BymaxCoreModuleOptions): ResolvedCore
     timing: resolveTiming(raw?.timing),
     bodyDepth: resolveBodyDepth(raw?.bodyDepth),
     health: resolveHealth(raw?.health),
-    metrics: resolveMetrics(raw?.metrics),
+    metrics: resolveMetrics(raw?.metrics, raw?.environment),
     openapi: resolveOpenApi(raw?.openapi, raw?.environment),
     telemetry: resolveTelemetry(raw?.telemetry),
     // Spread rather than assigned so an application that declared nothing has
