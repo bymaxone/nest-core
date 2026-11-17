@@ -6,4 +6,9 @@
  */
 export { applyHttpFloors } from './http-floors'
 
-export type { HttpFloorsHelmetOptions, HttpFloorsOptions } from './http-floors'
+export type {
+  HttpBodyLimit,
+  HttpFloorsBodyLimit,
+  HttpFloorsHelmetOptions,
+  HttpFloorsOptions
+} from './http-floors'

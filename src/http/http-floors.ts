@@ -56,7 +56,44 @@ export interface HttpFloorsOptions {
    * of cutting up to that long after the timeout.
    */
   readonly connectionsCheckingIntervalMs?: number
+  /**
+   * How long an idle keep-alive connection is held open. Positive integer.
+   * Default: `65000`. A server that closes an idle connection before the load balancer in front of
+   * it does leaves the balancer reusing a socket that is gone, which it reports as a 502; the
+   * common balancers idle out at 60 s, so the default is above that. Set it above your balancer's
+   * own idle timeout (for example `620000` behind a Google Cloud HTTP(S) balancer, which holds
+   * connections for 600 s). Node closes an idle connection about a second after this value, and
+   * closing the server drops idle connections at once, so a long value does not delay shutdown.
+   */
+  readonly keepAliveTimeoutMs?: number
+  /**
+   * The largest request body each parser accepts, over the limit a larger body is refused with
+   * `413` in the error envelope. A byte count (positive integer) or a size string such as `'100kb'`
+   * or `'1mb'` (units `b`, `kb`, `mb`, `gb`). Both default to `'100kb'`, which is what Express's
+   * parsers apply when nothing is set, stated here so the limit is a decision and not an accident.
+   */
+  readonly bodyLimit?: HttpFloorsBodyLimit
 }
+
+/** A body-size limit: bytes, or a size string such as `'100kb'`. */
+export type HttpBodyLimit = number | string
+
+/** The body-size limit of each parser; an omitted one keeps `'100kb'`. */
+export interface HttpFloorsBodyLimit {
+  /** The JSON parser's limit. */
+  readonly json?: HttpBodyLimit
+  /** The urlencoded parser's limit. */
+  readonly urlencoded?: HttpBodyLimit
+}
+
+/** What Express's body parsers accept when no limit is configured. */
+const DEFAULT_BODY_LIMIT = '100kb'
+
+/** The longest idle keep-alive default: above the 60 s idle timeout of the common load balancers. */
+const DEFAULT_KEEP_ALIVE_TIMEOUT_MS = 65_000
+
+/** A size string: a number, optionally fractional, and one of the units in {@link SIZE_UNITS}. */
+const SIZE_STRING = /^(\d+(?:\.\d+)?)\s*(b|kb|mb|gb)$/i
 
 /** The longest the sweep interval defaults to; a shorter header timeout shortens it further. */
 const DEFAULT_CONNECTIONS_CHECKING_INTERVAL_MS = 1_000
@@ -66,6 +103,7 @@ interface FloorsServer {
   listening: boolean
   headersTimeout: number
   requestTimeout: number
+  keepAliveTimeout: number
   connectionsCheckingInterval: number
 }
 
@@ -88,6 +126,68 @@ interface ExpressApplicationShape {
 function assertPositiveInteger(name: string, value: number): void {
   if (!Number.isSafeInteger(value) || value < 1) {
     throw new Error(`${name} must be a positive integer, received ${String(value)}`)
+  }
+}
+
+/** The units a size string may use, each 1024 times the one before. */
+const SIZE_UNITS = ['b', 'kb', 'mb', 'gb']
+
+/**
+ * The whole number of bytes a limit comes to, so the parser is handed a number and never reads a
+ * string of its own: its reading rounds a fraction down and lets an enormous value through.
+ * Throws unless that is a positive safe integer.
+ */
+function limitInBytes(name: string, value: HttpBodyLimit): number {
+  const size = typeof value === 'string' ? SIZE_STRING.exec(value) : null
+  const power = SIZE_UNITS.indexOf((size?.[2] ?? '').toLowerCase())
+  const bytes = typeof value === 'number' ? value : Math.floor(Number(size?.[1]) * 1024 ** power)
+  if (!Number.isSafeInteger(bytes) || bytes < 1) {
+    throw new Error(
+      `${name} must be a positive byte count or a size such as '100kb', received ${String(value)}`
+    )
+  }
+  return bytes
+}
+
+/** The settings of one call, every default applied and every value checked. */
+interface ResolvedFloors {
+  readonly headersTimeoutMs: number
+  readonly requestTimeoutMs: number
+  readonly checkingIntervalMs: number
+  readonly keepAliveTimeoutMs: number
+  readonly jsonLimit: number
+  readonly urlencodedLimit: number
+}
+
+/** Applies the defaults and checks every value, so nothing is applied on a bad one. */
+function resolveFloors(options: HttpFloorsOptions): ResolvedFloors {
+  const headersTimeoutMs = options.headersTimeoutMs ?? DEFAULT_HEADERS_TIMEOUT_MS
+  const requestTimeoutMs = options.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS
+  assertPositiveInteger('headersTimeoutMs', headersTimeoutMs)
+  assertPositiveInteger('requestTimeoutMs', requestTimeoutMs)
+  if (headersTimeoutMs > requestTimeoutMs) {
+    throw new Error(
+      `headersTimeoutMs (${headersTimeoutMs}) must not exceed requestTimeoutMs (${requestTimeoutMs})`
+    )
+  }
+  const checkingIntervalMs =
+    options.connectionsCheckingIntervalMs ??
+    Math.min(DEFAULT_CONNECTIONS_CHECKING_INTERVAL_MS, headersTimeoutMs)
+  assertPositiveInteger('connectionsCheckingIntervalMs', checkingIntervalMs)
+  const keepAliveTimeoutMs = options.keepAliveTimeoutMs ?? DEFAULT_KEEP_ALIVE_TIMEOUT_MS
+  assertPositiveInteger('keepAliveTimeoutMs', keepAliveTimeoutMs)
+  const jsonLimit = limitInBytes('bodyLimit.json', options.bodyLimit?.json ?? DEFAULT_BODY_LIMIT)
+  const urlencodedLimit = limitInBytes(
+    'bodyLimit.urlencoded',
+    options.bodyLimit?.urlencoded ?? DEFAULT_BODY_LIMIT
+  )
+  return {
+    headersTimeoutMs,
+    requestTimeoutMs,
+    checkingIntervalMs,
+    keepAliveTimeoutMs,
+    jsonLimit,
+    urlencodedLimit
   }
 }
 
@@ -121,7 +221,7 @@ function assertBootstrapState(express: ExpressApplicationShape): FloorsServer {
  * Apply the HTTP floors to an Express application. Call it before `app.init()` or `listen`.
  *
  * @param app - The Nest application, created on the Express adapter.
- * @param options - Overrides for the helmet options and the two timeouts.
+ * @param options - Overrides for the helmet options, the timeouts and the body-size limits.
  * @throws Error When a timeout is unusable, the application is not on Express, or `helmet` is
  * needed and not installed. Nothing is applied in those cases.
  */
@@ -129,19 +229,7 @@ export async function applyHttpFloors(
   app: INestApplication,
   options: HttpFloorsOptions = {}
 ): Promise<void> {
-  const headersTimeoutMs = options.headersTimeoutMs ?? DEFAULT_HEADERS_TIMEOUT_MS
-  const requestTimeoutMs = options.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS
-  assertPositiveInteger('headersTimeoutMs', headersTimeoutMs)
-  assertPositiveInteger('requestTimeoutMs', requestTimeoutMs)
-  if (headersTimeoutMs > requestTimeoutMs) {
-    throw new Error(
-      `headersTimeoutMs (${headersTimeoutMs}) must not exceed requestTimeoutMs (${requestTimeoutMs})`
-    )
-  }
-  const checkingIntervalMs =
-    options.connectionsCheckingIntervalMs ??
-    Math.min(DEFAULT_CONNECTIONS_CHECKING_INTERVAL_MS, headersTimeoutMs)
-  assertPositiveInteger('connectionsCheckingIntervalMs', checkingIntervalMs)
+  const floors = resolveFloors(options)
   const express = app as unknown as ExpressApplicationShape
   const server = assertBootstrapState(express)
   const given = options.helmet ?? {}
@@ -152,15 +240,20 @@ export async function applyHttpFloors(
     // `strictTransportSecurity` needs no such care: it overrides the default by position.
     express.use(helmet('hsts' in given ? given : { strictTransportSecurity: false, ...given }))
   }
-  // A compressed body is refused with 415 on every route and before routing; the size limits and
-  // the extended form syntax keep the parsers' defaults.
-  express.useBodyParser('json', { inflate: false })
-  express.useBodyParser('urlencoded', { inflate: false, extended: true })
-  server.headersTimeout = headersTimeoutMs
-  server.requestTimeout = requestTimeoutMs
+  // A compressed body is refused with 415 on every route and before routing; the extended form
+  // syntax is kept, and each parser has its own explicit size limit.
+  express.useBodyParser('json', { inflate: false, limit: floors.jsonLimit })
+  express.useBodyParser('urlencoded', {
+    inflate: false,
+    extended: true,
+    limit: floors.urlencodedLimit
+  })
+  server.headersTimeout = floors.headersTimeoutMs
+  server.requestTimeout = floors.requestTimeoutMs
+  server.keepAliveTimeout = floors.keepAliveTimeoutMs
   // Node stores this property when the server is built and reads it when the server emits
   // 'listening' (`setupConnectionsTracking` in `lib/_http_server.js`, Node 24), which is why the
   // helper must run before `listen`. Its typings do not declare it; the end-to-end suite fails if
   // a Node release stops honouring it.
-  server.connectionsCheckingInterval = checkingIntervalMs
+  server.connectionsCheckingInterval = floors.checkingIntervalMs
 }

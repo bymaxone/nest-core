@@ -12,6 +12,20 @@ heading here.
 
 ## [Unreleased]
 
+**Apply to a derived backend:** if you call `applyHttpFloors`, two things change without a code change:
+
+- Idle keep-alive connections are now held for `65000` ms instead of Node's `5000`, so a load balancer
+  with a 60 s idle timeout no longer reuses a socket the server has just closed (an intermittent
+  `502`). Set `keepAliveTimeoutMs` to change it, above your balancer's own idle timeout.
+- The JSON and urlencoded body limits are now stated, at `'100kb'` each, which is what Express applied
+  before. Nothing changes unless you set `bodyLimit`.
+
+### Added
+
+- `applyHttpFloors` takes `keepAliveTimeoutMs` (default `65000`) and `bodyLimit: { json?, urlencoded? }`
+  (byte counts or size strings, default `'100kb'`), both validated before anything is applied; a body
+  over its limit answers `413` in the error envelope.
+
 ## [1.6.10] - 2026-11-14
 
 A patch release. A `5xx` `HttpException` now reaches the unexpected-error sink, bounded so an outage
