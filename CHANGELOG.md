@@ -16,7 +16,7 @@ heading here.
 
 A patch release. `applyHttpFloors` holds idle keep-alive connections for longer than a load balancer's
 idle timeout, states its body-size limits and takes an opt-in CORS allowlist, and an open `/metrics`
-is refused in production unless the deployment says its edge protects it.
+is refused in production unless it has a token or the deployment says its edge protects it.
 
 **Apply to a derived backend:**
 
