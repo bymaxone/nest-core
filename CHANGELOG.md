@@ -12,8 +12,17 @@ heading here.
 
 ## [Unreleased]
 
-**Apply to a derived backend:** options are now checked more strictly, so a configuration that was
-silently wrong fails at boot.
+## [1.6.14] - 2026-11-17
+
+A patch release. Every option of every block is checked at boot, so a configuration that was silently
+wrong fails at boot, and a refusal names the option and the type of the value, never the value.
+
+**Apply to a derived backend:** options are now checked more strictly, and a configuration that booted
+before can now fail to boot. Read every item below against what you pass: a boolean that is not
+`true` or `false`, an option name a block does not document, an option of the wrong type (a
+string for a list, a number for a route or a label), a `helmet` option that is `null` or misspelt,
+and an `openapi` declaration that is not well formed. One change goes the other way: `cors: null` is
+now CORS off, where it was refused.
 
 - A **boolean option** must be `true` or `false` (or unset): `exposeInternals: 'false'` was kept as a
   truthy string and switched the feature on, and is now refused. This covers every `enabled`,
@@ -29,14 +38,16 @@ silently wrong fails at boot.
   default does; it used to turn helmet's own default back on. An option given as `null` is refused,
   so a `null` from configuration never silently switches a header off.
 - **`openapi`** declarations are checked at boot and not when the document is first built: `servers`
-  need a `url`, a security scheme needs a `type` of the specification (`http` a `scheme`, `apiKey` an
+  need a `url` (and take only a `url` and a string `description`), `title`, `description` and `version`
+  are strings, a security scheme needs a `type` of the specification (`http` a `scheme`, `apiKey` an
   `in` of `header`, `query` or `cookie` and a `name`), requirements map scheme names to lists of
   strings, an `operationSecurity` key is `"<METHOD> /path"` with an upper-case method,
   `operationIdFactory` is a function, and `path` and `jsonPath` are routes with no space, query or
   fragment. A scheme such as `{ type: 'http' }` with no `scheme` is refused.
 - **`metrics.defaultLabels`** must map Prometheus label names to strings; `metrics.authToken` must be a
   string; `health.path` and `metrics.path` are routes; `environment` is a string; `handlerTimeout.excludePaths`
-  is a list.
+  is a list. Every numeric option must be a number and every list option a list (of strings, where
+  the entries are names or paths), and a value of another type is refused and named by its type.
 - An option, or a whole block, given as `undefined` or `null` is read as unset and takes its default,
   in every block, except an option of `helmet` (see above), where `null` is refused:
   `applyHttpFloors({ cors: null })` is now CORS off, where it was refused.
@@ -1629,4 +1640,5 @@ have regressed from. They are kept because the reasoning is worth having.
 [1.6.9]: https://github.com/bymaxone/nest-core/compare/v1.6.8...v1.6.9
 [1.6.10]: https://github.com/bymaxone/nest-core/compare/v1.6.9...v1.6.10
 [1.6.13]: https://github.com/bymaxone/nest-core/compare/v1.6.10...v1.6.13
-[Unreleased]: https://github.com/bymaxone/nest-core/compare/v1.6.13...HEAD
+[1.6.14]: https://github.com/bymaxone/nest-core/compare/v1.6.13...v1.6.14
+[Unreleased]: https://github.com/bymaxone/nest-core/compare/v1.6.14...HEAD
