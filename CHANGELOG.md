@@ -12,46 +12,12 @@ heading here.
 
 ## [Unreleased]
 
-**Apply to a derived backend:** if you call `applyHttpFloors` with `cors`, `bodyLimit`,
-`keepAliveTimeoutMs` or `connectionsCheckingIntervalMs`, read the first group below; nothing else here
-changes unless you set the new options.
-
-- `applyHttpFloors({ cors })` is stricter at boot: an origin with a `*` in its host, an origin listed
-  twice, a `credentials` that is not a boolean, an unknown key, a `methods` entry that is not an upper-case
-  HTTP method, and a `cors` that is not an object are now refused. They were accepted before and did
-  nothing useful (a `*` in a host matched only the literal string).
-- With a list of origins, a request from an origin that is not listed, or with no `Origin`, now gets
-  none of the CORS headers (before, it still got the credentials header and, on a preflight, the allowed
-  methods, headers and max age), and an `OPTIONS` request from such an origin, or with no `Origin`,
-  reaches your application instead of being answered `204`. A listed origin is unchanged: its `OPTIONS`
-  requests are still answered by the CORS middleware. `Vary: Origin` is set on every response to a list of exact origins.
-- `keepAliveTimeoutMs` and `connectionsCheckingIntervalMs` above `2147483647` are refused: Node would
-  read them as one millisecond. `bodyLimit` must be an object with only `json` and `urlencoded`, each at most
-  `256mb`; a bare size string and an unknown key are refused.
-
-- `handlerTimeout` and `shutdown` are off by default. To bound handlers, set
-  `handlerTimeout: { enabled: true, timeoutMs, excludePaths }` and opt out the routes that legitimately
-  run long (uploads, long polls) with `@NoHandlerTimeout()` or `excludePaths`; an `@Sse()` route is never
-  bounded. The `504` frees the client and the connection. A handler that returns a promise runs to its
-  end unless it takes `@HandlerSignal()` and acts on it; one that returns an `Observable` is unsubscribed
-  at the bound, so its teardown runs.
-- A numeric option given as `null` is now read as unset; `timing.slowRequestThresholdMs` and
-  `cors.maxAgeSeconds` used to refuse it.
-
-### Added
-
-- `handlerTimeout: { enabled, timeoutMs, excludePaths }`: a bound on how long a request's handler may
-  run, answered `504` in the error envelope. `@NoHandlerTimeout()`, and `@HandlerSignal()`, an
-  `AbortSignal` aborted at the bound and when the client goes away. A response whose headers are already
-  out has its connection cut.
-- `shutdown: { deadlineMs }`: when the shutdown has not finished within `deadlineMs`, one error line is
-  logged and the process exits with code `1`.
-
-## [1.6.12] - 2026-11-17
+## [1.6.13] - 2026-11-17
 
 A patch release. `applyHttpFloors` holds idle keep-alive connections for longer than a load balancer's
-idle timeout, states its body-size limits and takes an opt-in CORS allowlist, and an open `/metrics`
-is refused in production unless it has a token or the deployment says its edge protects it.
+idle timeout, states its body-size limits and takes an opt-in CORS allowlist; an open `/metrics` is
+refused in production unless it has a token or the deployment says its edge protects it; and a handler
+timeout and a shutdown deadline are available, both off unless set.
 
 **Apply to a derived backend:**
 
@@ -64,21 +30,41 @@ is refused in production unless it has a token or the deployment says its edge p
 - If you call `applyHttpFloors`, idle keep-alive connections are now held for `65000` ms instead of
   Node's `5000`, so a load balancer with a 60 s idle timeout no longer reuses a socket the server has
   just closed (an intermittent `502`). Set `keepAliveTimeoutMs` to change it, above your balancer's own
-  idle timeout.
+  idle timeout; it and `connectionsCheckingIntervalMs` are refused above `2147483647`, which Node would
+  read as one millisecond.
 - If you call `applyHttpFloors`, the JSON and urlencoded body limits are now stated, at `'100kb'` each,
-  which is what Express applied before. Nothing changes unless you set `bodyLimit`.
-- `applyHttpFloors` gains an opt-in `cors` allowlist; nothing changes unless you set it.
+  which is what Express applied before. Nothing changes unless you set `bodyLimit`, which must be an
+  object with only `json` and `urlencoded`, each at most `256mb`.
+- A numeric option given as `null` is now read as unset; `timing.slowRequestThresholdMs` used to refuse
+  it.
+- `handlerTimeout`, `shutdown` and `applyHttpFloors({ cors })` are off unless you set them, and nothing
+  else here changes unless you do. To bound handlers, set
+  `handlerTimeout: { enabled: true, timeoutMs, excludePaths }` and opt out the routes that legitimately
+  run long (uploads, long polls) with `@NoHandlerTimeout()` or `excludePaths`; an `@Sse()` route is never
+  bounded. The `504` frees the client and the connection. A handler that returns a promise runs to its
+  end unless it takes `@HandlerSignal()` and acts on it; one that returns an `Observable` is unsubscribed
+  at the bound, so its teardown runs.
 
 ### Added
 
 - `metrics.edgeProtected`, and the boot refusal above.
 - `applyHttpFloors({ cors })`: an exact-match origin allowlist (`origins`), `credentials` off unless
-  asked, and `methods`, `allowedHeaders`, `exposedHeaders` and `maxAgeSeconds`. A wildcard together with
-  credentials, an empty list and an entry that is not an exact origin are refused at boot. It is mounted
-  after helmet and ahead of the body parsers, so a preflight and a parser refusal carry the headers.
+  asked, and `methods` (upper-case HTTP methods), `allowedHeaders`, `exposedHeaders` and
+  `maxAgeSeconds`. It is mounted after helmet and ahead of the body parsers, so a preflight and a parser
+  refusal carry the headers. A request from an origin that is not listed, or with no `Origin`, gets none
+  of the CORS headers, and an `OPTIONS` request from such an origin, or with no `Origin`, reaches your
+  application; a listed origin's `OPTIONS` requests are answered by the CORS middleware. `Vary: Origin` is
+  set on every response to a list of exact origins. `['*']` alone allows every origin and cannot be
+  combined with `credentials`.
 - `applyHttpFloors` takes `keepAliveTimeoutMs` (default `65000`) and `bodyLimit: { json?, urlencoded? }`
-  (byte counts or size strings, default `'100kb'`), both validated before anything is applied; a body
-  over its limit answers `413` in the error envelope.
+  (byte counts or size strings, default `'100kb'`, at most `256mb`), both validated before anything is
+  applied; a body over its limit answers `413` in the error envelope.
+- `handlerTimeout: { enabled, timeoutMs, excludePaths }`: a bound on how long a request's handler may
+  run, answered `504` in the error envelope. `@NoHandlerTimeout()`, and `@HandlerSignal()`, an
+  `AbortSignal` aborted at the bound and when the client goes away. A response whose headers are already
+  out has its connection cut.
+- `shutdown: { deadlineMs }`: when the shutdown has not finished within `deadlineMs`, one error line is
+  logged and the process exits with code `1`.
 
 ## [1.6.10] - 2026-11-14
 
@@ -1593,5 +1579,5 @@ have regressed from. They are kept because the reasoning is worth having.
 [1.6.8]: https://github.com/bymaxone/nest-core/compare/v1.6.7...v1.6.8
 [1.6.9]: https://github.com/bymaxone/nest-core/compare/v1.6.8...v1.6.9
 [1.6.10]: https://github.com/bymaxone/nest-core/compare/v1.6.9...v1.6.10
-[1.6.12]: https://github.com/bymaxone/nest-core/compare/v1.6.10...v1.6.12
-[Unreleased]: https://github.com/bymaxone/nest-core/compare/v1.6.12...HEAD
+[1.6.13]: https://github.com/bymaxone/nest-core/compare/v1.6.10...v1.6.13
+[Unreleased]: https://github.com/bymaxone/nest-core/compare/v1.6.13...HEAD
