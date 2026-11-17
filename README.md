@@ -344,8 +344,7 @@ On `forRootAsync` the interceptor is always registered and reads the resolved op
 | ------------ | -------- | --------- | ----------------------------------------------------------------------------------------------------------------------------------- |
 | `deadlineMs` | `number` | _(unset)_ | The longest the whole shutdown may take, from its start. A positive integer up to `2147483647`, or boot fails. Unset adds no bound. |
 
-Each library bounds its own close, so the worst case is the sum of their bounds, and a handle nothing closes
-keeps the process alive past all of them. With `deadlineMs` set, a shutdown that has not finished by then
+A handle nothing closes keeps the process alive. With `deadlineMs` set, a shutdown that has not finished by then
 logs one error line and ends the process with exit code `1`, so an orchestrator sees a failed stop and not a
 hung one. The timer is unreferenced: a shutdown that finishes lets the process end on its own and the
 deadline never fires. Measured on Node 24 against the built package: with a handle nothing closes and a
