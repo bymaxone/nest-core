@@ -13,3 +13,13 @@ reports/
 # normalizes these to 3 backticks, which breaks the convention and any nested
 # block; leave these authored files untouched.
 docs/tasks/phase-*.md
+
+# Kept byte-identical to the template copies in bymaxone/.github, which are formatted at their own
+# print width; reformatting here would make every later sync a diff.
+scripts/check-function-length.mjs
+scripts/function-length-key.mjs
+scripts/check-spec-headers.mjs
+src/check-function-length.spec.ts
+src/check-function-length.baseline.spec.ts
+src/check-function-length.key.spec.ts
+src/check-spec-headers.spec.ts
