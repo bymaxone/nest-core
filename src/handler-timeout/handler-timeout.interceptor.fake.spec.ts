@@ -240,14 +240,17 @@ describe('handler timeout interceptor, what the handler does around the bound', 
   })
 
   /** Subscribes to the intercepted handler and returns what the client side received. */
-  function observe(handled: Subject<string>): {
+  function observe(
+    handled: Subject<string>,
+    response = new FakeResponse()
+  ): {
     values: string[]
     errors: unknown[]
     done: () => boolean
   } {
     const seenByClient = { values: [] as string[], errors: [] as unknown[], completed: false }
     interceptor()
-      .intercept(contextFor(PlainController, new FakeResponse()), { handle: () => handled })
+      .intercept(contextFor(PlainController, response), { handle: () => handled })
       .subscribe({
         next: (value) => seenByClient.values.push(value as string),
         error: (error: unknown) => seenByClient.errors.push(error),
@@ -310,5 +313,38 @@ describe('handler timeout interceptor, what the handler does around the bound', 
       2,
       'A handler threw after its request was answered 504: a plain string'
     )
+  })
+
+  /**
+   * When the headers are already out there is no 504 to send, so the connection is destroyed and the
+   * client side stays open: nothing the handler emits afterwards may reach it.
+   */
+  it('passes nothing on after it destroyed a response whose headers were already sent', () => {
+    const response = new FakeResponse()
+    response.headersSent = true
+    const handled = new Subject<string>()
+    const client = observe(handled, response)
+    jest.advanceTimersByTime(1_000)
+    expect(response.destroyed).toBe(1)
+    handled.next('late')
+    handled.complete()
+    expect(client.values).toEqual([])
+    expect(client.done()).toBe(false)
+  })
+
+  it('releases the handler, its timer and its close listener when the client side unsubscribes', () => {
+    const response = new FakeResponse()
+    let tornDown = false
+    const handled = new Observable<string>(() => () => {
+      tornDown = true
+    })
+    const subscription = interceptor()
+      .intercept(contextFor(PlainController, response), { handle: () => handled })
+      .subscribe()
+    expect(jest.getTimerCount()).toBe(1)
+    subscription.unsubscribe()
+    expect(tornDown).toBe(true)
+    expect(jest.getTimerCount()).toBe(0)
+    expect(response.listeners.size).toBe(0)
   })
 })
