@@ -248,7 +248,7 @@ describe('metrics.defaultLabels', () => {
 
   it('refuses a label name Prometheus would not accept, without showing it', () => {
     const message = refusal(given('metrics', 'defaultLabels', { [`${SECRET} x`]: 'v' }))
-    expect(message).toContain('not a Prometheus label name')
+    expect(message).toContain('an invalid label name')
     expect(message).not.toContain(SECRET)
   })
 })

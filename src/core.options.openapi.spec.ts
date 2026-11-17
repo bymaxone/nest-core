@@ -117,7 +117,7 @@ describe('openapi declarations that are refused', () => {
     [
       'an operation key that is not "<METHOD> /path"',
       { operationSecurity: { [`get /x ${SECRET}`]: [] } },
-      'openapi.operationSecurity key number 1 must be "<METHOD> /path" with an upper-case method'
+      'openapi.operationSecurity key number 1 must be "<METHOD> /path"'
     ],
     [
       'operation requirements that are not a list',

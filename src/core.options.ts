@@ -723,9 +723,7 @@ function resolveDefaultLabels(given: unknown): Record<string, string> {
   return Object.fromEntries(
     Object.entries(given).map(([name, value]) => {
       if (!LABEL_NAME.test(name)) {
-        throw new Error(
-          'metrics.defaultLabels has a label name that is not a Prometheus label name'
-        )
+        throw new Error('metrics.defaultLabels has an invalid label name')
       }
       if (typeof value !== 'string')
         throw refusal(`metrics.defaultLabels.${name}`, 'a string', value)

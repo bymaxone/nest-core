@@ -25,8 +25,9 @@ silently wrong fails at boot.
   Check for options you pass that this package never read.
 - **`helmet`** is an object or `false`, and an option name `helmet` does not have is refused (`helmet`
   ignores it, so a misspelt `contentSecurityPolcy` left the header on its default). An option given as
-  `undefined` or `null` is dropped, so `{ strictTransportSecurity: undefined }` now keeps HSTS off as
-  the default does; it used to turn helmet's own default back on.
+  `undefined` is dropped, so `{ strictTransportSecurity: undefined }` now keeps HSTS off as the
+  default does; it used to turn helmet's own default back on. An option given as `null` is refused,
+  so a `null` from configuration never silently switches a header off.
 - **`openapi`** declarations are checked at boot and not when the document is first built: `servers`
   need a `url`, a security scheme needs a `type` of the specification (`http` a `scheme`, `apiKey` an
   `in` of `header`, `query` or `cookie` and a `name`), requirements map scheme names to lists of
@@ -37,7 +38,8 @@ silently wrong fails at boot.
   string; `health.path` and `metrics.path` are routes; `environment` is a string; `handlerTimeout.excludePaths`
   is a list.
 - An option, or a whole block, given as `undefined` or `null` is read as unset and takes its default,
-  in every block: `applyHttpFloors({ cors: null })` is now CORS off, where it was refused.
+  in every block, except an option of `helmet` (see above), where `null` is refused:
+  `applyHttpFloors({ cors: null })` is now CORS off, where it was refused.
 
 ### Changed
 

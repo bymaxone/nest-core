@@ -140,7 +140,7 @@ function assertDeclarations(raw: OpenApiOptions | undefined): void {
     entries.forEach(([key, requirements], index) => {
       if (!OPERATION_KEY.test(key)) {
         throw new Error(
-          `openapi.operationSecurity key number ${index + 1} must be "<METHOD> /path" with an upper-case method`
+          `openapi.operationSecurity key number ${index + 1} must be "<METHOD> /path"`
         )
       }
       assertRequirements(`openapi.operationSecurity entry ${index + 1}`, requirements)

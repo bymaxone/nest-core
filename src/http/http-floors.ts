@@ -204,7 +204,8 @@ export const HELMET_OPTION_NAMES: readonly string[] = [
 
 /**
  * The options handed to `helmet`: an object of helmet's own option names, or `false` to leave it out.
- * An option left `undefined` or `null` is dropped, so it reads as unset and not as a value.
+ * An option left `undefined` is dropped, so it reads as unset and not as a value; `null` is refused,
+ * because a `null` that comes from configuration must not silently switch a header off.
  *
  * @throws Error When the value is not an object or `false`, or names an option `helmet` does not have.
  */
@@ -218,7 +219,12 @@ function resolveHelmet(given: unknown): Record<string, unknown> | false {
   return Object.fromEntries(
     HELMET_OPTION_NAMES.flatMap((name) => {
       const value: unknown = Reflect.get(given, name)
-      return value === undefined || value === null ? [] : [[name, value]]
+      if (value === null) {
+        throw new Error(
+          `helmet.${name} must not be null: leave it out, or give an object, true or false`
+        )
+      }
+      return value === undefined ? [] : [[name, value]]
     })
   )
 }
