@@ -86,8 +86,10 @@ export class BymaxHandlerTimeoutInterceptor implements NestInterceptor {
       controller.abort(new GatewayTimeoutException('Handler timed out'))
       if (raw.headersSent) raw.destroy()
       else subscriber.error(new GatewayTimeoutException('The request took too long to answer'))
-      // Held for one more bound, so an error the handler throws meanwhile is logged and not lost.
+      // Held for one more bound, so an error the handler throws meanwhile is logged and not lost. The
+      // hold is unreferenced: a process that closes its application must not wait for it to exit.
       timer = setTimeout(release, timeoutMs)
+      timer.unref()
     }, timeoutMs)
     source.add(next.handle().subscribe(this.forwarding(subscriber, () => expired, release)))
     return () => {

@@ -58,6 +58,10 @@ timeout and a shutdown deadline are available, both off unless set.
   application; a listed origin's `OPTIONS` requests are answered by the CORS middleware. `Vary: Origin` is
   set on every response to a list of exact origins. `['*']` alone allows every origin and cannot be
   combined with `credentials`.
+- `applyHttpFloors({ cors })` refuses at boot what it would otherwise pass on: an empty `origins` list
+  (`methods`, `allowedHeaders` and `exposedHeaders` accept `[]`), a sparse list in any of the lists, and a
+  header name in `allowedHeaders` or `exposedHeaders` that is not an HTTP token (a space, a colon or a line
+  break in it). An application that passes one of these fails to start.
 - `applyHttpFloors` takes `keepAliveTimeoutMs` (default `65000`) and `bodyLimit: { json?, urlencoded? }`
   (byte counts or size strings, default `'100kb'`, at most `256mb`), both validated before anything is
   applied; a body over its limit answers `413` in the error envelope.
@@ -69,7 +73,8 @@ timeout and a shutdown deadline are available, both off unless set.
   error line is logged and the process exits with code `1`. It is armed by a `SIGTERM` or `SIGINT` the
   application already handles, or by the first of this module's shutdown hooks, so a never-settling
   `beforeApplicationShutdown` or `onApplicationShutdown` is covered everywhere and a never-settling
-  `onModuleDestroy` on a signal; a programmatic `app.close()` with one needs its own timeout.
+  `onModuleDestroy` on a `SIGTERM` or `SIGINT`; with one, a programmatic `app.close()` and any other signal
+  (`SIGHUP`, `SIGQUIT`, `SIGUSR2`) need their own timeout.
 
 ## [1.6.10] - 2026-11-14
 
