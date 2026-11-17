@@ -30,7 +30,7 @@ const NOT_AN_OPTION: Readonly<Record<string, readonly string[]>> = {
 const DEFAULTLESS: Readonly<Record<string, readonly string[]>> = {
   environment: ['environment'],
   timing: ['slowRequestThresholdMs'],
-  metrics: ['authToken'],
+  metrics: ['authToken', 'edgeProtected'],
   openapi: ['operationIdFactory']
 }
 
