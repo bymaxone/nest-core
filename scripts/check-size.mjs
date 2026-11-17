@@ -112,8 +112,12 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 // `./http` budget 1.81 KiB = 1853 B: measured 1821 B brotli (raw 6472 B) plus 32 B of headroom. The
 // growth over 1.25 KiB is the CORS allowlist: the validation of the origins and lists, and the
 // refusal messages: code, none of it comment text.
+// Root budget 20.65 KiB = 21146 B: measured 21111 B brotli (raw 90592 B) plus 35 B of headroom. The
+// growth over 19.44 KiB is the handler timeout (its interceptor, the two decorators and the option's
+// validation) and the shutdown deadline (a provider and the option's validation): code, none of it
+// comment text, and `rxjs` stays external.
 const BUDGETS = [
-  { name: '. (root)', path: 'dist/index.mjs', brotli: 19.44 * 1024 },
+  { name: '. (root)', path: 'dist/index.mjs', brotli: 20.65 * 1024 },
   { name: './pagination', path: 'dist/pagination/index.mjs', brotli: 1.5 * 1024 },
   { name: './health', path: 'dist/health/index.mjs', brotli: 0.5 * 1024 },
   { name: './openapi', path: 'dist/openapi/index.mjs', brotli: 7.5 * 1024 },

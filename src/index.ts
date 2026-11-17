@@ -7,6 +7,9 @@
  */
 
 export { BymaxCoreModule } from './core.module'
+export { HandlerSignal, NoHandlerTimeout } from './handler-timeout/handler-timeout.decorators'
+export type { HandlerTimeoutOptions } from './handler-timeout/handler-timeout.options'
+export type { ShutdownOptions } from './shutdown/shutdown.options'
 
 export type {
   BymaxCoreModuleOptions,

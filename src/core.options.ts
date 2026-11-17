@@ -6,8 +6,16 @@
  * @layer Config
  */
 import { assertMetricsProtected } from './core.options.metrics-guard'
+import { resolveHandlerTimeout } from './handler-timeout/handler-timeout.options'
+import type {
+  HandlerTimeoutOptions,
+  ResolvedHandlerTimeoutOptions
+} from './handler-timeout/handler-timeout.options'
+import { MAX_TIMER_DELAY_MS, positiveSafeInteger } from './positive-integer'
 import { DEFAULT_HEALTH_PATH, DEFAULT_METRICS_PATH } from './route-defaults'
 import { isProductionRuntime, runtimeEnvironmentName } from './runtime.environment'
+import { resolveShutdown } from './shutdown/shutdown.options'
+import type { ResolvedShutdownOptions, ShutdownOptions } from './shutdown/shutdown.options'
 
 export { DEFAULT_HEALTH_PATH, DEFAULT_METRICS_PATH } from './route-defaults'
 
@@ -360,6 +368,10 @@ export interface BymaxCoreModuleOptions {
   health?: HealthOptions
   /** Prometheus metrics endpoint. Default: disabled. */
   metrics?: MetricsOptions
+  /** Bound on how long a request's handler may run. Default: disabled. */
+  handlerTimeout?: HandlerTimeoutOptions
+  /** An overall bound on how long the process may take to stop. Default: none. */
+  shutdown?: ShutdownOptions
   /** OpenAPI document and UI. Default: disabled, and never served in production. */
   openapi?: OpenApiOptions
   /** Trace correlation. Default: disabled. */
@@ -473,6 +485,8 @@ export interface ResolvedCoreOptions {
   bodyDepth: ResolvedBodyDepthOptions
   health: ResolvedHealthOptions
   metrics: ResolvedMetricsOptions
+  handlerTimeout: ResolvedHandlerTimeoutOptions
+  shutdown: ResolvedShutdownOptions
   openapi: ResolvedOpenApiOptions
   telemetry: ResolvedTelemetryOptions
   /**
@@ -491,9 +505,6 @@ const DEFAULT_SCRAPE_TIMEOUT_MS = 5000
 
 /** The default {@link EnvelopeOptions.serverErrorWindowMs}. */
 const DEFAULT_SERVER_ERROR_WINDOW_MS = 60_000
-
-/** The longest delay `setTimeout` honours; a longer one fires after a millisecond. */
-const MAX_TIMER_DELAY_MS = 2 ** 31 - 1
 
 /** The default {@link HealthOptions.readinessCacheMs}. */
 const DEFAULT_READINESS_CACHE_MS = 1000
@@ -546,29 +557,6 @@ function resolveEnvelope(raw?: EnvelopeOptions): ResolvedEnvelopeOptions {
 }
 
 /**
- * Fail at boot on a number that is not a positive safe integer.
- *
- * A zero, negative or non-finite limit does not disable what it limits: it makes every check time
- * out, every request slow, or compares false for ever, and does so silently.
- *
- * @param name - The dotted option name, for the message.
- * @param value - The value to check.
- * @param max - The largest accepted value, for a limit that feeds a timer: Node clamps a delay
- *   above 2**31 - 1 to one millisecond.
- * @returns The value, unchanged.
- * @throws Error When `value` is not a positive safe integer, or is above `max`.
- */
-function positiveSafeInteger(name: string, value: number, max?: number): number {
-  if (!Number.isSafeInteger(value) || value < 1) {
-    throw new Error(`${name} must be a positive safe integer, received ${String(value)}`)
-  }
-  if (max !== undefined && value > max) {
-    throw new Error(`${name} must be a positive integer of at most ${max}, received ${value}`)
-  }
-  return value
-}
-
-/**
  * Resolve timing options against their defaults. `slowRequestThresholdMs` is
  * only present when the consumer supplied it, honoring exact optional typing.
  *
@@ -577,7 +565,7 @@ function positiveSafeInteger(name: string, value: number, max?: number): number 
  */
 function resolveTiming(raw?: TimingOptions): ResolvedTimingOptions {
   const enabled = raw?.enabled ?? true
-  const threshold = raw?.slowRequestThresholdMs
+  const threshold = raw?.slowRequestThresholdMs ?? undefined
   return threshold === undefined
     ? { enabled }
     : {
@@ -783,6 +771,8 @@ export function normalizeCoreOptions(raw?: BymaxCoreModuleOptions): ResolvedCore
     bodyDepth: resolveBodyDepth(raw?.bodyDepth),
     health: resolveHealth(raw?.health),
     metrics: resolveMetrics(raw?.metrics, raw?.environment),
+    handlerTimeout: resolveHandlerTimeout(raw?.handlerTimeout),
+    shutdown: resolveShutdown(raw?.shutdown),
     openapi: resolveOpenApi(raw?.openapi, raw?.environment),
     telemetry: resolveTelemetry(raw?.telemetry),
     // Spread rather than assigned so an application that declared nothing has

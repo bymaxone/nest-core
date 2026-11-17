@@ -17,7 +17,7 @@ import type {
   Provider,
   Type
 } from '@nestjs/common'
-import { APP_FILTER, DiscoveryModule, HttpAdapterHost } from '@nestjs/core'
+import { APP_FILTER, APP_INTERCEPTOR, DiscoveryModule, HttpAdapterHost } from '@nestjs/core'
 
 import { BymaxBodyDepthMiddleware } from './body-depth/body-depth.middleware'
 import { DEFAULT_HEALTH_PATH, DEFAULT_METRICS_PATH, normalizeCoreOptions } from './core.options'
@@ -34,6 +34,7 @@ import { buildDefaultProviders, buildTraceContextProvider } from './defaults.pro
 import type { ICorrelationIdProvider } from './envelope/correlation.interfaces'
 import { BymaxExceptionFilter } from './envelope/exception.filter'
 import type { IUnexpectedErrorSink } from './envelope/unexpected-error.sink'
+import { BymaxHandlerTimeoutInterceptor } from './handler-timeout/handler-timeout.interceptor'
 import { createHealthController } from './health/health.controller'
 import { HealthService } from './health/health.service'
 import { MetricsContributionRunner } from './metrics/metrics.contribution'
@@ -43,6 +44,7 @@ import {
   buildMetricsTimingSinkProvider
 } from './metrics/metrics.providers'
 import { selectAsyncExceptionFilter } from './passthrough.providers'
+import { BymaxShutdownDeadline } from './shutdown/shutdown-deadline'
 import type { ITraceContextProvider } from './telemetry/trace-context'
 import { bridgeFastifyRouteMetadata } from './timing/fastify-route.bridge'
 import type { HttpAdapterShape } from './timing/fastify-route.bridge'
@@ -103,6 +105,12 @@ function buildSyncProviders(resolved: ResolvedCoreOptions): Provider[] {
   if (resolved.timing.enabled) {
     providers.push(BymaxTimingMiddleware)
   }
+  if (resolved.handlerTimeout.enabled) {
+    providers.push({ provide: APP_INTERCEPTOR, useClass: BymaxHandlerTimeoutInterceptor })
+  }
+  if (resolved.shutdown.deadlineMs !== undefined) {
+    providers.push(BymaxShutdownDeadline)
+  }
   if (resolved.health.enabled) {
     providers.push(HealthService)
   }
@@ -160,6 +168,9 @@ function buildControllers(resolved: ResolvedCoreOptions): Type[] {
  */
 function buildAsyncSlots(): Provider[] {
   return [
+    // Registered unconditionally: whether the handler timeout is on is unknown until the factory
+    // has run, and the interceptor reads the resolved options on each request.
+    { provide: APP_INTERCEPTOR, useClass: BymaxHandlerTimeoutInterceptor },
     {
       provide: APP_FILTER,
       useFactory: (
@@ -401,6 +412,9 @@ export class BymaxCoreModule extends BymaxCoreModuleBase implements NestModule {
       // enabled is unknown until the consumer's factory has run. An unapplied
       // middleware provider costs one construction and observes nothing.
       BymaxTimingMiddleware,
+      // Always registered on this path, as the timing middleware is: it reads the resolved options
+      // when shutdown begins and does nothing without a deadline.
+      BymaxShutdownDeadline,
       HealthService,
       buildMetricsRegistryProvider(),
       buildMetricsTimingSinkProvider(),
