@@ -4,7 +4,7 @@
  * Layer: unit.
  * Goal: every option refuses a value of the wrong type without echoing it, an option it does not have
  * is refused by name, helmet is an object of helmet's own option names or `false`, and an option left
- * `undefined` or `null` is read as unset.
+ * `undefined` or `null` is read as unset, except an option of helmet, where `null` is refused.
  * Mocks: a fake application that records what is registered; helmet itself is real.
  */
 import helmet from 'helmet'
