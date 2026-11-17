@@ -121,6 +121,16 @@ describe('applyHttpFloors, CORS allowlist', () => {
     })
   })
 
+  it('allows only the listed methods when methods is set', async () => {
+    await withApp({ cors: { ...cors, methods: ['GET', 'POST'] } }, async (server) => {
+      const res = await request(server)
+        .options('/p/echo')
+        .set('origin', ALLOWED)
+        .set('access-control-request-method', 'POST')
+      expect(res.headers['access-control-allow-methods']).toBe('GET,POST')
+    })
+  })
+
   it('reflects only the listed request headers when allowedHeaders is set', async () => {
     await withApp({ cors: { ...cors, allowedHeaders: ['x-trace'] } }, async (server) => {
       const res = await request(server)
@@ -184,7 +194,11 @@ describe('applyHttpFloors, CORS wildcard', () => {
 describe('applyHttpFloors, CORS refusals', () => {
   it.each([
     ['an empty list', { origins: [] }, /cors\.origins must list at least one origin/],
-    ['a bare host', { origins: ['app.example.com'] }, /cors\.origins.*app\.example\.com/],
+    [
+      'a bare host',
+      { origins: ['app.example.com'] },
+      /cors\.origins entry .* is not an exact origin/
+    ],
     ['a trailing slash', { origins: [`${ALLOWED}/`] }, /cors\.origins/],
     ['a path', { origins: [`${ALLOWED}/app`] }, /cors\.origins/],
     ['an upper-case host', { origins: ['https://APP.example.com'] }, /cors\.origins/],
