@@ -92,7 +92,7 @@ const DEFAULT_BODY_LIMIT = '100kb'
 /** The longest idle keep-alive default: above the 60 s idle timeout of the common load balancers. */
 const DEFAULT_KEEP_ALIVE_TIMEOUT_MS = 65_000
 
-/** A size string the body parsers read: a number and one of these units. */
+/** A size string: a number, optionally fractional, and one of the units in {@link SIZE_UNITS}. */
 const SIZE_STRING = /^(\d+(?:\.\d+)?)\s*(b|kb|mb|gb)$/i
 
 /** The longest the sweep interval defaults to; a shorter header timeout shortens it further. */
