@@ -60,9 +60,9 @@ function contextFor(
   } as unknown as ExecutionContext
 }
 
-const interceptor = (enabled = true): BymaxHandlerTimeoutInterceptor =>
+const interceptor = (enabled = true, excludePaths: string[] = []): BymaxHandlerTimeoutInterceptor =>
   new BymaxHandlerTimeoutInterceptor(
-    normalizeCoreOptions({ handlerTimeout: { enabled, timeoutMs: 1_000 } }),
+    normalizeCoreOptions({ handlerTimeout: { enabled, timeoutMs: 1_000, excludePaths } }),
     new Reflector()
   )
 
@@ -153,5 +153,26 @@ describe('handler timeout interceptor, on a fake context', () => {
     interceptor().intercept(contextFor(PlainController, late, 'http', lateRequest), stalled)
     late.listeners.forEach((listener) => listener())
     expect(handlerSignalOf(lateRequest)?.aborted).toBe(false)
+  })
+
+  /**
+   * The path an excluded prefix is matched against is the request's own, whichever of the two url
+   * properties the adapter provides, with the query cut off; a prefix that ends in a slash matches
+   * what lies under it.
+   */
+  it.each([
+    ['originalUrl, with a query', { originalUrl: '/p/x?a=1' }, ['/p'], true],
+    ['url alone', { url: '/p/x' }, ['/p'], true],
+    ['originalUrl over url', { originalUrl: '/other', url: '/p/x' }, ['/p'], false],
+    ['neither url property', {}, ['/p'], false],
+    ['a prefix with a trailing slash, under it', { url: '/p/x' }, ['/p/'], true],
+    ['a prefix with a trailing slash, the bare path', { url: '/p' }, ['/p/'], false],
+    ['the path equal to the prefix', { url: '/p' }, ['/p'], true]
+  ])('matches excludePaths against %s', (_name, request, excludePaths, exempt) => {
+    const result = interceptor(true, excludePaths).intercept(
+      contextFor(PlainController, new FakeResponse(), 'http', request),
+      stalled
+    )
+    expect(result === NEVER).toBe(exempt)
   })
 })

@@ -101,6 +101,17 @@ describe('shutdown options', () => {
 })
 
 describe('shutdown deadline, in the module', () => {
+  /* Closing a module starts the deadline timer; faked time keeps it from firing in this worker. */
+  beforeEach(() => {
+    jest.useFakeTimers()
+    jest.spyOn(process, 'exit').mockImplementation((() => undefined) as never)
+  })
+
+  afterEach(() => {
+    jest.useRealTimers()
+    jest.restoreAllMocks()
+  })
+
   const find = async (module: Promise<unknown> | unknown): Promise<unknown> => {
     const ref = await Test.createTestingModule({ imports: [module as never] }).compile()
     try {
