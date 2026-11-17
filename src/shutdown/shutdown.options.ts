@@ -20,7 +20,8 @@ export interface ShutdownOptions {
    * handles (`app.enableShutdownHooks()` before `app.init()`), or the first of this module's own
    * shutdown hooks. Nest runs a global module, as this one is by default, after every other module in
    * each phase, so on a programmatic `app.close()` a never-settling `onModuleDestroy` in another module
-   * or in the root module's providers is reached first and the deadline is not armed; a never-settling
+   * or in the root module's providers is reached first and the deadline is not armed, as it is on any
+   * signal other than `SIGTERM` and `SIGINT` (`SIGHUP`, `SIGQUIT`, `SIGUSR2`); a never-settling
    * `beforeApplicationShutdown` or `onApplicationShutdown` anywhere is covered. A signal nothing
    * handles keeps Node's default of ending the process, and no listener is added for it.
    *

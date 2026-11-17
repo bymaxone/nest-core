@@ -332,6 +332,25 @@ describe('handler timeout interceptor, what the handler does around the bound', 
     expect(client.done()).toBe(false)
   })
 
+  /**
+   * The hold after a 504 is housekeeping, not work: a CLI, a job or a test process that closes its
+   * application must not wait out `timeoutMs` for it.
+   */
+  it('does not keep the process alive for the hold after a 504', () => {
+    const handles: Array<{ hasRef(): boolean }> = []
+    const real = global.setTimeout
+    jest.spyOn(global, 'setTimeout').mockImplementation(((...args: Parameters<typeof real>) => {
+      const handle = real(...args)
+      handles.push(handle)
+      return handle
+    }) as typeof setTimeout)
+    observe(new Subject<string>())
+    jest.advanceTimersByTime(1_000)
+    const hold = handles.at(-1)
+    expect(handles).toHaveLength(2)
+    expect(hold?.hasRef()).toBe(false)
+  })
+
   it('releases the handler, its timer and its close listener when the client side unsubscribes', () => {
     const response = new FakeResponse()
     let tornDown = false
