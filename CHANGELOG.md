@@ -12,6 +12,11 @@ heading here.
 
 ## [Unreleased]
 
+## [1.6.11] - 2026-11-17
+
+A patch release. `applyHttpFloors` holds idle keep-alive connections for longer than a load balancer's
+idle timeout and states its body-size limits.
+
 **Apply to a derived backend:** if you call `applyHttpFloors`, two things change without a code change:
 
 - Idle keep-alive connections are now held for `65000` ms instead of Node's `5000`, so a load balancer
@@ -1539,4 +1544,5 @@ have regressed from. They are kept because the reasoning is worth having.
 [1.6.8]: https://github.com/bymaxone/nest-core/compare/v1.6.7...v1.6.8
 [1.6.9]: https://github.com/bymaxone/nest-core/compare/v1.6.8...v1.6.9
 [1.6.10]: https://github.com/bymaxone/nest-core/compare/v1.6.9...v1.6.10
-[Unreleased]: https://github.com/bymaxone/nest-core/compare/v1.6.10...HEAD
+[1.6.11]: https://github.com/bymaxone/nest-core/compare/v1.6.10...v1.6.11
+[Unreleased]: https://github.com/bymaxone/nest-core/compare/v1.6.11...HEAD
