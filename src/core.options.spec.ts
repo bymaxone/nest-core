@@ -37,6 +37,8 @@ describe('normalizeCoreOptions', () => {
         defaultLabels: {},
         scrapeTimeoutMs: 5000
       },
+      handlerTimeout: { enabled: false, timeoutMs: 30000, excludePaths: [] },
+      shutdown: {},
       openapi: {
         enabled: false,
         suppressedInProduction: false,
@@ -113,6 +115,8 @@ describe('normalizeCoreOptions', () => {
         defaultLabels: { app: 'api' },
         scrapeTimeoutMs: 2500
       },
+      handlerTimeout: { enabled: true, timeoutMs: 5000, excludePaths: ['/uploads'] },
+      shutdown: { deadlineMs: 20000 },
       telemetry: { enabled: true, exposeTraceId: true }
     })
 

@@ -313,6 +313,46 @@ BymaxCoreModule.forRoot({
 // Scrape: curl -H "Authorization: Bearer $METRICS_TOKEN" http://host/metrics
 ```
 
+### `handlerTimeout`
+
+| Option         | Type       | Default | Description                                                                                                                                                                  |
+| -------------- | ---------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `enabled`      | `boolean`  | `false` | Bounds the handler of every request. Off by default: a default bound would cut an upload, a long poll or a long report; turn it on and exclude those routes.                 |
+| `timeoutMs`    | `number`   | `30000` | How long a handler may run before the request is answered `504` in the error envelope. A positive integer up to `2147483647`, or boot fails.                                 |
+| `excludePaths` | `string[]` | `[]`    | Path prefixes that are not bounded, each starting with `/` (`'/uploads'` covers `/uploads` and what lies under it, not `/uploads-old`). The path includes the global prefix. |
+
+Node's `requestTimeout` and `headersTimeout` bound only the receiving of the request, so a handler that
+stalls, or a client that reads the response slowly, holds the connection and whatever the handler holds
+with it. This bounds the handler itself. A route opts out with `@NoHandlerTimeout()` (a method or a
+controller), an `@Sse()` route is never bounded, and a path prefix in `excludePaths` opts out a whole area.
+
+**What it does not do.** The `504` frees the client and the connection; it does not cancel the handler.
+Measured with a handler that takes 400 ms against a 100 ms bound, the client got the `504` at about
+100 ms and the handler ran on to its end. The handler stops early, and releases what it holds, only if it
+takes the signal and acts on it: `@HandlerSignal()` gives it an `AbortSignal` that is aborted when the bound
+expires and when the client goes away, to pass to a driver, a `fetch` or an `await` that accepts one. The
+signal is `undefined` when the bound is off or does not apply to the route. The bound is the handler's own
+promise or observable: a handler that takes the response with `@Res()`, returns, and writes later has
+finished as far as this can see, and one that has already sent its headers when the bound expires has its
+connection cut, because a `504` can no longer be sent.
+
+On `forRootAsync` the interceptor is always registered and reads the resolved options on each request.
+
+### `shutdown`
+
+| Option       | Type     | Default   | Description                                                                                                                                    |
+| ------------ | -------- | --------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `deadlineMs` | `number` | _(unset)_ | The longest the whole shutdown may take, from its start. A positive integer up to `2147483647`, or boot fails. Unset adds no bound, as before. |
+
+Each library bounds its own close, so the worst case is the sum of their bounds, and a handle nothing closes
+keeps the process alive past all of them. With `deadlineMs` set, a shutdown that has not finished by then
+logs one error line and ends the process with exit code `1`, so an orchestrator sees a failed stop and not a
+hung one. The timer is unreferenced: a shutdown that finishes lets the process end on its own and the
+deadline never fires. Measured on Node 24 against the built package: with a handle nothing closes and a
+300 ms deadline the process logged the line and exited with code `1`; with a clean close and a 10 s
+deadline it exited with code `0` at once. Shutdown starts when Nest's shutdown hooks run (`app.close()`, or a signal after
+`app.enableShutdownHooks()`); without them nothing starts it.
+
 ### `telemetry`
 
 | Option          | Type      | Default | Description                                                                     |
@@ -1371,7 +1411,7 @@ idle keep-alive socket open does not wait for it, so a long value does not delay
 `requestTimeoutMs` bounds receiving the request, not serving it. Measured on Node 24 with
 `requestTimeoutMs: 1000` and a handler that takes 2.5 s, the response came back `200` after 2510 ms.
 Handler time and response writing are not bounded (`server.timeout` stays `0`), and bounding them is
-the application's job: a per-route timeout interceptor, or the edge. The helper deliberately leaves
+the job of [`handlerTimeout`](#handlertimeout), or of the edge. The helper deliberately leaves
 `server.timeout` and any socket idle timeout alone, because either would cut server-sent events and
 long-poll streams.
 
@@ -1416,7 +1456,7 @@ explained.
   always does.
 - Set `server.keepAliveTimeout` above the load balancer's idle timeout, for example 61 s behind a
   60 s one.
-- Bound handler time and slow reads yourself or at the edge: `requestTimeoutMs` does not.
+- Bound handler time with `handlerTimeout` or at the edge, and slow reads at the edge: `requestTimeoutMs` does not.
 - Set `metrics.authToken`, or restrict `/metrics` at the edge and set `metrics.edgeProtected: true`,
   when [metrics](#-metrics) are on: production refuses to boot with neither.
 - Leave `health.exposeIndicatorErrors` off, and keep `health.readinessCacheMs` at its default unless a

@@ -31,6 +31,7 @@ const DEFAULTLESS: Readonly<Record<string, readonly string[]>> = {
   environment: ['environment'],
   timing: ['slowRequestThresholdMs'],
   metrics: ['authToken', 'edgeProtected'],
+  shutdown: ['deadlineMs'],
   openapi: ['operationIdFactory']
 }
 
@@ -106,9 +107,11 @@ describe('README option tables', () => {
         'bodyDepth',
         'envelope',
         'environment',
+        'handlerTimeout',
         'health',
         'metrics',
         'openapi',
+        'shutdown',
         'telemetry',
         'timing'
       ].sort()

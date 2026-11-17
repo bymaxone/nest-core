@@ -12,6 +12,25 @@ heading here.
 
 ## [Unreleased]
 
+**Apply to a derived backend:** nothing changes unless you set the new options.
+
+- `handlerTimeout` and `shutdown` are off by default. To bound handlers, set
+  `handlerTimeout: { enabled: true, timeoutMs, excludePaths }` and opt out the routes that legitimately
+  run long (uploads, long polls) with `@NoHandlerTimeout()` or `excludePaths`; an `@Sse()` route is never
+  bounded. The `504` frees the client and the connection, not the handler: a handler that takes
+  `@HandlerSignal()` and acts on it stops early, any other runs to its end.
+- A numeric option given as `null` is now read as unset, as `undefined` was already by most of them;
+  `timing.slowRequestThresholdMs` and `cors.maxAgeSeconds` used to refuse it.
+
+### Added
+
+- `handlerTimeout: { enabled, timeoutMs, excludePaths }`: a bound on how long a request's handler may
+  run, answered `504` in the error envelope. `@NoHandlerTimeout()`, and `@HandlerSignal()`, an
+  `AbortSignal` aborted at the bound and when the client goes away. A response whose headers are already
+  out has its connection cut.
+- `shutdown: { deadlineMs }`: when the shutdown has not finished within `deadlineMs`, one error line is
+  logged and the process exits with code `1`.
+
 ## [1.6.12] - 2026-11-17
 
 A patch release. `applyHttpFloors` holds idle keep-alive connections for longer than a load balancer's

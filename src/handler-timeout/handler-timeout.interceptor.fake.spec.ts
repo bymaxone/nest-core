@@ -1,0 +1,157 @@
+/**
+ * Unit tests for the handler-timeout interceptor against a fake execution context.
+ *
+ * Layer: unit.
+ * Goal: what an HTTP round trip cannot tell apart: a non-HTTP context is left alone, a response whose
+ * headers are out has its connection destroyed and gets no 504, the close listener is removed when
+ * the handler ends, and a class-level opt-out is honoured.
+ * Mocks: a fake context and response, a real Reflector, and fake timers.
+ */
+import { GatewayTimeoutException } from '@nestjs/common'
+import type { CallHandler, ExecutionContext } from '@nestjs/common'
+import { Reflector } from '@nestjs/core'
+import { NEVER, Observable, of } from 'rxjs'
+
+import { normalizeCoreOptions } from '../core.options'
+import { handlerSignalOf, NoHandlerTimeout } from './handler-timeout.decorators'
+import { BymaxHandlerTimeoutInterceptor } from './handler-timeout.interceptor'
+
+/** A response that records what the interceptor does to it. */
+class FakeResponse {
+  headersSent = false
+  writableEnded = false
+  destroyed = 0
+  readonly listeners = new Set<() => void>()
+  once(_event: 'close', listener: () => void): void {
+    this.listeners.add(listener)
+  }
+  off(_event: 'close', listener: () => void): void {
+    this.listeners.delete(listener)
+  }
+  destroy(): void {
+    this.destroyed += 1
+  }
+}
+
+@NoHandlerTimeout()
+class OptedOutController {
+  handle(): void {}
+}
+
+class PlainController {
+  handle(): void {}
+}
+
+/** A context for `controller.handle`, of the given type, on the given response. */
+function contextFor(
+  controller: new () => { handle(): void },
+  response: FakeResponse,
+  type = 'http',
+  request: object = { url: '/p' }
+): ExecutionContext {
+  return {
+    getType: () => type,
+    getHandler: () => controller.prototype.handle,
+    getClass: () => controller,
+    switchToHttp: () => ({
+      getRequest: () => request,
+      getResponse: () => response
+    })
+  } as unknown as ExecutionContext
+}
+
+const interceptor = (enabled = true): BymaxHandlerTimeoutInterceptor =>
+  new BymaxHandlerTimeoutInterceptor(
+    normalizeCoreOptions({ handlerTimeout: { enabled, timeoutMs: 1_000 } }),
+    new Reflector()
+  )
+
+/** A handler that never answers. */
+const stalled: CallHandler = { handle: () => NEVER }
+
+describe('handler timeout interceptor, on a fake context', () => {
+  beforeEach(() => jest.useFakeTimers())
+  afterEach(() => jest.useRealTimers())
+
+  it('hands a non-HTTP context straight to the handler', () => {
+    const answer = of('x')
+    const result = interceptor().intercept(contextFor(PlainController, new FakeResponse(), 'rpc'), {
+      handle: () => answer
+    })
+    expect(result).toBe(answer)
+  })
+
+  it('hands every context straight to the handler when it is off', () => {
+    const answer = of('x')
+    const result = interceptor(false).intercept(contextFor(PlainController, new FakeResponse()), {
+      handle: () => answer
+    })
+    expect(result).toBe(answer)
+  })
+
+  it('honours an opt-out placed on the controller class', () => {
+    const response = new FakeResponse()
+    const result = interceptor().intercept(contextFor(OptedOutController, response), stalled)
+    expect(result).toBe(NEVER)
+    expect(response.listeners.size).toBe(0)
+  })
+
+  /**
+   * Headers already sent: a 504 cannot be written, so the connection is destroyed and nothing is
+   * thrown.
+   */
+  it('destroys the connection, and throws nothing, when the headers are already out', () => {
+    const response = new FakeResponse()
+    response.headersSent = true
+    const errors: unknown[] = []
+    let completed = false
+    interceptor()
+      .intercept(contextFor(PlainController, response), stalled)
+      .subscribe({ error: (e: unknown) => errors.push(e), complete: () => (completed = true) })
+    jest.advanceTimersByTime(1_000)
+    expect(response.destroyed).toBe(1)
+    expect(errors).toEqual([])
+    expect(completed).toBe(false)
+  })
+
+  it('answers with a 504 exception when the headers are not out', () => {
+    const response = new FakeResponse()
+    const errors: unknown[] = []
+    interceptor()
+      .intercept(contextFor(PlainController, response), stalled)
+      .subscribe({ error: (e: unknown) => errors.push(e) })
+    jest.advanceTimersByTime(1_000)
+    expect(response.destroyed).toBe(0)
+    expect(errors[0]).toBeInstanceOf(GatewayTimeoutException)
+  })
+
+  it('removes its close listener when the handler ends', () => {
+    const response = new FakeResponse()
+    const result: Observable<unknown> = interceptor().intercept(
+      contextFor(PlainController, response),
+      { handle: () => of('done') }
+    )
+    expect(response.listeners.size).toBe(1)
+    result.subscribe()
+    expect(response.listeners.size).toBe(0)
+  })
+
+  /**
+   * A client that goes away aborts the signal; a close that arrives after the response has ended
+   * is the normal end of a request and does not.
+   */
+  it('aborts the signal on a close before the response ended, and not after', () => {
+    const early = new FakeResponse()
+    const earlyRequest = {}
+    interceptor().intercept(contextFor(PlainController, early, 'http', earlyRequest), stalled)
+    early.listeners.forEach((listener) => listener())
+    expect(handlerSignalOf(earlyRequest)?.aborted).toBe(true)
+
+    const late = new FakeResponse()
+    late.writableEnded = true
+    const lateRequest = {}
+    interceptor().intercept(contextFor(PlainController, late, 'http', lateRequest), stalled)
+    late.listeners.forEach((listener) => listener())
+    expect(handlerSignalOf(lateRequest)?.aborted).toBe(false)
+  })
+})

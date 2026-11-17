@@ -64,7 +64,8 @@ function assertNames(name: string, value: readonly string[]): void {
  *   other origins or with credentials, or a list or the max age is unusable.
  */
 export function resolveCors(cors: HttpFloorsCorsOptions): CorsOptions {
-  const { origins, credentials = false, maxAgeSeconds } = cors
+  const { origins, credentials = false } = cors
+  const maxAgeSeconds = cors.maxAgeSeconds ?? undefined
   if (!Array.isArray(origins) || origins.length === 0) {
     throw new Error('cors.origins must list at least one origin')
   }

@@ -1,0 +1,44 @@
+/**
+ * @fileoverview The two decorators of the handler timeout: one that exempts a route from it, and
+ * one that hands a handler the signal aborted when its request ends early.
+ * @layer Utility
+ */
+import { createParamDecorator, SetMetadata } from '@nestjs/common'
+import type { CustomDecorator, ExecutionContext } from '@nestjs/common'
+
+/** The metadata key {@link NoHandlerTimeout} sets and the interceptor reads. */
+export const NO_HANDLER_TIMEOUT_KEY = 'bymax:no-handler-timeout'
+
+/** The signal of the handler running for each request, held by the request object itself. */
+const signals = new WeakMap<object, AbortSignal>()
+
+/** Record the signal of the handler about to run for `request`. */
+export function bindHandlerSignal(request: object, signal: AbortSignal): void {
+  signals.set(request, signal)
+}
+
+/** The signal recorded for `request`, if the handler timeout applies to it. */
+export function handlerSignalOf(request: object): AbortSignal | undefined {
+  return signals.get(request)
+}
+
+/**
+ * Exempt a controller or a route from the handler timeout: an upload, a long poll, a report. An
+ * `@Sse()` route needs no marker; it is never bounded.
+ *
+ * @returns The decorator, for a class or a method.
+ */
+export function NoHandlerTimeout(): CustomDecorator {
+  return SetMetadata(NO_HANDLER_TIMEOUT_KEY, true)
+}
+
+/**
+ * The signal of the request's handler, aborted when the handler timeout expires and when the client
+ * goes away, so a handler can stop work done for nobody by passing it to a driver or an `await`.
+ * `undefined` when the handler timeout is off or does not apply to the route.
+ */
+export const HandlerSignal = createParamDecorator(
+  (_data: unknown, context: ExecutionContext): AbortSignal | undefined => {
+    return handlerSignalOf(context.switchToHttp().getRequest<object>())
+  }
+)
