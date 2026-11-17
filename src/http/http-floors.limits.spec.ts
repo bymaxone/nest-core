@@ -9,6 +9,7 @@
  */
 import { Body, Controller, Module, Post } from '@nestjs/common'
 import type { INestApplication } from '@nestjs/common'
+import type { NestExpressApplication } from '@nestjs/platform-express'
 import { Test } from '@nestjs/testing'
 import type { Server } from 'node:http'
 import request from 'supertest'
@@ -54,6 +55,30 @@ async function post(app: INestApplication, type: 'json' | 'form', body: string) 
     .send(body)
 }
 
+/** Applies the floors with unusable options and asserts the refusal left the application as it was. */
+async function expectRefusedUntouched(options: HttpFloorsOptions, message: RegExp): Promise<void> {
+  const moduleRef = await Test.createTestingModule({ imports: [EchoModule] }).compile()
+  const app = moduleRef.createNestApplication<NestExpressApplication>()
+  const server = app.getHttpServer() as Server
+  const settings = (): number[] => [
+    server.headersTimeout,
+    server.requestTimeout,
+    server.keepAliveTimeout,
+    (server as Server & { connectionsCheckingInterval: number }).connectionsCheckingInterval
+  ]
+  const before = settings()
+  const use = jest.spyOn(app, 'use')
+  const useBodyParser = jest.spyOn(app, 'useBodyParser')
+  try {
+    await expect(applyHttpFloors(app, options)).rejects.toThrow(message)
+    expect(use).not.toHaveBeenCalled()
+    expect(useBodyParser).not.toHaveBeenCalled()
+    expect(settings()).toEqual(before)
+  } finally {
+    await app.close()
+  }
+}
+
 describe('applyHttpFloors, keep-alive timeout', () => {
   it('defaults to 65 s, above a 60 s load-balancer idle timeout', async () => {
     const app = await start()
@@ -74,17 +99,12 @@ describe('applyHttpFloors, keep-alive timeout', () => {
   })
 
   it.each([0, -1, 1.5, Number.NaN])(
-    'rejects a keep-alive timeout of %p and applies nothing',
+    'rejects a keep-alive timeout of %p and registers and sets nothing',
     async (value) => {
-      const moduleRef = await Test.createTestingModule({ imports: [EchoModule] }).compile()
-      const app = moduleRef.createNestApplication()
-      const server = app.getHttpServer() as Server
-      const before = server.keepAliveTimeout
-      await expect(applyHttpFloors(app, { keepAliveTimeoutMs: value })).rejects.toThrow(
+      await expectRefusedUntouched(
+        { keepAliveTimeoutMs: value },
         /keepAliveTimeoutMs must be a positive integer/
       )
-      expect(server.keepAliveTimeout).toBe(before)
-      await app.close()
     }
   )
 })
@@ -159,12 +179,7 @@ describe('applyHttpFloors, body limits', () => {
     ['a size that rounds down to no bytes', { urlencoded: '0.0009kb' }],
     ['a size beyond a safe byte count', { json: '999999999999999999999999gb' }],
     ['a byte count beyond a safe integer', { json: Number.MAX_SAFE_INTEGER + 2 }]
-  ])('rejects %s and applies nothing', async (_name, bodyLimit) => {
-    const moduleRef = await Test.createTestingModule({ imports: [EchoModule] }).compile()
-    const app = moduleRef.createNestApplication()
-    await expect(applyHttpFloors(app, { bodyLimit })).rejects.toThrow(
-      /bodyLimit\.(json|urlencoded)/
-    )
-    await app.close()
+  ])('rejects %s and registers and sets nothing', async (_name, bodyLimit) => {
+    await expectRefusedUntouched({ bodyLimit }, /bodyLimit\.(json|urlencoded)/)
   })
 })
