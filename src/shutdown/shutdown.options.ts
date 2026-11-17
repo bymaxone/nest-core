@@ -2,6 +2,7 @@
  * @fileoverview The options of the shutdown deadline and their resolution.
  * @layer Configuration
  */
+import { checkedBlock } from '../option-validation'
 import { MAX_TIMER_DELAY_MS, positiveSafeInteger } from '../positive-integer'
 
 /** Shutdown configuration: an overall bound on how long the process may take to stop. */
@@ -38,14 +39,19 @@ export interface ResolvedShutdownOptions {
   readonly deadlineMs?: number
 }
 
+/** The options of {@link ShutdownOptions}; the compiler keeps this table complete. */
+const SHUTDOWN_KEYS = { deadlineMs: 0 } satisfies Record<keyof ShutdownOptions, 0>
+
 /**
  * Resolve the shutdown options.
  *
- * @param raw - The consumer's shutdown block, if any.
+ * @param given - The consumer's shutdown block, if any.
  * @returns The options; `deadlineMs` is present only when it was set.
- * @throws Error When `deadlineMs` is not a positive timer-safe integer.
+ * @throws Error When the block has an option it does not document, or `deadlineMs` is not a
+ *   positive timer-safe integer.
  */
-export function resolveShutdown(raw?: ShutdownOptions): ResolvedShutdownOptions {
+export function resolveShutdown(given?: unknown): ResolvedShutdownOptions {
+  const raw = checkedBlock<ShutdownOptions>('shutdown', given, SHUTDOWN_KEYS)
   const deadlineMs = raw?.deadlineMs ?? undefined
   return deadlineMs === undefined
     ? {}

@@ -2,10 +2,11 @@
  * Integration test for what a client that goes away leaves running around the handler timeout.
  *
  * Layer: integration.
- * Goal: an interceptor that encloses the handler timeout, and the handler itself, are both released
- * when the client disconnects before the bound, whether the handler returns an Observable or a
- * promise that never settles. Nest's router unsubscribes the chain, so no enclosing `finalize` is
- * left waiting.
+ * Goal: when the client disconnects before the bound, an interceptor that encloses the handler timeout
+ * finalizes, whether the handler returns an Observable or a promise that never settles; an
+ * Observable handler is also unsubscribed. A promise cannot be cancelled, so nothing is claimed
+ * about it beyond the enclosing interceptor. Nest's router unsubscribes the chain, so no enclosing
+ * `finalize` is left waiting.
  * Mocks: none; a real application on a loopback port, with a global interceptor outside the bound.
  */
 import { Controller, Module, Post } from '@nestjs/common'

@@ -103,7 +103,7 @@ describe('applyHttpFloors, keep-alive timeout', () => {
     async (value) => {
       await expectRefusedUntouched(
         { keepAliveTimeoutMs: value },
-        /keepAliveTimeoutMs must be a positive integer/
+        /keepAliveTimeoutMs must be a positive safe integer/
       )
     }
   )

@@ -235,7 +235,7 @@ describe('applyHttpFloors, options', () => {
     const moduleRef = await Test.createTestingModule({ imports: [EchoModule] }).compile()
     const app = moduleRef.createNestApplication()
     await expect(applyHttpFloors(app, { connectionsCheckingIntervalMs: value })).rejects.toThrow(
-      /connectionsCheckingIntervalMs must be a positive integer/
+      /connectionsCheckingIntervalMs must be a positive safe integer/
     )
     await app.close()
   })

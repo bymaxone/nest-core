@@ -338,7 +338,9 @@ export class BymaxCoreModule extends BymaxCoreModuleBase implements NestModule {
    *   BymaxCoreModule.forRoot({ metrics: { enabled: true } })
    */
   static override forRoot(options: typeof OPTIONS_TYPE = {}): DynamicModule {
-    const resolved = normalizeCoreOptions(options)
+    // `isGlobal` is an extra of the module, not an option of the core: resolve what is left.
+    const { isGlobal: _isGlobal, ...own } = options
+    const resolved = normalizeCoreOptions(own)
     const providers: Provider[] = [
       { provide: BYMAX_CORE_OPTIONS, useValue: resolved },
       ...buildDefaultProviders(),

@@ -3,6 +3,8 @@
  * @layer Configuration
  */
 
+import { describeValue } from './option-validation'
+
 /** The longest delay `setTimeout` honours; a longer one fires after a millisecond. */
 export const MAX_TIMER_DELAY_MS = 2 ** 31 - 1
 
@@ -19,9 +21,9 @@ export const MAX_TIMER_DELAY_MS = 2 ** 31 - 1
  * @returns The value, unchanged.
  * @throws Error When `value` is not a positive safe integer, or is above `max`.
  */
-export function positiveSafeInteger(name: string, value: number, max?: number): number {
-  if (!Number.isSafeInteger(value) || value < 1) {
-    throw new Error(`${name} must be a positive safe integer, received ${String(value)}`)
+export function positiveSafeInteger(name: string, value: unknown, max?: number): number {
+  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 1) {
+    throw new Error(`${name} must be a positive safe integer, received ${describeValue(value)}`)
   }
   if (max !== undefined && value > max) {
     throw new Error(`${name} must be a positive integer of at most ${max}, received ${value}`)
