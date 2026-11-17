@@ -16,8 +16,8 @@ heading here.
 
 - **Metrics in production now needs a token or a stated edge.** `BymaxCoreModule.forRoot` and
   `forRootAsync` refuse, at boot, `metrics.enabled: true` in production with no `metrics.authToken`.
-  Production is what the module already decides for the OpenAPI document: `NODE_ENV` wins, and an
-  unset `NODE_ENV` is production unless `environment` declares `development` or `test`. If the route
+  `NODE_ENV` decides production, and an unset `NODE_ENV` is production unless `environment` declares
+  `development` or `test`. If the route
   is protected at your edge, set `metrics.edgeProtected: true`; otherwise set `metrics.authToken`. An
   application that runs with metrics on, in production, with neither, fails to start after this
   upgrade.
