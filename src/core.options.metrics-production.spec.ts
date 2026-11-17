@@ -45,7 +45,7 @@ describe('metrics production guard', () => {
    */
   it('refuses metrics in production with no token and no edge declaration', () => {
     expect(() => resolve('production', { enabled: true })).toThrow(
-      /metrics\.authToken.*metrics\.edgeProtected/s
+      /^\[BymaxCoreModule\] "metrics\.enabled" is on in production with no "metrics\.authToken", so any caller can read the route inventory and process internals\. Set "metrics\.authToken", or set "metrics\.edgeProtected: true" to state that the route is protected at the edge\.$/
     )
   })
 
