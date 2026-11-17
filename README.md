@@ -340,9 +340,9 @@ On `forRootAsync` the interceptor is always registered and reads the resolved op
 
 ### `shutdown`
 
-| Option       | Type     | Default   | Description                                                                                                                                    |
-| ------------ | -------- | --------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| `deadlineMs` | `number` | _(unset)_ | The longest the whole shutdown may take, from its start. A positive integer up to `2147483647`, or boot fails. Unset adds no bound, as before. |
+| Option       | Type     | Default   | Description                                                                                                                         |
+| ------------ | -------- | --------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `deadlineMs` | `number` | _(unset)_ | The longest the whole shutdown may take, from its start. A positive integer up to `2147483647`, or boot fails. Unset adds no bound. |
 
 Each library bounds its own close, so the worst case is the sum of their bounds, and a handle nothing closes
 keeps the process alive past all of them. With `deadlineMs` set, a shutdown that has not finished by then
