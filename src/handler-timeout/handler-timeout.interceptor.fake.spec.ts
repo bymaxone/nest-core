@@ -13,7 +13,11 @@ import { Reflector } from '@nestjs/core'
 import { NEVER, Observable, of } from 'rxjs'
 
 import { normalizeCoreOptions } from '../core.options'
-import { handlerSignalOf, NoHandlerTimeout } from './handler-timeout.decorators'
+import {
+  handlerSignalOf,
+  NO_HANDLER_TIMEOUT_KEY,
+  NoHandlerTimeout
+} from './handler-timeout.decorators'
 import { BymaxHandlerTimeoutInterceptor } from './handler-timeout.interceptor'
 
 /** A response that records what the interceptor does to it. */
@@ -123,6 +127,31 @@ describe('handler timeout interceptor, on a fake context', () => {
     jest.advanceTimersByTime(1_000)
     expect(response.destroyed).toBe(0)
     expect(errors[0]).toBeInstanceOf(GatewayTimeoutException)
+    expect((errors[0] as GatewayTimeoutException).message).toBe(
+      'The request took too long to answer'
+    )
+  })
+
+  /**
+   * The signal a handler holds says why it was aborted: the bound, or the client going away.
+   */
+  it('aborts the signal with a reason that says why', () => {
+    const expired = {}
+    interceptor()
+      .intercept(contextFor(PlainController, new FakeResponse(), 'http', expired), stalled)
+      .subscribe({ error: () => undefined })
+    jest.advanceTimersByTime(1_000)
+    const atBound = handlerSignalOf(expired)?.reason as GatewayTimeoutException
+    expect(atBound).toBeInstanceOf(GatewayTimeoutException)
+    expect(atBound.message).toBe('Handler timed out')
+
+    const gone = new FakeResponse()
+    const closed = {}
+    interceptor().intercept(contextFor(PlainController, gone, 'http', closed), stalled)
+    gone.listeners.forEach((listener) => listener())
+    const atClose = handlerSignalOf(closed)?.reason as Error
+    expect(atClose).toBeInstanceOf(Error)
+    expect(atClose.message).toBe('The client disconnected')
   })
 
   it('removes its close listener when the handler ends', () => {
@@ -162,6 +191,13 @@ describe('handler timeout interceptor, on a fake context', () => {
    */
   it.each([
     ['originalUrl, with a query', { originalUrl: '/p/x?a=1' }, ['/p'], true],
+    ['a path equal to the prefix plus a query', { originalUrl: '/p?a=1' }, ['/p'], true],
+    [
+      'a path under the prefix with a query only on the prefix',
+      { url: '/p/x?y=/p' },
+      ['/q'],
+      false
+    ],
     ['url alone', { url: '/p/x' }, ['/p'], true],
     ['originalUrl over url', { originalUrl: '/other', url: '/p/x' }, ['/p'], false],
     ['neither url property', {}, ['/p'], false],
@@ -174,5 +210,15 @@ describe('handler timeout interceptor, on a fake context', () => {
       stalled
     )
     expect(result === NEVER).toBe(exempt)
+  })
+})
+
+describe('handler timeout metadata key', () => {
+  /**
+   * The package ships an ESM and a CJS build, and a symbol made in one build is not the symbol of the
+   * other, so the key is a string. This pins the type only; it does not load either build.
+   */
+  it('is a string and not a symbol', () => {
+    expect(typeof NO_HANDLER_TIMEOUT_KEY).toBe('string')
   })
 })
