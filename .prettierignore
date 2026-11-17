@@ -23,3 +23,7 @@ src/check-function-length.spec.ts
 src/check-function-length.baseline.spec.ts
 src/check-function-length.key.spec.ts
 src/check-spec-headers.spec.ts
+
+# Vendored copy of a shared template. It stays byte-identical to its source, which uses another
+# trailing-comma style than this repository's Prettier configuration.
+scripts/commitlint-no-ai-attribution.cjs
