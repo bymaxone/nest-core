@@ -216,9 +216,9 @@ describe('handler timeout interceptor, on a fake context', () => {
 describe('handler timeout metadata key', () => {
   /**
    * The package ships an ESM and a CJS build, and a symbol made in one build is not the symbol of the
-   * other, so the key must be a string that both builds can write and read alike.
+   * other, so the key is a string. This pins the type only; it does not load either build.
    */
-  it('is a string, so the ESM and the CJS build agree on it', () => {
+  it('is a string and not a symbol', () => {
     expect(typeof NO_HANDLER_TIMEOUT_KEY).toBe('string')
   })
 })
