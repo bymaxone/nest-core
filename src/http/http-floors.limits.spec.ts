@@ -63,7 +63,8 @@ async function expectRefusedUntouched(options: HttpFloorsOptions, message: RegEx
   const settings = (): number[] => [
     server.headersTimeout,
     server.requestTimeout,
-    server.keepAliveTimeout
+    server.keepAliveTimeout,
+    (server as Server & { connectionsCheckingInterval: number }).connectionsCheckingInterval
   ]
   const before = settings()
   const use = jest.spyOn(app, 'use')
