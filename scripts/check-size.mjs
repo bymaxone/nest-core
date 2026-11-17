@@ -124,11 +124,13 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 // boolean, string, route and number, the refusal of an option a block does not have, the shape checks
 // of the OpenAPI servers, security schemes and requirements, and the metrics labels: code and refusal
 // messages, none of it comment text, and no module entered the bundle that was not already in it.
+// Root budget raised to 22.87 KiB = 23418 B: measured 23390 B brotli (raw 101358 B) plus 28 B of headroom;
+// the growth over 22.82 KiB is the final form of the same checks: code and refusal messages.
 // `./http` budget 3.16 KiB = 3236 B: measured 3204 B brotli (raw 11671 B) plus 32 B of headroom. The
 // growth over 2.64 KiB is the same checks applied to `applyHttpFloors`: the option tables, helmet's 22
 // option names, and the type-only refusal messages: code, none of it comment text.
 const BUDGETS = [
-  { name: '. (root)', path: 'dist/index.mjs', brotli: 22.82 * 1024 },
+  { name: '. (root)', path: 'dist/index.mjs', brotli: 22.87 * 1024 },
   { name: './pagination', path: 'dist/pagination/index.mjs', brotli: 1.5 * 1024 },
   { name: './health', path: 'dist/health/index.mjs', brotli: 0.5 * 1024 },
   { name: './openapi', path: 'dist/openapi/index.mjs', brotli: 7.5 * 1024 },
