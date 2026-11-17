@@ -338,9 +338,9 @@ connection cut, because a `504` can no longer be sent.
 
 ### `shutdown`
 
-| Option       | Type     | Default   | Description                                                                                                                         |
-| ------------ | -------- | --------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| `deadlineMs` | `number` | _(unset)_ | The longest the whole shutdown may take, from its start. A positive integer up to `2147483647`, or boot fails. Unset adds no bound. |
+| Option       | Type     | Default   | Description                                                                                                                                                 |
+| ------------ | -------- | --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `deadlineMs` | `number` | _(unset)_ | The longest the shutdown may take once Nest reaches `beforeApplicationShutdown`. A positive integer up to `2147483647`, or boot fails. Unset adds no bound. |
 
 A handle nothing closes keeps the process alive. With `deadlineMs` set, a shutdown that has not finished by then
 logs one error line and ends the process with exit code `1`, so an orchestrator sees a failed stop and not a
@@ -1407,8 +1407,8 @@ idle keep-alive socket open does not wait for it, so a long value does not delay
 
 `requestTimeoutMs` bounds receiving the request, not serving it. Measured on Node 24 with
 `requestTimeoutMs: 1000` and a handler that takes 2.5 s, the response came back `200` after 2510 ms.
-Handler time and response writing are not bounded (`server.timeout` stays `0`), and bounding them is
-the job of [`handlerTimeout`](#handlertimeout), or of the edge. The helper deliberately leaves
+Handler time and response writing are not bounded here (`server.timeout` stays `0`): handler time is
+the job of [`handlerTimeout`](#handlertimeout), response writing that of the edge. The helper deliberately leaves
 `server.timeout` and any socket idle timeout alone, because either would cut server-sent events and
 long-poll streams.
 
