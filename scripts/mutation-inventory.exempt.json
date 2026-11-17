@@ -4,6 +4,22 @@
     "reason": "Runs scripts/check-file-length.mjs as a child process against throwaway git repositories and imports nothing from src, so it executes no mutated source."
   },
   {
+    "file": "src/check-function-length.baseline.spec.ts",
+    "reason": "Tests scripts/check-function-length.mjs, a CI tool outside the mutate list, against throwaway git repositories. It imports nothing from src/, so no mutant of src/ can select it."
+  },
+  {
+    "file": "src/check-function-length.key.spec.ts",
+    "reason": "Tests scripts/function-length-key.mjs, a CI tool outside the mutate list, by running it as a child process. It imports nothing from src/, so no mutant of src/ can select it."
+  },
+  {
+    "file": "src/check-function-length.spec.ts",
+    "reason": "Tests scripts/check-function-length.mjs, a CI tool outside the mutate list, by spawning it on throwaway git repositories. It imports nothing from src/, so no mutant of src/ can select it."
+  },
+  {
+    "file": "src/check-spec-headers.spec.ts",
+    "reason": "Tests scripts/check-spec-headers.mjs, a CI tool outside the mutate list, by spawning it on throwaway git repositories. It imports nothing from src/, so no mutant of src/ can select it."
+  },
+  {
     "file": "src/mutate-const-tables.spec.ts",
     "reason": "Runs scripts/mutate-const-tables.mjs as a child process against throwaway projects and imports nothing from src, so it executes no mutated source."
   }
