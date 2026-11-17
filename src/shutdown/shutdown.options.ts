@@ -7,14 +7,27 @@ import { MAX_TIMER_DELAY_MS, positiveSafeInteger } from '../positive-integer'
 /** Shutdown configuration: an overall bound on how long the process may take to stop. */
 export interface ShutdownOptions {
   /**
-   * The longest the whole shutdown may take, in milliseconds, counted from the start of the
-   * application's shutdown. Positive integer up to `2147483647`. Default: unset, which adds no bound.
+   * The longest the shutdown may take, in milliseconds, once the deadline has been armed. Positive
+   * integer up to `2147483647`. Default: unset, which adds no bound.
    *
    * Each library bounds its own close, so the worst case is their sum, and a handle nothing closes
    * keeps the process alive past all of them. When this is set and the process has not exited by
-   * then, one error line is logged and the process exits with code `1`, so an orchestrator sees a
-   * failed stop and not a hung one. Choose it above the orchestrator's grace period only if you want
-   * the orchestrator to kill first; below it, to exit on your own terms.
+   * the deadline, one error line is logged and the process exits with code `1`, so an orchestrator
+   * sees a failed stop and not a hung one. Choose it above the orchestrator's grace period only if
+   * you want the orchestrator to kill first; below it, to exit on your own terms.
+   *
+   * It is armed by whichever comes first: a `SIGTERM` or `SIGINT` that the application already
+   * handles (`app.enableShutdownHooks()` before `app.init()`), or the first of this module's own
+   * shutdown hooks. Nest runs a global module, as this one is by default, after every other module in
+   * each phase, so on a programmatic `app.close()` a never-settling `onModuleDestroy` in another module
+   * or in the root module's providers is reached first and the deadline is not armed; a never-settling
+   * `beforeApplicationShutdown` or `onApplicationShutdown` anywhere is covered. A signal nothing
+   * handles keeps Node's default of ending the process, and no listener is added for it.
+   *
+   * A `SIGTERM` or `SIGINT` the application handles for another purpose also arms it, and the process
+   * then exits with code `1` after `deadlineMs`. The timer outlives `app.close()` on purpose, so a
+   * process that keeps running after it, such as a Jest end-to-end suite, exits with code `1` too:
+   * leave `deadlineMs` unset in test processes.
    */
   deadlineMs?: number
 }

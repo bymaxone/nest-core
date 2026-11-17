@@ -75,7 +75,11 @@ export interface HealthOptions {
   enabled?: boolean
   /** Route prefix for the health endpoints. Default: `'health'`. */
   path?: string
-  /** Per-indicator timeout before a check is reported as down. Positive integer up to 2147483647. Default: `5000`. */
+  /**
+   * Per-indicator timeout before a check is reported as down. Positive integer up to 2147483647.
+   * Default: `5000`. `handlerTimeout.timeoutMs`, when enabled, bounds the health routes too: keep it
+   * above this, or the probe answers `504` before a check is reported down.
+   */
   indicatorTimeoutMs?: number
   /**
    * How long a finished readiness answer is reused, in milliseconds. `0` turns the cache off.
@@ -349,6 +353,9 @@ export interface MetricsOptions {
    * because `prom-client` cannot cancel a collector, and every scrape answers `503` at once until it
    * settles. A contributor whose `collect()` never settles therefore makes `/metrics` answer `503`
    * for ever, which is visible, instead of holding every scrape open.
+   *
+   * `handlerTimeout.timeoutMs`, when enabled, bounds the scrape route too: keep it above this, or a
+   * slow scrape answers `504` in place of this `503`.
    */
   scrapeTimeoutMs?: number
 }
@@ -630,11 +637,12 @@ function resolveHealth(raw?: HealthOptions): ResolvedHealthOptions {
  * configuration fails loud, at boot, not open. A non-empty token is kept verbatim —
  * it is an opaque secret, never trimmed.
  *
- * @param raw - The consumer-supplied `authToken`, if any.
+ * @param given - The consumer-supplied `authToken`, if any; `null` reads as unset.
  * @returns The bearer to enforce, or `undefined` when authentication is not configured.
  * @throws Error When a token is configured but empty or whitespace-only.
  */
-function resolveMetricsAuthToken(raw?: string): string | undefined {
+function resolveMetricsAuthToken(given?: string): string | undefined {
+  const raw = given ?? undefined
   if (raw === undefined) {
     return undefined
   }

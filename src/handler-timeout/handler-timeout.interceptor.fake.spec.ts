@@ -7,10 +7,10 @@
  * the handler ends, and a class-level opt-out is honoured.
  * Mocks: a fake context and response, a real Reflector, and fake timers.
  */
-import { GatewayTimeoutException } from '@nestjs/common'
+import { GatewayTimeoutException, Logger } from '@nestjs/common'
 import type { CallHandler, ExecutionContext } from '@nestjs/common'
 import { Reflector } from '@nestjs/core'
-import { NEVER, Observable, of } from 'rxjs'
+import { NEVER, Observable, of, Subject } from 'rxjs'
 
 import { normalizeCoreOptions } from '../core.options'
 import {
@@ -147,21 +147,26 @@ describe('handler timeout interceptor, on a fake context', () => {
 
     const gone = new FakeResponse()
     const closed = {}
-    interceptor().intercept(contextFor(PlainController, gone, 'http', closed), stalled)
+    interceptor()
+      .intercept(contextFor(PlainController, gone, 'http', closed), stalled)
+      .subscribe()
     gone.listeners.forEach((listener) => listener())
     const atClose = handlerSignalOf(closed)?.reason as Error
     expect(atClose).toBeInstanceOf(Error)
     expect(atClose.message).toBe('The client disconnected')
   })
 
-  it('removes its close listener when the handler ends', () => {
+  it('removes its close listener when the handler ends, and holds none before it is subscribed', () => {
     const response = new FakeResponse()
+    const handled = new Subject<string>()
     const result: Observable<unknown> = interceptor().intercept(
       contextFor(PlainController, response),
-      { handle: () => of('done') }
+      { handle: () => handled }
     )
-    expect(response.listeners.size).toBe(1)
+    expect(response.listeners.size).toBe(0)
     result.subscribe()
+    expect(response.listeners.size).toBe(1)
+    handled.complete()
     expect(response.listeners.size).toBe(0)
   })
 
@@ -172,14 +177,18 @@ describe('handler timeout interceptor, on a fake context', () => {
   it('aborts the signal on a close before the response ended, and not after', () => {
     const early = new FakeResponse()
     const earlyRequest = {}
-    interceptor().intercept(contextFor(PlainController, early, 'http', earlyRequest), stalled)
+    interceptor()
+      .intercept(contextFor(PlainController, early, 'http', earlyRequest), stalled)
+      .subscribe()
     early.listeners.forEach((listener) => listener())
     expect(handlerSignalOf(earlyRequest)?.aborted).toBe(true)
 
     const late = new FakeResponse()
     late.writableEnded = true
     const lateRequest = {}
-    interceptor().intercept(contextFor(PlainController, late, 'http', lateRequest), stalled)
+    interceptor()
+      .intercept(contextFor(PlainController, late, 'http', lateRequest), stalled)
+      .subscribe()
     late.listeners.forEach((listener) => listener())
     expect(handlerSignalOf(lateRequest)?.aborted).toBe(false)
   })
@@ -220,5 +229,122 @@ describe('handler timeout metadata key', () => {
    */
   it('is a string and not a symbol', () => {
     expect(typeof NO_HANDLER_TIMEOUT_KEY).toBe('string')
+  })
+})
+
+describe('handler timeout interceptor, what the handler does around the bound', () => {
+  beforeEach(() => jest.useFakeTimers())
+  afterEach(() => {
+    jest.useRealTimers()
+    jest.restoreAllMocks()
+  })
+
+  /** Subscribes to the intercepted handler and returns what the client side received. */
+  function observe(
+    handled: Subject<string>,
+    response = new FakeResponse()
+  ): {
+    values: string[]
+    errors: unknown[]
+    done: () => boolean
+  } {
+    const seenByClient = { values: [] as string[], errors: [] as unknown[], completed: false }
+    interceptor()
+      .intercept(contextFor(PlainController, response), { handle: () => handled })
+      .subscribe({
+        next: (value) => seenByClient.values.push(value as string),
+        error: (error: unknown) => seenByClient.errors.push(error),
+        complete: () => {
+          seenByClient.completed = true
+        }
+      })
+    return {
+      values: seenByClient.values,
+      errors: seenByClient.errors,
+      done: () => seenByClient.completed
+    }
+  }
+
+  it('passes a value and the completion on before the bound', () => {
+    const handled = new Subject<string>()
+    const client = observe(handled)
+    handled.next('a')
+    handled.complete()
+    expect(client.values).toEqual(['a'])
+    expect(client.done()).toBe(true)
+  })
+
+  it('passes an error on before the bound, and logs nothing', () => {
+    const logged = jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined)
+    const handled = new Subject<string>()
+    const client = observe(handled)
+    const boom = new Error('boom')
+    handled.error(boom)
+    expect(client.errors).toEqual([boom])
+    expect(logged).not.toHaveBeenCalled()
+  })
+
+  it('drops a value and a completion that come after the 504', () => {
+    const handled = new Subject<string>()
+    const client = observe(handled)
+    jest.advanceTimersByTime(1_000)
+    expect(client.errors).toHaveLength(1)
+    handled.next('late')
+    handled.complete()
+    expect(client.values).toEqual([])
+    expect(client.done()).toBe(false)
+  })
+
+  it('logs the message of an Error thrown after the 504, and the text of anything else', () => {
+    const logged = jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined)
+    const first = new Subject<string>()
+    observe(first)
+    jest.advanceTimersByTime(1_000)
+    first.error(new Error('after the bound'))
+    const second = new Subject<string>()
+    observe(second)
+    jest.advanceTimersByTime(1_000)
+    second.error('a plain string')
+    expect(logged).toHaveBeenNthCalledWith(
+      1,
+      'A handler threw after its request was answered 504: after the bound'
+    )
+    expect(logged).toHaveBeenNthCalledWith(
+      2,
+      'A handler threw after its request was answered 504: a plain string'
+    )
+  })
+
+  /**
+   * When the headers are already out there is no 504 to send, so the connection is destroyed and the
+   * client side stays open: nothing the handler emits afterwards may reach it.
+   */
+  it('passes nothing on after it destroyed a response whose headers were already sent', () => {
+    const response = new FakeResponse()
+    response.headersSent = true
+    const handled = new Subject<string>()
+    const client = observe(handled, response)
+    jest.advanceTimersByTime(1_000)
+    expect(response.destroyed).toBe(1)
+    handled.next('late')
+    handled.complete()
+    expect(client.values).toEqual([])
+    expect(client.done()).toBe(false)
+  })
+
+  it('releases the handler, its timer and its close listener when the client side unsubscribes', () => {
+    const response = new FakeResponse()
+    let tornDown = false
+    const handled = new Observable<string>(() => () => {
+      tornDown = true
+    })
+    const subscription = interceptor()
+      .intercept(contextFor(PlainController, response), { handle: () => handled })
+      .subscribe()
+    expect(jest.getTimerCount()).toBe(1)
+    subscription.unsubscribe()
+    expect(tornDown).toBe(true)
+    expect(jest.getTimerCount()).toBe(0)
+    expect(response.listeners.size).toBe(0)
   })
 })

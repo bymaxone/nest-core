@@ -29,8 +29,10 @@ const seen: {
   abortedAtEnd: boolean | undefined
   abortEvents: number
   tornDown: boolean
+  watchTornDown: boolean
 } = {
   tornDown: false,
+  watchTornDown: false,
   finished: false,
   abortedAtEnd: undefined,
   abortEvents: 0
@@ -70,6 +72,35 @@ class SlowController {
         seen.tornDown = true
       }
     })
+  }
+
+  @Post('emit-forever')
+  emitForever(): RxObservable<{ ok: true }> {
+    return new RxObservable((subscriber) => {
+      subscriber.next({ ok: true })
+      return () => {
+        seen.tornDown = true
+      }
+    })
+  }
+
+  @Post('watch-observable')
+  watchObservable(): RxObservable<{ ok: true }> {
+    return new RxObservable(() => () => {
+      seen.watchTornDown = true
+    })
+  }
+
+  @Post('late-error')
+  async lateError(): Promise<{ ok: true }> {
+    await sleep(150)
+    throw new Error('late boom')
+  }
+
+  @Post('very-late-error')
+  async veryLateError(): Promise<{ ok: true }> {
+    await sleep(500)
+    throw new Error('much later boom')
   }
 
   @Post('by-path/slow')
@@ -149,6 +180,7 @@ beforeEach(() => {
   seen.abortedAtEnd = undefined
   seen.abortEvents = 0
   seen.tornDown = false
+  seen.watchTornDown = false
 })
 
 describe('handler timeout', () => {
@@ -184,13 +216,81 @@ describe('handler timeout', () => {
 
 describe('handler timeout, what a handler that returns an Observable sees', () => {
   /**
-   * An Observable handler is unsubscribed at the bound, so its teardown runs: that is the one kind
-   * of handler the bound itself can stop, where a promise cannot be.
+   * An Observable handler is held for one more bound after the 504, so an error it throws meanwhile
+   * is logged, and is then unsubscribed, so its teardown runs. The response does not wait for it.
    */
-  it('unsubscribes an Observable handler at the bound, so its teardown runs', async () => {
+  it('unsubscribes an Observable handler one bound after the 504, so its teardown runs', async () => {
     const res = await request(server()).post('/t/observable')
     expect(res.status).toBe(504)
+    expect(seen.tornDown).toBe(false)
+    await sleep(250)
     expect(seen.tornDown).toBe(true)
+  })
+})
+
+describe('handler timeout, the whole duration', () => {
+  /**
+   * An Observable that emits and never completes leaves the request unanswered: the bound is the
+   * handler's whole duration, not the time to its first value.
+   */
+  it('answers 504 for an Observable that emits and never completes, and releases it afterwards', async () => {
+    const res = await request(server()).post('/t/emit-forever')
+    expect(res.status).toBe(504)
+    await sleep(350)
+    expect(seen.tornDown).toBe(true)
+  })
+
+  it('releases an Observable handler when the client goes away', async () => {
+    const listening = await start(5_000)
+    await listening.listen(0, '127.0.0.1')
+    try {
+      const { port } = (listening.getHttpServer() as Server).address() as AddressInfo
+      const req = httpRequest({
+        port,
+        host: '127.0.0.1',
+        path: '/t/watch-observable',
+        method: 'POST'
+      })
+      req.on('error', () => undefined)
+      req.end()
+      await sleep(150)
+      expect(seen.watchTornDown).toBe(false)
+      req.destroy()
+      await sleep(150)
+      expect(seen.watchTornDown).toBe(true)
+    } finally {
+      await listening.close()
+    }
+  })
+})
+
+describe('handler timeout, an error after the 504', () => {
+  /**
+   * A handler that throws after the client was answered would otherwise leave no trace: the error is
+   * logged while the subscription is still held, which is one more bound after the 504.
+   */
+  it('logs an error the handler throws within a bound after the 504', async () => {
+    const logged = jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined)
+    try {
+      expect((await request(server()).post('/t/late-error')).status).toBe(504)
+      await sleep(250)
+      expect(logged.mock.calls.map((call) => String(call[0])).join('\n')).toContain('late boom')
+    } finally {
+      logged.mockRestore()
+    }
+  })
+
+  it('does not log an error that comes after the subscription was released', async () => {
+    const logged = jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined)
+    try {
+      expect((await request(server()).post('/t/very-late-error')).status).toBe(504)
+      await sleep(600)
+      expect(logged.mock.calls.map((call) => String(call[0])).join('\n')).not.toContain(
+        'much later boom'
+      )
+    } finally {
+      logged.mockRestore()
+    }
   })
 })
 

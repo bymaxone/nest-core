@@ -75,16 +75,6 @@ function isExactOrigin(origin: unknown): origin is string {
   }
 }
 
-/** Throws unless `value` is a list of non-blank strings. */
-function assertNames(name: string, value: readonly string[]): void {
-  if (
-    !Array.isArray(value) ||
-    value.some((item) => typeof item !== 'string' || item.trim() === '')
-  ) {
-    throw new Error(`cors.${name} must be a list of non-empty strings`)
-  }
-}
-
 /**
  * The entries whose value is set. An option left out must stay out, not be present as `undefined`:
  * the `cors` middleware lets a present key override its own default.
@@ -97,21 +87,48 @@ function withoutUndefined<T extends object>(
   }
 }
 
+/** What an HTTP header name may be made of: a token, with no space, colon, line break or control character. */
+const HEADER_NAME = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/
+
+/**
+ * Throws unless `value` is a list of non-blank strings. An empty slot of a sparse list counts as an
+ * entry that is not a string: `some` and `find` would skip it and let it become an empty item of a
+ * header.
+ */
+function assertNames(name: string, value: readonly string[]): void {
+  if (
+    !Array.isArray(value) ||
+    Array.from(value).some((item) => typeof item !== 'string' || item.trim() === '')
+  ) {
+    throw new Error(`cors.${name} must be a list of non-empty strings`)
+  }
+}
+
+/** Throws unless every entry of a header list is a header name. */
+function assertHeaderNames(name: string, value: readonly string[]): void {
+  const bad = value.find((item) => !HEADER_NAME.test(item))
+  if (bad !== undefined) {
+    throw new Error(`cors.${name} entry ${JSON.stringify(bad)} is not a header name`)
+  }
+}
+
 /** Throws unless every origin is an exact origin, listed once, with no wildcard in its host. */
 function assertOrigins(origins: readonly string[]): void {
-  const bad = origins.find((origin) => !isExactOrigin(origin))
-  if (bad !== undefined) {
-    throw new Error(
-      `cors.origins entry ${JSON.stringify(bad)} is not an exact origin such as "https://app.example.com"`
-    )
+  const entries = Array.from(origins)
+  for (const origin of entries) {
+    if (!isExactOrigin(origin)) {
+      throw new Error(
+        `cors.origins entry ${JSON.stringify(origin)} is not an exact origin such as "https://app.example.com"`
+      )
+    }
   }
-  const wild = origins.find((origin) => new URL(origin).hostname.includes(WILDCARD))
+  const wild = entries.find((origin) => new URL(origin).hostname.includes(WILDCARD))
   if (wild !== undefined) {
     throw new Error(
       `cors.origins entry ${JSON.stringify(wild)} has a wildcard in its host: a pattern is not matched, list each origin`
     )
   }
-  if (new Set(origins).size !== origins.length) {
+  if (new Set(entries).size !== entries.length) {
     throw new Error('cors.origins lists an origin more than once')
   }
 }
@@ -129,6 +146,8 @@ function assertShape(cors: HttpFloorsCorsOptions): void {
   ] as const) {
     if (list !== undefined) assertNames(name, list)
   }
+  if (cors.allowedHeaders !== undefined) assertHeaderNames('allowedHeaders', cors.allowedHeaders)
+  if (cors.exposedHeaders !== undefined) assertHeaderNames('exposedHeaders', cors.exposedHeaders)
   const method = cors.methods?.find((name) => !HTTP_METHODS.has(name))
   if (method !== undefined) {
     throw new Error(

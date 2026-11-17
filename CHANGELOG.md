@@ -35,15 +35,17 @@ timeout and a shutdown deadline are available, both off unless set.
 - If you call `applyHttpFloors`, the JSON and urlencoded body limits are now stated, at `'100kb'` each,
   which is what Express applied before. Nothing changes unless you set `bodyLimit`, which must be an
   object with only `json` and `urlencoded`, each at most `256mb`.
-- A numeric option given as `null` is now read as unset; `timing.slowRequestThresholdMs` used to refuse
-  it.
+- A numeric option given as `null`, and `metrics.authToken` given as `null`, are now read as unset;
+  `timing.slowRequestThresholdMs` used to refuse `null`, and `authToken` threw a `TypeError`.
 - `handlerTimeout`, `shutdown` and `applyHttpFloors({ cors })` are off unless you set them, and nothing
   else here changes unless you do. To bound handlers, set
   `handlerTimeout: { enabled: true, timeoutMs, excludePaths }` and opt out the routes that legitimately
   run long (uploads, long polls) with `@NoHandlerTimeout()` or `excludePaths`; an `@Sse()` route is never
-  bounded. The `504` frees the client and the connection. A handler that returns a promise runs to its
-  end unless it takes `@HandlerSignal()` and acts on it; one that returns an `Observable` is unsubscribed
-  at the bound, so its teardown runs.
+  bounded. The `504` frees the client and the connection, and the bound is the handler's whole duration.
+  A handler that returns a promise runs to its end unless it takes `@HandlerSignal()` and acts on it; one
+  that returns an `Observable` is unsubscribed one more `timeoutMs` after the `504`, so its teardown runs,
+  and an error either kind throws meanwhile is logged. The bound covers `/health` and `/metrics` too: keep
+  `timeoutMs` above `health.indicatorTimeoutMs` and `metrics.scrapeTimeoutMs`, or exclude those paths.
 
 ### Added
 
@@ -63,8 +65,11 @@ timeout and a shutdown deadline are available, both off unless set.
   run, answered `504` in the error envelope. `@NoHandlerTimeout()`, and `@HandlerSignal()`, an
   `AbortSignal` aborted at the bound and when the client goes away. A response whose headers are already
   out has its connection cut.
-- `shutdown: { deadlineMs }`: when the shutdown has not finished within `deadlineMs`, one error line is
-  logged and the process exits with code `1`.
+- `shutdown: { deadlineMs }`: when the shutdown has not finished within `deadlineMs` of being armed, one
+  error line is logged and the process exits with code `1`. It is armed by a `SIGTERM` or `SIGINT` the
+  application already handles, or by the first of this module's shutdown hooks, so a never-settling
+  `beforeApplicationShutdown` or `onApplicationShutdown` is covered everywhere and a never-settling
+  `onModuleDestroy` on a signal; a programmatic `app.close()` with one needs its own timeout.
 
 ## [1.6.10] - 2026-11-14
 

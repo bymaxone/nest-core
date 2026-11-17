@@ -112,22 +112,20 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 // `./http` budget 1.81 KiB = 1853 B: measured 1821 B brotli (raw 6472 B) plus 32 B of headroom. The
 // growth over 1.25 KiB is the CORS allowlist: the validation of the origins and lists, and the
 // refusal messages: code, none of it comment text.
-// Root budget 20.65 KiB = 21146 B: measured 21111 B brotli (raw 90592 B) plus 35 B of headroom. The
-// growth over 19.44 KiB is the handler timeout (its interceptor, the two decorators and the option's
-// validation) and the shutdown deadline (a provider and the option's validation): code, none of it
-// comment text, and `rxjs` stays external.
-// `./http` budget 2.52 KiB = 2580 B: measured 2543 B brotli (raw 9299 B) plus 37 B of headroom. The
-// growth over 1.81 KiB is the strict validation of the CORS options (the key list, the method list, the
-// origin checks, the delegate that offers nothing to an origin that is not listed, the helper that keeps
-// an unset option out of the middleware's options) and of the body-limit shape and ceiling: code and
-// refusal messages, none of it comment text.
+// Root budget 21.14 KiB = 21647 B: measured 21611 B brotli (raw 92844 B) plus 36 B of headroom. The
+// growth over 20.65 KiB is the shutdown deadline armed by a signal and by each of the module's three
+// hooks, and the handler timeout rewritten to bound the whole duration, release a client that went
+// away and log an error after the 504: code, none of it comment text, and `rxjs` stays external.
+// `./http` budget 2.64 KiB = 2703 B: measured 2667 B brotli (raw 9808 B) plus 36 B of headroom. The
+// growth over 2.52 KiB is the header-name check and the sparse-list handling of the CORS options:
+// code and refusal messages, none of it comment text.
 const BUDGETS = [
-  { name: '. (root)', path: 'dist/index.mjs', brotli: 20.65 * 1024 },
+  { name: '. (root)', path: 'dist/index.mjs', brotli: 21.14 * 1024 },
   { name: './pagination', path: 'dist/pagination/index.mjs', brotli: 1.5 * 1024 },
   { name: './health', path: 'dist/health/index.mjs', brotli: 0.5 * 1024 },
   { name: './openapi', path: 'dist/openapi/index.mjs', brotli: 7.5 * 1024 },
   { name: './metrics', path: 'dist/metrics/index.mjs', brotli: 0.5 * 1024 },
-  { name: './http', path: 'dist/http/index.mjs', brotli: 2.52 * 1024 }
+  { name: './http', path: 'dist/http/index.mjs', brotli: 2.64 * 1024 }
 ]
 
 const fmt = (n) => `${(n / 1024).toFixed(2)} kB`

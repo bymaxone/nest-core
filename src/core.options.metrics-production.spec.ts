@@ -87,6 +87,23 @@ describe('metrics production guard', () => {
     )
   })
 
+  /**
+   * A token given as `null` is read as unset, as every other option given as `null` is, and not as a
+   * TypeError from reading a property of it.
+   */
+  it('reads a null token as unset: no token in the options, and the production guard applies', () => {
+    const asNull = null as unknown as string
+    expect(resolve('development', { enabled: true, authToken: asNull }).metrics).not.toHaveProperty(
+      'authToken'
+    )
+    expect(() => resolve('production', { enabled: true, authToken: asNull })).toThrow(
+      /metrics\.edgeProtected/
+    )
+    expect(() =>
+      resolve('production', { enabled: true, authToken: asNull, edgeProtected: true })
+    ).not.toThrow()
+  })
+
   it('keeps an empty token a boot error, ahead of the production guard', () => {
     expect(() => resolve('production', { enabled: true, authToken: ' ' })).toThrow(/authToken/)
   })
