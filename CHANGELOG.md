@@ -12,8 +12,12 @@ heading here.
 
 ## [Unreleased]
 
-**Apply to a derived backend:** options are now checked more strictly, so a configuration that was
-silently wrong fails at boot.
+## [1.6.14] - 2026-11-17
+
+A patch release. Every option of every block is checked at boot, so a configuration that was silently
+wrong fails at boot, and a refusal names the option and the type of the value, never the value.
+
+**Apply to a derived backend:** options are now checked more strictly.
 
 - A **boolean option** must be `true` or `false` (or unset): `exposeInternals: 'false'` was kept as a
   truthy string and switched the feature on, and is now refused. This covers every `enabled`,
@@ -1629,4 +1633,5 @@ have regressed from. They are kept because the reasoning is worth having.
 [1.6.9]: https://github.com/bymaxone/nest-core/compare/v1.6.8...v1.6.9
 [1.6.10]: https://github.com/bymaxone/nest-core/compare/v1.6.9...v1.6.10
 [1.6.13]: https://github.com/bymaxone/nest-core/compare/v1.6.10...v1.6.13
-[Unreleased]: https://github.com/bymaxone/nest-core/compare/v1.6.13...HEAD
+[1.6.14]: https://github.com/bymaxone/nest-core/compare/v1.6.13...v1.6.14
+[Unreleased]: https://github.com/bymaxone/nest-core/compare/v1.6.14...HEAD
