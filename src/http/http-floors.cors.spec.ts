@@ -149,7 +149,7 @@ describe('applyHttpFloors, CORS allowlist', () => {
     })
   })
 
-  it('sends credentials only when asked, and never with a wildcard', async () => {
+  it('sends the credentials header, with the origin echoed, when credentials is true', async () => {
     await withApp({ cors: { ...cors, credentials: true } }, async (server) => {
       const res = await request(server).post('/p/echo').set('origin', ALLOWED)
       expect(res.headers['access-control-allow-credentials']).toBe('true')
