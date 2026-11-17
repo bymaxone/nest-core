@@ -3,8 +3,9 @@
  *
  * Layer: integration.
  * Goal: an interceptor that encloses the handler timeout, and the handler itself, are both released
- * when the client disconnects before the bound. The interceptor releases the handler, and Nest's
- * router unsubscribes the rest of the chain, so no enclosing `finalize` is left waiting.
+ * when the client disconnects before the bound, whether the handler returns an Observable or a
+ * promise that never settles. Nest's router unsubscribes the chain, so no enclosing `finalize` is
+ * left waiting.
  * Mocks: none; a real application on a loopback port, with a global interceptor outside the bound.
  */
 import { Controller, Module, Post } from '@nestjs/common'
@@ -41,7 +42,15 @@ class GoneController {
   }
 }
 
-@Module({ controllers: [GoneController] })
+@Controller('gone-promise')
+class GonePromiseController {
+  @Post('hang')
+  hang(): Promise<unknown> {
+    return new Promise(() => undefined)
+  }
+}
+
+@Module({ controllers: [GoneController, GonePromiseController] })
 class GoneModule {}
 
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
@@ -71,6 +80,42 @@ describe('handler timeout, a client that disconnects before the bound', () => {
       req.destroy()
       await sleep(300)
       expect(ended).toEqual({ enclosing: true, handler: true })
+    } finally {
+      await app.close()
+    }
+  })
+
+  /**
+   * A promise that never settles is released by the disconnect too, well inside the 400 ms bound
+   * that would otherwise end it.
+   */
+  it('finalizes an interceptor outside the bound when a promise handler that never settles loses its client', async () => {
+    ended.enclosing = false
+    const ref = await Test.createTestingModule({
+      imports: [
+        BymaxCoreModule.forRoot({ handlerTimeout: { enabled: true, timeoutMs: 400 } }),
+        GoneModule
+      ]
+    }).compile()
+    const app = ref.createNestApplication()
+    app.useGlobalInterceptors(new Enclosing())
+    await app.init()
+    await app.listen(0, '127.0.0.1')
+    try {
+      const { port } = (app.getHttpServer() as Server).address() as AddressInfo
+      const req = httpRequest({
+        port,
+        host: '127.0.0.1',
+        path: '/gone-promise/hang',
+        method: 'POST'
+      })
+      req.on('error', () => undefined)
+      req.end()
+      await sleep(100)
+      expect(ended.enclosing).toBe(false)
+      req.destroy()
+      await sleep(200)
+      expect(ended.enclosing).toBe(true)
     } finally {
       await app.close()
     }
