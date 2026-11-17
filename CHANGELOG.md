@@ -12,15 +12,26 @@ heading here.
 
 ## [Unreleased]
 
+## [1.6.12] - 2026-11-17
+
+A patch release. `applyHttpFloors` holds idle keep-alive connections for longer than a load balancer's
+idle timeout, states its body-size limits and takes an opt-in CORS allowlist, and an open `/metrics`
+is refused in production unless it has a token or the deployment says its edge protects it.
+
 **Apply to a derived backend:**
 
 - **Metrics in production now needs a token or a stated edge.** `BymaxCoreModule.forRoot` and
   `forRootAsync` refuse, at boot, `metrics.enabled: true` in production with no `metrics.authToken`.
   `NODE_ENV` decides production, and an unset `NODE_ENV` is production unless `environment` declares
-  `development` or `test`. If the route
-  is protected at your edge, set `metrics.edgeProtected: true`; otherwise set `metrics.authToken`. An
-  application that runs with metrics on, in production, with neither, fails to start after this
-  upgrade.
+  `development` or `test`. If the route is protected at your edge, set `metrics.edgeProtected: true`;
+  otherwise set `metrics.authToken`. An application that runs with metrics on, in production, with
+  neither, fails to start after this upgrade.
+- If you call `applyHttpFloors`, idle keep-alive connections are now held for `65000` ms instead of
+  Node's `5000`, so a load balancer with a 60 s idle timeout no longer reuses a socket the server has
+  just closed (an intermittent `502`). Set `keepAliveTimeoutMs` to change it, above your balancer's own
+  idle timeout.
+- If you call `applyHttpFloors`, the JSON and urlencoded body limits are now stated, at `'100kb'` each,
+  which is what Express applied before. Nothing changes unless you set `bodyLimit`.
 - `applyHttpFloors` gains an opt-in `cors` allowlist; nothing changes unless you set it.
 
 ### Added
@@ -30,22 +41,6 @@ heading here.
   asked, and `methods`, `allowedHeaders`, `exposedHeaders` and `maxAgeSeconds`. A wildcard together with
   credentials, an empty list and an entry that is not an exact origin are refused at boot. It is mounted
   after helmet and ahead of the body parsers, so a preflight and a parser refusal carry the headers.
-
-## [1.6.11] - 2026-11-17
-
-A patch release. `applyHttpFloors` holds idle keep-alive connections for longer than a load balancer's
-idle timeout and states its body-size limits.
-
-**Apply to a derived backend:** if you call `applyHttpFloors`, two things change without a code change:
-
-- Idle keep-alive connections are now held for `65000` ms instead of Node's `5000`, so a load balancer
-  with a 60 s idle timeout no longer reuses a socket the server has just closed (an intermittent
-  `502`). Set `keepAliveTimeoutMs` to change it, above your balancer's own idle timeout.
-- The JSON and urlencoded body limits are now stated, at `'100kb'` each, which is what Express applied
-  before. Nothing changes unless you set `bodyLimit`.
-
-### Added
-
 - `applyHttpFloors` takes `keepAliveTimeoutMs` (default `65000`) and `bodyLimit: { json?, urlencoded? }`
   (byte counts or size strings, default `'100kb'`), both validated before anything is applied; a body
   over its limit answers `413` in the error envelope.
@@ -1563,5 +1558,5 @@ have regressed from. They are kept because the reasoning is worth having.
 [1.6.8]: https://github.com/bymaxone/nest-core/compare/v1.6.7...v1.6.8
 [1.6.9]: https://github.com/bymaxone/nest-core/compare/v1.6.8...v1.6.9
 [1.6.10]: https://github.com/bymaxone/nest-core/compare/v1.6.9...v1.6.10
-[1.6.11]: https://github.com/bymaxone/nest-core/compare/v1.6.10...v1.6.11
-[Unreleased]: https://github.com/bymaxone/nest-core/compare/v1.6.11...HEAD
+[1.6.12]: https://github.com/bymaxone/nest-core/compare/v1.6.10...v1.6.12
+[Unreleased]: https://github.com/bymaxone/nest-core/compare/v1.6.12...HEAD
