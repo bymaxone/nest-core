@@ -23,10 +23,20 @@ export interface HandlerTimeoutOptions {
    * How long a handler may run before the request is answered `504` in the error envelope, in
    * milliseconds. Positive integer up to `2147483647`. Default: `30000`.
    *
+   * The bound is the handler's whole duration, not the time to its first value: an `Observable` that
+   * emits and never completes is answered `504` too.
+   *
    * The `504` frees the client and the connection. A handler that returns a promise (an `async`
    * method) cannot be cancelled: it runs to its end unless it takes the abort signal
    * (`@HandlerSignal()`) and stops on it, and a database connection it holds is released only when it
-   * does. A handler that returns an `Observable` is unsubscribed at the bound, so its teardown runs.
+   * does. Either kind of handler is held for one more `timeoutMs` after the `504`, so that an error it
+   * throws meanwhile is logged and not lost; an `Observable` is then unsubscribed, so its teardown
+   * runs; a client that goes away before the `504` releases it at once.
+   *
+   * The bound covers every route the interceptor sees, the health and metrics endpoints included: a
+   * `timeoutMs` below `health.indicatorTimeoutMs` or `metrics.scrapeTimeoutMs` makes a slow probe or
+   * scrape answer `504` in place of its own `503`. Keep it above them, or list those paths in
+   * `excludePaths`.
    */
   timeoutMs?: number
   /**

@@ -32,6 +32,13 @@ class EchoModule {}
 
 const ALLOWED = 'https://app.example.com'
 
+/** A copy of `list` with an empty slot after its last entry, as `[a, , ]` and `list.length += 1` make. */
+const sparse = <T>(list: T[]): T[] => {
+  const holey = [...list]
+  holey.length += 1
+  return holey
+}
+
 /** Build an Express application, apply the helper, and initialise it. */
 async function start(options?: HttpFloorsOptions): Promise<INestApplication> {
   const moduleRef = await Test.createTestingModule({
@@ -352,6 +359,36 @@ describe('applyHttpFloors, CORS refusals', () => {
     ['a cors value that is not an object', 'https://a.example.com', /cors must be an object/],
     ['a cors value that is a list', [ALLOWED], /cors must be an object/],
     ['a null cors value', null, /cors must be an object/],
+    [
+      'a sparse origins list',
+      { origins: sparse([ALLOWED]) },
+      /cors\.origins entry undefined is not an exact origin/
+    ],
+    [
+      'a sparse methods list',
+      { origins: [ALLOWED], methods: sparse(['GET']) },
+      /cors\.methods must be a list of non-empty strings/
+    ],
+    [
+      'a sparse exposedHeaders list',
+      { origins: [ALLOWED], exposedHeaders: sparse(['x-id']) },
+      /cors\.exposedHeaders must be a list of non-empty strings/
+    ],
+    [
+      'a CRLF in allowedHeaders',
+      { origins: [ALLOWED], allowedHeaders: ['x-a\r\nx-b: 1'] },
+      /cors\.allowedHeaders entry .* is not a header name/
+    ],
+    [
+      'a space in exposedHeaders',
+      { origins: [ALLOWED], exposedHeaders: ['x id'] },
+      /cors\.exposedHeaders entry .* is not a header name/
+    ],
+    [
+      'a colon in allowedHeaders',
+      { origins: [ALLOWED], allowedHeaders: ['x:a'] },
+      /cors\.allowedHeaders entry .* is not a header name/
+    ],
     ['a zero max age', { origins: [ALLOWED], maxAgeSeconds: 0 }, /cors\.maxAgeSeconds/],
     ['a fractional max age', { origins: [ALLOWED], maxAgeSeconds: 1.5 }, /cors\.maxAgeSeconds/],
     ['an empty method', { origins: [ALLOWED], methods: [''] }, /cors\.methods/],

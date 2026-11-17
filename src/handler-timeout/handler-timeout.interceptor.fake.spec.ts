@@ -10,7 +10,7 @@
 import { GatewayTimeoutException } from '@nestjs/common'
 import type { CallHandler, ExecutionContext } from '@nestjs/common'
 import { Reflector } from '@nestjs/core'
-import { NEVER, Observable, of } from 'rxjs'
+import { NEVER, Observable, of, Subject } from 'rxjs'
 
 import { normalizeCoreOptions } from '../core.options'
 import {
@@ -147,21 +147,26 @@ describe('handler timeout interceptor, on a fake context', () => {
 
     const gone = new FakeResponse()
     const closed = {}
-    interceptor().intercept(contextFor(PlainController, gone, 'http', closed), stalled)
+    interceptor()
+      .intercept(contextFor(PlainController, gone, 'http', closed), stalled)
+      .subscribe()
     gone.listeners.forEach((listener) => listener())
     const atClose = handlerSignalOf(closed)?.reason as Error
     expect(atClose).toBeInstanceOf(Error)
     expect(atClose.message).toBe('The client disconnected')
   })
 
-  it('removes its close listener when the handler ends', () => {
+  it('removes its close listener when the handler ends, and holds none before it is subscribed', () => {
     const response = new FakeResponse()
+    const handled = new Subject<string>()
     const result: Observable<unknown> = interceptor().intercept(
       contextFor(PlainController, response),
-      { handle: () => of('done') }
+      { handle: () => handled }
     )
-    expect(response.listeners.size).toBe(1)
+    expect(response.listeners.size).toBe(0)
     result.subscribe()
+    expect(response.listeners.size).toBe(1)
+    handled.complete()
     expect(response.listeners.size).toBe(0)
   })
 
@@ -172,14 +177,18 @@ describe('handler timeout interceptor, on a fake context', () => {
   it('aborts the signal on a close before the response ended, and not after', () => {
     const early = new FakeResponse()
     const earlyRequest = {}
-    interceptor().intercept(contextFor(PlainController, early, 'http', earlyRequest), stalled)
+    interceptor()
+      .intercept(contextFor(PlainController, early, 'http', earlyRequest), stalled)
+      .subscribe()
     early.listeners.forEach((listener) => listener())
     expect(handlerSignalOf(earlyRequest)?.aborted).toBe(true)
 
     const late = new FakeResponse()
     late.writableEnded = true
     const lateRequest = {}
-    interceptor().intercept(contextFor(PlainController, late, 'http', lateRequest), stalled)
+    interceptor()
+      .intercept(contextFor(PlainController, late, 'http', lateRequest), stalled)
+      .subscribe()
     late.listeners.forEach((listener) => listener())
     expect(handlerSignalOf(lateRequest)?.aborted).toBe(false)
   })

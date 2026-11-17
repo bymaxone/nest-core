@@ -7,7 +7,8 @@
  * positive timer-safe integer.
  * Mocks: the process exit and the Nest logger are spied on; time is faked.
  */
-import { Logger } from '@nestjs/common'
+import { Global, Injectable, Logger, Module } from '@nestjs/common'
+import type { DynamicModule, Type } from '@nestjs/common'
 import { Test } from '@nestjs/testing'
 
 import { BymaxCoreModule } from '../core.module'
@@ -135,5 +136,220 @@ describe('shutdown deadline, in the module', () => {
       useFactory: () => ({ shutdown: { deadlineMs: 5_000 } })
     })
     expect(await find(module)).toBeInstanceOf(BymaxShutdownDeadline)
+  })
+})
+
+/** A promise that never settles, as a driver's `quit()` does when its server is gone. */
+const never = (): Promise<void> => new Promise<void>(() => undefined)
+
+const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
+
+/** A provider whose chosen shutdown hook never settles. */
+function hanging(hook: 'onModuleDestroy' | 'beforeApplicationShutdown'): Type {
+  class Hanging {}
+  Object.defineProperty(Hanging.prototype, hook, { value: never })
+  Injectable()(Hanging)
+  return Hanging
+}
+
+/** A module that provides `provider` and nothing else. */
+function moduleOf(provider: Type): Type {
+  class Holder {}
+  Module({ providers: [provider] })(Holder)
+  return Holder
+}
+
+describe('shutdown deadline, arming', () => {
+  let exit: jest.SpyInstance
+
+  beforeEach(() => {
+    exit = jest.spyOn(process, 'exit').mockImplementation((() => undefined) as never)
+    jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined)
+  })
+
+  afterEach(() => {
+    jest.restoreAllMocks()
+  })
+
+  /** Boots an application with the deadline set and the given modules around it, then starts closing it. */
+  async function closing(modules: (core: DynamicModule) => unknown[]): Promise<void> {
+    const core = BymaxCoreModule.forRoot({ shutdown: { deadlineMs: 150 } })
+    const ref = await Test.createTestingModule({ imports: modules(core) as never[] }).compile()
+    const app = ref.createNestApplication()
+    await app.init()
+    void app.close()
+    await sleep(400)
+  }
+
+  /**
+   * Every hook of the phases after destroy runs after all the destroy hooks, so arming in
+   * onModuleDestroy covers a never-settling beforeApplicationShutdown wherever its module sits.
+   */
+  it.each([
+    ['imported before the core module', (core: DynamicModule, hang: Type) => [hang, core]],
+    ['imported after the core module', (core: DynamicModule, hang: Type) => [core, hang]]
+  ])(
+    'exits when a beforeApplicationShutdown hook in a module %s never settles',
+    async (_name, order) => {
+      await closing((core) => order(core, moduleOf(hanging('beforeApplicationShutdown'))))
+      expect(exit).toHaveBeenCalledWith(1)
+    }
+  )
+
+  it('arms once, whichever hooks run', () => {
+    jest.useFakeTimers()
+    const provider = deadline({ deadlineMs: 5_000 })
+    provider.onModuleDestroy()
+    provider.beforeApplicationShutdown()
+    provider.onApplicationShutdown()
+    expect(jest.getTimerCount()).toBe(1)
+    jest.useRealTimers()
+  })
+})
+
+describe('shutdown deadline, signals', () => {
+  let exit: jest.SpyInstance
+  const added: [NodeJS.Signals, () => void][] = []
+
+  /** Registers a listener the test removes afterwards, standing for the application's own handler. */
+  function handle(signal: NodeJS.Signals, listener: () => void): void {
+    process.on(signal, listener)
+    added.push([signal, listener])
+  }
+
+  beforeEach(() => {
+    jest.useFakeTimers()
+    exit = jest.spyOn(process, 'exit').mockImplementation((() => undefined) as never)
+    jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined)
+  })
+
+  afterEach(() => {
+    for (const [signal, listener] of added.splice(0)) process.removeListener(signal, listener)
+    jest.useRealTimers()
+    jest.restoreAllMocks()
+  })
+
+  /**
+   * The signal path reaches the root module's own providers first, ahead of any module's hook, so
+   * the deadline is armed when the signal arrives, on a signal something already handles.
+   */
+  it('arms at a signal the application already handles, before any hook has run', () => {
+    handle('SIGTERM', () => undefined)
+    const provider = deadline({ deadlineMs: 5_000 })
+    provider.onApplicationBootstrap()
+    process.emit('SIGTERM')
+    expect(jest.getTimerCount()).toBe(1)
+    jest.advanceTimersByTime(5_000)
+    expect(exit).toHaveBeenCalledWith(1)
+    provider.onApplicationShutdown()
+  })
+
+  it('adds no listener to a signal nothing handles, so the default of ending the process stays', () => {
+    const before = process.listenerCount('SIGINT')
+    const provider = deadline({ deadlineMs: 5_000 })
+    provider.onApplicationBootstrap()
+    expect(process.listenerCount('SIGINT')).toBe(before)
+    provider.onApplicationShutdown()
+  })
+
+  it('removes the listeners it added when the shutdown completes', () => {
+    handle('SIGTERM', () => undefined)
+    const before = process.listenerCount('SIGTERM')
+    const provider = deadline({ deadlineMs: 5_000 })
+    provider.onApplicationBootstrap()
+    expect(process.listenerCount('SIGTERM')).toBe(before + 1)
+    provider.onApplicationShutdown()
+    expect(process.listenerCount('SIGTERM')).toBe(before)
+  })
+
+  it('does nothing at bootstrap without a deadline', () => {
+    handle('SIGTERM', () => undefined)
+    const before = process.listenerCount('SIGTERM')
+    deadline().onApplicationBootstrap()
+    expect(process.listenerCount('SIGTERM')).toBe(before)
+  })
+})
+
+describe('shutdown deadline, a signal and a hang in onModuleDestroy', () => {
+  /**
+   * A global module's hooks run last in every phase, so a never-settling onModuleDestroy elsewhere,
+   * in a module or in a provider of the root module, is reached before this module's own. A signal
+   * arms the deadline ahead of them.
+   */
+  it('exits when a provider of the root module never settles in onModuleDestroy, on a signal', async () => {
+    const exit = jest.spyOn(process, 'exit').mockImplementation((() => undefined) as never)
+    jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined)
+    const before = process.listeners('SIGTERM')
+    const hang = hanging('onModuleDestroy')
+    class Root {}
+    Module({
+      imports: [BymaxCoreModule.forRoot({ shutdown: { deadlineMs: 150 } })],
+      providers: [hang]
+    })(Root)
+    const ref = await Test.createTestingModule({ imports: [Root] }).compile()
+    const app = ref.createNestApplication()
+    app.enableShutdownHooks(['SIGTERM'])
+    await app.init()
+    try {
+      process.emit('SIGTERM')
+      await sleep(400)
+      expect(exit).toHaveBeenCalledWith(1)
+    } finally {
+      for (const listener of process.listeners('SIGTERM')) {
+        if (!before.includes(listener)) process.removeListener('SIGTERM', listener)
+      }
+      jest.restoreAllMocks()
+    }
+  })
+})
+
+describe('the Nest hook order the deadline relies on', () => {
+  /** Records the order of the destroy and before-shutdown hooks of a few modules. */
+  async function order(globalCore: boolean): Promise<string[]> {
+    const seen: string[] = []
+    const named = (name: string): Type => {
+      class Probe {}
+      Object.defineProperty(Probe.prototype, 'onModuleDestroy', {
+        value: () => seen.push(`destroy:${name}`)
+      })
+      Object.defineProperty(Probe.prototype, 'beforeApplicationShutdown', {
+        value: () => seen.push(`before:${name}`)
+      })
+      Injectable()(Probe)
+      return Probe
+    }
+    const holder = (name: string, imports: Type[] = [], global = false): Type => {
+      class Holder {}
+      Module({ imports, providers: [named(name)] })(Holder)
+      if (global) Global()(Holder)
+      return Holder
+    }
+    const root = holder('root', [
+      holder('feature', [holder('deep')]),
+      holder('core', [], globalCore)
+    ])
+    const ref = await Test.createTestingModule({ imports: [root] }).compile()
+    const app = ref.createNestApplication()
+    await app.init()
+    await app.close()
+    return seen
+  }
+
+  /**
+   * A global module's hooks run after every other module's, in each phase, and every destroy hook of
+   * every module runs before any before-shutdown hook. The deadline is armed in onModuleDestroy, which
+   * covers every beforeApplicationShutdown hang, and by the signal, which covers the rest.
+   */
+  it('runs a global module last in each phase, and all destroy hooks before any before-shutdown hook', async () => {
+    const seen = await order(true)
+    expect(seen.filter((hook) => hook.startsWith('destroy')).at(-1)).toBe('destroy:core')
+    expect(seen.filter((hook) => hook.startsWith('before')).at(-1)).toBe('before:core')
+    expect(seen.lastIndexOf('destroy:core')).toBeLessThan(seen.indexOf('before:root'))
+  })
+
+  it('runs the root module first, and a module that is not global in its place among the imports', async () => {
+    const seen = await order(false)
+    expect(seen[0]).toBe('destroy:root')
+    expect(seen.indexOf('destroy:core')).toBeLessThan(seen.indexOf('destroy:deep'))
   })
 })
