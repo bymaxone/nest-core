@@ -14,7 +14,7 @@ import type { Response } from 'express'
 import type { Server } from 'node:http'
 import { request as httpRequest } from 'node:http'
 import type { AddressInfo } from 'node:net'
-import { interval, map, take } from 'rxjs'
+import { interval, map, Observable as RxObservable, take } from 'rxjs'
 import type { Observable } from 'rxjs'
 import request from 'supertest'
 
@@ -24,7 +24,13 @@ import { HandlerSignal, NoHandlerTimeout } from './handler-timeout.decorators'
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
 
 /** What the handlers observed, read back by the cases. */
-const seen: { finished: boolean; abortedAtEnd: boolean | undefined; abortEvents: number } = {
+const seen: {
+  finished: boolean
+  abortedAtEnd: boolean | undefined
+  abortEvents: number
+  tornDown: boolean
+} = {
+  tornDown: false,
   finished: false,
   abortedAtEnd: undefined,
   abortEvents: 0
@@ -50,6 +56,20 @@ class SlowController {
   async optedOut(): Promise<{ ok: true }> {
     await sleep(300)
     return { ok: true }
+  }
+
+  @Post('observable')
+  observable(): RxObservable<{ ok: true }> {
+    return new RxObservable((subscriber) => {
+      const timer = setTimeout(() => {
+        subscriber.next({ ok: true })
+        subscriber.complete()
+      }, 400)
+      return () => {
+        clearTimeout(timer)
+        seen.tornDown = true
+      }
+    })
   }
 
   @Post('by-path/slow')
@@ -128,6 +148,7 @@ beforeEach(() => {
   seen.finished = false
   seen.abortedAtEnd = undefined
   seen.abortEvents = 0
+  seen.tornDown = false
 })
 
 describe('handler timeout', () => {
@@ -158,6 +179,18 @@ describe('handler timeout', () => {
     await sleep(450)
     expect(seen.finished).toBe(true)
     expect(seen.abortedAtEnd).toBe(true)
+  })
+})
+
+describe('handler timeout, what a handler that returns an Observable sees', () => {
+  /**
+   * An Observable handler is unsubscribed at the bound, so its teardown runs: that is the one kind
+   * of handler the bound itself can stop, where a promise cannot be.
+   */
+  it('unsubscribes an Observable handler at the bound, so its teardown runs', async () => {
+    const res = await request(server()).post('/t/observable')
+    expect(res.status).toBe(504)
+    expect(seen.tornDown).toBe(true)
   })
 })
 

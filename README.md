@@ -326,10 +326,11 @@ stalls, or a client that reads the response slowly, holds the connection and wha
 with it. This bounds the handler itself. A route opts out with `@NoHandlerTimeout()` (a method or a
 controller), an `@Sse()` route is never bounded, and a path prefix in `excludePaths` opts out a whole area.
 
-**What it does not do.** The `504` frees the client and the connection; it does not cancel the handler.
-Measured with a handler that takes 400 ms against a 100 ms bound, the client got the `504` at about
-100 ms and the handler ran on to its end. The handler stops early, and releases what it holds, only if it
-takes the signal and acts on it: `@HandlerSignal()` gives it an `AbortSignal` that is aborted when the bound
+**What it does not do.** The `504` frees the client and the connection. It cannot cancel a handler that
+returns a promise, which is every `async` method: measured with one that takes 400 ms against a 100 ms
+bound, the client got the `504` at about 100 ms and the handler ran on to its end. A handler that returns
+an `Observable` is unsubscribed at the bound, so its teardown runs. A promise handler stops early, and
+releases what it holds, only if it takes the signal and acts on it: `@HandlerSignal()` gives it an `AbortSignal` that is aborted when the bound
 expires and when the client goes away, to pass to a driver, a `fetch` or an `await` that accepts one. The
 signal is `undefined` when the bound is off or does not apply to the route. The bound is the handler's own
 promise or observable: a handler that takes the response with `@Res()`, returns, and writes later has

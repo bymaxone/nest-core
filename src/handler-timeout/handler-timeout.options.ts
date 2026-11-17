@@ -23,9 +23,10 @@ export interface HandlerTimeoutOptions {
    * How long a handler may run before the request is answered `504` in the error envelope, in
    * milliseconds. Positive integer up to `2147483647`. Default: `30000`.
    *
-   * The `504` frees the client and the connection; it does not cancel the handler. The handler runs
-   * to its end unless it takes the abort signal (`@HandlerSignal()`) and stops on it, and a database
-   * connection it holds is released only when it does.
+   * The `504` frees the client and the connection. A handler that returns a promise (an `async`
+   * method) cannot be cancelled: it runs to its end unless it takes the abort signal
+   * (`@HandlerSignal()`) and stops on it, and a database connection it holds is released only when it
+   * does. A handler that returns an `Observable` is unsubscribed at the bound, so its teardown runs.
    */
   timeoutMs?: number
   /**

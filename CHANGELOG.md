@@ -17,8 +17,9 @@ heading here.
 - `handlerTimeout` and `shutdown` are off by default. To bound handlers, set
   `handlerTimeout: { enabled: true, timeoutMs, excludePaths }` and opt out the routes that legitimately
   run long (uploads, long polls) with `@NoHandlerTimeout()` or `excludePaths`; an `@Sse()` route is never
-  bounded. The `504` frees the client and the connection, not the handler: a handler that takes
-  `@HandlerSignal()` and acts on it stops early, any other runs to its end.
+  bounded. The `504` frees the client and the connection. A handler that returns a promise runs to its
+  end unless it takes `@HandlerSignal()` and acts on it; one that returns an `Observable` is unsubscribed
+  at the bound, so its teardown runs.
 - A numeric option given as `null` is now read as unset; `timing.slowRequestThresholdMs` and
   `cors.maxAgeSeconds` used to refuse it.
 
