@@ -44,11 +44,32 @@ describe('the log-event catalog', () => {
 })
 
 describe('the metrics catalog', () => {
-  it.each(['http_requests_total', 'http_request_duration_seconds', 'bymax_core_health_status'])(
-    'names the registered metric %s',
-    (name) => {
-      expect(SOURCE).toContain(`'${name}'`)
-      expect(README).toContain(`\`${name}\``)
-    }
+  /** The files that construct a collector, which is where a metric's name is a constant. */
+  const constructing = sourceFiles(join(ROOT, 'src')).filter((file) =>
+    /new promClient\.(Counter|Histogram|Gauge)\(/.test(readFileSync(file, 'utf8'))
   )
+  const registered = new Set(
+    constructing.flatMap((file) =>
+      [...readFileSync(file, 'utf8').matchAll(/const [A-Z_]+ = '([a-z][a-z0-9_]*)'/g)].map(
+        (match) => match[1] as string
+      )
+    )
+  )
+  const listed = new Set(
+    [...README.matchAll(/^\| `([a-z][a-z0-9_]*)`\s*\| (?:counter|gauge|histogram)\b/gm)].map(
+      (match) => match[1] as string
+    )
+  )
+
+  it('finds the metrics the source registers', () => {
+    expect([...registered].sort()).toEqual([
+      'bymax_core_health_status',
+      'http_request_duration_seconds',
+      'http_requests_total'
+    ])
+  })
+
+  it('lists exactly the metrics the source registers', () => {
+    expect([...listed].sort()).toEqual([...registered].sort())
+  })
 })
