@@ -30,8 +30,12 @@ the object as it is.
   `CORE_SHUTDOWN_DEADLINE` (`deadlineMs`), `CORE_METRICS_SCRAPE_SLOW` (`timeoutMs`),
   `CORE_METRICS_CONTRIBUTORS` (`contributors`, `labels`), `CORE_OPENAPI_SERVED` (`path`, `jsonPath`),
   `CORE_OPENAPI_PRODUCTION_REFUSED`, `CORE_OPENAPI_UNSECURED` (`operations`) and
-  `CORE_OPENAPI_COMPONENT_CONFLICT` (`components`). The text moved into `message`; where a field carries a number
-  (`deadlineMs`, `timeoutMs`, `contributors`), the sentence no longer repeats it.
+  `CORE_OPENAPI_COMPONENT_CONFLICT` (`components`). The text moved into `message`, which is this package's own text; where a field carries a number
+  (`deadlineMs`, `timeoutMs`, `contributors`), the sentence no longer repeats it. An error that code of yours
+  threw (a rejecting health indicator in `CORE_HEALTH_DOWN`, a transition sink in
+  `CORE_HEALTH_SINK_FAILED`, a handler in `CORE_HANDLER_LATE_ERROR`) is an `Error` under `err`, never
+  part of `message`; `CORE_HEALTH_DOWN` also carries `cause` (`rejected`, `timed-out`, `reported-down`) and
+  `timeoutMs`.
 - **`bymax_core_health_status{indicator}`**, a gauge, `1` while a health check's dependency is up and `0`
   while it is down, one series per check, set each time readiness observes it (so a check that is up
   reads `1` from its first probe). It exists only when `metrics` and `health` are both enabled; with

@@ -191,27 +191,34 @@ async function runIndicator(
 }
 
 /**
- * Render a cause as the tail of a log line.
+ * The log entry for a check that went down. `message` is this package's own text: what a rejecting
+ * indicator said goes as an `Error` under `err`, so the logger treats it as the host's data, and the
+ * other fields are closed or numeric.
  *
- * @param cause - The cause to describe.
- * @returns A human-readable fragment naming what happened.
+ * @param name - The check's name.
+ * @param cause - Why it is down.
+ * @returns The entry to write.
  */
-function describeCause(cause: HealthTransitionCause): string {
+function downEntry(name: string, cause: HealthTransitionCause): HealthLogEntry {
+  const down = { event: 'CORE_HEALTH_DOWN', message: 'The health check went down', check: name }
   switch (cause.kind) {
     case 'rejected':
-      return `the indicator rejected: ${cause.message}`
+      return { ...down, cause: cause.kind, err: new Error(cause.message) }
     case 'timed-out':
-      return `the indicator did not answer within ${cause.timeoutMs}ms`
+      return { ...down, cause: cause.kind, timeoutMs: cause.timeoutMs }
     case 'reported-down':
-      return 'the indicator reported it down'
+      return { ...down, cause: cause.kind }
   }
 }
 
-/** What the aggregator writes to the log: an event code, a short text, and closed fields. */
+/** What the aggregator writes to the log: an event code, library text, closed fields, and the host's error. */
 interface HealthLogEntry {
   readonly event: string
   readonly message: string
   readonly check?: string
+  readonly cause?: HealthTransitionCause['kind']
+  readonly timeoutMs?: number
+  readonly err?: Error
 }
 
 /**
@@ -363,10 +370,7 @@ export class HealthService implements OnApplicationBootstrap, BeforeApplicationS
       this.emit({ name, isUp: true })
       return
     }
-    this.describe(
-      { event: 'CORE_HEALTH_DOWN', message: describeCause(outcome.cause), check: name },
-      true
-    )
+    this.describe(downEntry(name, outcome.cause), true)
     this.emit({ name, isUp: false, cause: outcome.cause })
   }
 
@@ -462,7 +466,8 @@ export class HealthService implements OnApplicationBootstrap, BeforeApplicationS
     this.writeLine(
       {
         event: 'CORE_HEALTH_SINK_FAILED',
-        message: `The transition sink threw and was ignored: ${summarizeRejection(error)}`
+        message: 'The transition sink threw and was ignored',
+        err: new Error(summarizeRejection(error))
       },
       true
     )
