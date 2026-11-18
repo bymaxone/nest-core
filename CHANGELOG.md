@@ -30,8 +30,8 @@ the object as it is.
   `CORE_SHUTDOWN_DEADLINE` (`deadlineMs`), `CORE_METRICS_SCRAPE_SLOW` (`timeoutMs`),
   `CORE_METRICS_CONTRIBUTORS` (`contributors`, `labels`), `CORE_OPENAPI_SERVED` (`path`, `jsonPath`),
   `CORE_OPENAPI_PRODUCTION_REFUSED`, `CORE_OPENAPI_UNSECURED` (`operations`) and
-  `CORE_OPENAPI_COMPONENT_CONFLICT` (`components`). The text moved into `message`, and where a field now
-  carries a number the sentence no longer repeats it.
+  `CORE_OPENAPI_COMPONENT_CONFLICT` (`components`). The text moved into `message`; where a field carries a number
+  (`deadlineMs`, `timeoutMs`, `contributors`), the sentence no longer repeats it.
 - **`bymax_core_health_status{indicator}`**, a gauge, `1` while a health check's dependency is up and `0`
   while it is down, one series per check, set each time readiness observes it (so a check that is up
   reads `1` from its first probe). It exists only when `metrics` and `health` are both enabled; with
@@ -46,13 +46,16 @@ can fail to boot for one of these.
   `xContentTypeOptions`, `ieNoOpen`, `xDownloadOptions`, `originAgentCluster`, `xXssProtection`,
   `xssFilter`) must be `true` or `false`; any other option must be `true`, `false` or an object. A value
   `helmet` itself refuses inside an object is reported as `helmet refused its <option> option`, without
-  the value: `helmet` quotes it, and it may be a secret.
+  the value: `helmet` quotes it, and it may be a secret. When no single option reproduces the refusal
+  (two aliases given together), the error is `helmet refused the options given`.
 - **`openapi` security schemes:** `oauth2` needs `flows` (an object) and `openIdConnect` needs a
   non-empty `openIdConnectUrl`, as the specification requires; `mutualTLS` is accepted as it is.
-- **A `Date`, `Map`, `Set` or `RegExp` is refused where a block is expected** (the options object, any
-  block, `bodyLimit`, `cors`, `helmet`); it used to be accepted as an empty block.
-- **`metrics.defaultLabels` refuses reserved names:** a name starting with `__`, `le`, `quantile`,
-  `method`, `route` or `status_code`.
+- **A `Date`, `Map`, `Set`, `RegExp`, `Promise`, `Error` or any other built-in object is refused where a
+  block is expected** (the options object, any block, `bodyLimit`, `cors`, `helmet`, `openapi` blocks,
+  `metrics.defaultLabels`); it used to be accepted as an empty block. The refusal names the built-in
+  (`received a Date`), where it used to say `an object`.
+- **`metrics.defaultLabels` refuses reserved names:** a name starting with `__`, or one of `le`,
+  `quantile`, `method`, `route` or `status_code`.
 - The late-error log of a handler that threw after its `504` carries the handler's own error message;
   the README now says so.
 
