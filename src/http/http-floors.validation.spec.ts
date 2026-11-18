@@ -235,7 +235,7 @@ describe('helmet is an object of helmet option names, or false', () => {
    * A null that comes from configuration must not silently mean "no header": the protections helmet
    * switches on are refused when set to null, and only an option left out takes its default.
    */
-  it.each(HELMET_OPTION_NAMES)('refuses %s set to null', async (name) => {
+  it.each(HELMET_OPTION_NAMES)('refuses helmet option number %# set to null', async (name) => {
     expect(await refusal({ helmet: { [name]: null } } as never)).toBe(
       `helmet.${name} must not be null: leave it out, or give an object, true or false`
     )

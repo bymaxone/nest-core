@@ -161,7 +161,7 @@ describe('README option tables', () => {
    * The reverse direction: a field the resolver always sets must have a row,
    * apart from the fields that are not consumer options.
    */
-  it.each(Object.keys(RESOLVED))('documents every resolved option of %s', (block) => {
+  it.each(Object.keys(RESOLVED))('documents every resolved option of block number %#', (block) => {
     const resolved = RESOLVED[block]
     const options = isRecord(resolved) ? Object.keys(resolved) : []
     const rows = new Set(documented.filter((row) => row.block === block).map((row) => row.option))

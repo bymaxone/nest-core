@@ -138,7 +138,11 @@ describe('BYMAX_* code literals', () => {
     [BYMAX_GATEWAY_TIMEOUT, 'BYMAX_GATEWAY_TIMEOUT']
   ]
 
-  it.each(literals)('exposes the exact literal "%s"', (actual, expected) => {
+  // The title carries the documented literal of this file, not the constant under test: a mutation of the
+  // constant would otherwise change the name of the test that is meant to catch it.
+  const byLiteral = literals.map(([actual, expected]) => [expected, actual] as const)
+
+  it.each(byLiteral)('exposes the exact literal "%s"', (expected, actual) => {
     // The constant's runtime value must equal its documented string verbatim.
     expect(actual).toBe(expected)
   })
