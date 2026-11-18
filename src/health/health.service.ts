@@ -207,6 +207,13 @@ function describeCause(cause: HealthTransitionCause): string {
   }
 }
 
+/** What the aggregator writes to the log: an event code, a short text, and closed fields. */
+interface HealthLogEntry {
+  readonly event: string
+  readonly message: string
+  readonly check?: string
+}
+
 /**
  * The readiness aggregator. Injected with the health-indicator multi-token
  * and the resolved core options, from which it reads
@@ -346,13 +353,20 @@ export class HealthService implements OnApplicationBootstrap, BeforeApplicationS
         return
       }
       this.describe(
-        `[CORE_HEALTH_RECOVERED] check=${name} The dependency is reachable again`,
+        {
+          event: 'CORE_HEALTH_RECOVERED',
+          message: 'The dependency is reachable again',
+          check: name
+        },
         false
       )
       this.emit({ name, isUp: true })
       return
     }
-    this.describe(`[CORE_HEALTH_DOWN] check=${name} ${describeCause(outcome.cause)}`, true)
+    this.describe(
+      { event: 'CORE_HEALTH_DOWN', message: describeCause(outcome.cause), check: name },
+      true
+    )
     this.emit({ name, isUp: false, cause: outcome.cause })
   }
 
@@ -366,7 +380,7 @@ export class HealthService implements OnApplicationBootstrap, BeforeApplicationS
    * @param message - The line to write.
    * @param isDown - Whether it describes a check going down, which sets the level.
    */
-  private describe(message: string, isDown: boolean): void {
+  private describe(message: HealthLogEntry, isDown: boolean): void {
     if (this.transitionSink !== undefined) {
       return
     }
@@ -390,7 +404,7 @@ export class HealthService implements OnApplicationBootstrap, BeforeApplicationS
    * @param message - The line to write.
    * @param asWarning - Whether to write it at warning level.
    */
-  private writeLine(message: string, asWarning: boolean): void {
+  private writeLine(message: HealthLogEntry, asWarning: boolean): void {
     try {
       if (asWarning) {
         this.logger.warn(message)
@@ -446,7 +460,10 @@ export class HealthService implements OnApplicationBootstrap, BeforeApplicationS
    */
   private reportSinkFailure(error: unknown): void {
     this.writeLine(
-      `[CORE_HEALTH_SINK_FAILED] The transition sink threw and was ignored: ${summarizeRejection(error)}`,
+      {
+        event: 'CORE_HEALTH_SINK_FAILED',
+        message: `The transition sink threw and was ignored: ${summarizeRejection(error)}`
+      },
       true
     )
   }

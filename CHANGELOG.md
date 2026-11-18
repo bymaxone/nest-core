@@ -12,18 +12,20 @@ heading here.
 
 ## [Unreleased]
 
-**Apply to your observability:** every operational log line this package writes now starts with a stable
-event code in square brackets, and a new gauge reports each health check. If you match on the text of a
-line (an alert on `Health check "x" went down`, a log filter), match on the code instead; the codes and
-their fields are listed under **Log events** in the README.
+**Apply to your observability:** every operational log line this package writes is now an object
+message, `{ event: 'CORE_<EVENT>', message, ...fields }`, and a new gauge reports each health check. If you
+match on the text of a line (an alert on `Health check "x" went down`, a log filter), match on `event`
+instead; the codes and their fields are listed under **Log events** in the README.
+`@bymax-one/nest-logger` 1.4.23 or later writes the object as structured fields; another logger receives
+the object as it is.
 
-- **Log lines carry an event code**, followed by `key=value` fields and the text: `[CORE_HEALTH_DOWN]`
-  `check=<name>`, `[CORE_HEALTH_RECOVERED]`, `[CORE_HEALTH_SINK_FAILED]`, `[CORE_HANDLER_LATE_ERROR]`,
-  `[CORE_SHUTDOWN_DEADLINE]` `deadlineMs=`, `[CORE_METRICS_SCRAPE_SLOW]` `timeoutMs=`,
-  `[CORE_METRICS_CONTRIBUTORS]` `contributors=`, `[CORE_OPENAPI_SERVED]`,
-  `[CORE_OPENAPI_PRODUCTION_REFUSED]`, `[CORE_OPENAPI_UNSECURED]` `operations=` and
-  `[CORE_OPENAPI_COMPONENT_CONFLICT]` `components=`. The wording after the code changed where a field
-  now carries a number (the slow-scrape and shutdown lines no longer repeat it in the sentence).
+- **Log lines are object messages with an `event` code** and closed or numeric fields: `CORE_HEALTH_DOWN`
+  (`check`), `CORE_HEALTH_RECOVERED` (`check`), `CORE_HEALTH_SINK_FAILED`, `CORE_HANDLER_LATE_ERROR`,
+  `CORE_SHUTDOWN_DEADLINE` (`deadlineMs`), `CORE_METRICS_SCRAPE_SLOW` (`timeoutMs`),
+  `CORE_METRICS_CONTRIBUTORS` (`contributors`, `labels`), `CORE_OPENAPI_SERVED` (`path`, `jsonPath`),
+  `CORE_OPENAPI_PRODUCTION_REFUSED`, `CORE_OPENAPI_UNSECURED` (`operations`) and
+  `CORE_OPENAPI_COMPONENT_CONFLICT` (`components`). The text moved into `message`, and where a field now
+  carries a number the sentence no longer repeats it.
 - **`bymax_core_health_status{indicator}`**, a gauge, `1` while a health check's dependency is up and `0`
   while it is down, one series per check, set each time readiness observes it (so a check that is up
   reads `1` from its first probe). It exists only when `metrics` and `health` are both enabled; with

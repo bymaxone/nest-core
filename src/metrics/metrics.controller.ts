@@ -105,9 +105,11 @@ function bearerMatches(authorization: unknown, expected: string): boolean {
  */
 function newScrapeRun(scrapeTimeoutMs: number): ScrapeRun {
   return new ScrapeRun(scrapeTimeoutMs, () => {
-    new Logger('MetricsController').warn(
-      `[CORE_METRICS_SCRAPE_SLOW] timeoutMs=${scrapeTimeoutMs} Metrics collection is past the bound: scrapes answer 503 until it finishes`
-    )
+    new Logger('MetricsController').warn({
+      event: 'CORE_METRICS_SCRAPE_SLOW',
+      message: 'Metrics collection is past its bound: scrapes answer 503 until it finishes',
+      timeoutMs: scrapeTimeoutMs
+    })
   })
 }
 

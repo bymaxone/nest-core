@@ -157,11 +157,12 @@ export class MetricsContributionRunner implements OnApplicationBootstrap {
     const contributors = discoverContributors(this.discovery, this.reflector)
     applyContributions(contributors, this.registry)
     if (contributors.length > 0) {
-      this.logger.log(
-        `[CORE_METRICS_CONTRIBUTORS] contributors=${contributors.length} Registered metrics from: ${contributors
-          .map(({ label }) => label)
-          .join(', ')}`
-      )
+      this.logger.log({
+        event: 'CORE_METRICS_CONTRIBUTORS',
+        message: 'Registered metrics from contributors',
+        contributors: contributors.length,
+        labels: contributors.map(({ label }) => label).join(', ')
+      })
     }
   }
 }

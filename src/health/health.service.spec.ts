@@ -299,9 +299,11 @@ describe('HealthService', () => {
 
     await service.checkReadiness()
 
-    expect(warn).toHaveBeenCalledWith(
-      '[CORE_HEALTH_DOWN] check=database the indicator rejected: connection refused'
-    )
+    expect(warn).toHaveBeenCalledWith({
+      event: 'CORE_HEALTH_DOWN',
+      message: 'the indicator rejected: connection refused',
+      check: 'database'
+    })
     warn.mockRestore()
   })
 

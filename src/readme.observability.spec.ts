@@ -27,10 +27,10 @@ const SOURCE = sourceFiles(join(ROOT, 'src'))
 
 describe('the log-event catalog', () => {
   const written = new Set(
-    [...SOURCE.matchAll(/\[(CORE_[A-Z_]+)\]/g)].map((match) => match[1] as string)
+    [...SOURCE.matchAll(/event: '(CORE_[A-Z_]+)'/g)].map((match) => match[1] as string)
   )
   const listed = new Set(
-    [...README.matchAll(/`\[(CORE_[A-Z_]+)\]`/g)].map((match) => match[1] as string)
+    [...README.matchAll(/`(CORE_[A-Z_]+)`/g)].map((match) => match[1] as string)
   )
 
   it('names every code the source writes', () => {

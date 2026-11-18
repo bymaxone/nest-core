@@ -53,7 +53,12 @@ describe('shutdown deadline', () => {
     expect(exit).toHaveBeenCalledTimes(1)
     expect(exit).toHaveBeenCalledWith(1)
     expect(error).toHaveBeenCalledTimes(1)
-    expect(String(error.mock.calls[0]?.[0])).toContain('deadlineMs=5000')
+    expect(error.mock.calls[0]?.[0]).toEqual({
+      event: 'CORE_SHUTDOWN_DEADLINE',
+      message:
+        'Shutdown did not finish in time; exiting with code 1. Something still holds the process open.',
+      deadlineMs: 5000
+    })
     jest.advanceTimersByTime(60_000)
     expect(exit).toHaveBeenCalledTimes(1)
   })

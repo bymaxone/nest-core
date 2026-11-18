@@ -288,14 +288,17 @@ function warnUnsecuredOperations(logger: Logger, keys: readonly string[]): void 
   // Consequence first, cause second: the sentence that makes someone act is
   // what a client generated from this document will do, and a line read while
   // scrolling past a boot log is read from the front.
-  logger.warn(
-    `[CORE_OPENAPI_UNSECURED] operations=${keys.length} a client generated from the OpenAPI document will send no credentials to ${keys.length} ` +
+  logger.warn({
+    event: 'CORE_OPENAPI_UNSECURED',
+    operations: keys.length,
+    message:
+      `a client generated from the OpenAPI document will send no credentials to ${keys.length} ` +
       `operation(s): ${listed}${elided > 0 ? `, and ${elided} more` : ''}. They state no security ` +
       'requirement, the document declares no default, and other operations in it do state one — ' +
       'so this is more often a missing openapi.security default than a public API. Set ' +
       'openapi.security, or state the intent per operation with an explicit [] in ' +
       'openapi.operationSecurity.'
-  )
+  })
 }
 
 /**
@@ -334,14 +337,17 @@ function warnDiscardedComponents(logger: Logger, discarded: readonly DiscardedCo
   // that won. The merge runs the document, then this package's catalogue, then
   // the consumer's configuration, then contributors in label order — so "remove
   // your local definition" is advice that does not always have a referent.
-  logger.warn(
-    `[CORE_OPENAPI_COMPONENT_CONFLICT] components=${discarded.length} the served OpenAPI document already defines ${discarded.length} component entry(ies) a ` +
+  logger.warn({
+    event: 'CORE_OPENAPI_COMPONENT_CONFLICT',
+    components: discarded.length,
+    message:
+      `the served OpenAPI document already defines ${discarded.length} component entry(ies) a ` +
       `library also contributes: ${listed}${elided > 0 ? `, and ${elided} more` : ''}. The ` +
       'contributed version is not served, so where the two differ a client generated from this ' +
       "document will not match that library's own types. What holds the name may be the application's own " +
       'declaration, a core schema under openapi.includeCoreSchemas, or a contributor that ' +
       'sorted earlier — read the document before deciding what to remove.'
-  )
+  })
 }
 
 /**
@@ -360,6 +366,16 @@ function buildConfig(
     builder.addServer(server.url, server.description)
   }
   return builder.build()
+}
+
+/** Log that the document is up, and where: the only feedback a developer gets that it is. */
+function logServed(logger: Logger, options: ResolvedOpenApiOptions): void {
+  logger.log({
+    event: 'CORE_OPENAPI_SERVED',
+    message: 'OpenAPI document served',
+    path: options.path,
+    jsonPath: options.jsonPath
+  })
 }
 
 /**
@@ -405,10 +421,12 @@ export async function applyBymaxOpenApi(app: INestApplication): Promise<OpenApiM
     // Warn only when the operator actually asked for the document: an
     // application that never enabled it should boot silently.
     if (options.suppressedInProduction || options.enabled) {
-      logger.warn(
-        '[CORE_OPENAPI_PRODUCTION_REFUSED] openapi.enabled was requested but the OpenAPI document is never served in production. ' +
+      logger.warn({
+        event: 'CORE_OPENAPI_PRODUCTION_REFUSED',
+        message:
+          'openapi.enabled was requested but the OpenAPI document is never served in production. ' +
           'Set NODE_ENV to "development" or "test" to serve it.'
-      )
+      })
     }
     return { mounted: false, reason: 'production' }
   }
@@ -440,8 +458,6 @@ export async function applyBymaxOpenApi(app: INestApplication): Promise<OpenApiM
   swagger.SwaggerModule.setup(options.path, app, document, {
     jsonDocumentUrl: options.jsonPath
   })
-  logger.log(
-    `[CORE_OPENAPI_SERVED] OpenAPI document served at "/${options.path}" (JSON at "/${options.jsonPath}")`
-  )
+  logServed(logger, options)
   return { mounted: true, path: options.path, discarded }
 }
