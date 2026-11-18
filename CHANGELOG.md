@@ -52,8 +52,7 @@ can fail to boot for one of these.
   non-empty `openIdConnectUrl`, as the specification requires; `mutualTLS` is accepted as it is.
 - **A `Date`, `Map`, `Set`, `RegExp`, `Promise`, `Error` or any other built-in object is refused where a
   block is expected** (the options object, any block, `bodyLimit`, `cors`, `helmet`, `openapi` blocks,
-  `metrics.defaultLabels`); it used to be accepted as an empty block. The refusal names the built-in
-  (`received a Date`), where it used to say `an object`.
+  `metrics.defaultLabels`); it used to be accepted as an empty block. The refusal names the built-in (`received a Date`).
 - **`metrics.defaultLabels` refuses reserved names:** a name starting with `__`, or one of `le`,
   `quantile`, `method`, `route` or `status_code`.
 - The late-error log of a handler that threw after its `504` carries the handler's own error message;
