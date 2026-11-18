@@ -256,7 +256,7 @@ const HELMET_SWITCHES: readonly string[] = [
  */
 function assertHelmetOption(name: string, value: unknown): void {
   if (HELMET_SWITCHES.includes(name)) {
-    booleanOption(`helmet.${name}`, value, false)
+    if (typeof value !== 'boolean') throw refusal(`helmet.${name}`, 'true or false', value)
   } else if (typeof value !== 'boolean' && !isPlainRecord(value)) {
     throw refusal(`helmet.${name}`, 'an object, true or false', value)
   }

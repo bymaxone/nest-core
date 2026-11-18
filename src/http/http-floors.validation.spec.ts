@@ -275,7 +275,10 @@ describe('helmet options are checked by type, and helmet never has the last word
     'noSniff',
     'xContentTypeOptions',
     'originAgentCluster',
-    'xssFilter'
+    'xssFilter',
+    'ieNoOpen',
+    'xDownloadOptions',
+    'xXssProtection'
   ])('%s takes only true or false', async (name) => {
     for (const value of [{}, 'x', 1, []]) {
       expect(await refusal({ helmet: { [name]: value } } as never)).toContain(

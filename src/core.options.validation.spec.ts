@@ -298,7 +298,9 @@ describe('a built-in object is not a block', () => {
     ['a Date', new Date()],
     ['a Map', new Map()],
     ['a Set', new Set()],
-    ['a RegExp', /x/]
+    ['a RegExp', /x/],
+    ['a Promise', Promise.resolve()],
+    ['an Error', new Error('x')]
   ])('refuses %s given as a block, naming what it is', (_name, value) => {
     const kind = Object.prototype.toString.call(value).slice(8, -1)
     expect(refusal({ envelope: value } as never)).toBe(
