@@ -32,14 +32,18 @@ describe('core DI tokens', () => {
     [BYMAX_TRACE_CONTEXT, '@bymax-one/nest-core:trace-context']
   ]
 
-  it.each(tokens)('exposes %s under its own registry key', (token, key) => {
+  // The title names the documented key, a literal of this file, and not the token: a token's own text
+  // is its registry key, which a mutation of the source would change in the test's name.
+  const byKey = tokens.map(([token, key]) => [key, token] as const)
+
+  it.each(byKey)('exposes the token of %s under its own registry key', (key, token) => {
     // A Symbol token cannot collide with a consumer's string token and keeps
     // injection sites explicit and self-documenting.
     expect(typeof token).toBe('symbol')
     expect(token.description).toBe(key)
   })
 
-  it.each(tokens)('resolves %s through the global symbol registry', (token, key) => {
+  it.each(byKey)('resolves the token of %s through the global symbol registry', (key, token) => {
     // The identity check that the per-subpath bundles depend on: this file is
     // inlined into every published bundle, so a `Symbol()` token would mint a
     // separate identity per bundle and a provider registered from the package
