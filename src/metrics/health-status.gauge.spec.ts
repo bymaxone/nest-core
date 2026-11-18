@@ -18,6 +18,7 @@ import { normalizeCoreOptions } from '../core.options'
 import type { BymaxCoreModuleOptions } from '../core.options'
 import { BYMAX_HEALTH_INDICATORS } from '../core.tokens'
 import type { IHealthIndicator } from '../health/health.interfaces'
+import { BYMAX_HEALTH_STATUS_RECORDER } from '../health/health.status-recorder'
 import {
   HealthStatusGauge,
   HEALTH_STATUS_METRIC,
@@ -169,5 +170,20 @@ describe.each([
     app = await boot(optionsFor(false), [new SwitchableIndicator('db')], asyncPath)
     await request(app.getHttpServer()).get('/health/ready').expect(200)
     await request(app.getHttpServer()).get('/metrics').expect(404)
+  })
+})
+
+describe('the recorder provider on the sync path', () => {
+  /** Whether the module definition binds the recorder token. */
+  function bindsRecorder(options: BymaxCoreModuleOptions): boolean {
+    return (BymaxCoreModule.forRoot(options).providers ?? []).some(
+      (provider) => (provider as { provide?: unknown }).provide === BYMAX_HEALTH_STATUS_RECORDER
+    )
+  }
+
+  it('is registered only when metrics and health are both on', () => {
+    expect(bindsRecorder({ metrics: { enabled: true }, health: { enabled: true } })).toBe(true)
+    expect(bindsRecorder({ metrics: { enabled: true }, health: { enabled: false } })).toBe(false)
+    expect(bindsRecorder({ metrics: { enabled: false }, health: { enabled: true } })).toBe(false)
   })
 })
