@@ -274,7 +274,9 @@ describe('handler timeout, an error after the 504', () => {
     try {
       expect((await request(server()).post('/t/late-error')).status).toBe(504)
       await sleep(250)
-      expect(logged.mock.calls.map((call) => String(call[0])).join('\n')).toContain('late boom')
+      expect(logged.mock.calls.map((call) => JSON.stringify(call[0])).join('\n')).toContain(
+        'late boom'
+      )
     } finally {
       logged.mockRestore()
     }

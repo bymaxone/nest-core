@@ -349,7 +349,11 @@ describe('createMetricsController, scrape deadline', () => {
     await Promise.allSettled([controller.scrape({})])
 
     expect(warn).toHaveBeenCalledTimes(1)
-    expect(warn).toHaveBeenCalledWith(expect.stringContaining('2000 ms'))
+    expect(warn).toHaveBeenCalledWith({
+      event: 'CORE_METRICS_SCRAPE_SLOW',
+      message: 'Metrics collection is past its bound: scrapes answer 503 until it finishes',
+      timeoutMs: 2000
+    })
     expect((warn.mock.contexts[0] as { context?: string }).context).toBe('MetricsController')
   })
 

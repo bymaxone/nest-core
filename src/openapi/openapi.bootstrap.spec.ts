@@ -49,17 +49,24 @@ function operationIdsOf(document: unknown): readonly string[] {
 }
 
 /** The exact warning emitted when production refuses a requested document. */
-const PRODUCTION_WARNING =
-  'openapi.enabled was requested but the OpenAPI document is never served in production. ' +
-  'Set NODE_ENV to "development" or "test" to serve it.'
+const PRODUCTION_WARNING = {
+  event: 'CORE_OPENAPI_PRODUCTION_REFUSED',
+  message:
+    'openapi.enabled was requested but the OpenAPI document is never served in production. ' +
+    'Set NODE_ENV to "development" or "test" to serve it.'
+}
 
 /** The exact warning emitted for a single operation left requiring nothing. */
-const UNSECURED_WARNING =
-  'a client generated from the OpenAPI document will send no credentials to 1 operation(s): ' +
-  'GET /examples. They state no security requirement, the document declares no default, and ' +
-  'other operations in it do state one — so this is more often a missing openapi.security ' +
-  'default than a public API. Set openapi.security, or state the intent per operation with an ' +
-  'explicit [] in openapi.operationSecurity.'
+const UNSECURED_WARNING = {
+  event: 'CORE_OPENAPI_UNSECURED',
+  operations: 1,
+  message:
+    'a client generated from the OpenAPI document will send no credentials to 1 operation(s): ' +
+    'GET /examples. They state no security requirement, the document declares no default, and ' +
+    'other operations in it do state one — so this is more often a missing openapi.security ' +
+    'default than a public API. Set openapi.security, or state the intent per operation with an ' +
+    'explicit [] in openapi.operationSecurity.'
+}
 
 /** The exact guidance thrown when the core options cannot be resolved. */
 const UNRESOLVED_GUIDANCE =
@@ -174,7 +181,12 @@ describe('applyBymaxOpenApi', () => {
     // The log line names both served routes under this package's context: it is
     // the only feedback a developer gets that the document is up, and where.
     expect(logged.log).toHaveBeenCalledWith(
-      'OpenAPI document served at "/reference" (JSON at "/docs-json")',
+      {
+        event: 'CORE_OPENAPI_SERVED',
+        message: 'OpenAPI document served',
+        path: 'reference',
+        jsonPath: 'docs-json'
+      },
       LOG_CONTEXT
     )
   })
@@ -629,7 +641,7 @@ describe('applyBymaxOpenApi', () => {
 
     await applyBymaxOpenApi(app)
 
-    const [message] = (logged.warn as jest.Mock).mock.calls[0] as [string]
+    const [{ message }] = (logged.warn as jest.Mock).mock.calls[0] as [{ message: string }]
     expect(message).toContain('will send no credentials to 11 operation(s)')
     expect(message).toContain('GET /bulk/r1, GET /bulk/r2')
     expect(message).toContain('GET /bulk/r10, and 1 more.')
@@ -653,7 +665,7 @@ describe('applyBymaxOpenApi', () => {
 
     await applyBymaxOpenApi(app)
 
-    const [message] = (logged.warn as jest.Mock).mock.calls[0] as [string]
+    const [{ message }] = (logged.warn as jest.Mock).mock.calls[0] as [{ message: string }]
     expect(message).toContain('will send no credentials to 10 operation(s)')
     expect(message).toContain('GET /bulk/r10. They state no security requirement')
     expect(message).not.toContain(', and 0 more')

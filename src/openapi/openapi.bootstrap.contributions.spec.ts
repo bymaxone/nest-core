@@ -18,12 +18,16 @@ import { applyBymaxOpenApi } from './openapi.bootstrap'
 import { bootApp, ExampleController, logged, LOG_CONTEXT } from './__tests__/bootstrap.harness'
 
 /** The exact warning emitted for a single contributed entry the document keeps. */
-const DISCARDED_WARNING =
-  'the served OpenAPI document already defines 1 component entry(ies) a library also contributes: ' +
-  'CollidingOpenApi -> securitySchemes.cookieAuth. The contributed version is not served, so where ' +
-  "the two differ a client generated from this document will not match that library's own types. What holds the " +
-  "name may be the application's own declaration, a core schema under openapi.includeCoreSchemas, " +
-  'or a contributor that sorted earlier — read the document before deciding what to remove.'
+const DISCARDED_WARNING = {
+  event: 'CORE_OPENAPI_COMPONENT_CONFLICT',
+  components: 1,
+  message:
+    'the served OpenAPI document already defines 1 component entry(ies) a library also contributes: ' +
+    'CollidingOpenApi -> securitySchemes.cookieAuth. The contributed version is not served, so where ' +
+    "the two differ a client generated from this document will not match that library's own types. What holds the " +
+    "name may be the application's own declaration, a core schema under openapi.includeCoreSchemas, " +
+    'or a contributor that sorted earlier — read the document before deciding what to remove.'
+}
 
 /** A library contributing one scheme under a name the application already declares. */
 @BymaxOpenApiContributor()
@@ -104,9 +108,12 @@ const ELEVEN_SCHEMES = Object.fromEntries(
  */
 function discardWarning(): string {
   const call = logged.warn.mock.calls.find(
-    ([message]) => typeof message === 'string' && message.includes('component entry(ies)')
+    ([entry]) =>
+      typeof entry === 'object' &&
+      entry !== null &&
+      String((entry as { message?: unknown }).message).includes('component entry(ies)')
   )
-  return call === undefined ? '' : String(call[0])
+  return call === undefined ? '' : String((call[0] as { message: string }).message)
 }
 
 describe('applyBymaxOpenApi — contributed component collisions', () => {

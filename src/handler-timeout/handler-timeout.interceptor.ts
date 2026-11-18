@@ -113,7 +113,11 @@ export class BymaxHandlerTimeoutInterceptor implements NestInterceptor {
       error: (error: unknown): void => {
         release()
         if (!expired()) subscriber.error(error)
-        else this.logger.error(this.afterTheBound(error))
+        else
+          this.logger.error({
+            event: 'CORE_HANDLER_LATE_ERROR',
+            message: this.afterTheBound(error)
+          })
       },
       complete: (): void => {
         release()

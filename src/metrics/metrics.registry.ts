@@ -33,6 +33,10 @@ export interface PromClientModule {
   readonly Histogram: new <T extends string>(
     configuration: PromClient.HistogramConfiguration<T>
   ) => PromClient.Histogram<T>
+  /** The gauge constructor, used by the health-status gauge. */
+  readonly Gauge: new <T extends string>(
+    configuration: PromClient.GaugeConfiguration<T>
+  ) => PromClient.Gauge<T>
   /** Wire process CPU, memory, and event-loop metrics against a registry. */
   readonly collectDefaultMetrics: (
     config?: PromClient.DefaultMetricsCollectorConfiguration<PromClient.PrometheusContentType>

@@ -76,9 +76,12 @@ export class BymaxShutdownDeadline
     if (deadlineMs === undefined || this.armed) return
     this.armed = true
     setTimeout(() => {
-      this.logger.error(
-        `Shutdown did not finish within ${deadlineMs}ms; exiting with code 1. Something still holds the process open.`
-      )
+      this.logger.error({
+        event: 'CORE_SHUTDOWN_DEADLINE',
+        message:
+          'Shutdown did not finish in time; exiting with code 1. Something still holds the process open.',
+        deadlineMs
+      })
       process.exit(1)
     }, deadlineMs).unref()
   }

@@ -305,14 +305,14 @@ describe('handler timeout interceptor, what the handler does around the bound', 
     observe(second)
     jest.advanceTimersByTime(1_000)
     second.error('a plain string')
-    expect(logged).toHaveBeenNthCalledWith(
-      1,
-      'A handler threw after its request was answered 504: after the bound'
-    )
-    expect(logged).toHaveBeenNthCalledWith(
-      2,
-      'A handler threw after its request was answered 504: a plain string'
-    )
+    expect(logged).toHaveBeenNthCalledWith(1, {
+      event: 'CORE_HANDLER_LATE_ERROR',
+      message: 'A handler threw after its request was answered 504: after the bound'
+    })
+    expect(logged).toHaveBeenNthCalledWith(2, {
+      event: 'CORE_HANDLER_LATE_ERROR',
+      message: 'A handler threw after its request was answered 504: a plain string'
+    })
   })
 
   /**
