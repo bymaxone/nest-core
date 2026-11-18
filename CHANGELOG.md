@@ -12,6 +12,12 @@ heading here.
 
 ## [Unreleased]
 
+## [1.6.15] - 2026-11-18
+
+A patch release. Every health check has a gauge, every operational log line is an object message with an
+event code, and the option checks go a little further: `helmet` values are typed, `openapi` schemes need
+the fields the specification requires, and a built-in object is not accepted as a block.
+
 **Apply to your observability:** every operational log line this package writes is now an object
 message, `{ event: 'CORE_<EVENT>', message, ...fields }`, and a new gauge reports each health check. If you
 match on the text of a line (an alert on `Health check "x" went down`, a log filter), match on `event`
@@ -1679,4 +1685,5 @@ have regressed from. They are kept because the reasoning is worth having.
 [1.6.10]: https://github.com/bymaxone/nest-core/compare/v1.6.9...v1.6.10
 [1.6.13]: https://github.com/bymaxone/nest-core/compare/v1.6.10...v1.6.13
 [1.6.14]: https://github.com/bymaxone/nest-core/compare/v1.6.13...v1.6.14
-[Unreleased]: https://github.com/bymaxone/nest-core/compare/v1.6.14...HEAD
+[1.6.15]: https://github.com/bymaxone/nest-core/compare/v1.6.14...v1.6.15
+[Unreleased]: https://github.com/bymaxone/nest-core/compare/v1.6.15...HEAD
