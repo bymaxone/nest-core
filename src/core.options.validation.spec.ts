@@ -275,3 +275,38 @@ describe('the health block', () => {
     expect(refusal(given('health', 'readinessCacheMs', SECRET))).toContain('received a string')
   })
 })
+
+describe('metrics.defaultLabels reserved names', () => {
+  it.each(['__name__', '__x', 'le', 'quantile', 'method', 'route', 'status_code'])(
+    'refuses the reserved label name %s',
+    (name) => {
+      expect(refusal(given('metrics', 'defaultLabels', { [name]: 'v' }))).toBe(
+        'metrics.defaultLabels has a reserved label name'
+      )
+    }
+  )
+
+  it('accepts a name that merely contains a reserved one', () => {
+    expect(
+      refusal(given('metrics', 'defaultLabels', { route_group: 'v', mle: 'v' }))
+    ).toBeUndefined()
+  })
+})
+
+describe('a built-in object is not a block', () => {
+  it.each([
+    ['a Date', new Date()],
+    ['a Map', new Map()],
+    ['a Set', new Set()],
+    ['a RegExp', /x/]
+  ])('refuses %s given as a block, naming what it is', (_name, value) => {
+    const kind = Object.prototype.toString.call(value).slice(8, -1)
+    expect(refusal({ envelope: value } as never)).toBe(
+      `envelope must be an object, received a ${kind}`
+    )
+  })
+
+  it('refuses one as the options object', () => {
+    expect(refusal(new Date() as never)).toBe('options must be an object, received a Date')
+  })
+})

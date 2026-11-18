@@ -12,6 +12,23 @@ heading here.
 
 ## [Unreleased]
 
+**Apply to a derived backend:** options are checked a little further, and a configuration that booted
+can fail to boot for one of these.
+
+- **`helmet` options are checked by type.** A switch (`xPoweredBy`, `hidePoweredBy`, `noSniff`,
+  `xContentTypeOptions`, `ieNoOpen`, `xDownloadOptions`, `originAgentCluster`, `xXssProtection`,
+  `xssFilter`) must be `true` or `false`; any other option must be `true`, `false` or an object. A value
+  `helmet` itself refuses inside an object is reported as `helmet refused its <option> option`, without
+  the value: `helmet` quotes it, and it may be a secret.
+- **`openapi` security schemes:** `oauth2` needs `flows` (an object) and `openIdConnect` needs a
+  non-empty `openIdConnectUrl`, as the specification requires; `mutualTLS` is accepted as it is.
+- **A `Date`, `Map`, `Set` or `RegExp` is refused where a block is expected** (the options object, any
+  block, `bodyLimit`, `cors`, `helmet`); it used to be accepted as an empty block.
+- **`metrics.defaultLabels` refuses reserved names:** a name starting with `__`, `le`, `quantile`,
+  `method`, `route` or `status_code`.
+- The late-error log of a handler that threw after its `504` carries the handler's own error message;
+  the README now says so.
+
 ## [1.6.14] - 2026-11-17
 
 A patch release. Every option of every block is checked at boot, so a configuration that was silently

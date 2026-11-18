@@ -5,6 +5,9 @@
  * @layer Configuration
  */
 
+/** The built-in objects that are named when one is given where a block was expected. */
+const BUILT_IN_OBJECTS = ['Date', 'Map', 'Set', 'RegExp', 'Promise', 'Error']
+
 /** The longest an unknown option's name is shown, so a hostile key cannot fill a log line. */
 const MAX_KEY_SHOWN = 40
 
@@ -19,7 +22,11 @@ export function describeValue(value: unknown): string {
   if (typeof value === 'number') return String(value)
   if (value === null || value === undefined) return String(value)
   if (Array.isArray(value)) return 'an array'
-  return `${typeof value === 'object' ? 'an' : 'a'} ${typeof value}`
+  if (typeof value === 'object') {
+    const tag = Object.prototype.toString.call(value).slice(8, -1)
+    return BUILT_IN_OBJECTS.includes(tag) ? `a ${tag}` : 'an object'
+  }
+  return `a ${typeof value}`
 }
 
 /** The error a refused option throws: `<name> must be <expected>, received <type>`. */
@@ -69,7 +76,9 @@ export function checkedBlock<T extends object>(
   known: Readonly<Record<string, unknown>>
 ): T | undefined {
   if (raw === undefined || raw === null) return undefined
-  if (typeof raw !== 'object' || Array.isArray(raw)) throw refusal(name, 'an object', raw)
+  if (typeof raw !== 'object' || Object.prototype.toString.call(raw) !== '[object Object]') {
+    throw refusal(name, 'an object', raw)
+  }
   const stray = Object.keys(raw).find((key) => !Object.hasOwn(known, key))
   if (stray !== undefined) {
     const shown = stray.length > MAX_KEY_SHOWN ? `${stray.slice(0, MAX_KEY_SHOWN)}…` : stray

@@ -249,3 +249,39 @@ describe('openapi refusals carry exact messages', () => {
     expect(refusal(openapi)).toBe(message)
   })
 })
+
+describe('openapi schemes that the specification requires more of', () => {
+  it.each([
+    [
+      'oauth2 with no flows',
+      { type: 'oauth2' },
+      'openapi.securitySchemes.a.flows must be an object, received undefined'
+    ],
+    [
+      'oauth2 with flows that are a number',
+      { type: 'oauth2', flows: 5 },
+      'openapi.securitySchemes.a.flows must be an object, received 5'
+    ],
+    [
+      'oauth2 with flows that are a list',
+      { type: 'oauth2', flows: [] },
+      'openapi.securitySchemes.a.flows must be an object, received an array'
+    ],
+    [
+      'openIdConnect with no url',
+      { type: 'openIdConnect' },
+      'openapi.securitySchemes.a.openIdConnectUrl must be a non-empty string, received undefined'
+    ],
+    [
+      'openIdConnect with an empty url',
+      { type: 'openIdConnect', openIdConnectUrl: '' },
+      'openapi.securitySchemes.a.openIdConnectUrl must be a non-empty string, received a string'
+    ]
+  ])('refuses %s', (_name, scheme, message) => {
+    expect(refusal({ securitySchemes: { a: scheme } })).toBe(message)
+  })
+
+  it('accepts mutualTLS, which the specification gives no more fields', () => {
+    expect(refusal({ securitySchemes: { a: { type: 'mutualTLS' } } })).toBeUndefined()
+  })
+})

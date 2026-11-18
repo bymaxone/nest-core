@@ -78,6 +78,13 @@ function assertScheme(name: string, scheme: unknown): void {
   ) {
     throw refusal(`${name}.scheme`, 'a non-empty string', fields['scheme'])
   }
+  if (fields['type'] === 'oauth2') recordOf(`${name}.flows`, fields['flows'])
+  if (
+    fields['type'] === 'openIdConnect' &&
+    (typeof fields['openIdConnectUrl'] !== 'string' || fields['openIdConnectUrl'] === '')
+  ) {
+    throw refusal(`${name}.openIdConnectUrl`, 'a non-empty string', fields['openIdConnectUrl'])
+  }
   if (fields['type'] === 'apiKey') {
     oneOf(`${name}.in`, fields['in'], KEY_LOCATIONS)
     if (typeof fields['name'] !== 'string' || fields['name'] === '') {
