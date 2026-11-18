@@ -129,13 +129,19 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 // `./http` budget 3.16 KiB = 3236 B: measured 3204 B brotli (raw 11671 B) plus 32 B of headroom. The
 // growth over 2.64 KiB is the same checks applied to `applyHttpFloors`: the option tables, helmet's 22
 // option names, and the type-only refusal messages: code, none of it comment text.
+// Root budget 23.00 KiB = 23552 B: measured 23520 B brotli (raw 102163 B) plus 32 B of headroom. The
+// growth over 22.87 KiB is the type check of `oauth2` and `openIdConnect` schemes, the built-in
+// object check on blocks and the reserved label names: code and refusal messages.
+// `./http` budget 3.49 KiB = 3574 B: measured 3535 B brotli (raw 13255 B) plus 39 B of headroom. The
+// growth over 3.16 KiB is the helmet option types and the refusal that reports the option helmet
+// rejected and not its value: code and messages, none of it comment text.
 const BUDGETS = [
-  { name: '. (root)', path: 'dist/index.mjs', brotli: 22.87 * 1024 },
+  { name: '. (root)', path: 'dist/index.mjs', brotli: 23.0 * 1024 },
   { name: './pagination', path: 'dist/pagination/index.mjs', brotli: 1.5 * 1024 },
   { name: './health', path: 'dist/health/index.mjs', brotli: 0.5 * 1024 },
   { name: './openapi', path: 'dist/openapi/index.mjs', brotli: 7.5 * 1024 },
   { name: './metrics', path: 'dist/metrics/index.mjs', brotli: 0.5 * 1024 },
-  { name: './http', path: 'dist/http/index.mjs', brotli: 3.16 * 1024 }
+  { name: './http', path: 'dist/http/index.mjs', brotli: 3.49 * 1024 }
 ]
 
 const fmt = (n) => `${(n / 1024).toFixed(2)} kB`

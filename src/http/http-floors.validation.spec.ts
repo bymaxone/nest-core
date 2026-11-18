@@ -267,3 +267,71 @@ describe('cors refusals carry exact messages', () => {
     expect(await refusal({ cors } as never)).toBe(message)
   })
 })
+
+describe('helmet options are checked by type, and helmet never has the last word on a value', () => {
+  it.each([
+    'xPoweredBy',
+    'hidePoweredBy',
+    'noSniff',
+    'xContentTypeOptions',
+    'originAgentCluster',
+    'xssFilter',
+    'ieNoOpen',
+    'xDownloadOptions',
+    'xXssProtection'
+  ])('%s takes only true or false', async (name) => {
+    for (const value of [{}, 'x', 1, []]) {
+      expect(await refusal({ helmet: { [name]: value } } as never)).toContain(
+        `helmet.${name} must be true or false, received`
+      )
+    }
+    expect(await refusal({ helmet: { [name]: false } })).toBeUndefined()
+  })
+
+  it.each([
+    'hsts',
+    'strictTransportSecurity',
+    'contentSecurityPolicy',
+    'frameguard',
+    'referrerPolicy'
+  ])(
+    '%s takes true, false or an object, and not a string, a number, a list or a Date',
+    async (name) => {
+      for (const value of ['x', 1, [], new Date(), new Map()]) {
+        expect(await refusal({ helmet: { [name]: value } } as never)).toContain(
+          `helmet.${name} must be an object, true or false, received`
+        )
+      }
+      expect(await refusal({ helmet: { [name]: true } })).toBeUndefined()
+    }
+  )
+
+  it('does not echo a value helmet itself refuses inside an option, and names the option', async () => {
+    const message = await refusal({ helmet: { hsts: { maxAge: SECRET } } } as never)
+    expect(message).toBe(
+      'helmet refused its hsts option; see the helmet documentation for the values it accepts'
+    )
+    expect(message).not.toContain(SECRET)
+  })
+
+  it('names no option when helmet refuses the combination', async () => {
+    const message = await refusal({
+      helmet: { hsts: true, strictTransportSecurity: true }
+    } as never)
+    expect(message).toBe(
+      'helmet refused the options given; see the helmet documentation for the values it accepts'
+    )
+  })
+
+  it('refuses a Date as the helmet block and as bodyLimit and cors', async () => {
+    expect(await refusal({ helmet: new Date() } as never)).toBe(
+      'helmet must be an object or false, received a Date'
+    )
+    expect(await refusal({ bodyLimit: new Date() } as never)).toBe(
+      'bodyLimit must be an object, received a Date'
+    )
+    expect(await refusal({ cors: new Date() } as never)).toBe(
+      'cors must be an object, received a Date'
+    )
+  })
+})

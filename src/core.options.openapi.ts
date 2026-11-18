@@ -13,6 +13,7 @@ import type {
 import {
   booleanOption,
   checkedBlock,
+  isPlainRecord,
   refusal,
   routeOption,
   stringOption
@@ -49,10 +50,8 @@ const OPERATION_KEY = /^(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS|TRACE) \/\S*$/
 
 /** A record that is not an array, or throws. */
 function recordOf(name: string, value: unknown): Record<string, unknown> {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-    throw refusal(name, 'an object', value)
-  }
-  return value as Record<string, unknown>
+  if (!isPlainRecord(value)) throw refusal(name, 'an object', value)
+  return value
 }
 
 /** A list, or throws. */
@@ -77,6 +76,13 @@ function assertScheme(name: string, scheme: unknown): void {
     (typeof fields['scheme'] !== 'string' || fields['scheme'] === '')
   ) {
     throw refusal(`${name}.scheme`, 'a non-empty string', fields['scheme'])
+  }
+  if (fields['type'] === 'oauth2') recordOf(`${name}.flows`, fields['flows'])
+  if (
+    fields['type'] === 'openIdConnect' &&
+    (typeof fields['openIdConnectUrl'] !== 'string' || fields['openIdConnectUrl'] === '')
+  ) {
+    throw refusal(`${name}.openIdConnectUrl`, 'a non-empty string', fields['openIdConnectUrl'])
   }
   if (fields['type'] === 'apiKey') {
     oneOf(`${name}.in`, fields['in'], KEY_LOCATIONS)

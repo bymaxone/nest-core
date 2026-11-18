@@ -275,3 +275,77 @@ describe('the health block', () => {
     expect(refusal(given('health', 'readinessCacheMs', SECRET))).toContain('received a string')
   })
 })
+
+describe('metrics.defaultLabels reserved names', () => {
+  it.each(['__name__', '__x', 'le', 'quantile', 'method', 'route', 'status_code'])(
+    'refuses the reserved label name %s',
+    (name) => {
+      expect(refusal(given('metrics', 'defaultLabels', { [name]: 'v' }))).toBe(
+        'metrics.defaultLabels has a reserved label name'
+      )
+    }
+  )
+
+  it('accepts a name that merely contains a reserved one', () => {
+    expect(
+      refusal(given('metrics', 'defaultLabels', { route_group: 'v', mle: 'v' }))
+    ).toBeUndefined()
+  })
+})
+
+describe('a built-in object is not a block', () => {
+  it.each([
+    ['a Date', new Date()],
+    ['a Map', new Map()],
+    ['a Set', new Set()],
+    ['a RegExp', /x/],
+    ['a Promise', Promise.resolve()],
+    ['an Error', new Error('x')]
+  ])('refuses %s given as a block, naming what it is', (_name, value) => {
+    const kind = Object.prototype.toString.call(value).slice(8, -1)
+    expect(refusal({ envelope: value } as never)).toBe(
+      `envelope must be an object, received a ${kind}`
+    )
+  })
+
+  it('refuses one as the options object', () => {
+    expect(refusal(new Date() as never)).toBe('options must be an object, received a Date')
+  })
+})
+
+describe('a built-in object is not a record anywhere one is expected', () => {
+  it.each([
+    [
+      'metrics.defaultLabels',
+      () => given('metrics', 'defaultLabels', new Date()),
+      'metrics.defaultLabels must be an object, received a Date'
+    ],
+    [
+      'openapi.securitySchemes',
+      () => given('openapi', 'securitySchemes', new Map()),
+      'openapi.securitySchemes must be an object, received a Map'
+    ],
+    [
+      'an openapi scheme',
+      () => given('openapi', 'securitySchemes', { a: new Set() }),
+      'openapi.securitySchemes.a must be an object, received a Set'
+    ],
+    [
+      'oauth2 flows',
+      () => given('openapi', 'securitySchemes', { a: { type: 'oauth2', flows: new Date() } }),
+      'openapi.securitySchemes.a.flows must be an object, received a Date'
+    ],
+    [
+      'a requirement',
+      () => given('openapi', 'security', [/x/]),
+      'openapi.security[0] must be an object, received a RegExp'
+    ],
+    [
+      'operationSecurity',
+      () => given('openapi', 'operationSecurity', new Date()),
+      'openapi.operationSecurity must be an object, received a Date'
+    ]
+  ])('%s', (_name, build, message) => {
+    expect(refusal(build())).toBe(message)
+  })
+})

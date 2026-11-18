@@ -14,11 +14,18 @@
  */
 import type { INestApplication } from '@nestjs/common'
 
-import { checkedBlock, describeValue, refusal } from '../option-validation'
+import {
+  booleanOption,
+  checkedBlock,
+  describeValue,
+  isPlainRecord,
+  refusal
+} from '../option-validation'
 import { MAX_TIMER_DELAY_MS, positiveSafeInteger } from '../positive-integer'
 import { resolveCors } from './http-floors.cors'
 import type { HttpFloorsCorsOptions } from './http-floors.cors'
 import { loadHelmet } from './http.loader'
+import type { HelmetFactory } from './http.loader'
 
 /** Longest a client may take to send its complete header block. */
 const DEFAULT_HEADERS_TIMEOUT_MS = 15_000
@@ -212,9 +219,7 @@ export const HELMET_OPTION_NAMES: readonly string[] = [
 function resolveHelmet(given: unknown): Record<string, unknown> | false {
   if (given === false) return false
   if (given === undefined || given === null) return {}
-  if (typeof given !== 'object' || Array.isArray(given)) {
-    throw refusal('helmet', 'an object or false', given)
-  }
+  if (!isPlainRecord(given)) throw refusal('helmet', 'an object or false', given)
   checkedBlock('helmet', given, Object.fromEntries(HELMET_OPTION_NAMES.map((name) => [name, 0])))
   return Object.fromEntries(
     HELMET_OPTION_NAMES.flatMap((name) => {
@@ -224,9 +229,65 @@ function resolveHelmet(given: unknown): Record<string, unknown> | false {
           `helmet.${name} must not be null: leave it out, or give an object, true or false`
         )
       }
-      return value === undefined ? [] : [[name, value]]
+      if (value === undefined) return []
+      assertHelmetOption(name, value)
+      return [[name, value]]
     })
   )
+}
+
+/** The helmet options that are switches and take no settings, aliases included. */
+const HELMET_SWITCHES: readonly string[] = [
+  'hidePoweredBy',
+  'ieNoOpen',
+  'noSniff',
+  'originAgentCluster',
+  'xContentTypeOptions',
+  'xDownloadOptions',
+  'xPoweredBy',
+  'xXssProtection',
+  'xssFilter'
+]
+
+/**
+ * Throws unless a helmet option has the type helmet documents for it: a switch is `true` or `false`,
+ * and any other takes those or an object of settings. What is inside an object is `helmet`'s to
+ * check; see {@link helmetOrRefusal}.
+ */
+function assertHelmetOption(name: string, value: unknown): void {
+  if (HELMET_SWITCHES.includes(name)) {
+    if (typeof value !== 'boolean') throw refusal(`helmet.${name}`, 'true or false', value)
+  } else if (typeof value !== 'boolean' && !isPlainRecord(value)) {
+    throw refusal(`helmet.${name}`, 'an object, true or false', value)
+  }
+}
+
+/**
+ * Build the helmet middleware, with a refusal of its own in place of `helmet`'s: `helmet` quotes the
+ * value it refuses, which may be a secret, so the option is found by trying each on its own and only
+ * its name is reported.
+ */
+function helmetOrRefusal(
+  helmet: HelmetFactory,
+  options: Record<string, unknown>
+): ReturnType<HelmetFactory> {
+  try {
+    return helmet(options)
+  } catch {
+    const culprit = Object.entries(options).find(([name, value]) => {
+      try {
+        helmet({ [name]: value })
+        return false
+      } catch {
+        return true
+      }
+    })
+    throw new Error(
+      culprit === undefined
+        ? 'helmet refused the options given; see the helmet documentation for the values it accepts'
+        : `helmet refused its ${culprit[0]} option; see the helmet documentation for the values it accepts`
+    )
+  }
 }
 
 /** The whole number of bytes a size string comes to, or `NaN` when it is not one. */
@@ -342,7 +403,12 @@ export async function applyHttpFloors(
     // helmet accepts `hsts` as an alias of `strictTransportSecurity` and throws when both are
     // present, so the default is left out when the caller used the alias. The caller's own
     // `strictTransportSecurity` needs no such care: it overrides the default by position.
-    express.use(helmet('hsts' in given ? given : { strictTransportSecurity: false, ...given }))
+    express.use(
+      helmetOrRefusal(
+        helmet,
+        'hsts' in given ? given : { strictTransportSecurity: false, ...given }
+      )
+    )
   }
   if (floors.cors !== undefined) {
     express.enableCors(floors.cors)
