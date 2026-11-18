@@ -187,3 +187,15 @@ describe('the recorder provider on the sync path', () => {
     expect(bindsRecorder({ metrics: { enabled: false }, health: { enabled: true } })).toBe(false)
   })
 })
+
+describe('the recorder token', () => {
+  /**
+   * Minted with `Symbol.for`, so the bundles of this package share one identity, and the registry key is
+   * the namespaced one every token of this package uses.
+   */
+  it('is the registry symbol of its documented key', () => {
+    expect(BYMAX_HEALTH_STATUS_RECORDER).toBe(
+      Symbol.for('@bymax-one/nest-core:health-status-recorder')
+    )
+  })
+})
