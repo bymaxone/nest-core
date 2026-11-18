@@ -12,6 +12,25 @@ heading here.
 
 ## [Unreleased]
 
+**Apply to your observability:** every operational log line this package writes now starts with a stable
+event code in square brackets, and a new gauge reports each health check. If you match on the text of a
+line (an alert on `Health check "x" went down`, a log filter), match on the code instead; the codes and
+their fields are listed under **Log events** in the README.
+
+- **Log lines carry an event code**, followed by `key=value` fields and the text: `[CORE_HEALTH_DOWN]`
+  `check=<name>`, `[CORE_HEALTH_RECOVERED]`, `[CORE_HEALTH_SINK_FAILED]`, `[CORE_HANDLER_LATE_ERROR]`,
+  `[CORE_SHUTDOWN_DEADLINE]` `deadlineMs=`, `[CORE_METRICS_SCRAPE_SLOW]` `timeoutMs=`,
+  `[CORE_METRICS_CONTRIBUTORS]` `contributors=`, `[CORE_OPENAPI_SERVED]`,
+  `[CORE_OPENAPI_PRODUCTION_REFUSED]`, `[CORE_OPENAPI_UNSECURED]` `operations=` and
+  `[CORE_OPENAPI_COMPONENT_CONFLICT]` `components=`. The wording after the code changed where a field
+  now carries a number (the slow-scrape and shutdown lines no longer repeat it in the sentence).
+- **`bymax_core_health_status{indicator}`**, a gauge, `1` while a health check's dependency is up and `0`
+  while it is down, one series per check, set each time readiness observes it (so a check that is up
+  reads `1` from its first probe). It exists only when `metrics` and `health` are both enabled; with
+  either off nothing is registered and `prom-client` is not loaded.
+- A spec now fails when a code or a metric in the source is missing from the README, or the README lists
+  a code the source does not write.
+
 **Apply to a derived backend:** options are checked a little further, and a configuration that booted
 can fail to boot for one of these.
 

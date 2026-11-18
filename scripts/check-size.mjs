@@ -135,8 +135,12 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 // `./http` budget 3.49 KiB = 3574 B: measured 3535 B brotli (raw 13255 B) plus 39 B of headroom. The
 // growth over 3.16 KiB is the helmet option types and the refusal that reports the option helmet
 // rejected and not its value: code and messages, none of it comment text.
+// Root budget 23.36 KiB = 23921 B: measured 23891 B brotli (raw 104033 B) plus 30 B of headroom. The
+// growth over 23.00 KiB is the health-status gauge (one class, its resolver and provider, and the
+// recorder call in the readiness aggregator) and the event codes of the log lines: code and message
+// text, none of it comment text.
 const BUDGETS = [
-  { name: '. (root)', path: 'dist/index.mjs', brotli: 23.0 * 1024 },
+  { name: '. (root)', path: 'dist/index.mjs', brotli: 23.36 * 1024 },
   { name: './pagination', path: 'dist/pagination/index.mjs', brotli: 1.5 * 1024 },
   { name: './health', path: 'dist/health/index.mjs', brotli: 0.5 * 1024 },
   { name: './openapi', path: 'dist/openapi/index.mjs', brotli: 7.5 * 1024 },
