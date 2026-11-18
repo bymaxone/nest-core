@@ -301,8 +301,10 @@ describe('HealthService', () => {
 
     expect(warn).toHaveBeenCalledWith({
       event: 'CORE_HEALTH_DOWN',
-      message: 'the indicator rejected: connection refused',
-      check: 'database'
+      message: 'The health check went down',
+      check: 'database',
+      cause: 'rejected',
+      err: expect.objectContaining({ message: 'connection refused' })
     })
     warn.mockRestore()
   })

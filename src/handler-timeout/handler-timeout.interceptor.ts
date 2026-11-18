@@ -116,7 +116,8 @@ export class BymaxHandlerTimeoutInterceptor implements NestInterceptor {
         else
           this.logger.error({
             event: 'CORE_HANDLER_LATE_ERROR',
-            message: this.afterTheBound(error)
+            message: 'A handler threw after its request was answered 504',
+            err: error instanceof Error ? error : new Error(String(error))
           })
       },
       complete: (): void => {
@@ -124,12 +125,6 @@ export class BymaxHandlerTimeoutInterceptor implements NestInterceptor {
         if (!expired()) subscriber.complete()
       }
     }
-  }
-
-  /** The line logged for an error the handler threw after the request was answered `504`. */
-  private afterTheBound(error: unknown): string {
-    const message = error instanceof Error ? error.message : String(error)
-    return `A handler threw after its request was answered 504: ${message}`
   }
 
   /** Whether the route is outside the bound: an SSE stream, a marked route, or an excluded path. */

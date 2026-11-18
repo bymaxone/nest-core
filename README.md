@@ -926,21 +926,21 @@ Every operational line this package writes through Nest's `Logger` is an object 
 `{ event: 'CORE_<EVENT>', message: '<short text>', ...fields }`, where the fields are numbers or names
 the application chose. `@bymax-one/nest-logger` 1.4.23 or later writes the object as structured fields,
 so an alert matches on `event`; with another logger the object reaches it as it is. Match on `event`,
-not on the text.
+not on the text. `message` is this package's own text: an error that code of yours threw (an indicator that rejected, a transition sink, a handler) goes as an `Error` under `err`, for your logger to treat as your data, and never inside `message`.
 
-| `event`                           | Level | When                                                                                                                                           | Fields                   |
-| --------------------------------- | ----- | ---------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------ |
-| `CORE_HEALTH_DOWN`                | warn  | A health check changed from up to down, or was first seen down; the cause follows. Not written when a `BYMAX_HEALTH_TRANSITION_SINK` is bound. | `check`                  |
-| `CORE_HEALTH_RECOVERED`           | log   | A health check that had been down is reachable again. Not written when a `BYMAX_HEALTH_TRANSITION_SINK` is bound.                              | `check`                  |
-| `CORE_HEALTH_SINK_FAILED`         | warn  | The bound health transition sink threw or rejected; the probe is unaffected.                                                                   |                          |
-| `CORE_HANDLER_LATE_ERROR`         | error | A handler threw after its request was answered `504`; the handler's own message follows.                                                       |                          |
-| `CORE_SHUTDOWN_DEADLINE`          | error | Shutdown did not finish within `shutdown.deadlineMs`; the process exits with code `1`.                                                         | `deadlineMs`             |
-| `CORE_METRICS_SCRAPE_SLOW`        | warn  | A metrics collection is past `metrics.scrapeTimeoutMs`; scrapes answer `503` until it ends.                                                    | `timeoutMs`              |
-| `CORE_METRICS_CONTRIBUTORS`       | log   | Contributors registered their metrics at boot; their labels follow.                                                                            | `contributors`, `labels` |
-| `CORE_OPENAPI_SERVED`             | log   | The OpenAPI document was mounted.                                                                                                              | `path`, `jsonPath`       |
-| `CORE_OPENAPI_PRODUCTION_REFUSED` | warn  | The OpenAPI document was requested in production and is never served there.                                                                    |                          |
-| `CORE_OPENAPI_UNSECURED`          | warn  | Operations state no security requirement while others in the document do.                                                                      | `operations`             |
-| `CORE_OPENAPI_COMPONENT_CONFLICT` | warn  | A library contributed a component the document already defines; the contributed one is not served.                                             | `components`             |
+| `event`                           | Level | When                                                                                                                                                                                       | Fields                               |
+| --------------------------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------ |
+| `CORE_HEALTH_DOWN`                | warn  | A health check changed from up to down, or was first seen down; `cause` says why (`rejected`, `timed-out` or `reported-down`). Not written when a `BYMAX_HEALTH_TRANSITION_SINK` is bound. | `check`, `cause`, `timeoutMs`, `err` |
+| `CORE_HEALTH_RECOVERED`           | log   | A health check that had been down is reachable again. Not written when a `BYMAX_HEALTH_TRANSITION_SINK` is bound.                                                                          | `check`                              |
+| `CORE_HEALTH_SINK_FAILED`         | warn  | The bound health transition sink threw or rejected; the probe is unaffected.                                                                                                               | `err`                                |
+| `CORE_HANDLER_LATE_ERROR`         | error | A handler threw after its request was answered `504`; the handler's own error is `err`.                                                                                                    | `err`                                |
+| `CORE_SHUTDOWN_DEADLINE`          | error | Shutdown did not finish within `shutdown.deadlineMs`; the process exits with code `1`.                                                                                                     | `deadlineMs`                         |
+| `CORE_METRICS_SCRAPE_SLOW`        | warn  | A metrics collection is past `metrics.scrapeTimeoutMs`; scrapes answer `503` until it ends.                                                                                                | `timeoutMs`                          |
+| `CORE_METRICS_CONTRIBUTORS`       | log   | Contributors registered their metrics at boot; their labels follow.                                                                                                                        | `contributors`, `labels`             |
+| `CORE_OPENAPI_SERVED`             | log   | The OpenAPI document was mounted.                                                                                                                                                          | `path`, `jsonPath`                   |
+| `CORE_OPENAPI_PRODUCTION_REFUSED` | warn  | The OpenAPI document was requested in production and is never served there.                                                                                                                |                                      |
+| `CORE_OPENAPI_UNSECURED`          | warn  | Operations state no security requirement while others in the document do.                                                                                                                  | `operations`                         |
+| `CORE_OPENAPI_COMPONENT_CONFLICT` | warn  | A library contributed a component the document already defines; the contributed one is not served.                                                                                         | `components`                         |
 
 ## 📈 Metrics
 

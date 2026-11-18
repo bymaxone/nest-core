@@ -363,7 +363,8 @@ describe('HealthService readiness transitions', () => {
     expect(result).toEqual({ status: 'error', checks: [{ name: 'redis', status: 'down' }] })
     expect(warn).toHaveBeenCalledWith({
       event: 'CORE_HEALTH_SINK_FAILED',
-      message: 'The transition sink threw and was ignored: log pipeline down'
+      message: 'The transition sink threw and was ignored',
+      err: expect.objectContaining({ message: 'log pipeline down' })
     })
   })
 
@@ -458,7 +459,8 @@ describe('HealthService readiness transitions', () => {
     expect(result.status).toBe('error')
     expect(warn).toHaveBeenCalledWith({
       event: 'CORE_HEALTH_SINK_FAILED',
-      message: 'The transition sink threw and was ignored: log pipeline down'
+      message: 'The transition sink threw and was ignored',
+      err: expect.objectContaining({ message: 'log pipeline down' })
     })
   })
 
@@ -495,7 +497,8 @@ describe('HealthService readiness transitions', () => {
 
     expect(warn).toHaveBeenCalledWith({
       event: 'CORE_HEALTH_SINK_FAILED',
-      message: 'The transition sink threw and was ignored: userland promise failed'
+      message: 'The transition sink threw and was ignored',
+      err: expect.objectContaining({ message: 'userland promise failed' })
     })
   })
 
@@ -533,7 +536,8 @@ describe('HealthService readiness transitions', () => {
 
     expect(warn).toHaveBeenCalledWith({
       event: 'CORE_HEALTH_SINK_FAILED',
-      message: 'The transition sink threw and was ignored: Error: foreign realm failure'
+      message: 'The transition sink threw and was ignored',
+      err: expect.objectContaining({ message: 'Error: foreign realm failure' })
     })
   })
 
@@ -566,7 +570,8 @@ describe('HealthService readiness transitions', () => {
     expect(result).toEqual({ status: 'error', checks: [{ name: 'redis', status: 'down' }] })
     expect(warn).toHaveBeenCalledWith({
       event: 'CORE_HEALTH_SINK_FAILED',
-      message: 'The transition sink threw and was ignored: null'
+      message: 'The transition sink threw and was ignored',
+      err: expect.objectContaining({ message: 'null' })
     })
   })
 
@@ -686,8 +691,9 @@ describe('HealthService readiness transitions', () => {
     expect(warn).toHaveBeenCalledTimes(1)
     expect(warn).toHaveBeenCalledWith({
       event: 'CORE_HEALTH_DOWN',
-      message: 'the indicator reported it down',
-      check: 'redis'
+      message: 'The health check went down',
+      check: 'redis',
+      cause: 'reported-down'
     })
     expect(log).toHaveBeenCalledTimes(1)
     expect(log).toHaveBeenCalledWith({
@@ -714,8 +720,10 @@ describe('HealthService readiness transitions', () => {
 
     expect(warn).toHaveBeenCalledWith({
       event: 'CORE_HEALTH_DOWN',
-      message: 'the indicator rejected: connection refused',
-      check: 'database'
+      message: 'The health check went down',
+      check: 'database',
+      cause: 'rejected',
+      err: expect.objectContaining({ message: 'connection refused' })
     })
   })
 
@@ -736,8 +744,10 @@ describe('HealthService readiness transitions', () => {
 
     expect(warn).toHaveBeenCalledWith({
       event: 'CORE_HEALTH_DOWN',
-      message: 'the indicator did not answer within 20ms',
-      check: 'database'
+      message: 'The health check went down',
+      check: 'database',
+      cause: 'timed-out',
+      timeoutMs: 20
     })
   })
 
