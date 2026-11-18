@@ -8,6 +8,18 @@
 /** The built-in objects that are named when one is given where a block was expected. */
 const BUILT_IN_OBJECTS = ['Date', 'Map', 'Set', 'RegExp', 'Promise', 'Error']
 
+/**
+ * Whether `value` is an object that holds settings: not `null`, a list, or a built-in such as a
+ * `Date` or a `Map`, which would otherwise pass as an empty set of options.
+ */
+export function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    Object.prototype.toString.call(value) === '[object Object]'
+  )
+}
+
 /** The longest an unknown option's name is shown, so a hostile key cannot fill a log line. */
 const MAX_KEY_SHOWN = 40
 
@@ -76,9 +88,7 @@ export function checkedBlock<T extends object>(
   known: Readonly<Record<string, unknown>>
 ): T | undefined {
   if (raw === undefined || raw === null) return undefined
-  if (typeof raw !== 'object' || Object.prototype.toString.call(raw) !== '[object Object]') {
-    throw refusal(name, 'an object', raw)
-  }
+  if (!isPlainRecord(raw)) throw refusal(name, 'an object', raw)
   const stray = Object.keys(raw).find((key) => !Object.hasOwn(known, key))
   if (stray !== undefined) {
     const shown = stray.length > MAX_KEY_SHOWN ? `${stray.slice(0, MAX_KEY_SHOWN)}…` : stray

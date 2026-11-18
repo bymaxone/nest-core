@@ -294,7 +294,7 @@ describe('helmet options are checked by type, and helmet never has the last word
   ])(
     '%s takes true, false or an object, and not a string, a number, a list or a Date',
     async (name) => {
-      for (const value of ['x', 1, [], new Date()]) {
+      for (const value of ['x', 1, [], new Date(), new Map()]) {
         expect(await refusal({ helmet: { [name]: value } } as never)).toContain(
           `helmet.${name} must be an object, true or false, received`
         )

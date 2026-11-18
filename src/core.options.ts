@@ -24,6 +24,7 @@ import type {
 import {
   booleanOption,
   checkedBlock,
+  isPlainRecord,
   refusal,
   routeOption,
   stringOption
@@ -716,9 +717,7 @@ const LABEL_NAME = /^[a-zA-Z_][a-zA-Z0-9_]*$/
  */
 function resolveDefaultLabels(given: unknown): Record<string, string> {
   if (given === undefined || given === null) return {}
-  if (typeof given !== 'object' || Array.isArray(given)) {
-    throw refusal('metrics.defaultLabels', 'an object', given)
-  }
+  if (!isPlainRecord(given)) throw refusal('metrics.defaultLabels', 'an object', given)
   return Object.fromEntries(
     Object.entries(given).map(([name, value]) => {
       if (name.startsWith('__') || RESERVED_LABELS.includes(name)) {

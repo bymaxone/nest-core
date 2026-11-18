@@ -14,7 +14,13 @@
  */
 import type { INestApplication } from '@nestjs/common'
 
-import { booleanOption, checkedBlock, describeValue, refusal } from '../option-validation'
+import {
+  booleanOption,
+  checkedBlock,
+  describeValue,
+  isPlainRecord,
+  refusal
+} from '../option-validation'
 import { MAX_TIMER_DELAY_MS, positiveSafeInteger } from '../positive-integer'
 import { resolveCors } from './http-floors.cors'
 import type { HttpFloorsCorsOptions } from './http-floors.cors'
@@ -213,9 +219,7 @@ export const HELMET_OPTION_NAMES: readonly string[] = [
 function resolveHelmet(given: unknown): Record<string, unknown> | false {
   if (given === false) return false
   if (given === undefined || given === null) return {}
-  if (typeof given !== 'object' || Object.prototype.toString.call(given) !== '[object Object]') {
-    throw refusal('helmet', 'an object or false', given)
-  }
+  if (!isPlainRecord(given)) throw refusal('helmet', 'an object or false', given)
   checkedBlock('helmet', given, Object.fromEntries(HELMET_OPTION_NAMES.map((name) => [name, 0])))
   return Object.fromEntries(
     HELMET_OPTION_NAMES.flatMap((name) => {
@@ -253,10 +257,7 @@ const HELMET_SWITCHES: readonly string[] = [
 function assertHelmetOption(name: string, value: unknown): void {
   if (HELMET_SWITCHES.includes(name)) {
     booleanOption(`helmet.${name}`, value, false)
-  } else if (
-    typeof value !== 'boolean' &&
-    !(typeof value === 'object' && Object.prototype.toString.call(value) === '[object Object]')
-  ) {
+  } else if (typeof value !== 'boolean' && !isPlainRecord(value)) {
     throw refusal(`helmet.${name}`, 'an object, true or false', value)
   }
 }

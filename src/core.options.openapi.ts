@@ -13,6 +13,7 @@ import type {
 import {
   booleanOption,
   checkedBlock,
+  isPlainRecord,
   refusal,
   routeOption,
   stringOption
@@ -49,10 +50,8 @@ const OPERATION_KEY = /^(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS|TRACE) \/\S*$/
 
 /** A record that is not an array, or throws. */
 function recordOf(name: string, value: unknown): Record<string, unknown> {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-    throw refusal(name, 'an object', value)
-  }
-  return value as Record<string, unknown>
+  if (!isPlainRecord(value)) throw refusal(name, 'an object', value)
+  return value
 }
 
 /** A list, or throws. */

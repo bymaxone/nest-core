@@ -310,3 +310,40 @@ describe('a built-in object is not a block', () => {
     expect(refusal(new Date() as never)).toBe('options must be an object, received a Date')
   })
 })
+
+describe('a built-in object is not a record anywhere one is expected', () => {
+  it.each([
+    [
+      'metrics.defaultLabels',
+      () => given('metrics', 'defaultLabels', new Date()),
+      'metrics.defaultLabels must be an object, received a Date'
+    ],
+    [
+      'openapi.securitySchemes',
+      () => given('openapi', 'securitySchemes', new Map()),
+      'openapi.securitySchemes must be an object, received a Map'
+    ],
+    [
+      'an openapi scheme',
+      () => given('openapi', 'securitySchemes', { a: new Set() }),
+      'openapi.securitySchemes.a must be an object, received a Set'
+    ],
+    [
+      'oauth2 flows',
+      () => given('openapi', 'securitySchemes', { a: { type: 'oauth2', flows: new Date() } }),
+      'openapi.securitySchemes.a.flows must be an object, received a Date'
+    ],
+    [
+      'a requirement',
+      () => given('openapi', 'security', [/x/]),
+      'openapi.security[0] must be an object, received a RegExp'
+    ],
+    [
+      'operationSecurity',
+      () => given('openapi', 'operationSecurity', new Date()),
+      'openapi.operationSecurity must be an object, received a Date'
+    ]
+  ])('%s', (_name, build, message) => {
+    expect(refusal(build())).toBe(message)
+  })
+})
