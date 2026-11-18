@@ -22,5 +22,13 @@
   {
     "file": "src/mutate-const-tables.spec.ts",
     "reason": "Runs scripts/mutate-const-tables.mjs as a child process against throwaway projects and imports nothing from src, so it executes no mutated source."
+  },
+  {
+    "file": "src/readme.exports.spec.ts",
+    "reason": "Reads the README and the export lists of the barrels through the TypeScript compiler API and imports nothing from src/ at run time, so it executes no mutated source; it checks the documentation against the public surface."
+  },
+  {
+    "file": "src/readme.observability.spec.ts",
+    "reason": "Reads the README and the text of the source files to compare the event codes and metric names they hold, and imports nothing from src/ at run time, so it executes no mutated source; it checks the catalogs against the code."
   }
 ]
