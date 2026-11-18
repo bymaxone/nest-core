@@ -158,7 +158,7 @@ export class MetricsContributionRunner implements OnApplicationBootstrap {
     applyContributions(contributors, this.registry)
     if (contributors.length > 0) {
       this.logger.log(
-        `Registered metrics from ${contributors.length} contributor(s): ${contributors
+        `[CORE_METRICS_CONTRIBUTORS] contributors=${contributors.length} Registered metrics from: ${contributors
           .map(({ label }) => label)
           .join(', ')}`
       )

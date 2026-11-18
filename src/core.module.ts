@@ -41,6 +41,7 @@ import { MetricsContributionRunner } from './metrics/metrics.contribution'
 import { createMetricsController } from './metrics/metrics.controller'
 import {
   buildMetricsRegistryProvider,
+  buildHealthStatusRecorderProvider,
   buildMetricsTimingSinkProvider
 } from './metrics/metrics.providers'
 import { selectAsyncExceptionFilter } from './passthrough.providers'
@@ -122,6 +123,9 @@ function buildSyncProviders(resolved: ResolvedCoreOptions): Provider[] {
     providers.push(MetricsContributionRunner)
     if (resolved.timing.enabled) {
       providers.push(buildMetricsTimingSinkProvider())
+    }
+    if (resolved.health.enabled) {
+      providers.push(buildHealthStatusRecorderProvider())
     }
   }
   return providers
@@ -419,6 +423,7 @@ export class BymaxCoreModule extends BymaxCoreModuleBase implements NestModule {
       HealthService,
       buildMetricsRegistryProvider(),
       buildMetricsTimingSinkProvider(),
+      buildHealthStatusRecorderProvider(),
       MetricsContributionRunner,
       buildTraceContextProvider()
     ]

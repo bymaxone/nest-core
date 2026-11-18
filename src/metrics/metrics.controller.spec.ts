@@ -349,7 +349,7 @@ describe('createMetricsController, scrape deadline', () => {
     await Promise.allSettled([controller.scrape({})])
 
     expect(warn).toHaveBeenCalledTimes(1)
-    expect(warn).toHaveBeenCalledWith(expect.stringContaining('2000 ms'))
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('timeoutMs=2000'))
     expect((warn.mock.contexts[0] as { context?: string }).context).toBe('MetricsController')
   })
 

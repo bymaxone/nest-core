@@ -19,7 +19,7 @@ import { bootApp, ExampleController, logged, LOG_CONTEXT } from './__tests__/boo
 
 /** The exact warning emitted for a single contributed entry the document keeps. */
 const DISCARDED_WARNING =
-  'the served OpenAPI document already defines 1 component entry(ies) a library also contributes: ' +
+  '[CORE_OPENAPI_COMPONENT_CONFLICT] components=1 the served OpenAPI document already defines 1 component entry(ies) a library also contributes: ' +
   'CollidingOpenApi -> securitySchemes.cookieAuth. The contributed version is not served, so where ' +
   "the two differ a client generated from this document will not match that library's own types. What holds the " +
   "name may be the application's own declaration, a core schema under openapi.includeCoreSchemas, " +

@@ -920,6 +920,26 @@ health better than you do — but it is your decision, not something you inherit
 `@BymaxHealthIndicator()` lives in `./health`, alongside the contract, so a
 library that only ships an indicator never imports the module.
 
+## 🧾 Log events
+
+Every operational line this package writes through Nest's `Logger` starts with a stable event code in
+square brackets, followed by `key=value` fields whose values are numbers or names the application chose,
+then free text. Match on the code, not on the text.
+
+| Code                                | Level | When                                                                                               | Fields         |
+| ----------------------------------- | ----- | -------------------------------------------------------------------------------------------------- | -------------- |
+| `[CORE_HEALTH_DOWN]`                | warn  | A health check changed from up to down, or was first seen down; the cause follows.                 | `check`        |
+| `[CORE_HEALTH_RECOVERED]`           | log   | A health check that had been down is reachable again.                                              | `check`        |
+| `[CORE_HEALTH_SINK_FAILED]`         | warn  | The bound health transition sink threw or rejected; the probe is unaffected.                       |                |
+| `[CORE_HANDLER_LATE_ERROR]`         | error | A handler threw after its request was answered `504`; the handler's own message follows.           |                |
+| `[CORE_SHUTDOWN_DEADLINE]`          | error | Shutdown did not finish within `shutdown.deadlineMs`; the process exits with code `1`.             | `deadlineMs`   |
+| `[CORE_METRICS_SCRAPE_SLOW]`        | warn  | A metrics collection is past `metrics.scrapeTimeoutMs`; scrapes answer `503` until it ends.        | `timeoutMs`    |
+| `[CORE_METRICS_CONTRIBUTORS]`       | log   | Contributors registered their metrics at boot; their labels follow.                                | `contributors` |
+| `[CORE_OPENAPI_SERVED]`             | log   | The OpenAPI document was mounted; the routes follow.                                               |                |
+| `[CORE_OPENAPI_PRODUCTION_REFUSED]` | warn  | The OpenAPI document was requested in production and is never served there.                        |                |
+| `[CORE_OPENAPI_UNSECURED]`          | warn  | Operations state no security requirement while others in the document do.                          | `operations`   |
+| `[CORE_OPENAPI_COMPONENT_CONFLICT]` | warn  | A library contributed a component the document already defines; the contributed one is not served. | `components`   |
+
 ## 📈 Metrics
 
 Disabled by default. Enabling it registers `GET /metrics`, serving Prometheus
@@ -942,13 +962,19 @@ the life of the process, and it offers no way to stop them. Neither keeps the pr
 `app.close()` still lets it exit. It matters only to a host that creates many applications in one
 process, a test runner or a hot reload, where each application leaves a small observer behind.
 
-When timing and metrics are both enabled, an internal bridge feeds two
-default HTTP metrics with a bounded label set:
+The metrics this package registers, besides the default collectors:
 
-| Metric                          | Type      | Labels                           |
-| ------------------------------- | --------- | -------------------------------- |
-| `http_requests_total`           | counter   | `method`, `route`, `status_code` |
-| `http_request_duration_seconds` | histogram | `method`, `route`, `status_code` |
+| Metric                          | Type      | Labels                           | Meaning                                                                                             | When                       |
+| ------------------------------- | --------- | -------------------------------- | --------------------------------------------------------------------------------------------------- | -------------------------- |
+| `http_requests_total`           | counter   | `method`, `route`, `status_code` | Completed HTTP requests; `route` is the route template, or `<unmatched>`, never the requested path. | timing and metrics enabled |
+| `http_request_duration_seconds` | histogram | `method`, `route`, `status_code` | HTTP request duration in seconds.                                                                   | timing and metrics enabled |
+| `bymax_core_health_status`      | gauge     | `indicator`                      | Readiness state of each health check: `1` while its dependency is up, `0` while it is down.         | health and metrics enabled |
+
+`bymax_core_health_status` has one series per health check, named as the indicator declares it, so its
+cardinality is the number of indicators. A series appears when the check is first probed (readiness is
+probed on a request to the readiness route), reads `1` from that first probe if the dependency is up,
+and follows every later probe. The label is the indicator's own name, never anything a request carries.
+Name the metric in an alert as `bymax_core_health_status{indicator="database"} == 0`.
 
 Inject `BYMAX_METRICS_REGISTRY` to register your own application metrics
 against the same registry the endpoint scrapes.

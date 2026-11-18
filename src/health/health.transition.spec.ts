@@ -362,7 +362,7 @@ describe('HealthService readiness transitions', () => {
 
     expect(result).toEqual({ status: 'error', checks: [{ name: 'redis', status: 'down' }] })
     expect(warn).toHaveBeenCalledWith(
-      'Health transition sink threw and was ignored: log pipeline down'
+      '[CORE_HEALTH_SINK_FAILED] The transition sink threw and was ignored: log pipeline down'
     )
   })
 
@@ -456,7 +456,7 @@ describe('HealthService readiness transitions', () => {
 
     expect(result.status).toBe('error')
     expect(warn).toHaveBeenCalledWith(
-      'Health transition sink threw and was ignored: log pipeline down'
+      '[CORE_HEALTH_SINK_FAILED] The transition sink threw and was ignored: log pipeline down'
     )
   })
 
@@ -492,7 +492,7 @@ describe('HealthService readiness transitions', () => {
     await Promise.resolve()
 
     expect(warn).toHaveBeenCalledWith(
-      'Health transition sink threw and was ignored: userland promise failed'
+      '[CORE_HEALTH_SINK_FAILED] The transition sink threw and was ignored: userland promise failed'
     )
   })
 
@@ -529,7 +529,7 @@ describe('HealthService readiness transitions', () => {
     await flushAsync()
 
     expect(warn).toHaveBeenCalledWith(
-      'Health transition sink threw and was ignored: Error: foreign realm failure'
+      '[CORE_HEALTH_SINK_FAILED] The transition sink threw and was ignored: Error: foreign realm failure'
     )
   })
 
@@ -560,7 +560,9 @@ describe('HealthService readiness transitions', () => {
     const result = await service.checkReadiness()
 
     expect(result).toEqual({ status: 'error', checks: [{ name: 'redis', status: 'down' }] })
-    expect(warn).toHaveBeenCalledWith('Health transition sink threw and was ignored: null')
+    expect(warn).toHaveBeenCalledWith(
+      '[CORE_HEALTH_SINK_FAILED] The transition sink threw and was ignored: null'
+    )
   })
 
   /**
@@ -678,10 +680,12 @@ describe('HealthService readiness transitions', () => {
 
     expect(warn).toHaveBeenCalledTimes(1)
     expect(warn).toHaveBeenCalledWith(
-      'Health check "redis" went down: the indicator reported it down'
+      '[CORE_HEALTH_DOWN] check=redis the indicator reported it down'
     )
     expect(log).toHaveBeenCalledTimes(1)
-    expect(log).toHaveBeenCalledWith('Health check "redis" recovered')
+    expect(log).toHaveBeenCalledWith(
+      '[CORE_HEALTH_RECOVERED] check=redis The dependency is reachable again'
+    )
   })
 
   /**
@@ -700,7 +704,7 @@ describe('HealthService readiness transitions', () => {
     await service.checkReadiness()
 
     expect(warn).toHaveBeenCalledWith(
-      'Health check "database" went down: the indicator rejected: connection refused'
+      '[CORE_HEALTH_DOWN] check=database the indicator rejected: connection refused'
     )
   })
 
@@ -720,7 +724,7 @@ describe('HealthService readiness transitions', () => {
     await service.checkReadiness()
 
     expect(warn).toHaveBeenCalledWith(
-      'Health check "database" went down: the indicator did not answer within 20ms'
+      '[CORE_HEALTH_DOWN] check=database the indicator did not answer within 20ms'
     )
   })
 

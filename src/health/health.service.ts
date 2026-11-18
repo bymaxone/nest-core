@@ -28,6 +28,8 @@ import {
 import type { ProviderScanner } from '../discovery'
 import { discoverIndicators, mergeIndicators } from './health.discovery'
 import type { HealthCheckEntry, HealthResponse, IHealthIndicator } from './health.interfaces'
+import { BYMAX_HEALTH_STATUS_RECORDER } from './health.status-recorder'
+import type { IHealthStatusRecorder } from './health.status-recorder'
 import type {
   HealthTransition,
   HealthTransitionCause,
@@ -288,7 +290,10 @@ export class HealthService implements OnApplicationBootstrap, BeforeApplicationS
     @Optional() @Inject(Reflector) private readonly reflector?: Reflector,
     @Optional()
     @Inject(BYMAX_HEALTH_TRANSITION_SINK)
-    private readonly transitionSink?: IHealthTransitionSink
+    private readonly transitionSink?: IHealthTransitionSink,
+    @Optional()
+    @Inject(BYMAX_HEALTH_STATUS_RECORDER)
+    private readonly statusRecorder?: IHealthStatusRecorder
   ) {}
 
   /**
@@ -332,6 +337,7 @@ export class HealthService implements OnApplicationBootstrap, BeforeApplicationS
     // Recorded even when the state is unchanged, so the newest probe to observe
     // this check is always what a later-arriving outcome is ordered against.
     this.lastState.set(name, { isUp: outcome.isUp, seq })
+    this.statusRecorder?.record(name, outcome.isUp)
     if (!changed) {
       return
     }
@@ -339,11 +345,14 @@ export class HealthService implements OnApplicationBootstrap, BeforeApplicationS
       if (previous === undefined) {
         return
       }
-      this.describe(`Health check "${name}" recovered`, false)
+      this.describe(
+        `[CORE_HEALTH_RECOVERED] check=${name} The dependency is reachable again`,
+        false
+      )
       this.emit({ name, isUp: true })
       return
     }
-    this.describe(`Health check "${name}" went down: ${describeCause(outcome.cause)}`, true)
+    this.describe(`[CORE_HEALTH_DOWN] check=${name} ${describeCause(outcome.cause)}`, true)
     this.emit({ name, isUp: false, cause: outcome.cause })
   }
 
@@ -437,7 +446,7 @@ export class HealthService implements OnApplicationBootstrap, BeforeApplicationS
    */
   private reportSinkFailure(error: unknown): void {
     this.writeLine(
-      `Health transition sink threw and was ignored: ${summarizeRejection(error)}`,
+      `[CORE_HEALTH_SINK_FAILED] The transition sink threw and was ignored: ${summarizeRejection(error)}`,
       true
     )
   }

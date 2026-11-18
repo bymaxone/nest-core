@@ -307,11 +307,11 @@ describe('handler timeout interceptor, what the handler does around the bound', 
     second.error('a plain string')
     expect(logged).toHaveBeenNthCalledWith(
       1,
-      'A handler threw after its request was answered 504: after the bound'
+      '[CORE_HANDLER_LATE_ERROR] A handler threw after its request was answered 504: after the bound'
     )
     expect(logged).toHaveBeenNthCalledWith(
       2,
-      'A handler threw after its request was answered 504: a plain string'
+      '[CORE_HANDLER_LATE_ERROR] A handler threw after its request was answered 504: a plain string'
     )
   })
 

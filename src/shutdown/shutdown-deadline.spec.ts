@@ -53,7 +53,7 @@ describe('shutdown deadline', () => {
     expect(exit).toHaveBeenCalledTimes(1)
     expect(exit).toHaveBeenCalledWith(1)
     expect(error).toHaveBeenCalledTimes(1)
-    expect(String(error.mock.calls[0]?.[0])).toContain('5000ms')
+    expect(String(error.mock.calls[0]?.[0])).toContain('deadlineMs=5000')
     jest.advanceTimersByTime(60_000)
     expect(exit).toHaveBeenCalledTimes(1)
   })

@@ -289,7 +289,7 @@ function warnUnsecuredOperations(logger: Logger, keys: readonly string[]): void 
   // what a client generated from this document will do, and a line read while
   // scrolling past a boot log is read from the front.
   logger.warn(
-    `a client generated from the OpenAPI document will send no credentials to ${keys.length} ` +
+    `[CORE_OPENAPI_UNSECURED] operations=${keys.length} a client generated from the OpenAPI document will send no credentials to ${keys.length} ` +
       `operation(s): ${listed}${elided > 0 ? `, and ${elided} more` : ''}. They state no security ` +
       'requirement, the document declares no default, and other operations in it do state one — ' +
       'so this is more often a missing openapi.security default than a public API. Set ' +
@@ -335,7 +335,7 @@ function warnDiscardedComponents(logger: Logger, discarded: readonly DiscardedCo
   // the consumer's configuration, then contributors in label order — so "remove
   // your local definition" is advice that does not always have a referent.
   logger.warn(
-    `the served OpenAPI document already defines ${discarded.length} component entry(ies) a ` +
+    `[CORE_OPENAPI_COMPONENT_CONFLICT] components=${discarded.length} the served OpenAPI document already defines ${discarded.length} component entry(ies) a ` +
       `library also contributes: ${listed}${elided > 0 ? `, and ${elided} more` : ''}. The ` +
       'contributed version is not served, so where the two differ a client generated from this ' +
       "document will not match that library's own types. What holds the name may be the application's own " +
@@ -406,7 +406,7 @@ export async function applyBymaxOpenApi(app: INestApplication): Promise<OpenApiM
     // application that never enabled it should boot silently.
     if (options.suppressedInProduction || options.enabled) {
       logger.warn(
-        'openapi.enabled was requested but the OpenAPI document is never served in production. ' +
+        '[CORE_OPENAPI_PRODUCTION_REFUSED] openapi.enabled was requested but the OpenAPI document is never served in production. ' +
           'Set NODE_ENV to "development" or "test" to serve it.'
       )
     }
@@ -440,6 +440,8 @@ export async function applyBymaxOpenApi(app: INestApplication): Promise<OpenApiM
   swagger.SwaggerModule.setup(options.path, app, document, {
     jsonDocumentUrl: options.jsonPath
   })
-  logger.log(`OpenAPI document served at "/${options.path}" (JSON at "/${options.jsonPath}")`)
+  logger.log(
+    `[CORE_OPENAPI_SERVED] OpenAPI document served at "/${options.path}" (JSON at "/${options.jsonPath}")`
+  )
   return { mounted: true, path: options.path, discarded }
 }

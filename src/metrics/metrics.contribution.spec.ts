@@ -307,7 +307,7 @@ describe('MetricsContributionRunner', () => {
     runner.onApplicationBootstrap()
 
     expect(logged.log).toHaveBeenCalledWith(
-      'Registered metrics from 2 contributor(s): CacheMetrics, QueueMetrics',
+      '[CORE_METRICS_CONTRIBUTORS] contributors=2 Registered metrics from: CacheMetrics, QueueMetrics',
       'BymaxCoreModule'
     )
   })

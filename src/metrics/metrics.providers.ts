@@ -27,9 +27,11 @@ import type { Provider } from '@nestjs/common'
 import type { ResolvedCoreOptions } from '../core.options'
 import { BYMAX_CORE_OPTIONS, BYMAX_METRICS_REGISTRY, BYMAX_TIMING_SINK } from '../core.tokens'
 import { NoopTimingSink } from '../defaults.providers'
+import { resolveHealthStatusRecorder } from './health-status.gauge'
 import { createMetricsRegistry, loadPromClient } from './metrics.registry'
 import type { MetricsRegistry } from './metrics.registry'
 import { TimingMetricsSink } from './timing-metrics.sink'
+import { BYMAX_HEALTH_STATUS_RECORDER } from '../health/health.status-recorder'
 import type { ITimingSink } from '../timing/timing.interfaces'
 
 /**
@@ -125,6 +127,21 @@ export function buildMetricsTimingSinkProvider(): Provider {
     provide: BYMAX_TIMING_SINK,
     useFactory: (options: ResolvedCoreOptions, registry: MetricsRegistry): Promise<ITimingSink> =>
       resolveTimingSink(options, registry),
+    inject: [BYMAX_CORE_OPTIONS, BYMAX_METRICS_REGISTRY]
+  }
+}
+
+/**
+ * Build the provider of the recorder that feeds the health-status gauge. Registered on both paths and
+ * gated when it resolves, so it is `undefined` unless metrics and health are both enabled.
+ *
+ * @returns The recorder provider.
+ */
+export function buildHealthStatusRecorderProvider(): Provider {
+  return {
+    provide: BYMAX_HEALTH_STATUS_RECORDER,
+    useFactory: (options: ResolvedCoreOptions, registry: MetricsRegistry) =>
+      resolveHealthStatusRecorder(options, registry),
     inject: [BYMAX_CORE_OPTIONS, BYMAX_METRICS_REGISTRY]
   }
 }

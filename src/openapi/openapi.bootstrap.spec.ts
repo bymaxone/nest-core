@@ -50,12 +50,12 @@ function operationIdsOf(document: unknown): readonly string[] {
 
 /** The exact warning emitted when production refuses a requested document. */
 const PRODUCTION_WARNING =
-  'openapi.enabled was requested but the OpenAPI document is never served in production. ' +
+  '[CORE_OPENAPI_PRODUCTION_REFUSED] openapi.enabled was requested but the OpenAPI document is never served in production. ' +
   'Set NODE_ENV to "development" or "test" to serve it.'
 
 /** The exact warning emitted for a single operation left requiring nothing. */
 const UNSECURED_WARNING =
-  'a client generated from the OpenAPI document will send no credentials to 1 operation(s): ' +
+  '[CORE_OPENAPI_UNSECURED] operations=1 a client generated from the OpenAPI document will send no credentials to 1 operation(s): ' +
   'GET /examples. They state no security requirement, the document declares no default, and ' +
   'other operations in it do state one — so this is more often a missing openapi.security ' +
   'default than a public API. Set openapi.security, or state the intent per operation with an ' +
@@ -174,7 +174,7 @@ describe('applyBymaxOpenApi', () => {
     // The log line names both served routes under this package's context: it is
     // the only feedback a developer gets that the document is up, and where.
     expect(logged.log).toHaveBeenCalledWith(
-      'OpenAPI document served at "/reference" (JSON at "/docs-json")',
+      '[CORE_OPENAPI_SERVED] OpenAPI document served at "/reference" (JSON at "/docs-json")',
       LOG_CONTEXT
     )
   })
