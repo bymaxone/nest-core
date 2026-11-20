@@ -721,7 +721,7 @@ describe('applyBymaxOpenApi', () => {
    * A control escape that would cross the cut is left out whole, not shown in part.
    *
    * The escape is six characters long, so one that starts just inside the limit would otherwise end
-   * as a fragment such as `\\u00`, which is neither the character nor its escape.
+   * as a fragment such as `\u00`, which is neither the character nor its escape.
    */
   it('does not cut a control escape in two', async () => {
     process.env['NODE_ENV'] = 'test'
