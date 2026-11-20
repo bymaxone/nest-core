@@ -3,7 +3,7 @@
  *
  * Layer: unit.
  * Goal: an `Error` is passed through untouched, anything else becomes a typed wrapper holding the
- * original as `cause`, and nothing is read from an object that was thrown.
+ * original as `cause`, and nothing is read from a thrown object but its type tag, which a hostile value cannot make throw.
  * Mocks: none.
  */
 import { asHostError, NonErrorThrownError } from './host-error'
@@ -38,6 +38,22 @@ describe('asHostError', () => {
     const wrapped = asHostError(hostile)
     expect(wrapped.message).toBe('A value that is not an Error was thrown: an object')
     expect(wrapped.cause).toBe(hostile)
+  })
+
+  it('wraps an object whose type tag throws when read, and a revoked proxy', () => {
+    const tagged = {
+      get [Symbol.toStringTag](): string {
+        throw new Error('tag')
+      }
+    }
+    const { proxy, revoke } = Proxy.revocable({}, {})
+    revoke()
+    for (const thrown of [tagged, proxy]) {
+      const wrapped = asHostError(thrown)
+      expect(wrapped).toBeInstanceOf(NonErrorThrownError)
+      expect(wrapped.message).toBe('A value that is not an Error was thrown')
+      expect(wrapped.cause).toBe(thrown)
+    }
   })
 
   it.each([

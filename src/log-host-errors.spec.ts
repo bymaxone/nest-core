@@ -160,6 +160,16 @@ describe('what a host threw is kept as the cause', () => {
     expect((err.cause as Error).cause).toBe(SECRET)
   })
 
+  it('contains a sink that threw an object whose type tag throws when read', async () => {
+    const hostile = {
+      get [Symbol.toStringTag](): string {
+        throw new Error('tag')
+      }
+    }
+    const err = await sinkFailure(hostile)
+    expect((err.cause as Error).cause).toBe(hostile)
+  })
+
   it('logs a handler that threw a string as a NonErrorThrownError holding it', () => {
     jest.useFakeTimers()
     const error = jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined)

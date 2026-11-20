@@ -10,8 +10,20 @@ import { describeValue } from './option-validation'
 const MAX_THROWN_TEXT = 500
 
 /**
- * The error a host threw something other than an `Error` becomes. The thrown value is `cause`
- * and nothing is read from an object, so a hostile getter or `toString` is never run.
+ * What a thrown value is, in a phrase, or `''` when inspecting it throws: a getter on the value's
+ * type tag or a revoked proxy must not stop the wrapper from being built.
+ */
+function describeSafely(thrown: unknown): string {
+  try {
+    return `: ${describeValue(thrown)}`
+  } catch {
+    return ''
+  }
+}
+
+/**
+ * The error a host threw something other than an `Error` becomes. The thrown value is `cause`,
+ * and a property of an object is never read except its type tag, which is guarded.
  */
 export class NonErrorThrownError extends Error {
   /** @param thrown - The value that was thrown. */
@@ -19,7 +31,7 @@ export class NonErrorThrownError extends Error {
     super(
       typeof thrown === 'string'
         ? thrown.slice(0, MAX_THROWN_TEXT)
-        : `A value that is not an Error was thrown: ${describeValue(thrown)}`,
+        : `A value that is not an Error was thrown${describeSafely(thrown)}`,
       { cause: thrown }
     )
     this.name = 'NonErrorThrownError'
@@ -34,5 +46,14 @@ export class NonErrorThrownError extends Error {
  *   {@link NonErrorThrownError} holding it as `cause`.
  */
 export function asHostError(thrown: unknown): Error {
-  return thrown instanceof Error ? thrown : new NonErrorThrownError(thrown)
+  return isError(thrown) ? thrown : new NonErrorThrownError(thrown)
+}
+
+/** Whether `thrown` is an `Error`; a revoked proxy throws on the test and is not one. */
+function isError(thrown: unknown): thrown is Error {
+  try {
+    return thrown instanceof Error
+  } catch {
+    return false
+  }
 }
