@@ -12,6 +12,11 @@ heading here.
 
 ## [Unreleased]
 
+## [1.6.18] - 2026-11-20
+
+A patch release. A boot error about something you declared no longer carries your text in its message, and the
+items an OpenAPI warning lists are escaped by character category.
+
 **Apply to your observability:**
 
 - A boot error about something you declared no longer has its text in the message: the message is this
@@ -1758,6 +1763,7 @@ have regressed from. They are kept because the reasoning is worth having.
 [1.6.13]: https://github.com/bymaxone/nest-core/compare/v1.6.10...v1.6.13
 [1.6.14]: https://github.com/bymaxone/nest-core/compare/v1.6.13...v1.6.14
 [1.6.15]: https://github.com/bymaxone/nest-core/compare/v1.6.14...v1.6.15
+[1.6.18]: https://github.com/bymaxone/nest-core/compare/v1.6.17...v1.6.18
 [1.6.17]: https://github.com/bymaxone/nest-core/compare/v1.6.16...v1.6.17
 [1.6.16]: https://github.com/bymaxone/nest-core/compare/v1.6.15...v1.6.16
 [Unreleased]: https://github.com/bymaxone/nest-core/compare/v1.6.16...HEAD
