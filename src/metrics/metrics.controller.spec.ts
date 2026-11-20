@@ -9,7 +9,7 @@
  * Mocks: a hand-built registry stub and a hand-built `HttpAdapterHost` capturing
  * the header and reply (family convention, no supertest at this layer).
  */
-import { Logger, UnauthorizedException } from '@nestjs/common'
+import { ConsoleLogger, Logger, UnauthorizedException } from '@nestjs/common'
 import type { HttpAdapterHost } from '@nestjs/core'
 
 import { normalizeCoreOptions } from '../core.options'
@@ -355,6 +355,24 @@ describe('createMetricsController, scrape deadline', () => {
       timeoutMs: 2000
     })
     expect((warn.mock.contexts[0] as { context?: string }).context).toBe('MetricsController')
+  })
+
+  it('still answers 503 when the logger the application installed throws on the slow-scrape warning', async () => {
+    const { controller } = hungController(2_000)
+    Logger.overrideLogger({
+      log: () => undefined,
+      error: () => undefined,
+      warn: () => {
+        throw new Error('logger down')
+      }
+    })
+    const scrape = controller.scrape({})
+    scrape.catch(() => undefined)
+
+    jest.advanceTimersByTime(2_000)
+
+    await expect(scrape).rejects.toMatchObject({ status: 503 })
+    Logger.overrideLogger(new ConsoleLogger())
   })
 
   it('refuses a wrong token with 401 before it looks at the collection', async () => {

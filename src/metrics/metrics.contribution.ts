@@ -18,6 +18,7 @@ import { BYMAX_CORE_OPTIONS, BYMAX_METRICS_REGISTRY } from '../core.tokens'
 import { findMarkedProviders } from '../discovery'
 import type { ProviderScanner } from '../discovery'
 import { asHostError } from '../host-error'
+import { writeLog } from '../write-log'
 import { BYMAX_METRICS_CONTRIBUTOR_METADATA } from './metrics.contract'
 import type { IMetricsContributor, MetricsRegistry } from './metrics.contract'
 
@@ -157,7 +158,7 @@ export class MetricsContributionRunner implements OnApplicationBootstrap {
     const contributors = discoverContributors(this.discovery, this.reflector)
     applyContributions(contributors, this.registry)
     if (contributors.length > 0) {
-      this.logger.log({
+      writeLog(this.logger, 'log', {
         event: 'CORE_METRICS_CONTRIBUTORS',
         message: 'Registered metrics from contributors',
         contributors: contributors.length,

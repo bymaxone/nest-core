@@ -12,6 +12,7 @@ import type { Observer, Subscriber } from 'rxjs'
 import type { ResolvedCoreOptions } from '../core.options'
 import { BYMAX_CORE_OPTIONS } from '../core.tokens'
 import { asHostError } from '../host-error'
+import { writeLog } from '../write-log'
 import { bindHandlerSignal, NO_HANDLER_TIMEOUT_KEY } from './handler-timeout.decorators'
 
 /** The metadata key Nest's `@Sse()` sets on a route handler. */
@@ -128,15 +129,11 @@ export class BymaxHandlerTimeoutInterceptor implements NestInterceptor {
    * already answered into an error of the observable, so the failure is dropped.
    */
   private logLate(error: unknown): void {
-    try {
-      this.logger.error({
-        event: 'CORE_HANDLER_LATE_ERROR',
-        message: 'A handler threw after its request was answered 504',
-        err: asHostError(error)
-      })
-    } catch {
-      // Nothing is left to report to: the request is answered and the logger is what failed.
-    }
+    writeLog(this.logger, 'error', {
+      event: 'CORE_HANDLER_LATE_ERROR',
+      message: 'A handler threw after its request was answered 504',
+      err: asHostError(error)
+    })
   }
 
   /** Whether the route is outside the bound: an SSE stream, a marked route, or an excluded path. */

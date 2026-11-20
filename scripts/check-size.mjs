@@ -151,11 +151,18 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 // 7404 B. The growth is the thrown-value wrapper that this entry now bundles for the boot error of a
 // contributor that throws: one class, its guarded helpers and the description of a value; the root entry
 // carries its own copy, and the instance mark is what keeps `instanceof` true across the two.
+// Root budget 23.76 KiB = 24330 B: measured 24292 B brotli (raw 105722 B) plus 38 B of headroom. The
+// growth over 23.71 KiB is the log writer that absorbs a throw of the application's logger, now the one
+// call at every site that logs, and the escape of line separators and bidirectional controls: code,
+// plus the docblock of one new module.
+// `./openapi` budget 7.98 KiB = 8171 B: measured 8144 B brotli (raw 33147 B) plus 27 B of headroom, from
+// 8079 B. The growth is the same log writer, which this entry bundles for its three lines, and the
+// escape of line separators and bidirectional controls in the listed items.
 const BUDGETS = [
-  { name: '. (root)', path: 'dist/index.mjs', brotli: 23.71 * 1024 },
+  { name: '. (root)', path: 'dist/index.mjs', brotli: 23.76 * 1024 },
   { name: './pagination', path: 'dist/pagination/index.mjs', brotli: 1.5 * 1024 },
   { name: './health', path: 'dist/health/index.mjs', brotli: 0.5 * 1024 },
-  { name: './openapi', path: 'dist/openapi/index.mjs', brotli: 7.89 * 1024 },
+  { name: './openapi', path: 'dist/openapi/index.mjs', brotli: 7.98 * 1024 },
   { name: './metrics', path: 'dist/metrics/index.mjs', brotli: 0.5 * 1024 },
   { name: './http', path: 'dist/http/index.mjs', brotli: 3.49 * 1024 }
 ]

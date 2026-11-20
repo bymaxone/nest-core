@@ -12,6 +12,16 @@ heading here.
 
 ## [Unreleased]
 
+### Fixed
+
+- A logger your application installed (`app.useLogger`, `Logger.overrideLogger`) that throws no longer
+  changes what this package does. Every line it writes goes through one writer that absorbs a synchronous
+  throw; before, the shutdown deadline, the OpenAPI bootstrap, the contributor run and the slow-scrape
+  warning let it escape. The rejection of an `async` logger method is dropped by Nest's `Logger`, which
+  does not await it, and is not this package's to catch.
+- A listed route or component in an OpenAPI warning now also escapes the line and paragraph separators
+  (U+2028, U+2029) and the bidirectional controls (U+202A to U+202E, U+2066 to U+2069) as `\uXXXX`.
+
 ## [1.6.16] - 2026-11-20
 
 A patch release. What your code threw is kept, as itself or as the `cause` of what this package logs or

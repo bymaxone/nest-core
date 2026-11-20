@@ -34,6 +34,7 @@ import type * as Swagger from '@nestjs/swagger'
 import type { ResolvedCoreOptions, ResolvedOpenApiOptions } from '../core.options'
 import { BYMAX_CORE_OPTIONS } from '../core.tokens'
 import { isProductionRuntime, runtimeEnvironmentName } from '../runtime.environment'
+import { writeLog } from '../write-log'
 import type { DiscardedComponent } from './openapi.components'
 import { collectContributions, createHandlerIdMap } from './openapi.contribution'
 import type { HandlerIdMap, ResolvedContribution } from './openapi.contribution'
@@ -87,16 +88,23 @@ const MAX_WARNED_OPERATIONS = 10
 /** The longest one listed item is shown, so a long route template cannot fill a log line. */
 const MAX_LISTED_ITEM = 200
 
+/** The line and paragraph separators and the bidirectional controls, which break or reorder a line unseen. */
+const isInvisibleFormat = (code: number): boolean =>
+  code === 0x2028 ||
+  code === 0x2029 ||
+  (code >= 0x202a && code <= 0x202e) ||
+  (code >= 0x2066 && code <= 0x2069)
+
 /**
- * One item of a list a warning carries, made safe for a log line: a control character (a line
- * break, an escape) is written as `\uXXXX`, and an item longer than the limit is cut before the first
+ * One item of a list a warning carries, made safe for a log line: a control character, a line or paragraph
+ * separator or a bidirectional control (a line break, an escape, a direction override) is written as `\uXXXX`, and an item longer than the limit is cut before the first
  * character whose text does not fit, so an escape is never left in part, and ends with an ellipsis.
  */
 function safeListed(item: string): string {
   let shown = ''
   for (const char of item) {
     const code = char.charCodeAt(0)
-    const control = code < 0x20 || (code >= 0x7f && code <= 0x9f)
+    const control = code < 0x20 || (code >= 0x7f && code <= 0x9f) || isInvisibleFormat(code)
     const text = control ? `\\u${code.toString(16).padStart(4, '0')}` : char
     if (shown.length + text.length > MAX_LISTED_ITEM) return `${shown}…`
     shown += text
@@ -308,7 +316,7 @@ function warnUnsecuredOperations(logger: Logger, keys: readonly string[]): void 
   // Consequence first, cause second: the sentence that makes someone act is
   // what a client generated from this document will do, and a line read while
   // scrolling past a boot log is read from the front.
-  logger.warn({
+  writeLog(logger, 'warn', {
     event: 'CORE_OPENAPI_UNSECURED',
     operations: keys.length,
     routes,
@@ -358,7 +366,7 @@ function warnDiscardedComponents(logger: Logger, discarded: readonly DiscardedCo
   // that won. The merge runs the document, then this package's catalogue, then
   // the consumer's configuration, then contributors in label order — so "remove
   // your local definition" is advice that does not always have a referent.
-  logger.warn({
+  writeLog(logger, 'warn', {
     event: 'CORE_OPENAPI_COMPONENT_CONFLICT',
     components: discarded.length,
     entries,
@@ -392,7 +400,7 @@ function buildConfig(
 
 /** Log that the document is up, and where: the only feedback a developer gets that it is. */
 function logServed(logger: Logger, options: ResolvedOpenApiOptions): void {
-  logger.log({
+  writeLog(logger, 'log', {
     event: 'CORE_OPENAPI_SERVED',
     message: 'OpenAPI document served',
     path: options.path,
@@ -443,7 +451,7 @@ export async function applyBymaxOpenApi(app: INestApplication): Promise<OpenApiM
     // Warn only when the operator actually asked for the document: an
     // application that never enabled it should boot silently.
     if (options.suppressedInProduction || options.enabled) {
-      logger.warn({
+      writeLog(logger, 'warn', {
         event: 'CORE_OPENAPI_PRODUCTION_REFUSED',
         message:
           'openapi.enabled was requested but the OpenAPI document is never served in production. ' +
