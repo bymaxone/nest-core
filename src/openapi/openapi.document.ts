@@ -24,6 +24,7 @@
  * so the recognition rules are stated once for every reader of them.
  * @layer Service
  */
+import { bootError } from '../boot-error'
 import type {
   OpenApiOperationKey,
   OpenApiSecurityRequirement,
@@ -536,10 +537,11 @@ function assertSchemesDeclared(
     return
   }
 
-  throw new Error(
+  throw bootError(
     `[BymaxCoreModule] openapi security names ${missing.length} scheme(s) that the document does ` +
-      `not define: ${missing.join(', ')}. Declare them in openapi.securitySchemes, or drop the ` +
-      `requirement. The document defines: ${declared.length === 0 ? '(none)' : declared.join(', ')}.`
+      'not define. Declare them in openapi.securitySchemes, or drop the requirement; schemes ' +
+      'lists the ones named and declaredSchemes the ones the document defines.',
+    { schemes: missing, declaredSchemes: declared }
   )
 }
 
@@ -624,11 +626,12 @@ function assertOverridesMatch(
     return
   }
 
-  throw new Error(
+  throw bootError(
     `[BymaxCoreModule] openapi.operationSecurity addresses ${unmatched.length} operation(s) that ` +
-      `the document does not contain: ${unmatched.join(', ')}. Keys are "<METHOD> <path>" with the ` +
-      'path exactly as documented, including any global prefix. The document contains: ' +
-      `${documented.length === 0 ? '(none)' : documented.join(', ')}.`
+      'the document does not contain. Keys are "<METHOD> <path>" with the path exactly as ' +
+      'documented, including any global prefix; operations lists the ones addressed and ' +
+      'documentedOperations the ones the document contains.',
+    { operations: unmatched, documentedOperations: documented }
   )
 }
 

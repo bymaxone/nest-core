@@ -164,11 +164,17 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 // 8171 B. The growth is the same description, the cause of the contract version error and the wider escape.
 // Measured at these figures: cutting the docblock of `writeLog` to one sentence left both bundles byte for
 // byte the same, and its text is absent from `dist`, so that docblock is not part of the growth.
+// Root budget 23.82 KiB = 24392 B: measured 24368 B brotli (raw 106073 B) plus 24 B of headroom. The
+// growth over 23.78 KiB is the boot-error builder, the fields it carries on the metrics and health boot
+// errors, and the escape by Unicode category: code and messages.
+// `./openapi` budget 8.12 KiB = 8315 B: measured 8308 B brotli (raw 33871 B) plus 7 B of headroom, from
+// 8243 B. The growth is the same builder, the fields on the contributor, handler-key, scheme and
+// operation boot errors, and the guarded read of a fragment: code and messages.
 const BUDGETS = [
-  { name: '. (root)', path: 'dist/index.mjs', brotli: 23.78 * 1024 },
+  { name: '. (root)', path: 'dist/index.mjs', brotli: 23.82 * 1024 },
   { name: './pagination', path: 'dist/pagination/index.mjs', brotli: 1.5 * 1024 },
   { name: './health', path: 'dist/health/index.mjs', brotli: 0.5 * 1024 },
-  { name: './openapi', path: 'dist/openapi/index.mjs', brotli: 8.05 * 1024 },
+  { name: './openapi', path: 'dist/openapi/index.mjs', brotli: 8.12 * 1024 },
   { name: './metrics', path: 'dist/metrics/index.mjs', brotli: 0.5 * 1024 },
   { name: './http', path: 'dist/http/index.mjs', brotli: 3.49 * 1024 }
 ]

@@ -88,27 +88,26 @@ const MAX_WARNED_OPERATIONS = 10
 /** The longest one listed item is shown, so a long route template cannot fill a log line. */
 const MAX_LISTED_ITEM = 200
 
-/** The separators, bidirectional controls, zero-width characters and byte order mark, which break, reorder or hide text in a line. */
-const isInvisibleFormat = (code: number): boolean =>
-  code === 0x2028 ||
-  code === 0x2029 ||
-  (code >= 0x200b && code <= 0x200f) ||
-  code === 0x2060 ||
-  code === 0xfeff ||
-  (code >= 0x202a && code <= 0x202e) ||
-  (code >= 0x2066 && code <= 0x2069)
+/** Control, format, line and paragraph separator characters: they break, reorder or hide text. */
+const UNSEEN = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u
 
 /**
- * One item of a list a warning carries, made safe for a log line: a control character, a separator, a
- * bidirectional control, a zero-width character or a byte order mark (a line break, an escape, a direction override) is written as `\uXXXX`, and an item longer than the limit is cut before the first
- * character whose text does not fit, so an escape is never left in part, and ends with an ellipsis.
+ * One item of a list a warning carries, made safe for a log line: a character that breaks, reorders
+ * or hides text (a control, a format character such as a direction override or a zero-width joiner,
+ * a line or paragraph separator) is written as `\uXXXX`, or `\u{X}` past the Basic Multilingual
+ * Plane, and an item longer than the limit is cut before the first character whose text does not
+ * fit, so an escape is never left in part, and ends with an ellipsis.
  */
 function safeListed(item: string): string {
   let shown = ''
   for (const char of item) {
-    const code = char.charCodeAt(0)
-    const control = code < 0x20 || (code >= 0x7f && code <= 0x9f) || isInvisibleFormat(code)
-    const text = control ? `\\u${code.toString(16).padStart(4, '0')}` : char
+    const code = char.codePointAt(0) as number
+    const hex = code.toString(16)
+    const text = UNSEEN.test(char)
+      ? char.length > 1
+        ? `\\u{${hex}}`
+        : `\\u${hex.padStart(4, '0')}`
+      : char
     if (shown.length + text.length > MAX_LISTED_ITEM) return `${shown}…`
     shown += text
   }

@@ -401,6 +401,11 @@ describe('OpenAPI document, deployment fidelity', () => {
       }
     })
 
-    await expect(applyBymaxOpenApi(app)).rejects.toThrow(/does not contain: POST \/nope/)
+    await expect(applyBymaxOpenApi(app)).rejects.toMatchObject({
+      message: expect.stringContaining(
+        'addresses 1 operation(s) that the document does not contain'
+      ) as string,
+      operations: ['POST /nope']
+    })
   })
 })
