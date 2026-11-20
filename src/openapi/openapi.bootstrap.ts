@@ -89,7 +89,7 @@ const MAX_WARNED_OPERATIONS = 10
 const MAX_LISTED_ITEM = 200
 
 /** Control, format, line and paragraph separator characters: they break, reorder or hide text. */
-const UNSEEN = /^[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]$/u
+const UNSEEN = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u
 
 /**
  * One item of a list a warning carries, made safe for a log line: a character that breaks, reorders
@@ -104,7 +104,7 @@ function safeListed(item: string): string {
     const code = char.codePointAt(0) as number
     const hex = code.toString(16)
     const text = UNSEEN.test(char)
-      ? code > 0xffff
+      ? char.length > 1
         ? `\\u{${hex}}`
         : `\\u${hex.padStart(4, '0')}`
       : char

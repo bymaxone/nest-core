@@ -425,7 +425,12 @@ describe('collectContributions', () => {
         })
       )
 
-    expect(build).toThrow(/an OpenAPI contributor contributed fragments for 2 handler\(s\)/)
+    expect(build).toThrow(
+      expect.objectContaining({
+        message:
+          '[BymaxCoreModule] an OpenAPI contributor contributed fragments for 2 handler(s) this application does not have. Keys are "<ControllerClassName>.<methodName>"; handlerKeys lists the ones it addressed and knownHandlers the ones the application has.'
+      })
+    )
     expect(build).toThrow(/"<ControllerClassName>\.<methodName>"/)
     expect(build).toThrow(
       expect.objectContaining({
