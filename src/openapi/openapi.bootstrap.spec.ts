@@ -690,8 +690,7 @@ describe('applyBymaxOpenApi', () => {
   /**
    * An item of exactly the longest length is shown whole.
    *
-   * The boundary the cut turns on: a rule that cut at `>=` would add an ellipsis to an item that fits,
-   * and no case either side of the limit would notice.
+   * The boundary the cut turns on: a rule that cut at `>=` would add an ellipsis to an item that fits.
    */
   it('shows a route of exactly 200 characters whole', async () => {
     process.env['NODE_ENV'] = 'test'
