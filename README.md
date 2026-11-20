@@ -428,16 +428,16 @@ registry as a guarded placeholder when metrics are off), so a consumer `BYMAX_TI
 override is honored on `forRoot` but shadowed on `forRootAsync`. Follow the pattern in
 [Integration with `@bymax-one/nest-logger`](#-integration-with-bymax-onenest-logger).
 
-| Token                          | Provides                              | When you do not provide one                                                                                       |
-| ------------------------------ | ------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| `BYMAX_CORE_OPTIONS`           | The resolved `BymaxCoreModuleOptions` | always set by the module                                                                                          |
-| `BYMAX_CORRELATION_PROVIDER`   | `ICorrelationIdProvider`              | internal no-op (omits `correlationId`)                                                                            |
-| `BYMAX_TIMING_SINK`            | `ITimingSink`                         | internal no-op, or the metrics bridge when timing and metrics are both enabled                                    |
-| `BYMAX_HEALTH_INDICATORS`      | `IHealthIndicator[]`                  | treated as an empty indicator set                                                                                 |
-| `BYMAX_HEALTH_TRANSITION_SINK` | `IHealthTransitionSink`               | no sink; readiness transitions go to Nest's logger instead (binding one stands that line down)                    |
-| `BYMAX_UNEXPECTED_ERROR_SINK`  | `IUnexpectedErrorSink`                | no sink; the cause of a `500 BYMAX_INTERNAL_ERROR` is not recorded anywhere                                       |
-| `BYMAX_METRICS_REGISTRY`       | the `prom-client` `Registry`          | bound when metrics are enabled; on `forRootAsync` always registered, guarded-placeholder when off                 |
-| `BYMAX_TRACE_CONTEXT`          | `ITraceContextProvider`               | bound on every path: the OpenTelemetry reader when telemetry is enabled, a no-op that resolves no trace otherwise |
+| Token                          | Provides                                      | When you do not provide one                                                                                       |
+| ------------------------------ | --------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `BYMAX_CORE_OPTIONS`           | The resolved `BymaxCoreModuleOptions`         | always set by the module                                                                                          |
+| `BYMAX_CORRELATION_PROVIDER`   | `ICorrelationIdProvider`                      | internal no-op (omits `correlationId`)                                                                            |
+| `BYMAX_TIMING_SINK`            | `ITimingSink`                                 | internal no-op, or the metrics bridge when timing and metrics are both enabled                                    |
+| `BYMAX_HEALTH_INDICATORS`      | `IHealthIndicator[]`                          | treated as an empty indicator set                                                                                 |
+| `BYMAX_HEALTH_TRANSITION_SINK` | `IHealthTransitionSink`                       | no sink; readiness transitions go to Nest's logger instead (binding one stands that line down)                    |
+| `BYMAX_UNEXPECTED_ERROR_SINK`  | `IUnexpectedErrorSink`                        | no sink; the cause of a `500 BYMAX_INTERNAL_ERROR` is not recorded anywhere                                       |
+| `BYMAX_METRICS_REGISTRY`       | the `prom-client` `Registry`                  | bound when metrics are enabled; on `forRootAsync` always registered, guarded-placeholder when off                 |
+| `BYMAX_TRACE_CONTEXT`          | `ITraceContextProvider` (`getTraceContext()`) | bound on every path: the OpenTelemetry reader when telemetry is enabled, a no-op that resolves no trace otherwise |
 
 ## 🚨 Error Envelope
 
@@ -714,6 +714,10 @@ export class InvoiceController {
 }
 ```
 
+A result is `{ items, meta }`, and `meta` is `{ page, limit, totalItems, totalPages }`: the page
+the query resolved to, the page size it resolved to, the count across every page, and the number of
+pages (`0` when there are no items).
+
 #### Bound the offset, not just the page size
 
 `maxLimit` caps how many rows a request reads; `maxOffset` caps how far in it starts, which is
@@ -752,6 +756,8 @@ export class InvoiceCursorController {
   }
 }
 ```
+
+A result is `{ items, nextCursor }`, where `nextCursor` is `null` on the last page.
 
 A malformed or tampered cursor rejects with `BYMAX_VALIDATION_FAILED`. Cursors
 are opaque `base64url` strings but are neither encrypted nor signed: encode
@@ -926,21 +932,21 @@ Every operational line this package writes through Nest's `Logger` is an object 
 `{ event: 'CORE_<EVENT>', message: '<short text>', ...fields }`, where the fields are numbers or names
 the application chose. `@bymax-one/nest-logger` 1.4.23 or later writes the object as structured fields,
 so an alert matches on `event`; with another logger the object reaches it as it is. Match on `event`,
-not on the text. `message` is this package's own text: an error that code of yours threw (an indicator that rejected, a transition sink, a handler) goes as an `Error` under `err`, for your logger to treat as your data, and never inside `message`.
+not on the text. `message` is this package's own text: an error that code of yours threw (an indicator that rejected, a transition sink, a handler) goes as an `Error` under `err`, for your logger to treat as your data, and never inside `message`. Where code of yours threw something that is not an `Error` (a string, an object), it is carried as a `NonErrorThrownError` with the value as its `cause`; an `Error` is carried as it is. `routes` and `entries` list what a warning is about (operation keys such as `GET /users/{id}`, contributed components), up to ten, then `, and <n> more`.
 
 | `event`                           | Level | When                                                                                                                                                                                       | Fields                               |
 | --------------------------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------ |
 | `CORE_HEALTH_DOWN`                | warn  | A health check changed from up to down, or was first seen down; `cause` says why (`rejected`, `timed-out` or `reported-down`). Not written when a `BYMAX_HEALTH_TRANSITION_SINK` is bound. | `check`, `cause`, `timeoutMs`, `err` |
 | `CORE_HEALTH_RECOVERED`           | log   | A health check that had been down is reachable again. Not written when a `BYMAX_HEALTH_TRANSITION_SINK` is bound.                                                                          | `check`                              |
-| `CORE_HEALTH_SINK_FAILED`         | warn  | The bound health transition sink threw or rejected; the probe is unaffected.                                                                                                               | `err`                                |
-| `CORE_HANDLER_LATE_ERROR`         | error | A handler threw after its request was answered `504`; the handler's own error is `err`.                                                                                                    | `err`                                |
+| `CORE_HEALTH_SINK_FAILED`         | warn  | The bound health transition sink threw or rejected; the probe is unaffected. `err` is a new `Error` with the sink's own as its `cause`.                                                    | `err`                                |
+| `CORE_HANDLER_LATE_ERROR`         | error | A handler threw after its request was answered `504`; the handler's own error is `err`, or a `NonErrorThrownError` holding what it threw as `cause`.                                       | `err`                                |
 | `CORE_SHUTDOWN_DEADLINE`          | error | Shutdown did not finish within `shutdown.deadlineMs`; the process exits with code `1`.                                                                                                     | `deadlineMs`                         |
 | `CORE_METRICS_SCRAPE_SLOW`        | warn  | A metrics collection is past `metrics.scrapeTimeoutMs`; scrapes answer `503` until it ends.                                                                                                | `timeoutMs`                          |
 | `CORE_METRICS_CONTRIBUTORS`       | log   | Contributors registered their metrics at boot; their labels follow.                                                                                                                        | `contributors`, `labels`             |
 | `CORE_OPENAPI_SERVED`             | log   | The OpenAPI document was mounted.                                                                                                                                                          | `path`, `jsonPath`                   |
 | `CORE_OPENAPI_PRODUCTION_REFUSED` | warn  | The OpenAPI document was requested in production and is never served there.                                                                                                                |                                      |
-| `CORE_OPENAPI_UNSECURED`          | warn  | Operations state no security requirement while others in the document do.                                                                                                                  | `operations`                         |
-| `CORE_OPENAPI_COMPONENT_CONFLICT` | warn  | A library contributed a component the document already defines; the contributed one is not served.                                                                                         | `components`                         |
+| `CORE_OPENAPI_UNSECURED`          | warn  | Operations state no security requirement while others in the document do.                                                                                                                  | `operations`, `routes`               |
+| `CORE_OPENAPI_COMPONENT_CONFLICT` | warn  | A library contributed a component the document already defines; the contributed one is not served.                                                                                         | `components`, `entries`              |
 
 ## 📈 Metrics
 

@@ -142,9 +142,10 @@ describe('metrics contribution', () => {
     }).compile()
     const built = moduleRef.createNestApplication()
 
-    await expect(built.init()).rejects.toThrow(
-      /"QueueMetricsContributor" failed to register its metrics: .*bymax_queue_jobs_total/
-    )
+    await expect(built.init()).rejects.toMatchObject({
+      message: '[BymaxCoreModule] "QueueMetricsContributor" failed to register its metrics',
+      cause: { message: expect.stringContaining('bymax_queue_jobs_total') as string }
+    })
     await built.close()
   })
 

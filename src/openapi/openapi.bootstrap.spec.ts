@@ -60,9 +60,10 @@ const PRODUCTION_WARNING = {
 const UNSECURED_WARNING = {
   event: 'CORE_OPENAPI_UNSECURED',
   operations: 1,
+  routes: 'GET /examples',
   message:
-    'a client generated from the OpenAPI document will send no credentials to 1 operation(s): ' +
-    'GET /examples. They state no security requirement, the document declares no default, and ' +
+    'a client generated from the OpenAPI document will send no credentials to 1 operation(s), ' +
+    'listed under routes. They state no security requirement, the document declares no default, and ' +
     'other operations in it do state one — so this is more often a missing openapi.security ' +
     'default than a public API. Set openapi.security, or state the intent per operation with an ' +
     'explicit [] in openapi.operationSecurity.'
@@ -641,11 +642,14 @@ describe('applyBymaxOpenApi', () => {
 
     await applyBymaxOpenApi(app)
 
-    const [{ message }] = (logged.warn as jest.Mock).mock.calls[0] as [{ message: string }]
+    const [{ message, routes }] = (logged.warn as jest.Mock).mock.calls[0] as [
+      { message: string; routes: string }
+    ]
     expect(message).toContain('will send no credentials to 11 operation(s)')
-    expect(message).toContain('GET /bulk/r1, GET /bulk/r2')
-    expect(message).toContain('GET /bulk/r10, and 1 more.')
-    expect(message).not.toContain('GET /bulk/r11,')
+    expect(message).not.toContain('GET /bulk')
+    expect(routes).toContain('GET /bulk/r1, GET /bulk/r2')
+    expect(routes.endsWith('GET /bulk/r10, and 1 more')).toBe(true)
+    expect(routes).not.toContain('GET /bulk/r11')
   })
 
   /**
@@ -665,9 +669,11 @@ describe('applyBymaxOpenApi', () => {
 
     await applyBymaxOpenApi(app)
 
-    const [{ message }] = (logged.warn as jest.Mock).mock.calls[0] as [{ message: string }]
+    const [{ message, routes }] = (logged.warn as jest.Mock).mock.calls[0] as [
+      { message: string; routes: string }
+    ]
     expect(message).toContain('will send no credentials to 10 operation(s)')
-    expect(message).toContain('GET /bulk/r10. They state no security requirement')
-    expect(message).not.toContain(', and 0 more')
+    expect(routes.endsWith('GET /bulk/r10')).toBe(true)
+    expect(routes).not.toContain('more')
   })
 })

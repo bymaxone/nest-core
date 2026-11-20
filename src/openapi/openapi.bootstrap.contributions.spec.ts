@@ -21,9 +21,10 @@ import { bootApp, ExampleController, logged, LOG_CONTEXT } from './__tests__/boo
 const DISCARDED_WARNING = {
   event: 'CORE_OPENAPI_COMPONENT_CONFLICT',
   components: 1,
+  entries: 'CollidingOpenApi -> securitySchemes.cookieAuth',
   message:
-    'the served OpenAPI document already defines 1 component entry(ies) a library also contributes: ' +
-    'CollidingOpenApi -> securitySchemes.cookieAuth. The contributed version is not served, so where ' +
+    'the served OpenAPI document already defines 1 component entry(ies) a library also contributes, ' +
+    'listed under entries. The contributed version is not served, so where ' +
     "the two differ a client generated from this document will not match that library's own types. What holds the " +
     "name may be the application's own declaration, a core schema under openapi.includeCoreSchemas, " +
     'or a contributor that sorted earlier — read the document before deciding what to remove.'
@@ -104,7 +105,8 @@ const ELEVEN_SCHEMES = Object.fromEntries(
  * makes it the wrong instrument for an elision: a line that listed everything
  * and then said "and 1 more" satisfies every such matcher written about it.
  *
- * @returns The warning text, or the empty string when it was never written.
+ * @returns The warning's message followed by its `entries` field, or the empty string when it was
+ *   never written.
  */
 function discardWarning(): string {
   const call = logged.warn.mock.calls.find(
@@ -113,7 +115,8 @@ function discardWarning(): string {
       entry !== null &&
       String((entry as { message?: unknown }).message).includes('component entry(ies)')
   )
-  return call === undefined ? '' : String((call[0] as { message: string }).message)
+  const { message, entries } = (call?.[0] ?? {}) as { message?: string; entries?: string }
+  return call === undefined ? '' : `${String(message)}\n${String(entries)}`
 }
 
 describe('applyBymaxOpenApi — contributed component collisions', () => {

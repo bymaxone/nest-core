@@ -12,6 +12,22 @@ heading here.
 
 ## [Unreleased]
 
+**Apply to your observability:**
+
+- A boot error for a metrics contributor that throws is now `"<name>" failed to register its metrics`,
+  with what it threw as `cause`; the text it threw is no longer part of the message. Match on the
+  `cause`, not on the text after the colon.
+- `CORE_OPENAPI_UNSECURED` and `CORE_OPENAPI_COMPONENT_CONFLICT` carry the operation keys and the
+  component entries in new fields, `routes` and `entries`, and no longer in `message`, which is this
+  package's own text.
+- `CORE_HANDLER_LATE_ERROR` and `CORE_HEALTH_SINK_FAILED` keep what your code threw. An `Error` is
+  logged as it is, with its name, code and stack; a string or an object becomes a `NonErrorThrownError`
+  (new export from the package root) holding the value as `cause`. `err` of `CORE_HEALTH_SINK_FAILED`
+  is a new `Error` whose `cause` is the sink's own.
+
+The README now names every field of the pagination results (`items`, `nextCursor`, `meta`) and of
+`ITraceContextProvider`, and a spec keeps the fields of every exported interface named there.
+
 ## [1.6.15] - 2026-11-18
 
 A patch release. Every health check has a gauge, every operational log line is an object message with an
