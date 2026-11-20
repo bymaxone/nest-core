@@ -145,10 +145,14 @@ describe('augmentDocument — security', () => {
       ).document
 
     expect(build).toThrow(/\[BymaxCoreModule\] openapi\.operationSecurity addresses 1 operation/)
-    expect(build).toThrow(/does not contain: POST \/auth\/login/)
+    expect(build).toThrow(expect.objectContaining({ operations: ['POST /auth/login'] }))
     expect(build).toThrow(/Keys are "<METHOD> <path>"/)
     expect(build).toThrow(/including any global prefix/)
-    expect(build).toThrow(/The document contains: POST \/api\/auth\/login/)
+    expect(build).toThrow(
+      expect.objectContaining({
+        documentedOperations: expect.arrayContaining(['POST /api/auth/login'])
+      })
+    )
   })
 
   /**
@@ -166,8 +170,10 @@ describe('augmentDocument — security', () => {
       ).document
 
     expect(build).toThrow(/addresses 2 operation/)
-    expect(build).toThrow(/does not contain: POST \/nope, GET \/nada\./)
-    expect(build).toThrow(/The document contains: GET \/invoices, POST \/payments\./)
+    expect(build).toThrow(expect.objectContaining({ operations: ['POST /nope', 'GET /nada'] }))
+    expect(build).toThrow(
+      expect.objectContaining({ documentedOperations: ['GET /invoices', 'POST /payments'] })
+    )
   })
 
   /**
@@ -184,9 +190,10 @@ describe('augmentDocument — security', () => {
       augmentDocument(generated({ '/x': { get: {} } }), options({ security: [{ ghost: [] }] }))
         .document
 
-    expect(build).toThrow(/names 1 scheme\(s\) that the document does not define: ghost/)
+    expect(build).toThrow(/names 1 scheme\(s\) that the document does not define/)
+    expect(build).toThrow(expect.objectContaining({ schemes: ['ghost'] }))
     expect(build).toThrow(/Declare them in openapi\.securitySchemes, or drop the requirement/)
-    expect(build).toThrow(/The document defines: \(none\)/)
+    expect(build).toThrow(expect.objectContaining({ declaredSchemes: [] }))
   })
 
   /**
@@ -205,8 +212,10 @@ describe('augmentDocument — security', () => {
         })
       ).document
 
-    expect(build).toThrow(/does not define: refreshCooky/)
-    expect(build).toThrow(/The document defines: cookieAuth, refreshCookie/)
+    expect(build).toThrow(expect.objectContaining({ schemes: ['refreshCooky'] }))
+    expect(build).toThrow(
+      expect.objectContaining({ declaredSchemes: ['cookieAuth', 'refreshCookie'] })
+    )
   })
 
   /**
@@ -227,7 +236,7 @@ describe('augmentDocument — security', () => {
       ).document
 
     expect(build).toThrow(/names 2 scheme\(s\)/)
-    expect(build).toThrow(/does not define: ghostOne, ghostTwo\./)
+    expect(build).toThrow(expect.objectContaining({ schemes: ['ghostOne', 'ghostTwo'] }))
   })
 
   /**
@@ -277,7 +286,7 @@ describe('augmentDocument — security', () => {
     expect(
       () =>
         augmentDocument(generated({}), options({ operationSecurity: { 'GET /x': [] } })).document
-    ).toThrow(/The document contains: \(none\)\./)
+    ).toThrow(expect.objectContaining({ documentedOperations: [] }))
   })
 
   /**
@@ -308,7 +317,7 @@ describe('augmentDocument — security', () => {
           generated({ ...OWN_ROUTES }),
           options({ operationSecurity: { 'GET /metrics': [] } })
         ).document
-    ).toThrow(/does not contain: GET \/metrics/)
+    ).toThrow(expect.objectContaining({ operations: ['GET /metrics'] }))
   })
 
   /**

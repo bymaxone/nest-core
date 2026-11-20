@@ -13,6 +13,7 @@ import { Inject, Injectable, Logger, Optional } from '@nestjs/common'
 import type { OnApplicationBootstrap } from '@nestjs/common'
 import { DiscoveryService, Reflector } from '@nestjs/core'
 
+import { bootError } from '../boot-error'
 import type { ResolvedCoreOptions } from '../core.options'
 import { BYMAX_CORE_OPTIONS, BYMAX_METRICS_REGISTRY } from '../core.tokens'
 import { findMarkedProviders } from '../discovery'
@@ -69,9 +70,10 @@ export function discoverContributors(
     BYMAX_METRICS_CONTRIBUTOR_METADATA
   )) {
     if (!isContributor(marked.instance)) {
-      throw new Error(
-        `[BymaxCoreModule] "${marked.label}" is marked with @BymaxMetricsContributor() but does ` +
-          'not implement IMetricsContributor: it must expose a "registerMetrics" method.'
+      throw bootError(
+        '[BymaxCoreModule] a provider marked @BymaxMetricsContributor() does not implement ' +
+          'IMetricsContributor: it must expose a "registerMetrics" method.',
+        { contributor: marked.label }
       )
     }
     found.push({ contributor: marked.instance, label: marked.label })
@@ -99,9 +101,11 @@ export function applyContributions(
     try {
       contributor.registerMetrics(registry)
     } catch (cause) {
-      throw new Error(`[BymaxCoreModule] "${label}" failed to register its metrics`, {
-        cause: asHostError(cause)
-      })
+      throw bootError(
+        '[BymaxCoreModule] a metrics contributor failed to register its metrics',
+        { contributor: label },
+        { cause: asHostError(cause) }
+      )
     }
   }
 }

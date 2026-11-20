@@ -127,8 +127,12 @@ describe('discoverContributors', () => {
    */
   it('throws naming the class when a marked provider is not a contributor', () => {
     expect(() => discoverContributors(scannerOver([IncompleteContributor]), reflector)).toThrow(
-      '[BymaxCoreModule] "IncompleteContributor" is marked with @BymaxMetricsContributor() but ' +
-        'does not implement IMetricsContributor: it must expose a "registerMetrics" method.'
+      expect.objectContaining({
+        message:
+          '[BymaxCoreModule] a provider marked @BymaxMetricsContributor() does not implement ' +
+          'IMetricsContributor: it must expose a "registerMetrics" method.',
+        contributor: 'IncompleteContributor'
+      })
     )
   })
 
@@ -189,7 +193,10 @@ describe('applyContributions', () => {
     } catch (error) {
       thrown = error as Error
     }
-    expect(thrown?.message).toBe('[BymaxCoreModule] "QueueMetrics" failed to register its metrics')
+    expect(thrown?.message).toBe(
+      '[BymaxCoreModule] a metrics contributor failed to register its metrics'
+    )
+    expect(thrown).toMatchObject({ contributor: 'QueueMetrics' })
     expect((thrown?.cause as Error).message).toContain('bymax_queue_depth')
   })
 
@@ -245,8 +252,9 @@ describe('applyContributions', () => {
       thrown = error as Error
     }
     expect(thrown?.message).toBe(
-      '[BymaxCoreModule] "RudeContributor" failed to register its metrics'
+      '[BymaxCoreModule] a metrics contributor failed to register its metrics'
     )
+    expect(thrown).toMatchObject({ contributor: 'RudeContributor' })
     expect(thrown?.cause).toBeInstanceOf(NonErrorThrownError)
     expect((thrown?.cause as Error).cause).toBe('just a string')
   })

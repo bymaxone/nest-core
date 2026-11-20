@@ -17,6 +17,7 @@
  */
 import type { Reflector } from '@nestjs/core'
 
+import { bootError } from '../boot-error'
 import { findMarkedProviders } from '../discovery'
 import type { ProviderScanner } from '../discovery'
 import { asHostError, describeUnreadable } from '../host-error'
@@ -90,11 +91,11 @@ export function createHandlerIdMap(): HandlerIdMap {
       // both, so a fragment for one would document the other too.
       const seen = versions.get(handlerKey) ?? new Set<string | undefined>()
       if (seen.has(version)) {
-        throw new Error(
-          `[BymaxCoreModule] two route handlers in this application answer to ` +
-            `"${handlerKey}", so an OpenAPI fragment addressing it would apply to both. ` +
-            'Handler keys are "<ControllerClassName>.<methodName>"; rename one of the ' +
-            'controller classes.'
+        throw bootError(
+          '[BymaxCoreModule] two route handlers in this application answer to the same handler ' +
+            'key, so an OpenAPI fragment addressing it would apply to both. Handler keys are ' +
+            '"<ControllerClassName>.<methodName>"; rename one of the controller classes.',
+          { handlerKey }
         )
       }
       seen.add(version)
@@ -125,6 +126,11 @@ function isContributor(instance: unknown): instance is IOpenApiContributor {
   return typeof (instance as Partial<IOpenApiContributor> | null)?.contributeOpenApi === 'function'
 }
 
+/** The three members of a fragment this package reads, taken once so a getter runs once. */
+type ReadFragment = {
+  [K in 'contractVersion' | 'operations' | 'components']: OpenApiFragment[K] | undefined
+}
+
 /**
  * Ask one contributor for its fragments, failing with its name if it cannot.
  *
@@ -138,13 +144,18 @@ function isContributor(instance: unknown): instance is IOpenApiContributor {
  * @returns The fragment it produced.
  * @throws Error When the contributor throws, with its name and what it threw as the cause.
  */
-function callContributor(contributor: IOpenApiContributor, label: string): OpenApiFragment {
+function callContributor(contributor: IOpenApiContributor, label: string): ReadFragment {
   try {
-    return contributor.contributeOpenApi()
+    // Read here, inside the guard: a fragment that is not an object, or whose getter throws, is a
+    // contributor's failure like a throw from the method.
+    const { contractVersion, operations, components } = contributor.contributeOpenApi()
+    return { contractVersion, operations, components }
   } catch (cause) {
-    throw new Error(`[BymaxCoreModule] "${label}" failed to contribute to the OpenAPI document`, {
-      cause: asHostError(cause)
-    })
+    throw bootError(
+      '[BymaxCoreModule] an OpenAPI contributor failed to contribute to the OpenAPI document',
+      { contributor: label },
+      { cause: asHostError(cause) }
+    )
   }
 }
 
@@ -163,16 +174,17 @@ function callContributor(contributor: IOpenApiContributor, label: string): OpenA
  * @param label - How to name the contributor in an error.
  * @throws Error When the fragment declares an unknown revision.
  */
-function assertContractVersion(fragment: OpenApiFragment, label: string): void {
+function assertContractVersion(fragment: ReadFragment, label: string): void {
   if (fragment.contractVersion === BYMAX_OPENAPI_CONTRACT_VERSION) {
     return
   }
   const declared = describeUnreadable(fragment.contractVersion) ?? 'a value that cannot be read'
-  throw new Error(
-    `[BymaxCoreModule] "${label}" contributed a fragment written against OpenAPI contract ` +
-      `version ${declared}, and this package speaks version ` +
+  throw bootError(
+    '[BymaxCoreModule] an OpenAPI contributor contributed a fragment written against OpenAPI ' +
+      `contract version ${declared}, and this package speaks version ` +
       `${String(BYMAX_OPENAPI_CONTRACT_VERSION)}. Upgrade whichever of the two is behind; the ` +
       'shapes are not interchangeable.',
+    { contributor: label },
     { cause: asHostError(fragment.contractVersion) }
   )
 }
@@ -194,7 +206,7 @@ function assertContractVersion(fragment: OpenApiFragment, label: string): void {
  * @throws Error When a key addresses no handler in the application.
  */
 function resolveOperations(
-  fragment: OpenApiFragment,
+  fragment: ReadFragment,
   label: string,
   handlers: HandlerIdMap
 ): Readonly<Record<string, OpenApiFragmentObject>> {
@@ -202,11 +214,11 @@ function resolveOperations(
   const unmatched = entries.filter(([handlerKey]) => handlers.idsFor(handlerKey).length === 0)
   if (unmatched.length > 0) {
     const known = handlers.keys()
-    throw new Error(
-      `[BymaxCoreModule] "${label}" contributed fragments for ${unmatched.length} handler(s) this ` +
-        `application does not have: ${unmatched.map(([key]) => key).join(', ')}. Keys are ` +
-        '"<ControllerClassName>.<methodName>". The application has: ' +
-        `${known.length === 0 ? '(none)' : known.join(', ')}.`
+    throw bootError(
+      `[BymaxCoreModule] an OpenAPI contributor contributed fragments for ${unmatched.length} ` +
+        'handler(s) this application does not have. Keys are "<ControllerClassName>.<methodName>"; ' +
+        'handlerKeys lists the ones it addressed and knownHandlers the ones the application has.',
+      { contributor: label, handlerKeys: unmatched.map(([key]) => key), knownHandlers: known }
     )
   }
 
@@ -249,19 +261,21 @@ export function collectContributions(
   const labels = marked.map(({ label }) => label)
   const duplicated = labels.filter((label, index) => labels.indexOf(label) !== index)
   if (duplicated.length > 0) {
-    throw new Error(
-      `[BymaxCoreModule] more than one OpenAPI contributor is named ` +
-        `"${[...new Set(duplicated)].join('", "')}", so the order they merge in would depend on ` +
-        'the container rather than on anything stated. Rename one of the contributor classes.'
+    throw bootError(
+      '[BymaxCoreModule] more than one OpenAPI contributor shares a class name, so the order ' +
+        'they merge in would depend on the container rather than on anything stated. Rename one ' +
+        'of the contributor classes; duplicates lists the names.',
+      { duplicates: [...new Set(duplicated)] }
     )
   }
   marked.sort((left, right) => left.label.localeCompare(right.label))
 
   return marked.map(({ instance, label }) => {
     if (!isContributor(instance)) {
-      throw new Error(
-        `[BymaxCoreModule] "${label}" is marked @BymaxOpenApiContributor() but does not implement ` +
-          'IOpenApiContributor: it must expose a "contributeOpenApi" method.'
+      throw bootError(
+        '[BymaxCoreModule] a provider marked @BymaxOpenApiContributor() does not implement ' +
+          'IOpenApiContributor: it must expose a "contributeOpenApi" method.',
+        { contributor: label }
       )
     }
     const fragment = callContributor(instance, label)

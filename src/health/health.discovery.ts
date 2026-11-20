@@ -9,6 +9,7 @@
  */
 import type { Reflector } from '@nestjs/core'
 
+import { bootError } from '../boot-error'
 import { findMarkedProviders } from '../discovery'
 import type { ProviderScanner } from '../discovery'
 import type { IHealthIndicator } from './health.interfaces'
@@ -56,9 +57,10 @@ export function discoverIndicators(
   const discovered: IHealthIndicator[] = []
   for (const marked of findMarkedProviders(discovery, reflector, BYMAX_HEALTH_INDICATOR_METADATA)) {
     if (!isIndicator(marked.instance)) {
-      throw new Error(
-        `[BymaxCoreModule] "${marked.label}" is marked with @BymaxHealthIndicator() but does not ` +
-          'implement IHealthIndicator: it must expose a non-empty "name" and a "check" method.'
+      throw bootError(
+        '[BymaxCoreModule] a provider marked @BymaxHealthIndicator() does not implement ' +
+          'IHealthIndicator: it must expose a non-empty "name" and a "check" method.',
+        { provider: marked.label }
       )
     }
     discovered.push(marked.instance)

@@ -98,7 +98,10 @@ describe('createHandlerIdMap', () => {
       map.record('AuthController', 'login', undefined, 'AuthController_login')
 
     expect(again).toThrow(
-      /two route handlers in this application answer to "AuthController\.login"/
+      expect.objectContaining({
+        message: expect.stringContaining('answer to the same handler key') as string,
+        handlerKey: 'AuthController.login'
+      })
     )
     expect(again).toThrow(/an OpenAPI fragment addressing it would apply to both/)
     expect(again).toThrow(/Handler keys are "<ControllerClassName>\.<methodName>"/)
@@ -205,7 +208,14 @@ describe('collectContributions', () => {
         reflector,
         mapOf({})
       )
-    ).toThrow(/"Broken" is marked @BymaxOpenApiContributor\(\) but does not implement/)
+    ).toThrow(
+      expect.objectContaining({
+        message: expect.stringContaining(
+          'a provider marked @BymaxOpenApiContributor() does not implement'
+        ) as string,
+        contributor: 'Broken'
+      })
+    )
   })
 
   /**
@@ -293,8 +303,9 @@ describe('collectContributions', () => {
       caught = error as Error
     }
     expect(caught?.message).toBe(
-      '[BymaxCoreModule] "Hostile" failed to contribute to the OpenAPI document'
+      '[BymaxCoreModule] an OpenAPI contributor failed to contribute to the OpenAPI document'
     )
+    expect(caught).toMatchObject({ contributor: 'Hostile' })
     expect((caught?.cause as Error).cause).toBe(thrown)
   })
 
@@ -322,7 +333,9 @@ describe('collectContributions', () => {
       )
     ).toThrow(
       expect.objectContaining({
-        message: '[BymaxCoreModule] "Exploding" failed to contribute to the OpenAPI document',
+        message:
+          '[BymaxCoreModule] an OpenAPI contributor failed to contribute to the OpenAPI document',
+        contributor: 'Exploding',
         cause: expect.objectContaining({ message: 'options not resolved' }) as unknown
       })
     )
@@ -381,7 +394,9 @@ describe('collectContributions', () => {
       )
     ).toThrow(
       expect.objectContaining({
-        message: '[BymaxCoreModule] "Odd" failed to contribute to the OpenAPI document',
+        message:
+          '[BymaxCoreModule] an OpenAPI contributor failed to contribute to the OpenAPI document',
+        contributor: 'Odd',
         cause: expect.objectContaining({ cause: 'plain string' }) as unknown
       })
     )
@@ -410,10 +425,15 @@ describe('collectContributions', () => {
         })
       )
 
-    expect(build).toThrow(/"AuthOpenApi" contributed fragments for 2 handler\(s\)/)
-    expect(build).toThrow(/does not have: AuthController\.renamed, AuthController\.gone\./)
+    expect(build).toThrow(/an OpenAPI contributor contributed fragments for 2 handler\(s\)/)
     expect(build).toThrow(/"<ControllerClassName>\.<methodName>"/)
-    expect(build).toThrow(/The application has: AuthController\.login, AuthController\.logout\./)
+    expect(build).toThrow(
+      expect.objectContaining({
+        contributor: 'AuthOpenApi',
+        handlerKeys: ['AuthController.renamed', 'AuthController.gone'],
+        knownHandlers: ['AuthController.login', 'AuthController.logout']
+      })
+    )
   })
 
   /**
@@ -434,7 +454,7 @@ describe('collectContributions', () => {
         reflector,
         mapOf({})
       )
-    ).toThrow(/The application has: \(none\)\./)
+    ).toThrow(expect.objectContaining({ knownHandlers: [] }))
   })
 
   /**
@@ -518,10 +538,76 @@ describe('collectContributions', () => {
     }
 
     expect((caught as Error).message).toBe(
-      `[BymaxCoreModule] "Odd" contributed a fragment written against OpenAPI contract version ${shown}, ` +
+      `[BymaxCoreModule] an OpenAPI contributor contributed a fragment written against OpenAPI contract version ${shown}, ` +
         `and this package speaks version 1. Upgrade whichever of the two is behind; the shapes are not interchangeable.`
     )
     expect(((caught as Error).cause as Error).cause).toBe(declared)
+  })
+
+  /**
+   * A fragment that cannot be read is the contributor's failure, labelled, with what threw as the cause.
+   *
+   * The three members are read inside the guard, so a missing fragment, a getter that throws and a
+   * proxy whose `get` throws cannot escape as a raw error that names no contributor.
+   */
+  it.each([
+    ['undefined', undefined],
+    ['null', null],
+    [
+      'a throwing contractVersion getter',
+      {
+        get contractVersion(): never {
+          throw new Error('SECRET-getter')
+        }
+      }
+    ],
+    [
+      'a throwing operations getter',
+      {
+        contractVersion: BYMAX_OPENAPI_CONTRACT_VERSION,
+        get operations(): never {
+          throw new Error('SECRET-getter')
+        }
+      }
+    ],
+    [
+      'a proxy whose get throws',
+      new Proxy(
+        {},
+        {
+          get: () => {
+            throw new Error('SECRET-getter')
+          }
+        }
+      )
+    ]
+  ])('labels a contributor that returned %s', (_name, returned) => {
+    const Odd = {
+      Odd: class {
+        contributeOpenApi(): OpenApiFragment {
+          return returned as OpenApiFragment
+        }
+      }
+    }.Odd
+    Reflect.defineMetadata(BYMAX_OPENAPI_CONTRIBUTOR_METADATA, true, Odd)
+
+    let caught: unknown
+    try {
+      collectContributions(
+        scannerOf([{ metatype: Odd, instance: new Odd() }]),
+        reflector,
+        mapOf({})
+      )
+    } catch (error) {
+      caught = error
+    }
+
+    expect(caught).toMatchObject({
+      message:
+        '[BymaxCoreModule] an OpenAPI contributor failed to contribute to the OpenAPI document',
+      contributor: 'Odd'
+    })
+    expect((caught as Error).cause).toBeInstanceOf(Error)
   })
 
   /**
@@ -549,7 +635,8 @@ describe('collectContributions', () => {
         mapOf({})
       )
 
-    expect(build).toThrow(/"Ahead" contributed a fragment written against OpenAPI contract/)
+    expect(build).toThrow(/an OpenAPI contributor contributed a fragment written against OpenAPI/)
+    expect(build).toThrow(expect.objectContaining({ contributor: 'Ahead' }))
     expect(build).toThrow(/version 2, and this package speaks version 1/)
     expect(build).toThrow(/the shapes are not interchangeable/i)
   })
@@ -580,7 +667,11 @@ describe('collectContributions', () => {
         mapOf({})
       )
     ).toThrow(
-      /more than one OpenAPI contributor is named "AuthOpenApi", so the order they merge in would depend on the container rather than on anything stated\. Rename one of the contributor classes\./
+      expect.objectContaining({
+        message:
+          '[BymaxCoreModule] more than one OpenAPI contributor shares a class name, so the order they merge in would depend on the container rather than on anything stated. Rename one of the contributor classes; duplicates lists the names.',
+        duplicates: ['AuthOpenApi']
+      })
     )
   })
 
@@ -609,7 +700,7 @@ describe('collectContributions', () => {
         reflector,
         mapOf({})
       )
-    ).toThrow(/is named "AlphaOpenApi", "ZuluOpenApi", so the order/)
+    ).toThrow(expect.objectContaining({ duplicates: ['AlphaOpenApi', 'ZuluOpenApi'] }))
   })
 
   /**

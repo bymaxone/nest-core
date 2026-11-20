@@ -139,8 +139,12 @@ describe('discoverIndicators', () => {
     // marker is what put it in scope, and what the contract requires — dropping
     // any of the three sends the reader back to this package's source.
     expect(() => discoverIndicators(scannerOver(nodes), reflector)).toThrow(
-      '[BymaxCoreModule] "IncompleteIndicator" is marked with @BymaxHealthIndicator() but does not ' +
-        'implement IHealthIndicator: it must expose a non-empty "name" and a "check" method.'
+      expect.objectContaining({
+        message:
+          '[BymaxCoreModule] a provider marked @BymaxHealthIndicator() does not implement ' +
+          'IHealthIndicator: it must expose a non-empty "name" and a "check" method.',
+        provider: 'IncompleteIndicator'
+      })
     )
   })
 
@@ -218,7 +222,9 @@ describe('discoverIndicators', () => {
     Reflect.defineMetadata('bymax-one:health-indicator', true, anonymous)
     const nodes: ProviderNode[] = [{ metatype: anonymous, instance: null, name: 'ANON_TOKEN' }]
 
-    expect(() => discoverIndicators(scannerOver(nodes), reflector)).toThrow(/"ANON_TOKEN"/)
+    expect(() => discoverIndicators(scannerOver(nodes), reflector)).toThrow(
+      expect.objectContaining({ provider: 'ANON_TOKEN' })
+    )
   })
 
   /**
