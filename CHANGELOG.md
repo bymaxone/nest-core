@@ -12,20 +12,6 @@ heading here.
 
 ## [Unreleased]
 
-**Apply to your observability:**
-
-- A contributor to the OpenAPI document that throws now fails the boot with
-  `[BymaxCoreModule] "<name>" failed to contribute to the OpenAPI document`, and what it threw is the
-  `cause` (a `NonErrorThrownError` when it is not an `Error`); its text is no longer part of the message.
-  A thrown value that cannot be read safely (a proxy, an object with no prototype) is labelled the same way.
-- `NonErrorThrownError` answers `instanceof` for an instance made by any entry of this package, so a
-  `cause` from `./openapi` is an instance of the class exported from the root.
-- An `Error` from another realm (a `vm` context, a worker) is carried as it is.
-- A logger that throws while `CORE_HANDLER_LATE_ERROR` is written is ignored, as the request was already
-  answered.
-- The items of `routes` and `entries` are cut at 200 characters, and a control character in one is
-  written as `\uXXXX`.
-
 ## [1.6.16] - 2026-11-20
 
 A patch release. What your code threw is kept, as itself or as the `cause` of what this package logs or
@@ -44,6 +30,17 @@ raises, and the route and component lists of two OpenAPI warnings moved out of `
   an object becomes a `NonErrorThrownError` (new export from the package root) holding the value as
   `cause`. `err` of `CORE_HEALTH_SINK_FAILED` is a new `Error` whose `cause` is what the sink threw,
   wrapped the same way when it is not an `Error`.
+- A contributor to the OpenAPI document that throws now fails the boot with
+  `[BymaxCoreModule] "<name>" failed to contribute to the OpenAPI document`, and what it threw is the
+  `cause` (a `NonErrorThrownError` when it is not an `Error`); its text is no longer part of the message.
+  A thrown value that cannot be read safely (a proxy, an object with no prototype) is labelled the same way.
+- `NonErrorThrownError` answers `instanceof` for an instance made by any entry of this package, so a
+  `cause` from `./openapi` is an instance of the class exported from the root.
+- An `Error` from another realm (a `vm` context, a worker) is carried as it is.
+- A logger that throws while `CORE_HANDLER_LATE_ERROR` is written is ignored, as the request was already
+  answered.
+- The items of `routes` and `entries` are cut at 200 characters, and a control character in one is
+  written as `\uXXXX`.
 
 The README now names every field of the pagination results (`items`, `nextCursor`, `meta`) and of
 `ITraceContextProvider`.
