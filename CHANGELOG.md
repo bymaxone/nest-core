@@ -40,7 +40,7 @@ raises, and the route and component lists of two OpenAPI warnings moved out of `
 - A logger that throws while `CORE_HANDLER_LATE_ERROR` is written is ignored, as the request was already
   answered.
 - A control character in an item of `routes` or `entries` is written as `\uXXXX`, and the item is
-  then cut at 200 characters of that text.
+  then cut at 200 characters of that text, never in the middle of an escape.
 
 The README now names every field of the pagination results (`items`, `nextCursor`, `meta`) and of
 `ITraceContextProvider`.

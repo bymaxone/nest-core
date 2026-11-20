@@ -89,15 +89,19 @@ const MAX_LISTED_ITEM = 200
 
 /**
  * One item of a list a warning carries, made safe for a log line: a control character (a line
- * break, an escape) is written as `\uXXXX`, and a long item is cut with an ellipsis.
+ * break, an escape) is written as `\uXXXX`, and an item longer than the limit is cut before the first
+ * character whose text does not fit, so an escape is never left in part, and ends with an ellipsis.
  */
 function safeListed(item: string): string {
-  const escaped = Array.from(item, (char) => {
+  let shown = ''
+  for (const char of item) {
     const code = char.charCodeAt(0)
     const control = code < 0x20 || (code >= 0x7f && code <= 0x9f)
-    return control ? `\\u${code.toString(16).padStart(4, '0')}` : char
-  }).join('')
-  return escaped.length > MAX_LISTED_ITEM ? `${escaped.slice(0, MAX_LISTED_ITEM)}…` : escaped
+    const text = control ? `\\u${code.toString(16).padStart(4, '0')}` : char
+    if (shown.length + text.length > MAX_LISTED_ITEM) return `${shown}…`
+    shown += text
+  }
+  return shown
 }
 
 /** Shown when the core options cannot be resolved from the application. */

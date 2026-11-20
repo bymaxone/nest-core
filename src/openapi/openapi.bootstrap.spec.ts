@@ -718,6 +718,40 @@ describe('applyBymaxOpenApi', () => {
   })
 
   /**
+   * A control escape that would cross the cut is left out whole, not shown in part.
+   *
+   * The escape is six characters long, so one that starts just inside the limit would otherwise end
+   * as a fragment such as `\\u00`, which is neither the character nor its escape.
+   */
+  it('does not cut a control escape in two', async () => {
+    process.env['NODE_ENV'] = 'test'
+    class SplitController {
+      split(): string {
+        return 'ok'
+      }
+    }
+    Controller('split')(SplitController)
+    const descriptor = Object.getOwnPropertyDescriptor(SplitController.prototype, 'split')
+    if (descriptor === undefined) throw new Error('no descriptor')
+    const prefix = 'GET /split/'
+    Get(`${'y'.repeat(197 - prefix.length)}\u001bzzz`)(
+      SplitController.prototype,
+      'split',
+      descriptor
+    )
+    app = await bootApp({ openapi: { enabled: true, operationSecurity: { 'GET /bulk/r0': [] } } }, [
+      bulkController(2),
+      SplitController
+    ])
+
+    await applyBymaxOpenApi(app)
+
+    const [{ routes }] = (logged.warn as jest.Mock).mock.calls[0] as [{ routes: string }]
+    const item = routes.split(', ').find((entry) => entry.startsWith(prefix))
+    expect(item).toBe(`${prefix}${'y'.repeat(197 - prefix.length)}…`)
+  })
+
+  /**
    * A report that fits says nothing about a remainder.
    *
    * The boundary the cap turns on: at exactly the limit there is nothing left
