@@ -30,5 +30,9 @@
   {
     "file": "src/readme.observability.spec.ts",
     "reason": "Reads the README and the text of the source files to compare the event codes and metric names they hold, and imports nothing from src/ at run time, so it executes no mutated source; it checks the catalogs against the code."
+  },
+  {
+    "file": "src/readme.fields.spec.ts",
+    "reason": "Reads the README and the interface fields of the barrels through the TypeScript compiler API and imports nothing from src/ at run time, so it executes no mutated source; it checks the documentation against the public surface."
   }
 ]
