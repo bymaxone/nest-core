@@ -153,8 +153,9 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 // carries its own copy, and the instance mark is what keeps `instanceof` true across the two.
 // Root budget 23.76 KiB = 24330 B: measured 24292 B brotli (raw 105722 B) plus 38 B of headroom. The
 // growth over 23.71 KiB is the log writer that absorbs a throw of the application's logger, now the one
-// call at every site that logs, and the escape of line separators and bidirectional controls: code,
-// plus the docblock of one new module.
+// call at every site that logs, and the escape of line separators and bidirectional controls: code
+// only. Measured: shortening the writer's docblock to one sentence left both bundles byte for byte the
+// same (24325 B and 8222 B), because the build drops JSDoc blocks.
 // `./openapi` budget 7.98 KiB = 8171 B: measured 8144 B brotli (raw 33147 B) plus 27 B of headroom, from
 // 8079 B. The growth is the same log writer, which this entry bundles for its three lines, and the
 // escape of line separators and bidirectional controls in the listed items.
