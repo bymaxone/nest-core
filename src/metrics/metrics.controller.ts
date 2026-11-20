@@ -35,6 +35,7 @@ import { BYMAX_CORE_OPTIONS, BYMAX_METRICS_REGISTRY } from '../core.tokens'
 import { assertAsyncFeatureEnabled } from '../passthrough.providers'
 import type { MetricsRegistry } from './metrics.registry'
 import { ScrapeRun } from './scrape-run'
+import { writeLog } from '../write-log'
 
 /**
  * Guard every request against the resolved options being inconsistent with how
@@ -105,7 +106,7 @@ function bearerMatches(authorization: unknown, expected: string): boolean {
  */
 function newScrapeRun(scrapeTimeoutMs: number): ScrapeRun {
   return new ScrapeRun(scrapeTimeoutMs, () => {
-    new Logger('MetricsController').warn({
+    writeLog(new Logger('MetricsController'), 'warn', {
       event: 'CORE_METRICS_SCRAPE_SLOW',
       message: 'Metrics collection is past its bound: scrapes answer 503 until it finishes',
       timeoutMs: scrapeTimeoutMs

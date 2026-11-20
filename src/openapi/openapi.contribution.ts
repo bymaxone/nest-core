@@ -19,7 +19,7 @@ import type { Reflector } from '@nestjs/core'
 
 import { findMarkedProviders } from '../discovery'
 import type { ProviderScanner } from '../discovery'
-import { asHostError } from '../host-error'
+import { asHostError, describeUnreadable } from '../host-error'
 import {
   BYMAX_OPENAPI_CONTRACT_VERSION,
   BYMAX_OPENAPI_CONTRIBUTOR_METADATA
@@ -167,11 +167,13 @@ function assertContractVersion(fragment: OpenApiFragment, label: string): void {
   if (fragment.contractVersion === BYMAX_OPENAPI_CONTRACT_VERSION) {
     return
   }
+  const declared = describeUnreadable(fragment.contractVersion) ?? 'a value that cannot be read'
   throw new Error(
     `[BymaxCoreModule] "${label}" contributed a fragment written against OpenAPI contract ` +
-      `version ${String(fragment.contractVersion)}, and this package speaks version ` +
+      `version ${declared}, and this package speaks version ` +
       `${String(BYMAX_OPENAPI_CONTRACT_VERSION)}. Upgrade whichever of the two is behind; the ` +
-      'shapes are not interchangeable.'
+      'shapes are not interchangeable.',
+    { cause: asHostError(fragment.contractVersion) }
   )
 }
 

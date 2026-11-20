@@ -13,6 +13,7 @@ import type {
 
 import type { ResolvedCoreOptions } from '../core.options'
 import { BYMAX_CORE_OPTIONS } from '../core.tokens'
+import { writeLog } from '../write-log'
 
 /** The signals that arm the deadline ahead of the hooks; any other signal is left to the hooks. */
 const SIGNALS: readonly NodeJS.Signals[] = ['SIGTERM', 'SIGINT']
@@ -76,7 +77,7 @@ export class BymaxShutdownDeadline
     if (deadlineMs === undefined || this.armed) return
     this.armed = true
     setTimeout(() => {
-      this.logger.error({
+      writeLog(this.logger, 'error', {
         event: 'CORE_SHUTDOWN_DEADLINE',
         message:
           'Shutdown did not finish in time; exiting with code 1. Something still holds the process open.',

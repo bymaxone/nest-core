@@ -16,10 +16,20 @@ const MAX_THROWN_TEXT = 500
  * type tag or a revoked proxy must not stop the wrapper from being built.
  */
 function describeSafely(thrown: unknown): string {
+  const phrase = describeUnreadable(thrown)
+  return phrase === undefined ? '' : `: ${phrase}`
+}
+
+/**
+ * What a value is, as `describeValue` says it, or `undefined` when inspecting it throws.
+ *
+ * @param value - Any value, including a revoked proxy or one whose type tag throws.
+ */
+export function describeUnreadable(value: unknown): string | undefined {
   try {
-    return `: ${describeValue(thrown)}`
+    return describeValue(value)
   } catch {
-    return ''
+    return undefined
   }
 }
 

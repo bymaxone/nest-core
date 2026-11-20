@@ -27,6 +27,7 @@ import {
 } from '../core.tokens'
 import type { ProviderScanner } from '../discovery'
 import { asHostError } from '../host-error'
+import { writeLog } from '../write-log'
 import { discoverIndicators, mergeIndicators } from './health.discovery'
 import type { HealthCheckEntry, HealthResponse, IHealthIndicator } from './health.interfaces'
 import { BYMAX_HEALTH_STATUS_RECORDER } from './health.status-recorder'
@@ -410,15 +411,7 @@ export class HealthService implements OnApplicationBootstrap, BeforeApplicationS
    * @param asWarning - Whether to write it at warning level.
    */
   private writeLine(message: HealthLogEntry, asWarning: boolean): void {
-    try {
-      if (asWarning) {
-        this.logger.warn(message)
-        return
-      }
-      this.logger.log(message)
-    } catch {
-      // Nowhere left to report to; see above.
-    }
+    writeLog(this.logger, asWarning ? 'warn' : 'log', message)
   }
 
   /**

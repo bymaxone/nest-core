@@ -151,11 +151,24 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 // 7404 B. The growth is the thrown-value wrapper that this entry now bundles for the boot error of a
 // contributor that throws: one class, its guarded helpers and the description of a value; the root entry
 // carries its own copy, and the instance mark is what keeps `instanceof` true across the two.
+// Root budget 23.76 KiB = 24330 B: measured 24292 B brotli (raw 105722 B) plus 38 B of headroom. The
+// growth over 23.71 KiB is the log writer that absorbs a throw of the application's logger, now the one
+// call at every site that logs, and the escape of line separators and bidirectional controls: code.
+// `./openapi` budget 7.98 KiB = 8171 B: measured 8144 B brotli (raw 33147 B) plus 27 B of headroom, from
+// 8079 B. The growth is the same log writer, which this entry bundles for its three lines, and the
+// escape of line separators and bidirectional controls in the listed items.
+// Root budget 23.78 KiB = 24351 B: measured 24325 B brotli (raw 105851 B) plus 26 B of headroom. The
+// growth over 23.76 KiB is the guarded description of a value that `NonErrorThrownError` and the contract
+// version error share, and the zero-width characters and byte order mark in the escape: code and messages.
+// `./openapi` budget 8.05 KiB = 8243 B: measured 8222 B brotli (raw 33471 B) plus 21 B of headroom, from
+// 8171 B. The growth is the same description, the cause of the contract version error and the wider escape.
+// Measured at these figures: cutting the docblock of `writeLog` to one sentence left both bundles byte for
+// byte the same, and its text is absent from `dist`, so that docblock is not part of the growth.
 const BUDGETS = [
-  { name: '. (root)', path: 'dist/index.mjs', brotli: 23.71 * 1024 },
+  { name: '. (root)', path: 'dist/index.mjs', brotli: 23.78 * 1024 },
   { name: './pagination', path: 'dist/pagination/index.mjs', brotli: 1.5 * 1024 },
   { name: './health', path: 'dist/health/index.mjs', brotli: 0.5 * 1024 },
-  { name: './openapi', path: 'dist/openapi/index.mjs', brotli: 7.89 * 1024 },
+  { name: './openapi', path: 'dist/openapi/index.mjs', brotli: 8.05 * 1024 },
   { name: './metrics', path: 'dist/metrics/index.mjs', brotli: 0.5 * 1024 },
   { name: './http', path: 'dist/http/index.mjs', brotli: 3.49 * 1024 }
 ]
