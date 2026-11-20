@@ -203,4 +203,39 @@ describe('what a host threw is kept as the cause', () => {
     expect(textOf(entry)).not.toContain(SECRET)
     jest.useRealTimers()
   })
+
+  it('drops a failure of the logger itself when a handler errors after the 504', () => {
+    jest.useFakeTimers()
+    jest.spyOn(Logger.prototype, 'error').mockImplementation(() => {
+      throw new Error('logger down')
+    })
+    const handled = new Subject<string>()
+    const context = {
+      getType: () => 'http',
+      getHandler: () => () => undefined,
+      getClass: () => class {},
+      switchToHttp: () => ({
+        getRequest: () => ({ url: '/p' }),
+        getResponse: () => ({
+          headersSent: false,
+          writableEnded: false,
+          once: () => undefined,
+          off: () => undefined,
+          destroy: () => undefined
+        })
+      })
+    } as unknown as ExecutionContext
+    new BymaxHandlerTimeoutInterceptor(
+      normalizeCoreOptions({ handlerTimeout: { enabled: true, timeoutMs: 1_000 } }),
+      new Reflector()
+    )
+      .intercept(context, { handle: () => handled } as CallHandler)
+      .subscribe({ error: () => undefined })
+    jest.advanceTimersByTime(1_000)
+    expect(() => {
+      handled.error(new Error(SECRET))
+      jest.runOnlyPendingTimers()
+    }).not.toThrow()
+    jest.useRealTimers()
+  })
 })

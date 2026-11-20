@@ -19,6 +19,7 @@ import type { Reflector } from '@nestjs/core'
 
 import { findMarkedProviders } from '../discovery'
 import type { ProviderScanner } from '../discovery'
+import { asHostError } from '../host-error'
 import {
   BYMAX_OPENAPI_CONTRACT_VERSION,
   BYMAX_OPENAPI_CONTRIBUTOR_METADATA
@@ -135,19 +136,15 @@ function isContributor(instance: unknown): instance is IOpenApiContributor {
  * @param contributor - The provider instance.
  * @param label - How to name it in an error.
  * @returns The fragment it produced.
- * @throws Error When the contributor throws, with its name and the cause.
+ * @throws Error When the contributor throws, with its name and what it threw as the cause.
  */
 function callContributor(contributor: IOpenApiContributor, label: string): OpenApiFragment {
   try {
     return contributor.contributeOpenApi()
   } catch (cause) {
-    const reason = cause instanceof Error ? cause.message : String(cause)
-    throw new Error(
-      `[BymaxCoreModule] "${label}" failed to contribute to the OpenAPI document: ${reason}`,
-      {
-        cause
-      }
-    )
+    throw new Error(`[BymaxCoreModule] "${label}" failed to contribute to the OpenAPI document`, {
+      cause: asHostError(cause)
+    })
   }
 }
 

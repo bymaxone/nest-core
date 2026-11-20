@@ -653,6 +653,105 @@ describe('applyBymaxOpenApi', () => {
   })
 
   /**
+   * A listed route is written for a log line: a control character is escaped and a long one is cut.
+   *
+   * The route template comes from the host's controllers, so it can hold a line break or an escape
+   * sequence that would forge a log line, or be long enough to fill one.
+   */
+  it('escapes control characters and cuts a long route in the routes field', async () => {
+    process.env['NODE_ENV'] = 'test'
+    class OddController {
+      odd(): string {
+        return 'ok'
+      }
+    }
+    Controller('odd')(OddController)
+    const descriptor = Object.getOwnPropertyDescriptor(OddController.prototype, 'odd')
+    if (descriptor === undefined) throw new Error('no descriptor')
+    Get(`line\u001bbreak\n\u007f\u009f\u00e9\u00a0${'x'.repeat(300)}`)(
+      OddController.prototype,
+      'odd',
+      descriptor
+    )
+    app = await bootApp({ openapi: { enabled: true, operationSecurity: { 'GET /bulk/r0': [] } } }, [
+      bulkController(2),
+      OddController
+    ])
+
+    await applyBymaxOpenApi(app)
+
+    const [{ routes }] = (logged.warn as jest.Mock).mock.calls[0] as [{ routes: string }]
+    expect(routes).toContain('line\\u001bbreak\\u000a')
+    expect(routes).toContain('\\u007f\\u009f\u00e9\u00a0')
+    expect([...routes].every((char) => char.charCodeAt(0) > 0x1f && char !== '\u007f')).toBe(true)
+    expect(routes.split(', ').some((item) => item.endsWith('…') && item.length === 201)).toBe(true)
+  })
+
+  /**
+   * An item of exactly the longest length is shown whole.
+   *
+   * The boundary the cut turns on: a rule that cut at `>=` would add an ellipsis to an item that fits.
+   */
+  it('shows a route of exactly 200 characters whole', async () => {
+    process.env['NODE_ENV'] = 'test'
+    class EdgeController {
+      edge(): string {
+        return 'ok'
+      }
+    }
+    Controller('edge')(EdgeController)
+    const descriptor = Object.getOwnPropertyDescriptor(EdgeController.prototype, 'edge')
+    if (descriptor === undefined) throw new Error('no descriptor')
+    const prefix = 'GET /edge/'
+    Get('y'.repeat(200 - prefix.length))(EdgeController.prototype, 'edge', descriptor)
+    app = await bootApp({ openapi: { enabled: true, operationSecurity: { 'GET /bulk/r0': [] } } }, [
+      bulkController(2),
+      EdgeController
+    ])
+
+    await applyBymaxOpenApi(app)
+
+    const [{ routes }] = (logged.warn as jest.Mock).mock.calls[0] as [{ routes: string }]
+    const item = routes.split(', ').find((entry) => entry.startsWith(prefix))
+    expect(item).toBe(`${prefix}${'y'.repeat(200 - prefix.length)}`)
+    expect(item).toHaveLength(200)
+  })
+
+  /**
+   * A control escape that would cross the cut is left out whole, not shown in part.
+   *
+   * The escape is six characters long, so one that starts just inside the limit would otherwise end
+   * as a fragment such as `\u00`, which is neither the character nor its escape.
+   */
+  it('does not cut a control escape in two', async () => {
+    process.env['NODE_ENV'] = 'test'
+    class SplitController {
+      split(): string {
+        return 'ok'
+      }
+    }
+    Controller('split')(SplitController)
+    const descriptor = Object.getOwnPropertyDescriptor(SplitController.prototype, 'split')
+    if (descriptor === undefined) throw new Error('no descriptor')
+    const prefix = 'GET /split/'
+    Get(`${'y'.repeat(197 - prefix.length)}\u001bzzz`)(
+      SplitController.prototype,
+      'split',
+      descriptor
+    )
+    app = await bootApp({ openapi: { enabled: true, operationSecurity: { 'GET /bulk/r0': [] } } }, [
+      bulkController(2),
+      SplitController
+    ])
+
+    await applyBymaxOpenApi(app)
+
+    const [{ routes }] = (logged.warn as jest.Mock).mock.calls[0] as [{ routes: string }]
+    const item = routes.split(', ').find((entry) => entry.startsWith(prefix))
+    expect(item).toBe(`${prefix}${'y'.repeat(197 - prefix.length)}…`)
+  })
+
+  /**
    * A report that fits says nothing about a remainder.
    *
    * The boundary the cap turns on: at exactly the limit there is nothing left
