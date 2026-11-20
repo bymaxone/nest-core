@@ -88,16 +88,19 @@ const MAX_WARNED_OPERATIONS = 10
 /** The longest one listed item is shown, so a long route template cannot fill a log line. */
 const MAX_LISTED_ITEM = 200
 
-/** The line and paragraph separators and the bidirectional controls, which break or reorder a line unseen. */
+/** The separators, bidirectional controls, zero-width characters and byte order mark, which break, reorder or hide text in a line. */
 const isInvisibleFormat = (code: number): boolean =>
   code === 0x2028 ||
   code === 0x2029 ||
+  (code >= 0x200b && code <= 0x200f) ||
+  code === 0x2060 ||
+  code === 0xfeff ||
   (code >= 0x202a && code <= 0x202e) ||
   (code >= 0x2066 && code <= 0x2069)
 
 /**
- * One item of a list a warning carries, made safe for a log line: a control character, a line or paragraph
- * separator or a bidirectional control (a line break, an escape, a direction override) is written as `\uXXXX`, and an item longer than the limit is cut before the first
+ * One item of a list a warning carries, made safe for a log line: a control character, a separator, a
+ * bidirectional control, a zero-width character or a byte order mark (a line break, an escape, a direction override) is written as `\uXXXX`, and an item longer than the limit is cut before the first
  * character whose text does not fit, so an escape is never left in part, and ends with an ellipsis.
  */
 function safeListed(item: string): string {

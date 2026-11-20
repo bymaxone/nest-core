@@ -39,7 +39,16 @@ describe('applyBymaxOpenApi, listed routes', () => {
     ['\u2027', '\u2027'],
     ['\u202f', '\u202f'],
     ['\u2065', '\u2065'],
-    ['\u206a', '\u206a']
+    ['\u206a', '\u206a'],
+    ['\u200b', '\\u200b'],
+    ['\u200f', '\\u200f'],
+    ['\u2060', '\\u2060'],
+    ['\ufeff', '\\ufeff'],
+    ['\u200a', '\u200a'],
+    ['\u2010', '\u2010'],
+    ['\u205f', '\u205f'],
+    ['\ufefe', '\ufefe'],
+    ['\uff00', '\uff00']
   ])('writes %j in a listed route as %j', async (char, written) => {
     process.env['NODE_ENV'] = 'test'
     class OddController {

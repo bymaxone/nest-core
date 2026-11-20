@@ -16,10 +16,17 @@ heading here.
 
 - A logger your application installed (`app.useLogger`, `Logger.overrideLogger`) that throws no longer
   changes what this package does. Every line it writes goes through one writer that absorbs a synchronous
-  throw; before, a throw could escape from some of those lines. The rejection of an `async` logger method is dropped by Nest's `Logger`, which
-  does not await it, and is not this package's to catch.
+  throw; before, a throw could escape from some of those lines. The rejection of an `async` logger method is not caught: Nest's `Logger` does
+  not await it, so it is an unhandled rejection that ends the process unless your application handles
+  `unhandledRejection`.
 - A listed route or component in an OpenAPI warning now also escapes the line and paragraph separators
-  (U+2028, U+2029) and the bidirectional controls (U+202A to U+202E, U+2066 to U+2069) as `\uXXXX`.
+  (U+2028, U+2029), the bidirectional controls (U+202A to U+202E, U+2066 to U+2069), the zero-width
+  characters (U+200B to U+200F, U+2060) and the byte order mark (U+FEFF) as `\uXXXX`.
+- The boot error for a contributor that declares a contract version this package does not speak no longer
+  prints the declared value's text: it names the value's type (a number as itself), and the declared value is
+  the `cause`. A value whose `toString` throws, or that has no prototype, no longer escapes the error raw.
+- The README says that a thrown string becomes the message of a `NonErrorThrownError` (cut at 500
+  characters), and documents `defaultLimit`.
 
 ## [1.6.16] - 2026-11-20
 

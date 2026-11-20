@@ -11,7 +11,8 @@ export type LogLevel = 'log' | 'warn' | 'error'
 /**
  * Write one structured line; a synchronous throw from the application's logger is dropped, since a
  * library line must not change what a probe, a shutdown deadline or a boot does. Nest's `Logger` does
- * not await what a method returns, so an `async` logger's rejection is not catchable here.
+ * not await what a method returns, so an `async` logger's rejection is unhandled: it ends the process
+ * unless the application handles `unhandledRejection`, and is not catchable here.
  *
  * @param logger - The Nest logger to write to.
  * @param level - The level to write at.

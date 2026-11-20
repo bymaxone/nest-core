@@ -470,6 +470,61 @@ describe('collectContributions', () => {
   })
 
   /**
+   * A contract version that cannot be read is described, not thrown through.
+   *
+   * The message is library text for any value the contributor declared, and the declared value is the
+   * cause, so a throwing `toString`, a null prototype or a revoked proxy cannot escape the boot error raw.
+   */
+  it.each([
+    [
+      'a throwing toString',
+      {
+        toString: () => {
+          throw new Error('boom')
+        }
+      },
+      'an object'
+    ],
+    ['a null-prototype object', Object.create(null) as object, 'an object'],
+    ['a string', 'SECRET-v', 'a string'],
+    [
+      'a revoked proxy',
+      (() => {
+        const r = Proxy.revocable({}, {})
+        r.revoke()
+        return r.proxy
+      })(),
+      'a value that cannot be read'
+    ]
+  ])('names the revision declared as %s without its text', (_name, declared, shown) => {
+    const Odd = {
+      Odd: class {
+        contributeOpenApi(): OpenApiFragment {
+          return { contractVersion: declared as unknown as 1 }
+        }
+      }
+    }.Odd
+    Reflect.defineMetadata(BYMAX_OPENAPI_CONTRIBUTOR_METADATA, true, Odd)
+
+    let caught: unknown
+    try {
+      collectContributions(
+        scannerOf([{ metatype: Odd, instance: new Odd() }]),
+        reflector,
+        mapOf({})
+      )
+    } catch (error) {
+      caught = error
+    }
+
+    expect((caught as Error).message).toBe(
+      `[BymaxCoreModule] "Odd" contributed a fragment written against OpenAPI contract version ${shown}, ` +
+        `and this package speaks version 1. Upgrade whichever of the two is behind; the shapes are not interchangeable.`
+    )
+    expect(((caught as Error).cause as Error).cause).toBe(declared)
+  })
+
+  /**
    * A fragment from an unknown contract revision fails, naming both.
    *
    * Types cannot catch this: a library and the application installing it each
