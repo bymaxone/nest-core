@@ -24,9 +24,7 @@ heading here.
   characters (U+200B to U+200F, U+2060) and the byte order mark (U+FEFF) as `\uXXXX`.
 - The boot error for a contributor that declares a contract version this package does not speak no longer
   prints the declared value's text: it names the value's type (a number as itself), and the declared value is
-  the `cause`. A value whose `toString` throws, or that has no prototype, no longer escapes the error raw.
-- The README says that a thrown string becomes the message of a `NonErrorThrownError` (cut at 500
-  characters), and documents `defaultLimit`.
+  the `cause`. A value whose type tag cannot be read no longer escapes the error raw.
 
 ## [1.6.16] - 2026-11-20
 
