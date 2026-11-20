@@ -12,13 +12,18 @@ heading here.
 
 ## [Unreleased]
 
-### Fixed
+## [1.6.17] - 2026-11-20
 
-- A logger your application installed (`app.useLogger`, `Logger.overrideLogger`) that throws no longer
-  changes what this package does. Every line it writes goes through one writer that absorbs a synchronous
-  throw; before, a throw could escape from some of those lines. The rejection of an `async` logger method is not caught: Nest's `Logger` does
-  not await it, so it is an unhandled rejection that ends the process unless your application handles
-  `unhandledRejection`.
+A patch release. A logger your application installed that throws no longer changes what this package
+does, and the items an OpenAPI warning lists are escaped for more characters.
+
+**Apply to your observability:**
+
+- A logger installed with `app.useLogger` or `Logger.overrideLogger` that throws no longer changes what
+  this package does. Every line it writes goes through one writer that absorbs a synchronous throw; before,
+  a throw could escape from some of those lines. The rejection of an `async` logger method is not caught:
+  Nest's `Logger` does not await it, so it is an unhandled rejection that ends the process unless your
+  application handles `unhandledRejection`.
 - A listed route or component in an OpenAPI warning now also escapes the line and paragraph separators
   (U+2028, U+2029), the bidirectional controls (U+202A to U+202E, U+2066 to U+2069), the zero-width
   characters (U+200B to U+200F, U+2060) and the byte order mark (U+FEFF) as `\uXXXX`.
@@ -1739,5 +1744,6 @@ have regressed from. They are kept because the reasoning is worth having.
 [1.6.13]: https://github.com/bymaxone/nest-core/compare/v1.6.10...v1.6.13
 [1.6.14]: https://github.com/bymaxone/nest-core/compare/v1.6.13...v1.6.14
 [1.6.15]: https://github.com/bymaxone/nest-core/compare/v1.6.14...v1.6.15
+[1.6.17]: https://github.com/bymaxone/nest-core/compare/v1.6.16...v1.6.17
 [1.6.16]: https://github.com/bymaxone/nest-core/compare/v1.6.15...v1.6.16
 [Unreleased]: https://github.com/bymaxone/nest-core/compare/v1.6.16...HEAD
