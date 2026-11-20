@@ -1714,4 +1714,5 @@ have regressed from. They are kept because the reasoning is worth having.
 [1.6.13]: https://github.com/bymaxone/nest-core/compare/v1.6.10...v1.6.13
 [1.6.14]: https://github.com/bymaxone/nest-core/compare/v1.6.13...v1.6.14
 [1.6.15]: https://github.com/bymaxone/nest-core/compare/v1.6.14...v1.6.15
-[Unreleased]: https://github.com/bymaxone/nest-core/compare/v1.6.15...HEAD
+[1.6.16]: https://github.com/bymaxone/nest-core/compare/v1.6.15...v1.6.16
+[Unreleased]: https://github.com/bymaxone/nest-core/compare/v1.6.16...HEAD
