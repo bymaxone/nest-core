@@ -33,7 +33,7 @@ raises, and the route and component lists of two OpenAPI warnings moved out of `
 - A contributor to the OpenAPI document that throws now fails the boot with
   `[BymaxCoreModule] "<name>" failed to contribute to the OpenAPI document`, and what it threw is the
   `cause` (a `NonErrorThrownError` when it is not an `Error`); its text is no longer part of the message.
-  A thrown value that cannot be inspected safely (a revoked proxy, an object with no prototype) is still wrapped in a `NonErrorThrownError`.
+  A thrown value that cannot be inspected safely (a revoked proxy) is still wrapped in a `NonErrorThrownError`.
 - `NonErrorThrownError` answers `instanceof` for an instance made by any entry of this package, so a
   `cause` from `./openapi` is an instance of the class exported from the root.
 - An `Error` from another realm (a `vm` context, a worker) is carried as it is.
