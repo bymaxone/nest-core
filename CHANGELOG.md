@@ -12,6 +12,11 @@ heading here.
 
 ## [Unreleased]
 
+## [1.6.16] - 2026-11-20
+
+A patch release. What your code threw is kept as the `cause` of what this package logs or raises, and the
+route and component lists of two OpenAPI warnings moved out of `message`.
+
 **Apply to your observability:**
 
 - A boot error for a metrics contributor that throws is now `"<name>" failed to register its metrics`,
