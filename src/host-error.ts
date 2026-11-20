@@ -4,6 +4,8 @@
  * when it is a string, an object or anything else.
  * @layer Utility
  */
+import { types } from 'node:util'
+
 import { describeValue } from './option-validation'
 
 /** The longest a thrown string is carried into the wrapper's message. */
@@ -22,10 +24,26 @@ function describeSafely(thrown: unknown): string {
 }
 
 /**
+ * Marks an instance. Each published entry bundles its own copy of the class, and a class from one
+ * copy is not an `instanceof` the other's; the registry key is what they share, as the DI tokens do.
+ */
+const BRAND = Symbol.for('@bymax-one/nest-core:non-error-thrown')
+
+/**
  * The error a host threw something other than an `Error` becomes. The thrown value is `cause`,
- * and a property of an object is never read except its type tag, which is guarded.
+ * and a property of an object is never read except its type tag, which is guarded. `instanceof`
+ * answers for an instance made by any bundled copy of this class.
  */
 export class NonErrorThrownError extends Error {
+  /** Whether `value` was made by a copy of this class; a hostile getter or proxy is not one. */
+  static override [Symbol.hasInstance](value: unknown): boolean {
+    try {
+      return typeof value === 'object' && value !== null && Reflect.get(value, BRAND) === true
+    } catch {
+      return false
+    }
+  }
+
   /** @param thrown - The value that was thrown. */
   constructor(thrown: unknown) {
     super(
@@ -35,6 +53,7 @@ export class NonErrorThrownError extends Error {
       { cause: thrown }
     )
     this.name = 'NonErrorThrownError'
+    Object.defineProperty(this, BRAND, { value: true })
   }
 }
 
@@ -49,10 +68,13 @@ export function asHostError(thrown: unknown): Error {
   return isError(thrown) ? thrown : new NonErrorThrownError(thrown)
 }
 
-/** Whether `thrown` is an `Error`; a revoked proxy throws on the test and is not one. */
+/**
+ * Whether `thrown` is an `Error`, one from another realm included; a revoked proxy is not one and
+ * makes `instanceof` throw.
+ */
 function isError(thrown: unknown): thrown is Error {
   try {
-    return thrown instanceof Error
+    return types.isNativeError(thrown) || thrown instanceof Error
   } catch {
     return false
   }

@@ -653,6 +653,41 @@ describe('applyBymaxOpenApi', () => {
   })
 
   /**
+   * A listed route is written for a log line: a control character is escaped and a long one is cut.
+   *
+   * The route template comes from the host's controllers, so it can hold a line break or an escape
+   * sequence that would forge a log line, or be long enough to fill one.
+   */
+  it('escapes control characters and cuts a long route in the routes field', async () => {
+    process.env['NODE_ENV'] = 'test'
+    class OddController {
+      odd(): string {
+        return 'ok'
+      }
+    }
+    Controller('odd')(OddController)
+    const descriptor = Object.getOwnPropertyDescriptor(OddController.prototype, 'odd')
+    if (descriptor === undefined) throw new Error('no descriptor')
+    Get(`line\u001bbreak\n\u007f\u009f\u00e9\u00a0${'x'.repeat(300)}`)(
+      OddController.prototype,
+      'odd',
+      descriptor
+    )
+    app = await bootApp({ openapi: { enabled: true, operationSecurity: { 'GET /bulk/r0': [] } } }, [
+      bulkController(2),
+      OddController
+    ])
+
+    await applyBymaxOpenApi(app)
+
+    const [{ routes }] = (logged.warn as jest.Mock).mock.calls[0] as [{ routes: string }]
+    expect(routes).toContain('line\\u001bbreak\\u000a')
+    expect(routes).toContain('\\u007f\\u009f\u00e9\u00a0')
+    expect([...routes].every((char) => char.charCodeAt(0) > 0x1f && char !== '\u007f')).toBe(true)
+    expect(routes.split(', ').some((item) => item.endsWith('…') && item.length === 201)).toBe(true)
+  })
+
+  /**
    * A report that fits says nothing about a remainder.
    *
    * The boundary the cap turns on: at exactly the limit there is nothing left

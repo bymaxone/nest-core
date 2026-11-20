@@ -239,6 +239,66 @@ describe('collectContributions', () => {
   })
 
   /**
+   * A contributor can throw a value no one can read safely, and the boot error must still be the
+   * library's own, with the contributor named and what it threw as the cause.
+   */
+  it.each([
+    [
+      'a proxy whose prototype read throws',
+      () =>
+        new Proxy(
+          {},
+          {
+            getPrototypeOf: () => {
+              throw new Error('trap')
+            }
+          }
+        )
+    ],
+    ['a null-prototype object', () => Object.create(null) as object],
+    [
+      'an object whose toString throws',
+      () => ({
+        toString: () => {
+          throw new Error('coerced')
+        }
+      })
+    ],
+    [
+      'an object whose type tag throws',
+      () => ({
+        get [Symbol.toStringTag](): string {
+          throw new Error('tag')
+        }
+      })
+    ]
+  ])('names the contributor when it throws %s', (_name, make) => {
+    const thrown = make()
+    const Hostile = {
+      Hostile: class {
+        contributeOpenApi(): OpenApiFragment {
+          throw thrown as Error
+        }
+      }
+    }.Hostile
+    Reflect.defineMetadata(BYMAX_OPENAPI_CONTRIBUTOR_METADATA, true, Hostile)
+    let caught: Error | undefined
+    try {
+      collectContributions(
+        scannerOf([{ metatype: Hostile, instance: new Hostile() }]),
+        reflector,
+        mapOf({})
+      )
+    } catch (error) {
+      caught = error as Error
+    }
+    expect(caught?.message).toBe(
+      '[BymaxCoreModule] "Hostile" failed to contribute to the OpenAPI document'
+    )
+    expect((caught?.cause as Error).cause).toBe(thrown)
+  })
+
+  /**
    * A contributor that throws fails the build with its name and its cause.
    *
    * A library that meant to describe its routes and could not is a defect. The
@@ -260,7 +320,12 @@ describe('collectContributions', () => {
         reflector,
         mapOf({})
       )
-    ).toThrow(/"Exploding" failed to contribute to the OpenAPI document: options not resolved/)
+    ).toThrow(
+      expect.objectContaining({
+        message: '[BymaxCoreModule] "Exploding" failed to contribute to the OpenAPI document',
+        cause: expect.objectContaining({ message: 'options not resolved' }) as unknown
+      })
+    )
   })
 
   /**
@@ -314,7 +379,12 @@ describe('collectContributions', () => {
         reflector,
         mapOf({})
       )
-    ).toThrow(/"Odd" failed to contribute to the OpenAPI document: plain string/)
+    ).toThrow(
+      expect.objectContaining({
+        message: '[BymaxCoreModule] "Odd" failed to contribute to the OpenAPI document',
+        cause: expect.objectContaining({ cause: 'plain string' }) as unknown
+      })
+    )
   })
 
   /**

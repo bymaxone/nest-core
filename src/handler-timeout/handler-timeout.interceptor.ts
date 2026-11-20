@@ -114,17 +114,28 @@ export class BymaxHandlerTimeoutInterceptor implements NestInterceptor {
       error: (error: unknown): void => {
         release()
         if (!expired()) subscriber.error(error)
-        else
-          this.logger.error({
-            event: 'CORE_HANDLER_LATE_ERROR',
-            message: 'A handler threw after its request was answered 504',
-            err: asHostError(error)
-          })
+        else this.logLate(error)
       },
       complete: (): void => {
         release()
         if (!expired()) subscriber.complete()
       }
+    }
+  }
+
+  /**
+   * Logs an error that came after the `504`. A logger that throws must not turn a request that was
+   * already answered into an error of the observable, so the failure is dropped.
+   */
+  private logLate(error: unknown): void {
+    try {
+      this.logger.error({
+        event: 'CORE_HANDLER_LATE_ERROR',
+        message: 'A handler threw after its request was answered 504',
+        err: asHostError(error)
+      })
+    } catch {
+      // Nothing is left to report to: the request is answered and the logger is what failed.
     }
   }
 

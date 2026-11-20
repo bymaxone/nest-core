@@ -84,6 +84,22 @@ export interface OpenApiMountOutcome {
  */
 const MAX_WARNED_OPERATIONS = 10
 
+/** The longest one listed item is shown, so a long route template cannot fill a log line. */
+const MAX_LISTED_ITEM = 200
+
+/**
+ * One item of a list a warning carries, made safe for a log line: a control character (a line
+ * break, an escape) is written as `\uXXXX`, and a long item is cut with an ellipsis.
+ */
+function safeListed(item: string): string {
+  const escaped = Array.from(item, (char) => {
+    const code = char.charCodeAt(0)
+    const control = code < 0x20 || (code >= 0x7f && code <= 0x9f)
+    return control ? `\\u${code.toString(16).padStart(4, '0')}` : char
+  }).join('')
+  return escaped.length > MAX_LISTED_ITEM ? `${escaped.slice(0, MAX_LISTED_ITEM)}…` : escaped
+}
+
 /** Shown when the core options cannot be resolved from the application. */
 const OPTIONS_UNRESOLVED_MESSAGE =
   '[BymaxCoreModule] applyBymaxOpenApi could not resolve BYMAX_CORE_OPTIONS from the application. ' +
@@ -284,7 +300,7 @@ function warnUnsecuredOperations(logger: Logger, keys: readonly string[]): void 
     return
   }
   const elided = keys.length - MAX_WARNED_OPERATIONS
-  const routes = `${keys.slice(0, MAX_WARNED_OPERATIONS).join(', ')}${elided > 0 ? `, and ${elided} more` : ''}`
+  const routes = `${keys.slice(0, MAX_WARNED_OPERATIONS).map(safeListed).join(', ')}${elided > 0 ? `, and ${elided} more` : ''}`
   // Consequence first, cause second: the sentence that makes someone act is
   // what a client generated from this document will do, and a line read while
   // scrolling past a boot log is read from the front.
@@ -328,7 +344,7 @@ function warnDiscardedComponents(logger: Logger, discarded: readonly DiscardedCo
   const elided = discarded.length - MAX_WARNED_OPERATIONS
   const entries = `${discarded
     .slice(0, MAX_WARNED_OPERATIONS)
-    .map(({ contributor, member, name }) => `${contributor} -> ${member}.${name}`)
+    .map(({ contributor, member, name }) => safeListed(`${contributor} -> ${member}.${name}`))
     .join(', ')}${elided > 0 ? `, and ${elided} more` : ''}`
   // Consequence first: what a reader needs is that the served document is not
   // the one the library described, which is why a generated client can disagree
