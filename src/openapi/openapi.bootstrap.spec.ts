@@ -688,6 +688,37 @@ describe('applyBymaxOpenApi', () => {
   })
 
   /**
+   * An item of exactly the longest length is shown whole.
+   *
+   * The boundary the cut turns on: a rule that cut at `>=` would add an ellipsis to an item that fits,
+   * and no case either side of the limit would notice.
+   */
+  it('shows a route of exactly 200 characters whole', async () => {
+    process.env['NODE_ENV'] = 'test'
+    class EdgeController {
+      edge(): string {
+        return 'ok'
+      }
+    }
+    Controller('edge')(EdgeController)
+    const descriptor = Object.getOwnPropertyDescriptor(EdgeController.prototype, 'edge')
+    if (descriptor === undefined) throw new Error('no descriptor')
+    const prefix = 'GET /edge/'
+    Get('y'.repeat(200 - prefix.length))(EdgeController.prototype, 'edge', descriptor)
+    app = await bootApp({ openapi: { enabled: true, operationSecurity: { 'GET /bulk/r0': [] } } }, [
+      bulkController(2),
+      EdgeController
+    ])
+
+    await applyBymaxOpenApi(app)
+
+    const [{ routes }] = (logged.warn as jest.Mock).mock.calls[0] as [{ routes: string }]
+    const item = routes.split(', ').find((entry) => entry.startsWith(prefix))
+    expect(item).toBe(`${prefix}${'y'.repeat(200 - prefix.length)}`)
+    expect(item).toHaveLength(200)
+  })
+
+  /**
    * A report that fits says nothing about a remainder.
    *
    * The boundary the cap turns on: at exactly the limit there is nothing left
