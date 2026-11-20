@@ -12,11 +12,16 @@ heading here.
 
 ## [Unreleased]
 
+## [1.6.16] - 2026-11-20
+
+A patch release. What your code threw is kept, as itself or as the `cause` of what this package logs or
+raises, and the route and component lists of two OpenAPI warnings moved out of `message`.
+
 **Apply to your observability:**
 
 - A boot error for a metrics contributor that throws is now `"<name>" failed to register its metrics`,
-  with what it threw as `cause` (wrapped in a `NonErrorThrownError` when it is not an `Error`); the text it threw is no longer part of the message. Match on the
-  `cause`, not on the text after the colon.
+  with what it threw as `cause` (wrapped in a `NonErrorThrownError` when it is not an `Error`); the text it
+  threw is no longer part of the message. Match on the `cause`.
 - `CORE_OPENAPI_UNSECURED` and `CORE_OPENAPI_COMPONENT_CONFLICT` carry the operation keys and the
   component entries in new fields, `routes` and `entries`, and no longer in `message`, which is this
   package's own text.
@@ -27,7 +32,7 @@ heading here.
   wrapped the same way when it is not an `Error`.
 
 The README now names every field of the pagination results (`items`, `nextCursor`, `meta`) and of
-`ITraceContextProvider`, and a spec keeps the fields of every exported interface named there.
+`ITraceContextProvider`.
 
 ## [1.6.15] - 2026-11-18
 
@@ -1709,4 +1714,5 @@ have regressed from. They are kept because the reasoning is worth having.
 [1.6.13]: https://github.com/bymaxone/nest-core/compare/v1.6.10...v1.6.13
 [1.6.14]: https://github.com/bymaxone/nest-core/compare/v1.6.13...v1.6.14
 [1.6.15]: https://github.com/bymaxone/nest-core/compare/v1.6.14...v1.6.15
-[Unreleased]: https://github.com/bymaxone/nest-core/compare/v1.6.15...HEAD
+[1.6.16]: https://github.com/bymaxone/nest-core/compare/v1.6.15...v1.6.16
+[Unreleased]: https://github.com/bymaxone/nest-core/compare/v1.6.16...HEAD
