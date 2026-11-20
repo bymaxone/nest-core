@@ -14,6 +14,7 @@ import { Subject } from 'rxjs'
 
 import { normalizeCoreOptions } from './core.options'
 import { BymaxHandlerTimeoutInterceptor } from './handler-timeout/handler-timeout.interceptor'
+import { NonErrorThrownError } from './host-error'
 import { HealthService } from './health/health.service'
 import type { HealthIndicatorResult, IHealthIndicator } from './health/health.interfaces'
 import type { IHealthTransitionSink } from './health/health.transition'
@@ -116,6 +117,89 @@ describe('the log events keep the text of a host error out of `message`', () => 
       err: expect.objectContaining({ message: SECRET })
     })
     expect((entry as { err: unknown }).err).toBeInstanceOf(Error)
+    expect(textOf(entry)).not.toContain(SECRET)
+    jest.useRealTimers()
+  })
+})
+
+describe('what a host threw is kept as the cause', () => {
+  afterEach(() => jest.restoreAllMocks())
+
+  /** A sink that throws `thrown`, and the `err` of the line the service then writes. */
+  async function sinkFailure(thrown: unknown): Promise<Error> {
+    const warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined)
+    const sink: IHealthTransitionSink = {
+      record: (): void => {
+        throw thrown as Error
+      }
+    }
+    const down: IHealthIndicator = {
+      name: 'redis',
+      check: (): Promise<HealthIndicatorResult> => Promise.resolve({ status: 'down' })
+    }
+    await new HealthService(
+      [down],
+      normalizeCoreOptions({ health: { readinessCacheMs: 0 } }),
+      undefined,
+      undefined,
+      sink
+    ).checkReadiness()
+    const failed = entries(warn).find((entry) => entry['event'] === 'CORE_HEALTH_SINK_FAILED')
+    return failed?.['err'] as Error
+  }
+
+  it('keeps the sink error itself as the cause of err, with its name and code', async () => {
+    const original = Object.assign(new TypeError(SECRET), { code: 'E_SINK' })
+    const err = await sinkFailure(original)
+    expect(err.cause).toBe(original)
+  })
+
+  it('wraps a string a sink threw, holding it as the cause', async () => {
+    const err = await sinkFailure(SECRET)
+    expect(err.cause).toBeInstanceOf(NonErrorThrownError)
+    expect((err.cause as Error).cause).toBe(SECRET)
+  })
+
+  it('contains a sink that threw an object whose type tag throws when read', async () => {
+    const hostile = {
+      get [Symbol.toStringTag](): string {
+        throw new Error('tag')
+      }
+    }
+    const err = await sinkFailure(hostile)
+    expect((err.cause as Error).cause).toBe(hostile)
+  })
+
+  it('logs a handler that threw a string as a NonErrorThrownError holding it', () => {
+    jest.useFakeTimers()
+    const error = jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined)
+    const handled = new Subject<string>()
+    const context = {
+      getType: () => 'http',
+      getHandler: () => () => undefined,
+      getClass: () => class {},
+      switchToHttp: () => ({
+        getRequest: () => ({ url: '/p' }),
+        getResponse: () => ({
+          headersSent: false,
+          writableEnded: false,
+          once: () => undefined,
+          off: () => undefined,
+          destroy: () => undefined
+        })
+      })
+    } as unknown as ExecutionContext
+    new BymaxHandlerTimeoutInterceptor(
+      normalizeCoreOptions({ handlerTimeout: { enabled: true, timeoutMs: 1_000 } }),
+      new Reflector()
+    )
+      .intercept(context, { handle: () => handled } as CallHandler)
+      .subscribe({ error: () => undefined })
+    jest.advanceTimersByTime(1_000)
+    handled.error(SECRET)
+    const [entry] = entries(error)
+    expect(entry?.['err']).toBeInstanceOf(NonErrorThrownError)
+    expect((entry?.['err'] as Error).cause).toBe(SECRET)
     expect(textOf(entry)).not.toContain(SECRET)
     jest.useRealTimers()
   })

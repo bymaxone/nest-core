@@ -51,6 +51,8 @@ export type { ICorrelationIdProvider } from './envelope/correlation.interfaces'
 
 export type { ITraceContextProvider, TraceContext } from './telemetry/trace-context'
 
+export { NonErrorThrownError } from './host-error'
+
 export { BymaxExceptionFilter } from './envelope/exception.filter'
 
 export type { FilterErrorContext } from './envelope/exception.filter'

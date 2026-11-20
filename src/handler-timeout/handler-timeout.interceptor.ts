@@ -11,6 +11,7 @@ import type { Observer, Subscriber } from 'rxjs'
 
 import type { ResolvedCoreOptions } from '../core.options'
 import { BYMAX_CORE_OPTIONS } from '../core.tokens'
+import { asHostError } from '../host-error'
 import { bindHandlerSignal, NO_HANDLER_TIMEOUT_KEY } from './handler-timeout.decorators'
 
 /** The metadata key Nest's `@Sse()` sets on a route handler. */
@@ -117,7 +118,7 @@ export class BymaxHandlerTimeoutInterceptor implements NestInterceptor {
           this.logger.error({
             event: 'CORE_HANDLER_LATE_ERROR',
             message: 'A handler threw after its request was answered 504',
-            err: error instanceof Error ? error : new Error(String(error))
+            err: asHostError(error)
           })
       },
       complete: (): void => {

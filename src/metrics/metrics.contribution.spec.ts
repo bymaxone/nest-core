@@ -17,6 +17,7 @@ import { Reflector } from '@nestjs/core'
 import { Counter, Registry } from 'prom-client'
 
 import { normalizeCoreOptions } from '../core.options'
+import { NonErrorThrownError } from '../host-error'
 import type { ProviderNode, ProviderScanner } from '../discovery'
 import {
   applyContributions,
@@ -182,9 +183,14 @@ describe('applyContributions', () => {
     const contributors = discoverContributors(scannerOver([QueueMetrics]), new Reflector())
     applyContributions(contributors, registry)
 
-    expect(() => applyContributions(contributors, registry)).toThrow(
-      /"QueueMetrics" failed to register its metrics: .*bymax_queue_depth/
-    )
+    let thrown: Error | undefined
+    try {
+      applyContributions(contributors, registry)
+    } catch (error) {
+      thrown = error as Error
+    }
+    expect(thrown?.message).toBe('[BymaxCoreModule] "QueueMetrics" failed to register its metrics')
+    expect((thrown?.cause as Error).message).toContain('bymax_queue_depth')
   })
 
   /**
@@ -232,9 +238,17 @@ describe('applyContributions', () => {
       }
     ]
 
-    expect(() => applyContributions(contributors, registry)).toThrow(
-      '[BymaxCoreModule] "RudeContributor" failed to register its metrics: just a string'
+    let thrown: Error | undefined
+    try {
+      applyContributions(contributors, registry)
+    } catch (error) {
+      thrown = error as Error
+    }
+    expect(thrown?.message).toBe(
+      '[BymaxCoreModule] "RudeContributor" failed to register its metrics'
     )
+    expect(thrown?.cause).toBeInstanceOf(NonErrorThrownError)
+    expect((thrown?.cause as Error).cause).toBe('just a string')
   })
 })
 

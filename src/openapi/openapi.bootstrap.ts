@@ -284,16 +284,17 @@ function warnUnsecuredOperations(logger: Logger, keys: readonly string[]): void 
     return
   }
   const elided = keys.length - MAX_WARNED_OPERATIONS
-  const listed = keys.slice(0, MAX_WARNED_OPERATIONS).join(', ')
+  const routes = `${keys.slice(0, MAX_WARNED_OPERATIONS).join(', ')}${elided > 0 ? `, and ${elided} more` : ''}`
   // Consequence first, cause second: the sentence that makes someone act is
   // what a client generated from this document will do, and a line read while
   // scrolling past a boot log is read from the front.
   logger.warn({
     event: 'CORE_OPENAPI_UNSECURED',
     operations: keys.length,
+    routes,
     message:
       `a client generated from the OpenAPI document will send no credentials to ${keys.length} ` +
-      `operation(s): ${listed}${elided > 0 ? `, and ${elided} more` : ''}. They state no security ` +
+      'operation(s), listed under routes. They state no security ' +
       'requirement, the document declares no default, and other operations in it do state one — ' +
       'so this is more often a missing openapi.security default than a public API. Set ' +
       'openapi.security, or state the intent per operation with an explicit [] in ' +
@@ -325,10 +326,10 @@ function warnDiscardedComponents(logger: Logger, discarded: readonly DiscardedCo
     return
   }
   const elided = discarded.length - MAX_WARNED_OPERATIONS
-  const listed = discarded
+  const entries = `${discarded
     .slice(0, MAX_WARNED_OPERATIONS)
     .map(({ contributor, member, name }) => `${contributor} -> ${member}.${name}`)
-    .join(', ')
+    .join(', ')}${elided > 0 ? `, and ${elided} more` : ''}`
   // Consequence first: what a reader needs is that the served document is not
   // the one the library described, which is why a generated client can disagree
   // with the library's own types.
@@ -340,9 +341,10 @@ function warnDiscardedComponents(logger: Logger, discarded: readonly DiscardedCo
   logger.warn({
     event: 'CORE_OPENAPI_COMPONENT_CONFLICT',
     components: discarded.length,
+    entries,
     message:
       `the served OpenAPI document already defines ${discarded.length} component entry(ies) a ` +
-      `library also contributes: ${listed}${elided > 0 ? `, and ${elided} more` : ''}. The ` +
+      'library also contributes, listed under entries. The ' +
       'contributed version is not served, so where the two differ a client generated from this ' +
       "document will not match that library's own types. What holds the name may be the application's own " +
       'declaration, a core schema under openapi.includeCoreSchemas, or a contributor that ' +

@@ -26,6 +26,7 @@ import {
   BYMAX_HEALTH_TRANSITION_SINK
 } from '../core.tokens'
 import type { ProviderScanner } from '../discovery'
+import { asHostError } from '../host-error'
 import { discoverIndicators, mergeIndicators } from './health.discovery'
 import type { HealthCheckEntry, HealthResponse, IHealthIndicator } from './health.interfaces'
 import { BYMAX_HEALTH_STATUS_RECORDER } from './health.status-recorder'
@@ -467,7 +468,7 @@ export class HealthService implements OnApplicationBootstrap, BeforeApplicationS
       {
         event: 'CORE_HEALTH_SINK_FAILED',
         message: 'The transition sink threw and was ignored',
-        err: new Error(summarizeRejection(error))
+        err: new Error(summarizeRejection(error), { cause: asHostError(error) })
       },
       true
     )

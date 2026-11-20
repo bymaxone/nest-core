@@ -139,8 +139,12 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 // growth over 23.00 KiB is the health-status gauge (one class, its resolver and provider, and the
 // recorder call in the readiness aggregator) and the event codes of the log lines: code and message
 // text, none of it comment text.
+// Root budget 23.52 KiB = 24084 B: measured 24043 B brotli (raw 104862 B) plus 41 B of headroom. The
+// growth over 23.44 KiB is the wrapper for a thrown non-Error (one class, two guarded helpers and the
+// call at each site that logs or chains a host's throw) and the `routes` and `entries` fields: code,
+// plus the docblocks of one new module.
 const BUDGETS = [
-  { name: '. (root)', path: 'dist/index.mjs', brotli: 23.44 * 1024 },
+  { name: '. (root)', path: 'dist/index.mjs', brotli: 23.52 * 1024 },
   { name: './pagination', path: 'dist/pagination/index.mjs', brotli: 1.5 * 1024 },
   { name: './health', path: 'dist/health/index.mjs', brotli: 0.5 * 1024 },
   { name: './openapi', path: 'dist/openapi/index.mjs', brotli: 7.5 * 1024 },

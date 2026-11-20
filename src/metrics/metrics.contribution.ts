@@ -17,6 +17,7 @@ import type { ResolvedCoreOptions } from '../core.options'
 import { BYMAX_CORE_OPTIONS, BYMAX_METRICS_REGISTRY } from '../core.tokens'
 import { findMarkedProviders } from '../discovery'
 import type { ProviderScanner } from '../discovery'
+import { asHostError } from '../host-error'
 import { BYMAX_METRICS_CONTRIBUTOR_METADATA } from './metrics.contract'
 import type { IMetricsContributor, MetricsRegistry } from './metrics.contract'
 
@@ -80,8 +81,8 @@ export function discoverContributors(
 /**
  * Hand the registry to every contributor, in order.
  *
- * A failure is rethrown with the contributor named and the original error
- * chained. `prom-client` rejects a duplicate metric name with a message that
+ * A failure is rethrown with the contributor named in this package's own text and the contributor's
+ * error chained as `cause`, so its text, name and stack are never part of the message. `prom-client` rejects a duplicate metric name with a message that
  * names the metric but not who registered it, which in an application composing
  * several libraries is the hard half of the question.
  *
@@ -97,9 +98,8 @@ export function applyContributions(
     try {
       contributor.registerMetrics(registry)
     } catch (cause) {
-      const reason = cause instanceof Error ? cause.message : String(cause)
-      throw new Error(`[BymaxCoreModule] "${label}" failed to register its metrics: ${reason}`, {
-        cause
+      throw new Error(`[BymaxCoreModule] "${label}" failed to register its metrics`, {
+        cause: asHostError(cause)
       })
     }
   }
