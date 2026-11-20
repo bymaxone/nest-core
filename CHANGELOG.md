@@ -39,8 +39,8 @@ raises, and the route and component lists of two OpenAPI warnings moved out of `
 - An `Error` from another realm (a `vm` context, a worker) is carried as it is.
 - A logger that throws while `CORE_HANDLER_LATE_ERROR` is written is ignored, as the request was already
   answered.
-- The items of `routes` and `entries` are cut at 200 characters, and a control character in one is
-  written as `\uXXXX`.
+- A control character in an item of `routes` or `entries` is written as `\uXXXX`, and the item is
+  then cut at 200 characters of that text.
 
 The README now names every field of the pagination results (`items`, `nextCursor`, `meta`) and of
 `ITraceContextProvider`.

@@ -30,9 +30,9 @@ function describeSafely(thrown: unknown): string {
 const BRAND = Symbol.for('@bymax-one/nest-core:non-error-thrown')
 
 /**
- * What a thrown value that is not an `Error` becomes. The thrown value is `cause`,
- * and a property of an object is never read except its type tag, which is guarded. `instanceof`
- * answers for an instance made by any bundled copy of this class.
+ * What a thrown value that is not an `Error` becomes. The thrown value is `cause`. Building one
+ * reads no property of an object except its type tag, which is guarded. `instanceof` answers for
+ * an instance made by any bundled copy of this class.
  */
 export class NonErrorThrownError extends Error {
   /** Whether `value` carries this class's mark; a value whose mark cannot be read is not one. */
