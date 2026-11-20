@@ -29,7 +29,7 @@ does, and the items an OpenAPI warning lists are escaped for more characters.
   characters (U+200B to U+200F, U+2060) and the byte order mark (U+FEFF) as `\uXXXX`.
 - The boot error for a contributor that declares a contract version this package does not speak no longer
   prints the declared value's text: it names the value's type (a number as itself), and the declared value is
-  the `cause`. A value whose type tag cannot be read no longer escapes the error raw.
+  the `cause`. A declared value whose type cannot be read is named `a value that cannot be read`.
 
 ## [1.6.16] - 2026-11-20
 
