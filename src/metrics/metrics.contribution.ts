@@ -84,7 +84,7 @@ export function discoverContributors(
 /**
  * Hand the registry to every contributor, in order.
  *
- * A failure is rethrown with the contributor named in this package's own text and the contributor's
+ * A failure is rethrown with the contributor named by the error's `contributor` property and the contributor's
  * error chained as `cause`, so its text, name and stack are never part of the message. `prom-client` rejects a duplicate metric name with a message that
  * names the metric but not who registered it, which in an application composing
  * several libraries is the hard half of the question.

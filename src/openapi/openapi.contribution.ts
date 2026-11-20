@@ -142,7 +142,7 @@ type ReadFragment = {
  * @param contributor - The provider instance.
  * @param label - How to name it in an error.
  * @returns The fragment it produced.
- * @throws Error When the contributor throws, with its name and what it threw as the cause.
+ * @throws Error When the contributor throws, with its name as `contributor` and what it threw as the cause.
  */
 function callContributor(contributor: IOpenApiContributor, label: string): ReadFragment {
   try {

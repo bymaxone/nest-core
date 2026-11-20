@@ -15,17 +15,15 @@ heading here.
 **Apply to your observability:**
 
 - A boot error about something you declared no longer has its text in the message: the message is this
-  package's own, and what you declared is a property of the error (`contributor`, `provider`, `handlerKey`,
-  `handlerKeys`, `knownHandlers`, `duplicates`, `schemes`, `declaredSchemes`, `operations`,
-  `documentedOperations`). Match on `contributor`, not on the message: `"QueueMetrics" failed to register
-its metrics` is now `a metrics contributor failed to register its metrics`, with `contributor:
-'QueueMetrics'`.
+  package's own, and what you declared is a property of the error.
+  Match on `contributor`, not on the message:
+  `"QueueMetrics" failed to register its metrics` is now `a metrics contributor failed to register its metrics`, with `contributor: 'QueueMetrics'`.
 - A contributor that returns no fragment, or a fragment whose `contractVersion`, `operations` or
   `components` cannot be read, fails the boot with the same labelled error as one that throws, with what
   went wrong as `cause`.
 - A listed route or component in an OpenAPI warning escapes every control, format, line-separator and
   paragraph-separator character (the Unicode categories `Cc`, `Cf`, `Zl` and `Zp`) as `\uXXXX`, or
-  `\u{X}` beyond the Basic Multilingual Plane, instead of a list of them.
+  `\u{X}` beyond the Basic Multilingual Plane.
 - The README states which values `defaultLimit` and `maxLimit` accept.
 
 ## [1.6.17] - 2026-11-20
