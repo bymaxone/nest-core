@@ -213,13 +213,17 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 // Root budget 24.87 KiB = 25466 B: measured 25439 B brotli (raw 111081 B) plus 27 B of headroom, from
 // 25395 B. Every other subpath is unchanged. The growth is the single read of each health indicator's
 // name, which refuses a name that is not a non-empty string and sorts the names read. Code only.
+// Root budget 24.94 KiB = 25540 B: measured 25506 B brotli plus 34 B of headroom, from 25466 B. `./http`
+// budget 4.46 KiB = 4570 B: measured 4535 B plus 35 B, from 4424 B. `./openapi` is unchanged. The growth is the
+// table of the settings the options of `helmet` take, which `./http` reads them by, and the refusal of an
+// option held behind a proxy that lists no keys, in the shared `readBlock`. Code only.
 const BUDGETS = [
-  { name: '. (root)', path: 'dist/index.mjs', brotli: 24.87 * 1024 },
+  { name: '. (root)', path: 'dist/index.mjs', brotli: 24.94 * 1024 },
   { name: './pagination', path: 'dist/pagination/index.mjs', brotli: 1.5 * 1024 },
   { name: './health', path: 'dist/health/index.mjs', brotli: 0.5 * 1024 },
   { name: './openapi', path: 'dist/openapi/index.mjs', brotli: 8.69 * 1024 },
   { name: './metrics', path: 'dist/metrics/index.mjs', brotli: 0.5 * 1024 },
-  { name: './http', path: 'dist/http/index.mjs', brotli: 4.32 * 1024 }
+  { name: './http', path: 'dist/http/index.mjs', brotli: 4.46 * 1024 }
 ]
 
 const fmt = (n) => `${(n / 1024).toFixed(2)} kB`

@@ -13,6 +13,7 @@
  * @layer Bootstrap
  */
 import type { INestApplication } from '@nestjs/common'
+import type { HelmetOptions } from 'helmet'
 
 import {
   booleanOption,
@@ -181,9 +182,6 @@ const FLOORS_KEYS = {
   cors: 0
 } satisfies Record<keyof HttpFloorsOptions, 0>
 
-/** What `applyHttpFloors` reads by name: its options, and the two blocks inside them. */
-const FLOORS_SHAPE: Shape = { ...FLOORS_KEYS, bodyLimit: BODY_LIMIT_KEYS, cors: CORS_KEYS }
-
 /**
  * The names `helmet` documents as options, aliases included. `helmet` ignores a name it does not
  * know, so a misspelt one would silently leave a header on its default; a test pins this list to
@@ -213,6 +211,40 @@ export const HELMET_OPTION_NAMES: readonly string[] = [
   'xXssProtection',
   'xssFilter'
 ]
+
+/** The names of every setting an option of `helmet` takes: what is left of its type once `true` and `false` are taken away. */
+type HelmetSettingNames = {
+  [Name in keyof HelmetOptions]-?: Exclude<
+    NonNullable<HelmetOptions[Name]>,
+    boolean
+  > extends infer Settings
+    ? Settings extends unknown
+      ? keyof Settings
+      : never
+    : never
+}[keyof HelmetOptions]
+
+/** The settings `helmet` options take; the compiler keeps it complete. */
+const HELMET_SETTINGS = {
+  reportOnly: 0,
+  useDefaults: 0,
+  directives: 0,
+  policy: 0,
+  maxAge: 0,
+  includeSubDomains: 0,
+  preload: 0,
+  allow: 0,
+  action: 0,
+  permittedPolicies: 0
+} satisfies Record<HelmetSettingNames, 0>
+
+/** What `applyHttpFloors` reads by name: its options, and the blocks inside them. */
+const FLOORS_SHAPE: Shape = {
+  ...FLOORS_KEYS,
+  helmet: Object.fromEntries(HELMET_OPTION_NAMES.map((name) => [name, HELMET_SETTINGS])),
+  bodyLimit: BODY_LIMIT_KEYS,
+  cors: CORS_KEYS
+}
 
 /**
  * The options handed to `helmet`: an object of helmet's own option names, or `false` to leave it out.

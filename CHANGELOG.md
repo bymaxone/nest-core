@@ -12,14 +12,6 @@ heading here.
 
 ## [Unreleased]
 
-### Fixed
-
-- `BymaxCoreModule.forRoot` hands Nest's module builder the copy of the options it has already read under
-  the guard, not your object. A proxy trap on the options object itself that throws now fails with
-  `the options could not be read`, with what it threw as the `cause`, instead of escaping from the builder.
-- A marked provider whose class `name` throws, and a health indicator whose `name` throws when discovery or
-  the merge reads it, fail the boot with a boot error that keeps what was thrown as the `cause`.
-
 ## [1.6.20] - 2026-11-21
 
 A patch release. What a host hands over is copied once under a guard, so a throw from it is attributed to it and
@@ -37,6 +29,16 @@ nothing read afterwards runs the host's code.
   getter threw, read `error.cause`; the error itself is no longer that one.
 - A provider marked as a health indicator or a metrics contributor that cannot be read fails with a boot error
   that names it (`provider` or `contributor`), and what it threw is the `cause`.
+- `BymaxCoreModule.forRoot` hands Nest's module builder the copy of the options it has already read under
+  the guard, not your object. A proxy trap on the options object itself that throws now fails with
+  `the options could not be read`, with what it threw as the `cause`, instead of escaping from the builder.
+- A marked provider whose class `name` throws, and a health indicator whose `name` throws when discovery or
+  the merge reads it, fail the boot with a boot error that keeps what was thrown as the `cause`.
+- The `helmet` block of `applyHttpFloors` is read by name, with the settings inside it, so a block held behind
+  a proxy that answers only `get`, a class accessor or a property that is not enumerable is honoured.
+- A map option (such as `metrics.defaultLabels` or `openapi.securitySchemes`) served through a proxy that answers only `get` has no keys to read, so it is refused instead of
+  read as empty: it fails with `the options could not be read`, and the `cause` names the option in its `option`
+  property. Give the map as a plain object, or a proxy that lists its keys.
 - A list a boot error carries as a property keeps its first ten items and ends with `and <n> more`.
 - The `option` property of an unknown-option error is cut on code points, so a surrogate pair at the cut stays whole.
 
