@@ -88,6 +88,13 @@ describe('ownCopy', () => {
     })
   })
 
+  it('copies an empty proxy in a list that no security key holds, and keeps a requirement proxy that lists keys', () => {
+    expect(ownCopy({ examples: [new Proxy({}, {})] })).toStrictEqual({ examples: [{}] })
+    expect(ownCopy({ security: [new Proxy({ bearer: [] }, {})] })).toStrictEqual({
+      security: [{ bearer: [] }]
+    })
+  })
+
   it('keeps a plain empty requirement, which is intended anonymous access', () => {
     expect(ownCopy({ security: [{}] })).toStrictEqual({ security: [{}] })
   })

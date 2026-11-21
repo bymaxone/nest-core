@@ -151,6 +151,10 @@ describe('a list item behind a proxy that lists no keys', () => {
     expect(scheme.cause).toMatchObject({ message: 'A proxy lists no keys' })
   })
 
+  it('keeps a block that is a proxy over an empty object as an empty block, as a block is read by name', () => {
+    expect(readOptions({ block: new Proxy({}, {}) }, { block: { name: 0 } })).toEqual({ block: {} })
+  })
+
   it('keeps a proxy over an empty object in an option that holds no requirement', () => {
     const extension = new Proxy({}, { get: () => 'x' })
     expect(readOptions({ other: { value: extension } }, SECURED)).toEqual({ other: { value: {} } })
