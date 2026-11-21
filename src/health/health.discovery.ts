@@ -78,6 +78,23 @@ function nameOf(indicator: IHealthIndicator, fields: { provider?: string } = {})
   return name
 }
 
+/** An indicator with the name it was read under, which is the name every later use serves. */
+export interface NamedIndicator {
+  readonly name: string
+  readonly indicator: IHealthIndicator
+}
+
+/**
+ * Read the name of each indicator once.
+ *
+ * @param indicators - The indicators to name.
+ * @returns Each indicator with its name, in the order given.
+ * @throws Error When a name cannot be read or is not a non-empty string.
+ */
+export function nameIndicators(indicators: readonly IHealthIndicator[]): readonly NamedIndicator[] {
+  return indicators.map((indicator) => ({ name: nameOf(indicator), indicator }))
+}
+
 /**
  * Collect every marked indicator registered anywhere in the application.
  *
@@ -89,14 +106,14 @@ function nameOf(indicator: IHealthIndicator, fields: { provider?: string } = {})
  *
  * @param discovery - Nest's discovery service, from `DiscoveryModule`.
  * @param reflector - Nest's metadata reader.
- * @returns The discovered indicators, ordered by name.
+ * @returns The discovered indicators with their names, ordered by name.
  * @throws Error When a marked provider does not implement `IHealthIndicator`.
  */
 export function discoverIndicators(
   discovery: ProviderScanner,
   reflector: Reflector
-): readonly IHealthIndicator[] {
-  const named: (readonly [string, IHealthIndicator])[] = []
+): readonly NamedIndicator[] {
+  const named: NamedIndicator[] = []
   for (const marked of findMarkedProviders(discovery, reflector, BYMAX_HEALTH_INDICATOR_METADATA)) {
     if (!implementsIndicator(marked.instance, marked.label)) {
       throw bootError(
@@ -105,11 +122,12 @@ export function discoverIndicators(
         { provider: marked.label }
       )
     }
-    named.push([nameOf(marked.instance, { provider: marked.label }), marked.instance])
+    named.push({
+      name: nameOf(marked.instance, { provider: marked.label }),
+      indicator: marked.instance
+    })
   }
-  return named
-    .sort(([left], [right]) => left.localeCompare(right))
-    .map(([, indicator]) => indicator)
+  return named.sort((left, right) => left.name.localeCompare(right.name))
 }
 
 /**
@@ -121,13 +139,14 @@ export function discoverIndicators(
  * indicators follow, in their own stable order.
  *
  * @param explicit - Indicators bound under `BYMAX_HEALTH_INDICATORS`.
- * @param discovered - Indicators found by {@link discoverIndicators}.
- * @returns The full readiness set, explicit entries first.
+ * @param discovered - Indicators found by {@link discoverIndicators}, with the names they were read under.
+ * @returns The full readiness set with each name, explicit entries first.
  */
 export function mergeIndicators(
   explicit: readonly IHealthIndicator[],
-  discovered: readonly IHealthIndicator[]
-): readonly IHealthIndicator[] {
-  const claimed = new Set(explicit.map((indicator) => nameOf(indicator)))
-  return [...explicit, ...discovered.filter((indicator) => !claimed.has(nameOf(indicator)))]
+  discovered: readonly NamedIndicator[]
+): readonly NamedIndicator[] {
+  const registered = nameIndicators(explicit)
+  const claimed = new Set(registered.map((entry) => entry.name))
+  return [...registered, ...discovered.filter((entry) => !claimed.has(entry.name))]
 }

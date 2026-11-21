@@ -301,12 +301,12 @@ describe('mergeIndicators', () => {
    */
   it('keeps explicit indicators first and unchanged', () => {
     const explicit = [indicator('cache'), indicator('database')]
-    const discovered = [indicator('queue')]
+    const discovered = [{ name: 'queue', indicator: indicator('queue') }]
 
     const merged = mergeIndicators(explicit, discovered)
 
     expect(merged.map((entry) => entry.name)).toEqual(['cache', 'database', 'queue'])
-    expect(merged[0]).toBe(explicit[0])
+    expect(merged[0]?.indicator).toBe(explicit[0])
   })
 
   /**
@@ -319,10 +319,10 @@ describe('mergeIndicators', () => {
     const mine = indicator('database', 'down')
     const theirs = indicator('database')
 
-    const merged = mergeIndicators([mine], [theirs])
+    const merged = mergeIndicators([mine], [{ name: 'database', indicator: theirs }])
 
     expect(merged).toHaveLength(1)
-    expect(merged[0]).toBe(mine)
+    expect(merged[0]?.indicator).toBe(mine)
   })
 
   /**
@@ -335,6 +335,6 @@ describe('mergeIndicators', () => {
   it('returns the explicit set unchanged when nothing was discovered', () => {
     const explicit = [indicator('cache')]
 
-    expect(mergeIndicators(explicit, [])).toEqual(explicit)
+    expect(mergeIndicators(explicit, []).map((entry) => entry.indicator)).toEqual(explicit)
   })
 })
