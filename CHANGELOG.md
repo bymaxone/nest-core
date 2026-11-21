@@ -12,11 +12,10 @@ heading here.
 
 ## [Unreleased]
 
-**Changed (since 1.6.20):**
+**Changed (in 1.6.20, not noted in its entry):**
 
 - With `autoDiscover: true`, an indicator you list explicitly whose `name` is empty, is not a string or is
   missing now fails the boot with `[BymaxCoreModule] a health indicator name must be a non-empty string`.
-  Before, it was skipped silently when discovery was on.
 
 **Apply to your observability:**
 
