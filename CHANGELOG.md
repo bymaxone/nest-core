@@ -12,6 +12,21 @@ heading here.
 
 ## [Unreleased]
 
+**Apply to your observability:**
+
+- A contributor's fragment is copied under the guard at every depth, not only to its operations and component
+  sections: a proxy that throws or is revoked, or a getter that throws, anywhere in it fails the boot as the
+  labelled contributor error, with what went wrong as `cause`. A fragment that holds itself, or is nested more
+  than 64 levels, is refused the same way.
+- The options are copied once, where a throw can be attributed. A getter that throws, or a proxy that throws or
+  is revoked, anywhere in the options fails with `the options could not be read`, and what it threw is the
+  `cause`. If your code matched on the error your own getter threw, read `error.cause`; the error itself no
+  longer is that one.
+- A provider marked as a health indicator or a metrics contributor that cannot be read fails with a boot error
+  that names it (`provider` or `contributor`), and what it threw is the `cause`.
+- A list a boot error carries as a property keeps its first ten items and ends with `and <n> more`.
+- The `option` property of an unknown-option error is cut on code points, so a surrogate pair at the cut stays whole.
+
 ## [1.6.19] - 2026-11-20
 
 A patch release. A contributor's fragment is read under the guard down to its entries, and what you declared in a

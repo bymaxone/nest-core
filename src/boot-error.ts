@@ -5,10 +5,18 @@
  */
 import { escapeUnseen } from './escape-unseen'
 
-/** A field value as it is kept: a string, or each string of a list, written out so nothing in it breaks a log line. */
+/** How many items of a list a boot error property keeps before it says how many more there are. */
+const MAX_LISTED = 10
+
+/**
+ * A field value as it is kept: a string, or each string of a list, written out so nothing in it
+ * breaks a log line, and a list cut after {@link MAX_LISTED} items with a last item that counts the rest.
+ */
 function shown(value: unknown): unknown {
   if (typeof value === 'string') return escapeUnseen(value)
-  return Array.isArray(value) ? value.map(shown) : value
+  if (!Array.isArray(value)) return value
+  const kept = value.slice(0, MAX_LISTED).map(shown)
+  return value.length > MAX_LISTED ? [...kept, `and ${value.length - MAX_LISTED} more`] : kept
 }
 
 /**

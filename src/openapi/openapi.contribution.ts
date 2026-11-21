@@ -21,6 +21,7 @@ import { bootError } from '../boot-error'
 import { findMarkedProviders } from '../discovery'
 import type { ProviderScanner } from '../discovery'
 import { asHostError, describeUnreadable } from '../host-error'
+import { ownCopy } from '../own-copy'
 import {
   BYMAX_OPENAPI_CONTRACT_VERSION,
   BYMAX_OPENAPI_CONTRIBUTOR_METADATA
@@ -126,18 +127,11 @@ function isContributor(instance: unknown): instance is IOpenApiContributor {
   return typeof (instance as Partial<IOpenApiContributor> | null)?.contributeOpenApi === 'function'
 }
 
-/** A fragment as read once: the version, the operations as entries, and the components copied one level down. */
+/** A fragment as read once: the version, the operations as entries, and the components. */
 interface ReadFragment {
   readonly contractVersion: unknown
   readonly operations: readonly (readonly [string, OpenApiFragmentObject])[]
   readonly components: ResolvedContribution['components']
-}
-
-/** A section of a fragment's components as an own copy, so reading it later runs no host code; anything but an object offers none. */
-function copySection(section: unknown): Readonly<Record<string, OpenApiFragmentObject>> {
-  return typeof section === 'object' && section !== null
-    ? (Object.fromEntries(Object.entries(section)) as Record<string, OpenApiFragmentObject>)
-    : {}
 }
 
 /**
@@ -155,19 +149,23 @@ function copySection(section: unknown): Readonly<Record<string, OpenApiFragmentO
  */
 function callContributor(contributor: IOpenApiContributor, label: string): ReadFragment {
   try {
-    // Read here, inside the guard, down to the entries of `operations` and of each component
-    // section: a fragment that is not an object, a getter that throws and a proxy that throws or
-    // is revoked are a contributor's failure like a throw from the method.
-    const fragment = contributor.contributeOpenApi()
+    // Read and copied here, inside the guard, at every depth: a fragment that is not an object, a
+    // getter that throws and a proxy that throws or is revoked, anywhere in it, are a contributor's
+    // failure like a throw from the method.
+    const given = contributor.contributeOpenApi()
+    const operations = ownCopy(given.operations ?? {}) as Record<string, OpenApiFragmentObject>
+    const components = ownCopy(given.components ?? {}) as Record<string, unknown>
     return {
-      contractVersion: fragment.contractVersion,
-      operations: Object.entries(fragment.operations ?? {}),
+      // Left as given: the version is described and never copied, so the error that names a
+      // version this package does not speak keeps the declared value as its cause.
+      contractVersion: given.contractVersion,
+      operations: Object.entries(operations),
       components: Object.fromEntries(
-        Object.entries(fragment.components ?? {}).map(([member, entries]) => [
+        Object.entries(components).map(([member, entries]) => [
           member,
-          copySection(entries)
+          typeof entries === 'object' && entries !== null ? entries : {}
         ])
-      )
+      ) as ReadFragment['components']
     }
   } catch (cause) {
     throw bootError(

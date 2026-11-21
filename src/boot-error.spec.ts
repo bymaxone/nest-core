@@ -36,6 +36,19 @@ describe('bootError', () => {
     expect((error as unknown as { option: string }).option).toBe(`${'x'.repeat(200)}…`)
   })
 
+  it('keeps ten items of a list and counts the rest as a last item', () => {
+    const keys = Array.from({ length: 13 }, (_, index) => `key${index}`)
+    const error = bootError('m', { keys }) as unknown as { keys: string[] }
+
+    expect(error.keys).toEqual([...keys.slice(0, 10), 'and 3 more'])
+  })
+
+  it('keeps a list of exactly ten as it is', () => {
+    const keys = Array.from({ length: 10 }, (_, index) => `key${index}`)
+
+    expect(bootError('m', { keys })).toMatchObject({ keys })
+  })
+
   it('chains the cause when it is given', () => {
     const cause = new Error('inner')
 
@@ -44,6 +57,18 @@ describe('bootError', () => {
 })
 
 describe('an unknown option key', () => {
+  it('is cut on code points, so a surrogate pair at the cut stays whole', () => {
+    const key = `${'k'.repeat(39)}\u{1f600}tail`
+    let caught: unknown
+    try {
+      checkedBlock('blk', { [key]: 1 }, {})
+    } catch (error) {
+      caught = error
+    }
+
+    expect(caught).toMatchObject({ option: `${'k'.repeat(39)}\u{1f600}…` })
+  })
+
   it('is written out in the option property, so a line break in it cannot reach a logger', () => {
     let caught: unknown
     try {

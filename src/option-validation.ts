@@ -88,7 +88,9 @@ export function checkedBlock<T extends object>(
   if (!isPlainRecord(raw)) throw refusal(name, 'an object', raw)
   const stray = Object.keys(raw).find((key) => !Object.hasOwn(known, key))
   if (stray !== undefined) {
-    const shown = stray.length > MAX_KEY_SHOWN ? `${stray.slice(0, MAX_KEY_SHOWN)}…` : stray
+    const letters = Array.from(stray)
+    const shown =
+      letters.length > MAX_KEY_SHOWN ? `${letters.slice(0, MAX_KEY_SHOWN).join('')}…` : stray
     throw bootError(`${name} has an unknown option`, { option: shown })
   }
   return raw as T

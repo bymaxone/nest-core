@@ -253,4 +253,74 @@ describe('collectContributions, a fragment that cannot be read', () => {
       responses: { Ok: { description: 'ok' } }
     })
   })
+
+  /** The result of collecting one contributor that returns `fragment`, or what was thrown. */
+  function collectOne(fragment: unknown): { thrown?: Error; components?: object } {
+    const Odd = contributorClass('Odd', fragment as OpenApiFragment)
+    try {
+      const [contribution] = collectContributions(
+        scannerOf([{ metatype: Odd, instance: new Odd() }]),
+        reflector,
+        mapOf({ 'Items.list': 'Items_list' })
+      )
+      return { components: contribution?.components as object }
+    } catch (error) {
+      return { thrown: error as Error }
+    }
+  }
+
+  /**
+   * A fragment that holds itself, or nests past the limit, fails as the contributor's error.
+   *
+   * Copying under the guard must end: a cycle never does, so it is refused with a range error as
+   * the cause, and so is a nesting no document needs.
+   */
+  it.each([
+    [
+      'holds itself',
+      (): object => {
+        const schema: Record<string, unknown> = { type: 'object' }
+        schema['self'] = schema
+        return { schemas: { Loop: schema } }
+      }
+    ],
+    [
+      'is nested past the limit',
+      (): object => {
+        let deepest: Record<string, unknown> = {}
+        for (let level = 0; level < 70; level += 1) deepest = { next: deepest }
+        return { schemas: { Deep: deepest } }
+      }
+    ]
+  ])('refuses a fragment that %s', (_name, components) => {
+    const { thrown } = collectOne({
+      contractVersion: BYMAX_OPENAPI_CONTRACT_VERSION,
+      components: components()
+    })
+
+    expect(thrown).toMatchObject({ contributor: 'Odd' })
+    expect(thrown?.cause).toBeInstanceOf(RangeError)
+  })
+
+  /**
+   * What is not a plain object or a list is kept as given, and a shared object is not a cycle.
+   *
+   * An example may be a `Date`; copying it as an object would serve `{}`. The same schema used in
+   * two places is one object reached twice, which is not a loop.
+   */
+  it('keeps a Date as it is and copies an object used in two places', () => {
+    const when = new Date(0)
+    const shared = { type: 'string' }
+    const { thrown, components } = collectOne({
+      contractVersion: BYMAX_OPENAPI_CONTRACT_VERSION,
+      components: { schemas: { A: { example: when, one: shared, two: shared } } }
+    })
+
+    expect(thrown).toBeUndefined()
+    const schemas = (components as { schemas: { A: Record<string, unknown> } }).schemas
+    expect(schemas.A['example']).toBe(when)
+    expect(schemas.A['one']).toEqual({ type: 'string' })
+    expect(schemas.A['two']).toEqual({ type: 'string' })
+    expect(schemas.A['one']).not.toBe(shared)
+  })
 })
