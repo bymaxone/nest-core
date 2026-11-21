@@ -177,7 +177,7 @@ describe('a list item behind a proxy that lists no keys', () => {
     expect(error.cause).toMatchObject({ message: 'an option is too large' })
   })
 
-  it.each([1000.5, -1, Number.NaN, '3'])(
+  it.each([1000.5, 0.5, -1, Number.NaN, Number.POSITIVE_INFINITY, 1001, '3', undefined, null])(
     'refuses a list whose length is %p, which is not an integer from 0 to the limit',
     (length) => {
       const list = new Proxy([], {
@@ -192,6 +192,15 @@ describe('a list item behind a proxy that lists no keys', () => {
       expect(error.cause).toMatchObject({ message: 'an option is too large' })
     }
   )
+
+  it('keeps an empty list, a one-item list and a list with a hole', () => {
+    expect(readOptions({ list: [] }, LISTED)).toEqual({ list: [] })
+    expect(readOptions({ list: [{}] }, LISTED)).toEqual({ list: [{}] })
+    const holey: unknown[] = new Array<unknown>(3)
+    holey[0] = 1
+    holey[2] = 3
+    expect(readOptions({ list: holey }, LISTED)).toEqual({ list: [1, undefined, 3] })
+  })
 
   it('keeps a plain empty requirement', () => {
     expect(readOptions({ list: [{}] }, LISTED)).toEqual({ list: [{}] })
