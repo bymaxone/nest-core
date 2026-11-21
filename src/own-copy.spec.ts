@@ -125,6 +125,34 @@ describe('ownCopy', () => {
     expect(reads).toBe(1)
   })
 
+  it('reads each item of a list once, by its index, and copies a hole as undefined', () => {
+    let reads = 0
+    const list: unknown[] = new Array<unknown>(3)
+    Object.defineProperty(list, 0, {
+      get: () => {
+        reads += 1
+        return 'first'
+      },
+      enumerable: true
+    })
+    list[2] = 'last'
+
+    expect(ownCopy({ list })).toStrictEqual({ list: ['first', undefined, 'last'] })
+    expect(reads).toBe(1)
+  })
+
+  it('reads a list subclass by its indexes, not by an iterator that disagrees with them', () => {
+    class Listed extends Array<unknown> {
+      override [Symbol.iterator](): ArrayIterator<unknown> {
+        return ['from the iterator'][Symbol.iterator]()
+      }
+    }
+    const list = new Listed()
+    list.push('from the index')
+
+    expect(ownCopy({ list })).toStrictEqual({ list: ['from the index'] })
+  })
+
   it('builds a list as a plain array, whatever its species names', () => {
     const list: unknown[] = [1, 2]
     Object.defineProperty(list, 'constructor', {
