@@ -17,35 +17,26 @@ import type { IHealthIndicator } from './health.interfaces'
 import { BYMAX_HEALTH_INDICATOR_METADATA } from './health.marker'
 
 /**
- * Whether a resolved instance satisfies the indicator contract: a non-empty
- * `name` to report the check under, and a `check` to run.
+ * A marked provider as an indicator with the name it was read under: its `name` and `check` are
+ * read once each, and a failure of reading them is refused as a boot error that names the provider
+ * and keeps what was thrown as the cause.
  *
- * @param instance - The provider instance to test.
- * @returns `true` when the instance can be run as an indicator.
- */
-function isIndicator(instance: unknown): instance is IHealthIndicator {
-  // Only nullish values need guarding: they are the two things a property read
-  // throws on. Everything else answers the questions below on its own.
-  if (instance === null || instance === undefined) {
-    return false
-  }
-  const candidate = instance as Partial<IHealthIndicator>
-  return (
-    typeof candidate.name === 'string' &&
-    candidate.name !== '' &&
-    typeof candidate.check === 'function'
-  )
-}
-
-/**
- * Whether a marked provider implements the contract, with a failure of reading it refused as a boot
- * error that names the provider and keeps what was thrown as the cause.
- *
+ * @param instance - The provider instance to read.
+ * @param label - The provider's label for an error message.
+ * @returns The indicator, or `undefined` when it has no non-empty `name` and `check` method.
  * @throws Error When reading the provider throws.
  */
-function implementsIndicator(instance: unknown, label: string): instance is IHealthIndicator {
+function readIndicator(instance: unknown, label: string): NamedIndicator | undefined {
+  // Only nullish values need guarding against: they are the two things a destructuring read throws
+  // on without a host getter being involved.
+  if (instance === null || instance === undefined) {
+    return undefined
+  }
   try {
-    return isIndicator(instance)
+    const { name, check } = instance as Partial<IHealthIndicator>
+    return typeof name === 'string' && name !== '' && typeof check === 'function'
+      ? { name, indicator: instance as IHealthIndicator }
+      : undefined
   } catch (cause) {
     throw bootError(
       '[BymaxCoreModule] a provider marked @BymaxHealthIndicator() could not be read',
@@ -60,20 +51,23 @@ function implementsIndicator(instance: unknown, label: string): instance is IHea
  * string, is refused as a boot error, so what is sorted and compared afterwards cannot change.
  *
  * @param indicator - The indicator to read.
- * @param fields - The provider the error names, when it is known.
  * @throws Error When reading the name throws, or it is not a non-empty string.
  */
-function nameOf(indicator: IHealthIndicator, fields: { provider?: string } = {}): string {
+function nameOf(indicator: IHealthIndicator): string {
   let name: unknown
   try {
     name = indicator.name
   } catch (cause) {
-    throw bootError('[BymaxCoreModule] a health indicator name could not be read', fields, {
-      cause: asHostError(cause)
-    })
+    throw bootError(
+      '[BymaxCoreModule] a health indicator name could not be read',
+      {},
+      {
+        cause: asHostError(cause)
+      }
+    )
   }
   if (typeof name !== 'string' || name === '') {
-    throw bootError('[BymaxCoreModule] a health indicator name must be a non-empty string', fields)
+    throw bootError('[BymaxCoreModule] a health indicator name must be a non-empty string', {})
   }
   return name
 }
@@ -115,17 +109,15 @@ export function discoverIndicators(
 ): readonly NamedIndicator[] {
   const named: NamedIndicator[] = []
   for (const marked of findMarkedProviders(discovery, reflector, BYMAX_HEALTH_INDICATOR_METADATA)) {
-    if (!implementsIndicator(marked.instance, marked.label)) {
+    const found = readIndicator(marked.instance, marked.label)
+    if (found === undefined) {
       throw bootError(
         '[BymaxCoreModule] a provider marked @BymaxHealthIndicator() does not implement ' +
           'IHealthIndicator: it must expose a non-empty "name" and a "check" method.',
         { provider: marked.label }
       )
     }
-    named.push({
-      name: nameOf(marked.instance, { provider: marked.label }),
-      indicator: marked.instance
-    })
+    named.push(found)
   }
   return named.sort((left, right) => left.name.localeCompare(right.name))
 }
