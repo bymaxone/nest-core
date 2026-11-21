@@ -14,10 +14,10 @@ heading here.
 
 **Apply to your observability:**
 
-- A contributor's fragment is copied under the guard at every depth, not only to its operations and component
-  sections: a proxy that throws or is revoked, or a getter that throws, anywhere in it fails the boot as the
-  labelled contributor error, with what went wrong as `cause`. A fragment that holds itself, or is nested more
-  than 64 levels, is refused the same way.
+- A contributor's `operations` and `components` are copied under the guard at every depth: a proxy that throws
+  or is revoked, or a getter that throws, anywhere in them fails the boot as the labelled contributor error,
+  with what went wrong as `cause`. A fragment that holds itself, or is nested too deeply, is refused the same
+  way.
 - The options are copied once, where a throw can be attributed. A getter that throws, or a proxy that throws or
   is revoked, anywhere in the options fails with `the options could not be read`, and what it threw is the
   `cause`. If your code matched on the error your own getter threw, read `error.cause`; the error itself no
