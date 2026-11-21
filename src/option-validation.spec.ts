@@ -61,10 +61,10 @@ describe('checkedBlock', () => {
   it('shows an unknown name in full up to 40 characters and cut after', () => {
     const forty = 'k'.repeat(40)
     expect(() => checkedBlock('blk', { [forty]: 1 }, known)).toThrow(
-      `blk has an unknown option "${forty}"`
+      expect.objectContaining({ message: 'blk has an unknown option', option: forty })
     )
     expect(() => checkedBlock('blk', { [`${forty}k`]: 1 }, known)).toThrow(
-      `blk has an unknown option "${forty}…"`
+      expect.objectContaining({ message: 'blk has an unknown option', option: `${forty}…` })
     )
   })
 })

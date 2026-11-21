@@ -170,13 +170,23 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 // `./openapi` budget 8.12 KiB = 8315 B: measured 8308 B brotli (raw 33871 B) plus 7 B of headroom, from
 // 8243 B. The growth is the same builder, the fields on the contributor, handler-key, scheme and
 // operation boot errors, and the guarded read of a fragment: code and messages.
+// `./openapi` budget 8.19 KiB = 8386 B: measured 8376 B brotli (raw 34222 B) plus 10 B of headroom, from
+// 8315 B. The growth is the copy of a fragment's operations and of each component section made inside the
+// guard of `callContributor`, so a proxy that throws or is revoked fails as the contributor's error, and
+// the lone-surrogate category in the escape: code. The root entry stays at 23.82 KiB (measured 24379 B).
+// Root budget 24.08 KiB = 24658 B: measured 24629 B brotli (raw 106913 B) plus 29 B of headroom, from
+// 24391 B. `./openapi` budget 8.26 KiB = 8458 B: measured 8427 B (raw 34505 B) plus 31 B, from 8386 B.
+// `./http` budget 3.75 KiB = 3840 B: measured 3807 B (raw 14044 B) plus 33 B, from 3574 B. The growth is
+// one module, `escapeUnseen`, which `bootError` now applies to every string a boot error carries (the
+// escape moved out of the OpenAPI bootstrap, where `./openapi` already had it), and the loop in `bootError`
+// that applies it: `./http` and the root reach it through the unknown-option refusal. Code only.
 const BUDGETS = [
-  { name: '. (root)', path: 'dist/index.mjs', brotli: 23.82 * 1024 },
+  { name: '. (root)', path: 'dist/index.mjs', brotli: 24.08 * 1024 },
   { name: './pagination', path: 'dist/pagination/index.mjs', brotli: 1.5 * 1024 },
   { name: './health', path: 'dist/health/index.mjs', brotli: 0.5 * 1024 },
-  { name: './openapi', path: 'dist/openapi/index.mjs', brotli: 8.12 * 1024 },
+  { name: './openapi', path: 'dist/openapi/index.mjs', brotli: 8.26 * 1024 },
   { name: './metrics', path: 'dist/metrics/index.mjs', brotli: 0.5 * 1024 },
-  { name: './http', path: 'dist/http/index.mjs', brotli: 3.49 * 1024 }
+  { name: './http', path: 'dist/http/index.mjs', brotli: 3.75 * 1024 }
 ]
 
 const fmt = (n) => `${(n / 1024).toFixed(2)} kB`
