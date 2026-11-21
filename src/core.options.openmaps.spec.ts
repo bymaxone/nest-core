@@ -9,6 +9,9 @@
  * Mocks: none.
  */
 import { BymaxCoreModule } from './core.module'
+import { normalizeCoreOptions } from './core.options'
+import { OPTION_SHAPE } from './core.options.shape'
+import { readOptions } from './read-options'
 
 /** The three open maps, each with an entry the host means. */
 const MAPS: ReadonlyArray<readonly [string, string, object]> = [
@@ -48,9 +51,18 @@ describe('an open map of the options held behind a proxy', () => {
     })
   })
 
-  it.each(MAPS)('honours %s.%s served by a proxy that lists its keys', (block, name, map) => {
-    expect(() => BymaxCoreModule.forRoot(options(block, name, listing(map)))).not.toThrow()
-  })
+  it.each(MAPS)(
+    'keeps the entries of %s.%s served by a proxy that lists its keys',
+    (block, name, map) => {
+      const resolved = normalizeCoreOptions(
+        readOptions(options(block, name, listing(map)), OPTION_SHAPE)
+      )
+
+      expect(
+        (resolved as unknown as Record<string, Record<string, unknown>>)[block]?.[name]
+      ).toEqual(map)
+    }
+  )
 
   it.each(MAPS)('honours %s.%s given as an empty plain object', (block, name) => {
     expect(() => BymaxCoreModule.forRoot(options(block, name, {}))).not.toThrow()
