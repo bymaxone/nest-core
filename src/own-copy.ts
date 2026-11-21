@@ -61,7 +61,7 @@ function copyProperties(
  * @param done - The copies already made in this call, so an object reached twice is copied once
  *   and the copy is shared as the original was.
  * @param strict - Whether a proxy below the root that lists no keys is refused instead of copied as `{}`; it
- *   holds under a `security` or `securitySchemes` key, where an empty requirement is anonymous access.
+ *   holds for the items of a `security` list, where an empty requirement is anonymous access.
  * @returns The copy.
  * @throws RangeError When `value` holds itself or is deeper than {@link MAX_DEPTH}, or, if `strict`, holds
  *   a proxy that lists no keys.
