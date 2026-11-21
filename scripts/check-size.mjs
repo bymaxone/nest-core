@@ -221,13 +221,16 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 // budget 4.70 KiB = 4812 B: measured 4794 B plus 18 B, from 4570 B. The growth is the read of a map option by
 // every name it answers to (own, non-enumerable and inherited accessors, capped) that the policy
 // `directives` are read by, and the refusal of a list item behind a proxy that lists no keys. Code only.
+// Root budget 25.26 KiB = 25866 B: measured 25839 B brotli plus 27 B of headroom, from 25784 B. `./http` budget
+// 4.80 KiB = 4915 B: measured 4885 B plus 30 B, from 4812 B. The growth is the read of a list option once, by
+// index, under a cap, which is the one place an item is checked and copied. Code only.
 const BUDGETS = [
-  { name: '. (root)', path: 'dist/index.mjs', brotli: 25.18 * 1024 },
+  { name: '. (root)', path: 'dist/index.mjs', brotli: 25.26 * 1024 },
   { name: './pagination', path: 'dist/pagination/index.mjs', brotli: 1.5 * 1024 },
   { name: './health', path: 'dist/health/index.mjs', brotli: 0.5 * 1024 },
   { name: './openapi', path: 'dist/openapi/index.mjs', brotli: 8.69 * 1024 },
   { name: './metrics', path: 'dist/metrics/index.mjs', brotli: 0.5 * 1024 },
-  { name: './http', path: 'dist/http/index.mjs', brotli: 4.7 * 1024 }
+  { name: './http', path: 'dist/http/index.mjs', brotli: 4.8 * 1024 }
 ]
 
 const fmt = (n) => `${(n / 1024).toFixed(2)} kB`
