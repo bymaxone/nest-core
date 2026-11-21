@@ -77,8 +77,12 @@ export function ownCopy(
   if (depth > MAX_DEPTH || open.includes(value)) {
     throw new RangeError('A value holds itself or is nested too deeply')
   }
-  const prototype = Object.getPrototypeOf(value) as unknown
-  if (!Array.isArray(value) && prototype !== Object.prototype && prototype !== null) return value
+  // A proxy is never handed back as itself, whatever prototype it answers: it is copied like a plain
+  // object, so what is judged and kept is the copy and not a value that can answer differently later.
+  if (!types.isProxy(value) && !Array.isArray(value)) {
+    const prototype = Object.getPrototypeOf(value) as unknown
+    if (prototype !== Object.prototype && prototype !== null) return value
+  }
   // A copy made without the refusal is not reused where it applies, so the order a shared object is
   // reached in cannot decide whether it is refused.
   const cache = strict ? strictCache(done) : done
@@ -86,14 +90,18 @@ export function ownCopy(
   if (made !== undefined) return made
   const inside = [...open, value]
   if (Array.isArray(value)) {
-    const items = value.map((item) => ownCopy(item, depth + 1, inside, done, strict))
+    // A plain list built by index, not `map`, which would build what the list's species names.
+    const items: unknown[] = []
+    for (let index = 0; index < value.length; index += 1) {
+      items.push(ownCopy(Reflect.get(value, index), depth + 1, inside, done, strict))
+    }
     cache.set(value, items)
     return items
   }
   const copy = copyProperties(value, depth, inside, done, strict)
   // The copy is judged: a proxy inside an option that lists no keys reads as `{}`, and an empty
   // requirement is anonymous access.
-  if (strict && depth > 0 && types.isProxy(value) && Reflect.ownKeys(copy).length === 0) {
+  if (strict && depth > 0 && types.isProxy(value) && Object.keys(copy).length === 0) {
     throw new RangeError('A proxy lists no keys')
   }
   cache.set(value, copy)

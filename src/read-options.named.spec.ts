@@ -155,6 +155,22 @@ describe('a list item behind a proxy that lists no keys', () => {
     expect(readOptions({ block: new Proxy({}, {}) }, { block: { name: 0 } })).toEqual({ block: {} })
   })
 
+  it('refuses a requirement proxy that answers a class prototype, and a symbol-only one', () => {
+    class Foo {}
+    const asFoo = new Proxy({}, { getPrototypeOf: () => Foo.prototype })
+    const symbolic = new Proxy({ [Symbol('hidden')]: [] }, {})
+
+    expect(refusal({ security: [asFoo] }, SECURED).cause).toMatchObject({
+      message: 'A proxy lists no keys'
+    })
+    expect(refusal({ security: [symbolic] }, SECURED).cause).toMatchObject({
+      message: 'A proxy lists no keys'
+    })
+    expect(refusal({ other: asFoo }, SECURED).cause).toMatchObject({
+      message: 'an option is held behind a proxy that lists no keys'
+    })
+  })
+
   it('keeps a proxy over an empty object in an option that holds no requirement', () => {
     const extension = new Proxy({}, { get: () => 'x' })
     expect(readOptions({ other: { value: extension } }, SECURED)).toEqual({ other: { value: {} } })

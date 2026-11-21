@@ -7,6 +7,8 @@
  * proxy that throws is refused by the copy and never reached afterwards.
  * Mocks: none.
  */
+import { types } from 'node:util'
+
 import { ownCopy } from './own-copy'
 
 /** `count` wrappers nested one inside the other, the innermost holding `leaf`. */
@@ -93,6 +95,39 @@ describe('ownCopy', () => {
     expect(ownCopy({ security: [new Proxy({ bearer: [] }, {})] })).toStrictEqual({
       security: [{ bearer: [] }]
     })
+  })
+
+  it('copies a proxy whatever prototype it answers, and judges the copy', () => {
+    class Foo {}
+    const asFoo = (target: object): object =>
+      new Proxy(target, { getPrototypeOf: () => Foo.prototype })
+
+    expect(() => ownCopy({ security: [asFoo({})] })).toThrow('A proxy lists no keys')
+    const copied = ownCopy({ extension: asFoo({ a: 1 }) }) as { extension: object }
+    expect(types.isProxy(copied.extension)).toBe(false)
+    expect(copied.extension).toStrictEqual({ a: 1 })
+  })
+
+  it('judges emptiness by the string keys: a proxy that lists only a symbol key is refused', () => {
+    const symbolic = new Proxy({ [Symbol('hidden')]: [] }, {})
+
+    expect(() => ownCopy({ security: [symbolic] })).toThrow('A proxy lists no keys')
+  })
+
+  it('builds a list as a plain array, whatever its species names', () => {
+    const list: unknown[] = [1, 2]
+    Object.defineProperty(list, 'constructor', {
+      value: {
+        [Symbol.species]: function made() {
+          return new Proxy([], {})
+        }
+      }
+    })
+
+    const copied = ownCopy({ list }) as { list: unknown[] }
+
+    expect(types.isProxy(copied.list)).toBe(false)
+    expect(copied.list).toStrictEqual([1, 2])
   })
 
   it('keeps a plain empty requirement, which is intended anonymous access', () => {

@@ -73,7 +73,7 @@ function isEmptyMap(value: unknown): boolean {
     typeof value === 'object' &&
     value !== null &&
     !Array.isArray(value) &&
-    Reflect.ownKeys(value).length === 0
+    Object.keys(value).length === 0
   )
 }
 
