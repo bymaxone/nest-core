@@ -77,6 +77,21 @@ describe('a map option read by every name it answers to', () => {
     expect(Reflect.ownKeys(read(held))).toEqual(['defaultSrc'])
   })
 
+  it('leaves what is not a block as it is, for the policy check to refuse', () => {
+    expect(read('self')).toBe('self')
+    expect(read(['self'])).toEqual(['self'])
+  })
+
+  it('does not take a method a class holds as a name', () => {
+    class Holder {
+      defaultSrc = ['x']
+      describe(): string {
+        return 'x'
+      }
+    }
+    expect(Object.keys(read(new Holder()))).toEqual(['defaultSrc'])
+  })
+
   it('turns a getter that throws into a boot error with what it threw as the cause', () => {
     const held = {
       get defaultSrc(): string[] {
