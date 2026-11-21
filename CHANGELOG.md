@@ -21,6 +21,8 @@ heading here.
   section that does the same, or a schema read by a getter that throws, fails the boot as the labelled
   contributor error, with what went wrong as `cause`.
 - A lone surrogate in a listed route or component is escaped as `\uXXXX` like the other unseen characters.
+- A string a boot error carries as a property, or each string of a list, is escaped and cut like a listed item, so
+  a line break or a direction override in a key cannot reach a logger that serializes the error.
 - The README names every property a boot error carries and the full set of escaped characters.
 
 ## [1.6.18] - 2026-11-20
