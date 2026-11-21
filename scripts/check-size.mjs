@@ -250,13 +250,17 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 // The growth is the servers taken through the same strict copy, a refusal of what a proxy lists without holding,
 // the functions a strict copy refuses, the one work limit shared by a call, and the option a strict refusal names.
 // Code only.
+// Root budget 25.85 KiB = 26470 B: measured 26438 B brotli plus 32 B of headroom, from 26398 B. `./http` budget
+// 5.41 KiB = 5540 B: measured 5501 B plus 39 B, from 5417 B. `./openapi` budget 9.22 KiB = 9441 B: measured 9405 B plus
+// 36 B, from 9298 B. The growth is the one snapshot a shared object gets for both kinds of copy, so the host is
+// read once whatever order the object is reached in. Code only.
 const BUDGETS = [
-  { name: '. (root)', path: 'dist/index.mjs', brotli: 25.78 * 1024 },
+  { name: '. (root)', path: 'dist/index.mjs', brotli: 25.85 * 1024 },
   { name: './pagination', path: 'dist/pagination/index.mjs', brotli: 1.5 * 1024 },
   { name: './health', path: 'dist/health/index.mjs', brotli: 0.5 * 1024 },
-  { name: './openapi', path: 'dist/openapi/index.mjs', brotli: 9.08 * 1024 },
+  { name: './openapi', path: 'dist/openapi/index.mjs', brotli: 9.22 * 1024 },
   { name: './metrics', path: 'dist/metrics/index.mjs', brotli: 0.5 * 1024 },
-  { name: './http', path: 'dist/http/index.mjs', brotli: 5.29 * 1024 }
+  { name: './http', path: 'dist/http/index.mjs', brotli: 5.41 * 1024 }
 ]
 
 const fmt = (n) => `${(n / 1024).toFixed(2)} kB`
