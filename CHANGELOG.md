@@ -12,6 +12,11 @@ heading here.
 
 ## [Unreleased]
 
+## [1.6.19] - 2026-11-20
+
+A patch release. A contributor's fragment is read under the guard down to its entries, and what you declared in a
+boot error is escaped in the error's properties.
+
 **Apply to your observability:**
 
 - An unknown option in an options block, and a `metrics.defaultLabels` value that is not a string, no longer
@@ -1776,6 +1781,7 @@ have regressed from. They are kept because the reasoning is worth having.
 [1.6.13]: https://github.com/bymaxone/nest-core/compare/v1.6.10...v1.6.13
 [1.6.14]: https://github.com/bymaxone/nest-core/compare/v1.6.13...v1.6.14
 [1.6.15]: https://github.com/bymaxone/nest-core/compare/v1.6.14...v1.6.15
+[1.6.19]: https://github.com/bymaxone/nest-core/compare/v1.6.18...v1.6.19
 [1.6.18]: https://github.com/bymaxone/nest-core/compare/v1.6.17...v1.6.18
 [1.6.17]: https://github.com/bymaxone/nest-core/compare/v1.6.16...v1.6.17
 [1.6.16]: https://github.com/bymaxone/nest-core/compare/v1.6.15...v1.6.16
