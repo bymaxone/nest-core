@@ -224,11 +224,14 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 // Root budget 25.26 KiB = 25866 B: measured 25839 B brotli plus 27 B of headroom, from 25784 B. `./http` budget
 // 4.80 KiB = 4915 B: measured 4885 B plus 30 B, from 4812 B. The growth is the read of a list option once, by
 // index, under a cap, which is the one place an item is checked and copied. Code only.
+// `./openapi` budget 8.72 KiB = 8929 B: measured 8907 B brotli plus 22 B of headroom, from 8898 B. Root (25850 B)
+// and `./http` (4890 B) stay within the budgets above. The growth is the shared copy judging a proxy that lists no
+// keys at every depth, and copying each property as an enumerable one. Code only.
 const BUDGETS = [
   { name: '. (root)', path: 'dist/index.mjs', brotli: 25.26 * 1024 },
   { name: './pagination', path: 'dist/pagination/index.mjs', brotli: 1.5 * 1024 },
   { name: './health', path: 'dist/health/index.mjs', brotli: 0.5 * 1024 },
-  { name: './openapi', path: 'dist/openapi/index.mjs', brotli: 8.69 * 1024 },
+  { name: './openapi', path: 'dist/openapi/index.mjs', brotli: 8.72 * 1024 },
   { name: './metrics', path: 'dist/metrics/index.mjs', brotli: 0.5 * 1024 },
   { name: './http', path: 'dist/http/index.mjs', brotli: 4.8 * 1024 }
 ]

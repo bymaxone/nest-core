@@ -64,8 +64,14 @@ function namedCopy(value: unknown): unknown {
   return copy
 }
 
-function isUnlisted(value: unknown): boolean {
-  return types.isProxy(value) && Reflect.ownKeys(value as object).length === 0
+/** Whether `value` is a map with no keys, a copy of one that listed none. */
+function isEmptyMap(value: unknown): boolean {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    !Array.isArray(value) &&
+    Reflect.ownKeys(value).length === 0
+  )
 }
 
 /** One value of a block, read as its entry in the shape says. */
@@ -95,11 +101,13 @@ function readBlock(given: unknown, shape: Shape): unknown {
       const isMap = entry === 0 || entry === 1
       // The items are read once, here, so the one checked is the one copied.
       if (isMap && Array.isArray(value)) value = snapshot(value)
-      // A proxy that lists no keys would read as empty, and an empty requirement is anonymous access.
-      if (isMap && (isUnlisted(value) || (Array.isArray(value) && value.some(isUnlisted)))) {
+      const made = readEntry(value, entry)
+      // The copy is judged, not the original: a proxy that lists no keys reads as an empty map, and an
+      // empty requirement is anonymous access.
+      if (isMap && types.isProxy(value) && isEmptyMap(made)) {
         throw bootError('an option is held behind a proxy that lists no keys', { option: key })
       }
-      copy[key] = readEntry(value, entry)
+      copy[key] = made
     }
   }
   for (const key of Object.keys(given)) {

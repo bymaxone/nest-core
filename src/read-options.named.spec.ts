@@ -139,10 +139,39 @@ describe('a list item behind a proxy that lists no keys', () => {
   it('refuses a requirement that is a proxy over an empty object', () => {
     const item = new Proxy({}, { get: () => ['read'] })
     const error = refusal({ list: [item] }, LISTED)
-    expect(error.cause).toMatchObject({
-      message: 'an option is held behind a proxy that lists no keys',
-      option: 'list'
-    })
+    expect(error.cause).toMatchObject({ message: 'A proxy lists no keys' })
+  })
+
+  it('refuses a requirement behind a proxy deeper in a map, as operationSecurity and securitySchemes hold them', () => {
+    const item = new Proxy({}, { get: () => ['read'] })
+    const deep = refusal({ map: { 'A.b': [item] } }, { map: 0 })
+    expect(deep.cause).toMatchObject({ message: 'A proxy lists no keys' })
+    const scheme = refusal({ map: { bearer: item } }, { map: 0 })
+    expect(scheme.cause).toMatchObject({ message: 'A proxy lists no keys' })
+  })
+
+  it('reads the keys once: an ownKeys trap that lists them once and none after is copied whole', () => {
+    let calls = 0
+    const item = new Proxy(
+      { bearer: [] },
+      { ownKeys: (target) => (++calls === 1 ? Reflect.ownKeys(target) : []) }
+    )
+    expect(readOptions({ list: [item] }, LISTED)).toEqual({ list: [{ bearer: [] }] })
+  })
+
+  it('judges the copy of directives too: a flipping ownKeys trap does not give an empty map', () => {
+    let calls = 0
+    const held = new Proxy(
+      { defaultSrc: ["'none'"] },
+      { ownKeys: (target) => (++calls === 1 ? Reflect.ownKeys(target) : []) }
+    )
+    expect(readOptions({ map: held }, NAMED)).toEqual({ map: { defaultSrc: ["'none'"] } })
+  })
+
+  it('copies a requirement kept in a property that is not enumerable as an enumerable one', () => {
+    const item = Object.defineProperty({}, 'bearer', { value: [], enumerable: false })
+    const read = readOptions({ list: [item] }, LISTED) as { list: Array<Record<string, unknown>> }
+    expect(Object.keys(read.list[0] ?? {})).toEqual(['bearer'])
   })
 
   it('reads each item once, so the item that is checked is the item that is copied', () => {

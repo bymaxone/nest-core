@@ -3,12 +3,13 @@
  * attributed, so nothing read from the copy afterwards runs host code.
  * @layer Utility
  */
+import { types } from 'node:util'
 
 /** How deep a value is copied before it is refused as a cycle in all but name. */
 const MAX_DEPTH = 64
 
 /**
- * An own copy of the plain objects and lists in `value`, at every depth, with every own property of an object (a non-enumerable one included), so nothing read from the
+ * An own copy of the plain objects and lists in `value`, at every depth, with every own property of an object (a non-enumerable one included, made enumerable), so nothing read from the
  * copy runs host code. Anything else (a number, a string, a `Date`, a function) is kept as it is.
  *
  * @param value - What the host handed over.
@@ -39,18 +40,23 @@ export function ownCopy(
     done.set(value, items)
     return items
   }
-  // Every own property, enumerable or not, with the flag kept: an option kept in a property that is
-  // not enumerable (a getter holding a token) must still be there when the copy is read. Defined,
-  // not assigned, so a key such as `__proto__` stays an own property of the copy.
+  // Every own property, enumerable or not, and every one enumerable in the copy, so the copy is seen
+  // whole by `Object.keys`. Defined, not assigned, so a key such as `__proto__` stays an own property.
   const copy: Record<PropertyKey, unknown> = {}
   for (const key of Reflect.ownKeys(value)) {
-    const described = Reflect.getOwnPropertyDescriptor(value, key)
+    // A name a proxy lists but holds no property under is not copied.
+    if (Reflect.getOwnPropertyDescriptor(value, key) === undefined) continue
     Object.defineProperty(copy, key, {
       value: ownCopy(Reflect.get(value, key), depth + 1, inside, done),
-      enumerable: described?.enumerable === true,
+      enumerable: true,
       writable: true,
       configurable: true
     })
+  }
+  // The copy is judged: a proxy inside a value that lists no keys reads as `{}`, and an empty
+  // requirement is anonymous access.
+  if (depth > 0 && types.isProxy(value) && Reflect.ownKeys(copy).length === 0) {
+    throw new RangeError('A proxy lists no keys')
   }
   done.set(value, copy)
   return copy

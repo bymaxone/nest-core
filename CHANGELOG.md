@@ -32,9 +32,11 @@ heading here.
   cannot be told from a map that holds only those, so list every name.
 - A list that an option holds is read once, by index, and is refused past its size limit with a
   boot error, never cut short. Reading it once means the item that is checked is the item that is copied.
-- An `openapi.security` entry held behind a proxy that lists no keys fails with
-  `the options could not be read`, as the map options do, and is not read as `{}`, which OpenAPI takes to
-  allow anonymous access.
+- A security requirement held behind a proxy that lists no keys, anywhere in `openapi.security`,
+  `openapi.operationSecurity` or `openapi.securitySchemes`, fails with `the options could not be read`, as
+  the map options do, and is not read as `{}`, which OpenAPI takes to allow anonymous access. The copy is
+  judged, so a proxy whose `ownKeys` answers differently on a second read cannot pass. A property that is
+  not enumerable is enumerable in the copy the library takes.
 - `forRootAsync`: Nest reads the factory's result before the library can guard it. See
   `docs/forrootasync-factory-result.md`.
 

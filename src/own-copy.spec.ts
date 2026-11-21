@@ -39,7 +39,7 @@ describe('ownCopy', () => {
     expect(Object.getPrototypeOf(copy)).toBe(Object.prototype)
   })
 
-  it('keeps a property that is not enumerable, still not enumerable, with its value read once', () => {
+  it('copies a property that is not enumerable as an enumerable one, with its value read once', () => {
     let reads = 0
     const source = Object.defineProperty({ shown: 1 }, 'hidden', {
       get: () => {
@@ -51,10 +51,15 @@ describe('ownCopy', () => {
     const copy = ownCopy(source) as Record<string, unknown>
 
     expect(copy['hidden']).toBe('secret')
-    expect(Object.keys(copy)).toEqual(['shown'])
-    expect(Object.getOwnPropertyDescriptor(copy, 'hidden')?.enumerable).toBe(false)
-    expect(Object.getOwnPropertyDescriptor(copy, 'shown')?.enumerable).toBe(true)
+    expect(Object.keys(copy)).toEqual(['shown', 'hidden'])
+    expect(Object.getOwnPropertyDescriptor(copy, 'hidden')?.enumerable).toBe(true)
     expect(reads).toBe(1)
+  })
+
+  it('does not copy a name a proxy lists but holds no property under', () => {
+    const source = new Proxy({ real: 1 }, { ownKeys: () => ['real', 'ghost'] })
+
+    expect(ownCopy(source)).toStrictEqual({ real: 1 })
   })
 
   it('defines each property of the copy as writable and configurable, as an assignment would', () => {
