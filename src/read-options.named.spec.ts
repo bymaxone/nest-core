@@ -159,6 +159,24 @@ describe('a list item behind a proxy that lists no keys', () => {
     expect(reads).toBe(1)
   })
 
+  it('reads an array subclass by its indexes, not by an iterator that disagrees with them', () => {
+    class Listed extends Array<unknown> {
+      override [Symbol.iterator](): ArrayIterator<unknown> {
+        return [{}][Symbol.iterator]()
+      }
+    }
+    const items = new Listed()
+    items.push({ bearer: [] })
+    expect(readOptions({ list: items }, LISTED)).toEqual({ list: [{ bearer: [] }] })
+  })
+
+  it('refuses a list longer than the limit, and keeps one of exactly the limit', () => {
+    const exact = Array.from({ length: 1000 }, () => 1)
+    expect(readOptions({ list: exact }, LISTED)).toEqual({ list: exact })
+    const error = refusal({ list: [...exact, 1] }, LISTED)
+    expect(error.cause).toMatchObject({ message: 'a map option is too large' })
+  })
+
   it('keeps a plain empty requirement', () => {
     expect(readOptions({ list: [{}] }, LISTED)).toEqual({ list: [{}] })
   })

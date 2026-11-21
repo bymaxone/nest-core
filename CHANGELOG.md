@@ -30,6 +30,8 @@ heading here.
   holds. A host that held them that way no longer loses a directive and falls back to the default
   (`default-src 'self'` in place of `'none'`). A proxy that lists only some of the names it answers to
   cannot be told from a map that holds only those, so list every name.
+- A list option (an array the options hold) is read once, by index, and is refused past 1,000 items with a
+  boot error, never cut short. Its items are read once, so the item that is checked is the item that is copied.
 - An `openapi.security` entry held behind a proxy that lists no keys fails with
   `the options could not be read`, as the map options do, and is not read as `{}`, which OpenAPI takes to
   allow anonymous access.
