@@ -4,9 +4,10 @@
  * Layer: unit.
  * Goal: every field of every interface a public subpath exports, read through the compiler, is named
  * in the README, so a consumer can learn the shape of a result or a contract from the documentation.
- * Mocks: none; the barrels are read with the TypeScript compiler API.
+ * The same holds for the properties a boot error carries, read from every `bootError` call.
+ * Mocks: none; the barrels and the sources are read with the TypeScript compiler API.
  */
-import { readFileSync } from 'node:fs'
+import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import * as ts from 'typescript'
 
@@ -62,5 +63,55 @@ describe('every field of an exported interface is named in the README', () => {
   it('reads the fields of an interface the root barrel exports', () => {
     expect(interfaceFieldsOf('src/index.ts')).toContain('ITraceContextProvider.getTraceContext')
     expect(interfaceFieldsOf('src/pagination/index.ts')).toContain('PageMeta.totalItems')
+  })
+})
+
+/** Every source file of the package that is not a spec. */
+function sourceFiles(directory: string): string[] {
+  return readdirSync(directory).flatMap((entry) => {
+    const path = join(directory, entry)
+    if (statSync(path).isDirectory()) return entry === '__tests__' ? [] : sourceFiles(path)
+    return path.endsWith('.ts') && !path.endsWith('.spec.ts') ? [path] : []
+  })
+}
+
+/** The property names set by the second argument of every `bootError(...)` call in a source text. */
+function bootErrorProperties(file: string): string[] {
+  const source = ts.createSourceFile(file, readFileSync(file, 'utf8'), ts.ScriptTarget.ES2022, true)
+  const names: string[] = []
+  const visit = (node: ts.Node): void => {
+    if (
+      ts.isCallExpression(node) &&
+      ts.isIdentifier(node.expression) &&
+      node.expression.text === 'bootError'
+    ) {
+      const fields = node.arguments[1]
+      if (fields !== undefined && ts.isObjectLiteralExpression(fields)) {
+        for (const property of fields.properties) {
+          if (property.name !== undefined && ts.isIdentifier(property.name)) {
+            names.push(property.name.text)
+          }
+        }
+      }
+    }
+    ts.forEachChild(node, visit)
+  }
+  visit(source)
+  return names
+}
+
+describe('every property of a boot error is named in the README', () => {
+  const properties = [
+    ...new Set(sourceFiles(join(ROOT, 'src')).flatMap((file) => bootErrorProperties(file)))
+  ].sort()
+
+  it('finds the properties the package sets', () => {
+    expect(properties).toEqual(
+      expect.arrayContaining(['contributor', 'handlerKeys', 'option', 'label', 'schemes'])
+    )
+  })
+
+  it.each(properties)('%s', (property) => {
+    expect(README).toContain(`| \`${property}\``)
   })
 })

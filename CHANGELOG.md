@@ -12,6 +12,17 @@ heading here.
 
 ## [Unreleased]
 
+**Apply to your observability:**
+
+- An unknown option in an options block, and a `metrics.defaultLabels` value that is not a string, no longer
+  put the key in the message. The key is the `option` or `label` property of the error. Match on the
+  property, not on the message.
+- A contributor that returns `operations` or `components` as a proxy that throws or is revoked, a component
+  section that does the same, or a schema read by a getter that throws, fails the boot as the labelled
+  contributor error, with what went wrong as `cause`.
+- A lone surrogate in a listed route or component is escaped as `\uXXXX` like the other unseen characters.
+- The README names every property a boot error carries and the full set of escaped characters.
+
 ## [1.6.18] - 2026-11-20
 
 A patch release. A boot error about something you declared no longer carries your text in its message, and the

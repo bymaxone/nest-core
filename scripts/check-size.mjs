@@ -170,11 +170,15 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 // `./openapi` budget 8.12 KiB = 8315 B: measured 8308 B brotli (raw 33871 B) plus 7 B of headroom, from
 // 8243 B. The growth is the same builder, the fields on the contributor, handler-key, scheme and
 // operation boot errors, and the guarded read of a fragment: code and messages.
+// `./openapi` budget 8.19 KiB = 8386 B: measured 8376 B brotli (raw 34222 B) plus 10 B of headroom, from
+// 8315 B. The growth is the copy of a fragment's operations and of each component section made inside the
+// guard of `callContributor`, so a proxy that throws or is revoked fails as the contributor's error, and
+// the lone-surrogate category in the escape: code. The root entry stays at 23.82 KiB (measured 24379 B).
 const BUDGETS = [
   { name: '. (root)', path: 'dist/index.mjs', brotli: 23.82 * 1024 },
   { name: './pagination', path: 'dist/pagination/index.mjs', brotli: 1.5 * 1024 },
   { name: './health', path: 'dist/health/index.mjs', brotli: 0.5 * 1024 },
-  { name: './openapi', path: 'dist/openapi/index.mjs', brotli: 8.12 * 1024 },
+  { name: './openapi', path: 'dist/openapi/index.mjs', brotli: 8.19 * 1024 },
   { name: './metrics', path: 'dist/metrics/index.mjs', brotli: 0.5 * 1024 },
   { name: './http', path: 'dist/http/index.mjs', brotli: 3.49 * 1024 }
 ]

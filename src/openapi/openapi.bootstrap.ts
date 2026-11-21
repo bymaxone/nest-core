@@ -88,8 +88,8 @@ const MAX_WARNED_OPERATIONS = 10
 /** The longest one listed item is shown, so a long route template cannot fill a log line. */
 const MAX_LISTED_ITEM = 200
 
-/** Control, format, line and paragraph separator characters: they break, reorder or hide text. */
-const UNSEEN = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u
+/** Control, format, lone surrogate, line and paragraph separator characters: they break, reorder or hide text. */
+const UNSEEN = /[\p{Cc}\p{Cf}\p{Cs}\p{Zl}\p{Zp}]/u
 
 /**
  * One item of a list a warning carries, made safe for a log line: a character that breaks, reorders

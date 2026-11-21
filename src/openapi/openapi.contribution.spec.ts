@@ -119,6 +119,13 @@ describe('createHandlerIdMap', () => {
   })
 })
 
+/** A proxy that has been revoked, so any read of it throws. */
+function revokedProxy(): object {
+  const revocable = Proxy.revocable({}, {})
+  revocable.revoke()
+  return revocable.proxy
+}
+
 describe('collectContributions', () => {
   const reflector = new Reflector()
 
@@ -576,6 +583,58 @@ describe('collectContributions', () => {
       }
     ],
     [
+      'operations as a proxy whose ownKeys throws',
+      {
+        contractVersion: BYMAX_OPENAPI_CONTRACT_VERSION,
+        operations: new Proxy(
+          {},
+          {
+            ownKeys: () => {
+              throw new Error('SECRET-ownKeys')
+            }
+          }
+        )
+      }
+    ],
+    [
+      'operations as a revoked proxy',
+      { contractVersion: BYMAX_OPENAPI_CONTRACT_VERSION, operations: revokedProxy() }
+    ],
+    [
+      'components as a proxy whose descriptor read throws',
+      {
+        contractVersion: BYMAX_OPENAPI_CONTRACT_VERSION,
+        components: new Proxy(
+          { schemas: {} },
+          {
+            getOwnPropertyDescriptor: () => {
+              throw new Error('SECRET-gopd')
+            }
+          }
+        )
+      }
+    ],
+    [
+      'a components section that is a revoked proxy',
+      {
+        contractVersion: BYMAX_OPENAPI_CONTRACT_VERSION,
+        components: { schemas: revokedProxy() }
+      }
+    ],
+    [
+      'a schema read by a getter that throws',
+      {
+        contractVersion: BYMAX_OPENAPI_CONTRACT_VERSION,
+        components: {
+          schemas: {
+            get Widget(): never {
+              throw new Error('SECRET-schema')
+            }
+          }
+        }
+      }
+    ],
+    [
       'a proxy whose get throws',
       new Proxy(
         {},
@@ -613,6 +672,31 @@ describe('collectContributions', () => {
       contributor: 'Odd'
     })
     expect((caught as Error).cause).toBeInstanceOf(Error)
+  })
+
+  /**
+   * A component section that is not an object offers nothing and does not stop the boot.
+   *
+   * A JavaScript contributor can hand over `null` or a string for a member; the merge treats it as
+   * offering no entries, and the copy taken under the guard keeps that.
+   */
+  it('copies a component section that is not an object as an empty one', () => {
+    const Odd = contributorClass('Odd', {
+      contractVersion: BYMAX_OPENAPI_CONTRACT_VERSION,
+      components: { schemas: null, parameters: 'x', responses: { Ok: { description: 'ok' } } }
+    } as unknown as OpenApiFragment)
+
+    const [contribution] = collectContributions(
+      scannerOf([{ metatype: Odd, instance: new Odd() }]),
+      reflector,
+      mapOf({})
+    )
+
+    expect(contribution?.components).toEqual({
+      schemas: {},
+      parameters: {},
+      responses: { Ok: { description: 'ok' } }
+    })
   })
 
   /**

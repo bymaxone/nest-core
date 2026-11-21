@@ -349,7 +349,11 @@ describe('applyHttpFloors, CORS refusals', () => {
       /cors\.credentials/
     ],
     ['a credentials of 1', { origins: [ALLOWED], credentials: 1 }, /cors\.credentials/],
-    ['an unknown key', { origins: [ALLOWED], allowedOrigins: ['x'] }, /cors.*allowedOrigins/],
+    [
+      'an unknown key',
+      { origins: [ALLOWED], allowedOrigins: ['x'] },
+      /cors has an unknown option$/
+    ],
     [
       'an unknown method',
       { origins: [ALLOWED], methods: ['FETCH'] },

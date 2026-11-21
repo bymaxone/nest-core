@@ -126,9 +126,18 @@ function isContributor(instance: unknown): instance is IOpenApiContributor {
   return typeof (instance as Partial<IOpenApiContributor> | null)?.contributeOpenApi === 'function'
 }
 
-/** The three members of a fragment this package reads, taken once so a getter runs once. */
-type ReadFragment = {
-  [K in 'contractVersion' | 'operations' | 'components']: OpenApiFragment[K] | undefined
+/** A fragment as read once: the version, the operations as entries, and the components copied one level down. */
+interface ReadFragment {
+  readonly contractVersion: unknown
+  readonly operations: readonly (readonly [string, OpenApiFragmentObject])[]
+  readonly components: ResolvedContribution['components']
+}
+
+/** A section of a fragment's components as an own copy, so reading it later runs no host code; anything but an object offers none. */
+function copySection(section: unknown): Readonly<Record<string, OpenApiFragmentObject>> {
+  return typeof section === 'object' && section !== null
+    ? (Object.fromEntries(Object.entries(section)) as Record<string, OpenApiFragmentObject>)
+    : {}
 }
 
 /**
@@ -146,10 +155,20 @@ type ReadFragment = {
  */
 function callContributor(contributor: IOpenApiContributor, label: string): ReadFragment {
   try {
-    // Read here, inside the guard: a fragment that is not an object, or whose getter throws, is a
-    // contributor's failure like a throw from the method.
-    const { contractVersion, operations, components } = contributor.contributeOpenApi()
-    return { contractVersion, operations, components }
+    // Read here, inside the guard, down to the entries of `operations` and of each component
+    // section: a fragment that is not an object, a getter that throws and a proxy that throws or
+    // is revoked are a contributor's failure like a throw from the method.
+    const fragment = contributor.contributeOpenApi()
+    return {
+      contractVersion: fragment.contractVersion,
+      operations: Object.entries(fragment.operations ?? {}),
+      components: Object.fromEntries(
+        Object.entries(fragment.components ?? {}).map(([member, entries]) => [
+          member,
+          copySection(entries)
+        ])
+      )
+    }
   } catch (cause) {
     throw bootError(
       '[BymaxCoreModule] an OpenAPI contributor failed to contribute to the OpenAPI document',
@@ -210,7 +229,7 @@ function resolveOperations(
   label: string,
   handlers: HandlerIdMap
 ): Readonly<Record<string, OpenApiFragmentObject>> {
-  const entries = Object.entries(fragment.operations ?? {})
+  const entries = fragment.operations
   const unmatched = entries.filter(([handlerKey]) => handlers.idsFor(handlerKey).length === 0)
   if (unmatched.length > 0) {
     const known = handlers.keys()
@@ -283,7 +302,7 @@ export function collectContributions(
     return {
       label,
       operations: resolveOperations(fragment, label, handlers),
-      components: fragment.components ?? {}
+      components: fragment.components
     }
   })
 }

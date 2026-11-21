@@ -4,6 +4,7 @@
  * never the value, since a value may be a secret and a message reaches logs.
  * @layer Configuration
  */
+import { bootError } from './boot-error'
 
 /** The built-in objects that are named when one is given where a block was expected. */
 const BUILT_IN_OBJECTS = ['Date', 'Map', 'Set', 'RegExp', 'Promise', 'Error']
@@ -88,7 +89,7 @@ export function checkedBlock<T extends object>(
   const stray = Object.keys(raw).find((key) => !Object.hasOwn(known, key))
   if (stray !== undefined) {
     const shown = stray.length > MAX_KEY_SHOWN ? `${stray.slice(0, MAX_KEY_SHOWN)}…` : stray
-    throw new Error(`${name} has an unknown option ${JSON.stringify(shown)}`)
+    throw bootError(`${name} has an unknown option`, { option: shown })
   }
   return raw as T
 }

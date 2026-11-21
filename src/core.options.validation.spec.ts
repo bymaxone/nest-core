@@ -157,13 +157,13 @@ describe('a block has only the keys it documents', () => {
     '%s refuses a key it does not have',
     (block) => {
       const message = refusal({ [block]: { bogusKey: 1 } } as BymaxCoreModuleOptions)
-      expect(message).toBe(`${block} has an unknown option "bogusKey"`)
+      expect(message).toBe(`${block} has an unknown option`)
     }
   )
 
   it('the options object refuses a block it does not have', () => {
     expect(refusal({ bogusBlock: {} } as BymaxCoreModuleOptions)).toBe(
-      'options has an unknown option "bogusBlock"'
+      'options has an unknown option'
     )
   })
 
@@ -245,8 +245,19 @@ describe('metrics.defaultLabels', () => {
     )
     expect(refusal(given('metrics', 'defaultLabels', []))).toContain('must be an object')
     expect(refusal(given('metrics', 'defaultLabels', { a: 1 }))).toBe(
-      'metrics.defaultLabels.a must be a string, received 1'
+      'metrics.defaultLabels has a label whose value must be a string, received 1'
     )
+  })
+
+  it('keeps the name of a label with a value that is not a string as a property, not in the message', () => {
+    let caught: unknown
+    try {
+      normalizeCoreOptions(given('metrics', 'defaultLabels', { team: 5 }))
+    } catch (error) {
+      caught = error
+    }
+    expect(caught).toMatchObject({ label: 'team' })
+    expect((caught as Error).message).not.toContain('team')
   })
 
   it('refuses a label name Prometheus would not accept, without showing it', () => {

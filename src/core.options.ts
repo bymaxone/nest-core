@@ -5,6 +5,7 @@
  * from the resolved snapshot, never from the raw consumer input.
  * @layer Config
  */
+import { bootError } from './boot-error'
 import {
   BODY_DEPTH_KEYS,
   ENVELOPE_KEYS,
@@ -24,6 +25,7 @@ import type {
 import {
   booleanOption,
   checkedBlock,
+  describeValue,
   isPlainRecord,
   refusal,
   routeOption,
@@ -726,8 +728,12 @@ function resolveDefaultLabels(given: unknown): Record<string, string> {
       if (!LABEL_NAME.test(name)) {
         throw new Error('metrics.defaultLabels has an invalid label name')
       }
-      if (typeof value !== 'string')
-        throw refusal(`metrics.defaultLabels.${name}`, 'a string', value)
+      if (typeof value !== 'string') {
+        throw bootError(
+          `metrics.defaultLabels has a label whose value must be a string, received ${describeValue(value)}`,
+          { label: name }
+        )
+      }
       return [name, value]
     })
   ) as Record<string, string>

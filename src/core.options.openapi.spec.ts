@@ -46,7 +46,7 @@ describe('openapi declarations that are refused', () => {
     [
       'a server with an option it does not have',
       { servers: [{ url: '/api', label: 'x' }] },
-      'openapi.servers[0] has an unknown option "label"'
+      'openapi.servers[0] has an unknown option'
     ],
     [
       'schemes that are a list',
