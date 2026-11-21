@@ -154,6 +154,20 @@ describe('ownCopy', () => {
     expect(coercions).toBe(1)
   })
 
+  it.each([
+    [Number.NaN, 0],
+    [-1, 0],
+    ['2', 2],
+    [undefined, 0]
+  ])('copies a list proxy whose length answers %p as %p items', (length, items) => {
+    const list = new Proxy([], {
+      get: (target, key, receiver) =>
+        key === 'length' ? length : Reflect.get(target, key, receiver)
+    })
+
+    expect((ownCopy({ list }) as { list: unknown[] }).list).toHaveLength(items)
+  })
+
   it('reads a list subclass by its indexes, not by an iterator that disagrees with them', () => {
     class Listed extends Array<unknown> {
       override [Symbol.iterator](): ArrayIterator<unknown> {
