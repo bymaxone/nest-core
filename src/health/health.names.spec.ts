@@ -51,6 +51,21 @@ describe('the name a probe serves is the one read when the set was resolved', ()
     expect(second).toEqual(first)
   })
 
+  it.each(['', 42, undefined])(
+    'an explicit indicator whose name is %p fails the boot when discovery is off',
+    (name) => {
+      const indicator = { name, check: () => Promise.resolve({ status: 'up' as const }) }
+      const service = new HealthService(
+        [indicator as never],
+        normalizeCoreOptions({ health: { readinessCacheMs: 0 } })
+      )
+
+      expect(() => service.onApplicationBootstrap()).toThrow(
+        '[BymaxCoreModule] a health indicator name must be a non-empty string'
+      )
+    }
+  )
+
   it('a discovered indicator whose name changes after discovery is served by the name it had', async () => {
     const indicator = named((read) => (read <= 3 ? 'queue' : 'renamed'))
     const scanner = {

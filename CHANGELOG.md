@@ -12,10 +12,12 @@ heading here.
 
 ## [Unreleased]
 
-**Changed (in 1.6.20, not noted in its entry):**
+**Changed:**
 
-- With health enabled, an indicator you list explicitly whose `name` is empty, is not a string or is
-  missing now fails the boot with `[BymaxCoreModule] a health indicator name must be a non-empty string`.
+- An indicator you list explicitly whose `name` is empty, is not a string or is missing fails the boot with
+  `[BymaxCoreModule] a health indicator name must be a non-empty string`. With `autoDiscover: true` it already
+  did in 1.6.20, whose entry does not say so; with `autoDiscover: false`, the default, it is new here: that
+  name was not checked before.
 
 **Apply to your observability:**
 
