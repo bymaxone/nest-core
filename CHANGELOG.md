@@ -23,7 +23,7 @@ boot error is escaped in the error's properties.
   put the key in the message. The key is the `option` or `label` property of the error. Match on the
   property, not on the message.
 - A contributor that returns `operations` or `components` as a proxy that throws or is revoked, a component
-  section that does the same, or a schema read by a getter that throws, fails the boot as the labelled
+  section that does the same, or a component entry whose getter throws, fails the boot as the labelled
   contributor error, with what went wrong as `cause`.
 - A lone surrogate in a listed route or component is escaped as `\uXXXX` like the other unseen characters.
 - A string a boot error carries as a property, or each string of a list, is escaped and cut like a listed item, so
