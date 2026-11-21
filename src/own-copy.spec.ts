@@ -142,30 +142,43 @@ describe('ownCopy', () => {
     expect(reads).toStrictEqual([1, 0, 1])
   })
 
-  it('coerces the length of a list once, so a length object that grows on every coercion ends', () => {
-    let coercions = 0
-    const growing = { valueOf: (): number => (coercions += 1) }
-    const list = new Proxy([], {
+  it.each([Number.NaN, -1, 1.5, '2', undefined, { valueOf: (): number => 1 }])(
+    'refuses a list proxy whose length answers %p: a real list has an integer length',
+    (length) => {
+      const list = new Proxy([], {
+        get: (target, key, receiver) =>
+          key === 'length' ? length : Reflect.get(target, key, receiver)
+      })
+
+      expect(() => ownCopy({ list })).toThrow('A list is too long')
+    }
+  )
+
+  it('refuses a security list a proxy gives out as empty by a length that is not a number', () => {
+    const security = new Proxy([{ bearer: [] }], {
       get: (target, key, receiver) =>
-        key === 'length' ? growing : Reflect.get(target, key, receiver)
+        key === 'length' ? Number.NaN : Reflect.get(target, key, receiver)
     })
 
-    expect(ownCopy({ list })).toStrictEqual({ list: [undefined] })
-    expect(coercions).toBe(1)
+    expect(() => ownCopy({ operation: { security } })).toThrow('A list is too long')
   })
 
-  it.each([
-    [Number.NaN, 0],
-    [-1, 0],
-    ['2', 2],
-    [undefined, 0]
-  ])('copies a list proxy whose length answers %p as %p items', (length, items) => {
-    const list = new Proxy([], {
-      get: (target, key, receiver) =>
-        key === 'length' ? length : Reflect.get(target, key, receiver)
-    })
+  it.each([Number.POSITIVE_INFINITY, 2 ** 31, 100_001])(
+    'refuses a list proxy whose length is %p instead of copying that many items',
+    (length) => {
+      const list = new Proxy([], {
+        get: (target, key, receiver) =>
+          key === 'length' ? length : Reflect.get(target, key, receiver)
+      })
 
-    expect((ownCopy({ list }) as { list: unknown[] }).list).toHaveLength(items)
+      expect(() => ownCopy({ list })).toThrow('A list is too long')
+    }
+  )
+
+  it('copies a list of exactly the longest length allowed', () => {
+    const list = Array.from({ length: 100_000 }, () => 0)
+
+    expect((ownCopy({ list }) as { list: unknown[] }).list).toHaveLength(100_000)
   })
 
   it('reads a list subclass by its indexes, not by an iterator that disagrees with them', () => {

@@ -5,6 +5,9 @@
  */
 import { types } from 'node:util'
 
+/** The longest list copied: a proxy can answer any length. */
+const MAX_LENGTH = 100_000
+
 /** How deep a value is copied before it is refused as a cycle in all but name. */
 const MAX_DEPTH = 64
 
@@ -92,8 +95,14 @@ export function ownCopy(
   if (Array.isArray(value)) {
     // A plain list built by index, not `map`, which would build what the list's species names.
     const items: unknown[] = []
-    const length = Number(value.length)
-    for (let index = 0; index < length; index += 1) {
+    const length = value.length as unknown
+    // A real list has an integer length from 0 up; anything else is a proxy, and a list it gives out
+    // as empty would read as no security at all.
+    if (!Number.isInteger(length) || (length as number) < 0 || (length as number) > MAX_LENGTH) {
+      throw new RangeError('A list is too long')
+    }
+    const count = length as number
+    for (let index = 0; index < count; index += 1) {
       items.push(ownCopy(Reflect.get(value, index), depth + 1, inside, done, strict))
     }
     cache.set(value, items)
