@@ -9,6 +9,7 @@
  * cause chain, and no message carries the host's text.
  * Mocks: none; the fragment is a plain object wrapped in proxies, the document is a small literal.
  */
+import type { INestApplication } from '@nestjs/common'
 import { Reflector } from '@nestjs/core'
 import { Registry } from 'prom-client'
 
@@ -19,6 +20,8 @@ import {
   BYMAX_OPENAPI_CONTRIBUTOR_METADATA
 } from './openapi/openapi.contract'
 import type { IOpenApiContributor, OpenApiFragment } from './openapi/openapi.contract'
+import { applyHttpFloors } from './http/http-floors'
+import type { HttpFloorsOptions } from './http/http-floors'
 import { discoverIndicators } from './health/health.discovery'
 import { BymaxHealthIndicator } from './health/health.marker'
 import { BymaxMetricsContributor } from './metrics/metrics.contract'
@@ -262,6 +265,60 @@ describe('a provider read through proxies that throw at the Nth trap', () => {
       )
     }, 'provider')
 
+    expect(raw).toEqual([])
+  })
+})
+
+/** A fake Express-backed application that accepts whatever is registered on it. */
+function fakeApp(): INestApplication {
+  return {
+    getHttpAdapter: () => ({ getType: () => 'express' }),
+    getHttpServer: () => ({ listening: false }),
+    use: () => 1,
+    enableCors: () => undefined,
+    useBodyParser: () => undefined
+  } as unknown as INestApplication
+}
+
+describe('the HTTP floors options read through proxies that throw at the Nth trap', () => {
+  it('fail as the options error with the host error as cause, for every N', async () => {
+    const floors: HttpFloorsOptions = {
+      helmet: { contentSecurityPolicy: false },
+      headersTimeoutMs: 1_000,
+      requestTimeoutMs: 2_000,
+      keepAliveTimeoutMs: 500,
+      bodyLimit: { json: '1mb', urlencoded: '1mb' },
+      cors: {
+        origins: ['https://app.example.com'],
+        credentials: true,
+        methods: ['GET'],
+        allowedHeaders: ['x-key'],
+        exposedHeaders: ['x-id'],
+        maxAgeSeconds: 10
+      }
+    }
+    const raw: number[] = []
+    let operations = 0
+    for (let failAt = 1; failAt < 2_000; failAt += 1) {
+      const sweep: Sweep = { count: 0, failAt }
+      let thrown: unknown
+      try {
+        await applyHttpFloors(fakeApp(), trapped(floors, sweep))
+      } catch (error) {
+        thrown = error
+      }
+      if (sweep.count < failAt) {
+        operations = sweep.count
+        break
+      }
+      const read =
+        thrown instanceof Error &&
+        thrown.message === 'the options could not be read' &&
+        chain(thrown).some((link) => link instanceof Error && link.message.includes(SECRET))
+      if (!read) raw.push(failAt)
+    }
+
+    expect(operations).toBeGreaterThan(20)
     expect(raw).toEqual([])
   })
 })

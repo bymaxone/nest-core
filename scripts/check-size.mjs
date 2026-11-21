@@ -182,7 +182,9 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 // that applies it: `./http` and the root reach it through the unknown-option refusal. Code only.
 // Root budget 24.37 KiB = 24955 B: measured 24930 B brotli (raw 108625 B) plus 25 B of headroom, from
 // 24658 B. `./openapi` budget 8.53 KiB = 8734 B: measured 8706 B (raw 35482 B) plus 28 B, from 8458 B.
-// `./http` budget 3.78 KiB = 3871 B: measured 3849 B (raw 14252 B) plus 22 B, from 3840 B. The growth is
+// `./http` budget 4.44 KiB = 4546 B: measured 4514 B (raw 16456 B) plus 32 B, from 3840 B; it reads the options
+// of `applyHttpFloors` through `readOptions`, which brings `ownCopy`, `bootError` and the wrapper for a thrown
+// non-Error (about 660 B) into this entry. The growth is
 // `ownCopy`, the deep copy of what a host hands over (a contributor's fragment in `./openapi`, the options in
 // the root, which also carries the guarded reads of a marked provider), and the ten-item cap of a list a boot
 // error carries, which reaches `./http` through `bootError`. Code only.
@@ -192,7 +194,7 @@ const BUDGETS = [
   { name: './health', path: 'dist/health/index.mjs', brotli: 0.5 * 1024 },
   { name: './openapi', path: 'dist/openapi/index.mjs', brotli: 8.53 * 1024 },
   { name: './metrics', path: 'dist/metrics/index.mjs', brotli: 0.5 * 1024 },
-  { name: './http', path: 'dist/http/index.mjs', brotli: 3.78 * 1024 }
+  { name: './http', path: 'dist/http/index.mjs', brotli: 4.44 * 1024 }
 ]
 
 const fmt = (n) => `${(n / 1024).toFixed(2)} kB`

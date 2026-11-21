@@ -22,6 +22,7 @@ import {
   refusal
 } from '../option-validation'
 import { MAX_TIMER_DELAY_MS, positiveSafeInteger } from '../positive-integer'
+import { readOptions } from '../read-options'
 import { resolveCors } from './http-floors.cors'
 import type { HttpFloorsCorsOptions } from './http-floors.cors'
 import { loadHelmet } from './http.loader'
@@ -314,7 +315,7 @@ interface ResolvedFloors {
 function resolveFloors(given: unknown): ResolvedFloors {
   const options = checkedBlock<HttpFloorsOptions>(
     'options',
-    given ?? {},
+    readOptions(given) ?? {},
     FLOORS_KEYS
   ) as HttpFloorsOptions
   const headersTimeoutMs = options.headersTimeoutMs ?? DEFAULT_HEADERS_TIMEOUT_MS

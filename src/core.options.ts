@@ -17,7 +17,6 @@ import {
 } from './core.options.keys'
 import { assertMetricsProtected } from './core.options.metrics-guard'
 import { resolveOpenApi } from './core.options.openapi'
-import { readOptions } from './core.options.read'
 import { resolveHandlerTimeout } from './handler-timeout/handler-timeout.options'
 import type {
   HandlerTimeoutOptions,
@@ -34,6 +33,7 @@ import {
   stringOption
 } from './option-validation'
 import { MAX_TIMER_DELAY_MS, positiveSafeInteger } from './positive-integer'
+import { readOptions } from './read-options'
 import { DEFAULT_HEALTH_PATH, DEFAULT_METRICS_PATH } from './route-defaults'
 import { resolveShutdown } from './shutdown/shutdown.options'
 import type { ResolvedShutdownOptions, ShutdownOptions } from './shutdown/shutdown.options'
