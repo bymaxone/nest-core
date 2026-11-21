@@ -56,6 +56,29 @@ function implementsIndicator(instance: unknown, label: string): instance is IHea
 }
 
 /**
+ * An indicator's name, read once: a failure of reading it, or a value that is not a non-empty
+ * string, is refused as a boot error, so what is sorted and compared afterwards cannot change.
+ *
+ * @param indicator - The indicator to read.
+ * @param fields - The provider the error names, when it is known.
+ * @throws Error When reading the name throws, or it is not a non-empty string.
+ */
+function nameOf(indicator: IHealthIndicator, fields: { provider?: string } = {}): string {
+  let name: unknown
+  try {
+    name = indicator.name
+  } catch (cause) {
+    throw bootError('[BymaxCoreModule] a health indicator name could not be read', fields, {
+      cause: asHostError(cause)
+    })
+  }
+  if (typeof name !== 'string' || name === '') {
+    throw bootError('[BymaxCoreModule] a health indicator name must be a non-empty string', fields)
+  }
+  return name
+}
+
+/**
  * Collect every marked indicator registered anywhere in the application.
  *
  * A marked provider that does not satisfy the contract throws rather than being
@@ -73,7 +96,7 @@ export function discoverIndicators(
   discovery: ProviderScanner,
   reflector: Reflector
 ): readonly IHealthIndicator[] {
-  const discovered: IHealthIndicator[] = []
+  const named: (readonly [string, IHealthIndicator])[] = []
   for (const marked of findMarkedProviders(discovery, reflector, BYMAX_HEALTH_INDICATOR_METADATA)) {
     if (!implementsIndicator(marked.instance, marked.label)) {
       throw bootError(
@@ -82,9 +105,11 @@ export function discoverIndicators(
         { provider: marked.label }
       )
     }
-    discovered.push(marked.instance)
+    named.push([nameOf(marked.instance, { provider: marked.label }), marked.instance])
   }
-  return discovered.sort((left, right) => left.name.localeCompare(right.name))
+  return named
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([, indicator]) => indicator)
 }
 
 /**
@@ -103,6 +128,6 @@ export function mergeIndicators(
   explicit: readonly IHealthIndicator[],
   discovered: readonly IHealthIndicator[]
 ): readonly IHealthIndicator[] {
-  const claimed = new Set(explicit.map((indicator) => indicator.name))
-  return [...explicit, ...discovered.filter((indicator) => !claimed.has(indicator.name))]
+  const claimed = new Set(explicit.map((indicator) => nameOf(indicator)))
+  return [...explicit, ...discovered.filter((indicator) => !claimed.has(nameOf(indicator)))]
 }

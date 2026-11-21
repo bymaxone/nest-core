@@ -197,18 +197,27 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 // Root budget 24.50 KiB = 25088 B: measured 25053 B brotli (raw 109082 B) plus 35 B of headroom, from
 // 25068 B. `./openapi` budget 8.66 KiB = 8868 B: measured 8837 B (raw 36015 B) plus 31 B, from 8806 B.
 // `./http` budget 4.15 KiB = 4250 B: measured 4219 B (raw 15571 B) plus 31 B, from 4188 B. The growth is
-// the memo of finished copies in `ownCopy`, which keeps an object reached twice copied once, and the
-// snapshot of a component section's entries in `callContributor`. Code only.
+// the memo of finished copies in `ownCopy`, which keeps an object reached twice copied once; the root and
+// `./openapi` also carry the snapshot of a component section's entries in `callContributor`, and `./http`
+// carries only the memo. Code only.
 // Root budget 24.74 KiB = 25334 B: measured 25302 B brotli (raw 110256 B) plus 32 B of headroom, from
 // 25088 B. `./http` budget 4.32 KiB = 4424 B: measured 4389 B (raw 16492 B) plus 35 B, from 4250 B.
 // `./openapi` is unchanged at 8.66 KiB (8837 B). The growth is `readBlock`, which reads each documented option
 // by its name from the tables the options are checked against, and the tables the root and `./http` now
 // carry for it. Reading by name keeps an option a host serves only through `get`. Code only.
+// Root budget 24.80 KiB = 25395 B: measured 25369 B brotli (raw 110720 B) plus 26 B of headroom, from
+// 25334 B. `./openapi` budget 8.69 KiB = 8898 B: measured 8869 B (raw 36287 B) plus 29 B, from 8868 B.
+// `./http` is unchanged at 4.32 KiB (4389 B). The growth is the one guarded read of the options that
+// `forRoot` hands to the builder, and the guarded reads of a marked class's name and of an indicator's
+// name; `./openapi` carries the class-name read through the shared discovery. Code only.
+// Root budget 24.87 KiB = 25466 B: measured 25439 B brotli (raw 111081 B) plus 27 B of headroom, from
+// 25395 B. Every other subpath is unchanged. The growth is the single read of each health indicator's
+// name, which refuses a name that is not a non-empty string and sorts the names read. Code only.
 const BUDGETS = [
-  { name: '. (root)', path: 'dist/index.mjs', brotli: 24.74 * 1024 },
+  { name: '. (root)', path: 'dist/index.mjs', brotli: 24.87 * 1024 },
   { name: './pagination', path: 'dist/pagination/index.mjs', brotli: 1.5 * 1024 },
   { name: './health', path: 'dist/health/index.mjs', brotli: 0.5 * 1024 },
-  { name: './openapi', path: 'dist/openapi/index.mjs', brotli: 8.66 * 1024 },
+  { name: './openapi', path: 'dist/openapi/index.mjs', brotli: 8.69 * 1024 },
   { name: './metrics', path: 'dist/metrics/index.mjs', brotli: 0.5 * 1024 },
   { name: './http', path: 'dist/http/index.mjs', brotli: 4.32 * 1024 }
 ]
