@@ -12,16 +12,21 @@ heading here.
 
 ## [Unreleased]
 
+## [1.6.20] - 2026-11-21
+
+A patch release. What a host hands over is copied once under a guard, so a throw from it is attributed to it and
+nothing read afterwards runs the host's code.
+
 **Apply to your observability:**
 
 - A contributor's `operations` and `components` are copied under the guard at every depth: a proxy that throws
   or is revoked, or a getter that throws, anywhere in them fails the boot as the labelled contributor error,
   with what went wrong as `cause`. A fragment that holds itself, or is nested too deeply, is refused the same
   way.
-- The options, and the options of `applyHttpFloors`, are copied once, where a throw can be attributed. A getter that
-  throws, or a proxy that throws or is revoked, anywhere in the options fails with
-  `the options could not be read`, and what it threw is the `cause`. If your code matched on the error your own getter threw, read `error.cause`; the error itself no
-  longer is that one.
+- The options, and the options of `applyHttpFloors`, are copied once, where a throw can be attributed. A getter
+  that throws, or a proxy that throws or is revoked, anywhere in the options fails with
+  `the options could not be read`, and what it threw is the `cause`. If your code matched on the error your own
+  getter threw, read `error.cause`; the error itself is no longer that one.
 - A provider marked as a health indicator or a metrics contributor that cannot be read fails with a boot error
   that names it (`provider` or `contributor`), and what it threw is the `cause`.
 - A list a boot error carries as a property keeps its first ten items and ends with `and <n> more`.
@@ -1796,6 +1801,7 @@ have regressed from. They are kept because the reasoning is worth having.
 [1.6.13]: https://github.com/bymaxone/nest-core/compare/v1.6.10...v1.6.13
 [1.6.14]: https://github.com/bymaxone/nest-core/compare/v1.6.13...v1.6.14
 [1.6.15]: https://github.com/bymaxone/nest-core/compare/v1.6.14...v1.6.15
+[1.6.20]: https://github.com/bymaxone/nest-core/compare/v1.6.19...v1.6.20
 [1.6.19]: https://github.com/bymaxone/nest-core/compare/v1.6.18...v1.6.19
 [1.6.18]: https://github.com/bymaxone/nest-core/compare/v1.6.17...v1.6.18
 [1.6.17]: https://github.com/bymaxone/nest-core/compare/v1.6.16...v1.6.17
