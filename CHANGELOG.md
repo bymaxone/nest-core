@@ -18,8 +18,7 @@ heading here.
   the guard, not your object. A proxy trap on the options object itself that throws now fails with
   `the options could not be read`, with what it threw as the `cause`, instead of escaping from the builder.
 - A marked provider whose class `name` throws, and a health indicator whose `name` throws when discovery or
-  the merge reads it, fail the boot with a boot error that keeps what was thrown as the `cause`. A name that
-  starts to throw after boot, while a readiness probe runs, is not covered.
+  the merge reads it, fail the boot with a boot error that keeps what was thrown as the `cause`.
 
 ## [1.6.20] - 2026-11-21
 
