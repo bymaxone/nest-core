@@ -19,6 +19,39 @@ function strictCache(done: Map<object, unknown>): Map<object, unknown> {
 }
 
 /**
+ * The own properties of `value` copied, enumerable or not and every one enumerable in the copy, so the
+ * copy is seen whole by `Object.keys`. Defined, not assigned, so a key such as `__proto__` stays an own
+ * property.
+ */
+function copyProperties(
+  value: object,
+  depth: number,
+  inside: readonly object[],
+  done: Map<object, unknown>,
+  strict: boolean
+): Record<PropertyKey, unknown> {
+  const copy: Record<PropertyKey, unknown> = {}
+  for (const key of Reflect.ownKeys(value)) {
+    // A name a proxy lists but holds no property under is not copied.
+    if (Reflect.getOwnPropertyDescriptor(value, key) === undefined) continue
+    const held: unknown = Reflect.get(value, key)
+    Object.defineProperty(copy, key, {
+      value: ownCopy(
+        held,
+        depth + 1,
+        inside,
+        done,
+        strict || (key === 'security' && Array.isArray(held))
+      ),
+      enumerable: true,
+      writable: true,
+      configurable: true
+    })
+  }
+  return copy
+}
+
+/**
  * An own copy of the plain objects and lists in `value`, at every depth, with every own property of an object (a non-enumerable one included, made enumerable), so nothing read from the
  * copy runs host code. Anything else (a number, a string, a `Date`, a function) is kept as it is.
  *
@@ -57,26 +90,7 @@ export function ownCopy(
     cache.set(value, items)
     return items
   }
-  // Every own property, enumerable or not, and every one enumerable in the copy, so the copy is seen
-  // whole by `Object.keys`. Defined, not assigned, so a key such as `__proto__` stays an own property.
-  const copy: Record<PropertyKey, unknown> = {}
-  for (const key of Reflect.ownKeys(value)) {
-    // A name a proxy lists but holds no property under is not copied.
-    if (Reflect.getOwnPropertyDescriptor(value, key) === undefined) continue
-    const held: unknown = Reflect.get(value, key)
-    Object.defineProperty(copy, key, {
-      value: ownCopy(
-        held,
-        depth + 1,
-        inside,
-        done,
-        strict || (key === 'security' && Array.isArray(held))
-      ),
-      enumerable: true,
-      writable: true,
-      configurable: true
-    })
-  }
+  const copy = copyProperties(value, depth, inside, done, strict)
   // The copy is judged: a proxy inside an option that lists no keys reads as `{}`, and an empty
   // requirement is anonymous access.
   if (strict && depth > 0 && types.isProxy(value) && Reflect.ownKeys(copy).length === 0) {
