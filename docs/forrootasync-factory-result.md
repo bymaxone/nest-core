@@ -51,7 +51,7 @@ Rejected because:
   host's own async function, which is indistinguishable from the factory's own throw, so a residual
   stays raw.
 - `useClass` and `useExisting` stay uncovered unless the builder's internal factory is replaced.
-- It costs root brotli bytes, and the root budget has little headroom.
+- It costs root brotli bytes.
 - A marker on the factory's own errors does not work: a thrown primitive cannot carry one, and an
   async factory's own error and a `then`-trap error share one rejection channel.
 
