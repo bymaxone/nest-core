@@ -17,6 +17,9 @@
  */
 import type { Reflector } from '@nestjs/core'
 
+import { bootError } from './boot-error'
+import { asHostError } from './host-error'
+
 /**
  * The part of a provider entry a scan reads. Declared structurally rather than
  * as Nest's `InstanceWrapper`, which lives behind a deep import and carries
@@ -66,6 +69,24 @@ function labelFor(className: string, token: unknown): string {
 }
 
 /**
+ * A class's name, with a failure of reading it refused as a boot error that keeps what was thrown
+ * as the cause.
+ *
+ * @throws Error When reading the name throws.
+ */
+function classNameOf(metatype: { readonly name: string }): string {
+  try {
+    return metatype.name
+  } catch (cause) {
+    throw bootError(
+      '[BymaxCoreModule] a marked provider could not be read',
+      {},
+      { cause: asHostError(cause) }
+    )
+  }
+}
+
+/**
  * Collect every provider in the application carrying `metadataKey`.
  *
  * Providers with no class are skipped: `useValue` and `useFactory` bindings have
@@ -92,7 +113,10 @@ export function findMarkedProviders(
     if (reflector.get<boolean>(metadataKey, metatype) !== true) {
       continue
     }
-    marked.push({ instance: wrapper.instance, label: labelFor(metatype.name, wrapper.name) })
+    marked.push({
+      instance: wrapper.instance,
+      label: labelFor(classNameOf(metatype), wrapper.name)
+    })
   }
   return marked
 }

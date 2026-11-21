@@ -56,6 +56,24 @@ function implementsIndicator(instance: unknown, label: string): instance is IHea
 }
 
 /**
+ * An indicator's name, with a failure of reading it refused as a boot error that keeps what was
+ * thrown as the cause.
+ *
+ * @throws Error When reading the name throws.
+ */
+function nameOf(indicator: IHealthIndicator): string {
+  try {
+    return indicator.name
+  } catch (cause) {
+    throw bootError(
+      '[BymaxCoreModule] a health indicator name could not be read',
+      {},
+      { cause: asHostError(cause) }
+    )
+  }
+}
+
+/**
  * Collect every marked indicator registered anywhere in the application.
  *
  * A marked provider that does not satisfy the contract throws rather than being
@@ -84,7 +102,7 @@ export function discoverIndicators(
     }
     discovered.push(marked.instance)
   }
-  return discovered.sort((left, right) => left.name.localeCompare(right.name))
+  return discovered.sort((left, right) => nameOf(left).localeCompare(nameOf(right)))
 }
 
 /**
@@ -103,6 +121,6 @@ export function mergeIndicators(
   explicit: readonly IHealthIndicator[],
   discovered: readonly IHealthIndicator[]
 ): readonly IHealthIndicator[] {
-  const claimed = new Set(explicit.map((indicator) => indicator.name))
-  return [...explicit, ...discovered.filter((indicator) => !claimed.has(indicator.name))]
+  const claimed = new Set(explicit.map(nameOf))
+  return [...explicit, ...discovered.filter((indicator) => !claimed.has(nameOf(indicator)))]
 }

@@ -205,11 +205,16 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 // `./openapi` is unchanged at 8.66 KiB (8837 B). The growth is `readBlock`, which reads each documented option
 // by its name from the tables the options are checked against, and the tables the root and `./http` now
 // carry for it. Reading by name keeps an option a host serves only through `get`. Code only.
+// Root budget 24.80 KiB = 25395 B: measured 25369 B brotli (raw 110720 B) plus 26 B of headroom, from
+// 25334 B. `./openapi` budget 8.69 KiB = 8898 B: measured 8869 B (raw 36287 B) plus 29 B, from 8868 B.
+// `./http` is unchanged at 4.32 KiB (4389 B). The growth is the one guarded read of the options that
+// `forRoot` hands to the builder, and the guarded reads of a marked class's name and of an indicator's
+// name; `./openapi` carries the class-name read through the shared discovery. Code only.
 const BUDGETS = [
-  { name: '. (root)', path: 'dist/index.mjs', brotli: 24.74 * 1024 },
+  { name: '. (root)', path: 'dist/index.mjs', brotli: 24.8 * 1024 },
   { name: './pagination', path: 'dist/pagination/index.mjs', brotli: 1.5 * 1024 },
   { name: './health', path: 'dist/health/index.mjs', brotli: 0.5 * 1024 },
-  { name: './openapi', path: 'dist/openapi/index.mjs', brotli: 8.66 * 1024 },
+  { name: './openapi', path: 'dist/openapi/index.mjs', brotli: 8.69 * 1024 },
   { name: './metrics', path: 'dist/metrics/index.mjs', brotli: 0.5 * 1024 },
   { name: './http', path: 'dist/http/index.mjs', brotli: 4.32 * 1024 }
 ]

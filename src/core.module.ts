@@ -22,6 +22,7 @@ import { APP_FILTER, APP_INTERCEPTOR, DiscoveryModule, HttpAdapterHost } from '@
 import { BymaxBodyDepthMiddleware } from './body-depth/body-depth.middleware'
 import { DEFAULT_HEALTH_PATH, DEFAULT_METRICS_PATH, normalizeCoreOptions } from './core.options'
 import type { BymaxCoreModuleOptions, ResolvedCoreOptions } from './core.options'
+import { OPTION_SHAPE } from './core.options.shape'
 import {
   BYMAX_CORE_OPTIONS,
   BYMAX_CORRELATION_PROVIDER,
@@ -45,6 +46,7 @@ import {
   buildMetricsTimingSinkProvider
 } from './metrics/metrics.providers'
 import { selectAsyncExceptionFilter } from './passthrough.providers'
+import { readOptions } from './read-options'
 import { BymaxShutdownDeadline } from './shutdown/shutdown-deadline'
 import type { ITraceContextProvider } from './telemetry/trace-context'
 import { bridgeFastifyRouteMetadata } from './timing/fastify-route.bridge'
@@ -342,7 +344,9 @@ export class BymaxCoreModule extends BymaxCoreModuleBase implements NestModule {
    *   BymaxCoreModule.forRoot({ metrics: { enabled: true } })
    */
   static override forRoot(options: typeof OPTIONS_TYPE = {}): DynamicModule {
-    const resolved = normalizeCoreOptions(options)
+    // Read once, under the guard: the builder below gets the copy, so it never runs a host's code.
+    const given = readOptions(options, OPTION_SHAPE)
+    const resolved = normalizeCoreOptions(given)
     const providers: Provider[] = [
       { provide: BYMAX_CORE_OPTIONS, useValue: resolved },
       ...buildDefaultProviders(),
@@ -374,7 +378,7 @@ export class BymaxCoreModule extends BymaxCoreModuleBase implements NestModule {
     const imports = scansProviders ? [DiscoveryModule] : []
     return augmentModule(
       // The builder destructures what it is given, so an unset input is an empty one.
-      super.forRoot(options ?? {}),
+      super.forRoot(given ?? {}),
       providers,
       buildControllers(resolved),
       exportTokens,

@@ -13,6 +13,7 @@ import type { INestApplication } from '@nestjs/common'
 import { Reflector } from '@nestjs/core'
 import { Registry } from 'prom-client'
 
+import { BymaxCoreModule } from './core.module'
 import { normalizeCoreOptions } from './core.options'
 import type { BymaxCoreModuleOptions } from './core.options'
 import {
@@ -234,6 +235,34 @@ describe('an open map, whose keys the host names', () => {
       metrics: { enabled: true, defaultLabels: labels }
     })
     expect(resolved.metrics.defaultLabels).toEqual({ app: 'api' })
+  })
+})
+
+describe('forRoot given options read through proxies that throw at the Nth trap', () => {
+  it('fails as the options error with the host error as cause, for every N, in the builder too', () => {
+    const raw: number[] = []
+    let operations = 0
+    for (let failAt = 1; failAt < 2_000; failAt += 1) {
+      const sweep: Sweep = { count: 0, failAt }
+      let thrown: unknown
+      try {
+        BymaxCoreModule.forRoot(trapped(options(), sweep))
+      } catch (error) {
+        thrown = error
+      }
+      if (sweep.count < failAt) {
+        operations = sweep.count
+        break
+      }
+      const read =
+        thrown instanceof Error &&
+        thrown.message === 'the options could not be read' &&
+        chain(thrown).some((link) => link instanceof Error && link.message.includes(SECRET))
+      if (!read) raw.push(failAt)
+    }
+
+    expect(operations).toBeGreaterThan(20)
+    expect(raw).toEqual([])
   })
 })
 
