@@ -89,4 +89,73 @@ describe('a name the host answers while discovery reads it', () => {
     expect(error?.message).toMatch(/^\[BymaxCoreModule\] a health indicator name could not be read/)
     expect((error?.cause as Error).message).toBe(SECRET)
   })
+
+  it('an indicator whose name turns into a number once it is sorted fails as a boot error, not a TypeError', () => {
+    @BymaxHealthIndicator()
+    class Database {}
+
+    let reads = 0
+    const flipping = {
+      get name(): unknown {
+        reads += 1
+        return reads > 2 ? 42 : 'qa'
+      },
+      check: () => Promise.resolve({ status: 'up' })
+    }
+    const other = { name: 'zz', check: () => Promise.resolve({ status: 'up' }) }
+    const error = thrownBy(() =>
+      discoverIndicators(
+        {
+          getProviders: () => [
+            { metatype: Database, instance: flipping, name: 'Database' },
+            { metatype: Database, instance: other, name: 'Other' }
+          ]
+        },
+        reflector
+      )
+    )
+    expect(error).toBeInstanceOf(Error)
+    expect(error?.constructor).not.toBe(TypeError)
+    expect(error?.message).toMatch(
+      /^\[BymaxCoreModule\] a health indicator name must be a non-empty string/
+    )
+  })
+
+  it('reads each name once, so the order is that of the names read and stable', () => {
+    @BymaxHealthIndicator()
+    class Database {}
+
+    const reads = new Map<string, number>()
+    const indicator = (name: string): object => ({
+      get name(): string {
+        reads.set(name, (reads.get(name) ?? 0) + 1)
+        return name
+      },
+      check: () => Promise.resolve({ status: 'up' })
+    })
+    const found = discoverIndicators(
+      {
+        getProviders: () =>
+          ['d', 'b', 'c', 'a', 'e'].map((name) => ({
+            metatype: Database,
+            instance: indicator(name),
+            name
+          }))
+      },
+      reflector
+    )
+    expect(found.map((item) => item.name)).toEqual(['a', 'b', 'c', 'd', 'e'])
+    expect([...reads.values()].every((count) => count <= 4)).toBe(true)
+  })
+
+  it.each([42, '', undefined])(
+    'an explicit indicator whose name is %p fails the merge as a boot error',
+    (name) => {
+      const explicit = { name, check: () => Promise.resolve({ status: 'up' }) }
+      const error = thrownBy(() => mergeIndicators([explicit as never], []))
+      expect(error?.message).toMatch(
+        /^\[BymaxCoreModule\] a health indicator name must be a non-empty string/
+      )
+    }
+  )
 })
