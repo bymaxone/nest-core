@@ -14,18 +14,31 @@ const MAX_DEPTH = 64
  * @param value - What the host handed over.
  * @param depth - How deep the copy is; callers leave it at its start.
  * @param open - The objects being copied above this one, to tell a cycle from a shared object.
+ * @param done - The copies already made in this call, so an object reached twice is copied once
+ *   and the copy is shared as the original was.
  * @returns The copy.
  * @throws RangeError When `value` holds itself or is deeper than {@link MAX_DEPTH}.
  */
-export function ownCopy(value: unknown, depth = 0, open: readonly object[] = []): unknown {
+export function ownCopy(
+  value: unknown,
+  depth = 0,
+  open: readonly object[] = [],
+  done: Map<object, unknown> = new Map()
+): unknown {
   if (typeof value !== 'object' || value === null) return value
   if (depth > MAX_DEPTH || open.includes(value)) {
     throw new RangeError('A value holds itself or is nested too deeply')
   }
   const prototype = Object.getPrototypeOf(value) as unknown
   if (!Array.isArray(value) && prototype !== Object.prototype && prototype !== null) return value
+  const made = done.get(value)
+  if (made !== undefined) return made
   const inside = [...open, value]
-  if (Array.isArray(value)) return value.map((item) => ownCopy(item, depth + 1, inside))
+  if (Array.isArray(value)) {
+    const items = value.map((item) => ownCopy(item, depth + 1, inside, done))
+    done.set(value, items)
+    return items
+  }
   // Every own property, enumerable or not, with the flag kept: an option kept in a property that is
   // not enumerable (a getter holding a token) must still be there when the copy is read. Defined,
   // not assigned, so a key such as `__proto__` stays an own property of the copy.
@@ -33,11 +46,12 @@ export function ownCopy(value: unknown, depth = 0, open: readonly object[] = [])
   for (const key of Reflect.ownKeys(value)) {
     const described = Reflect.getOwnPropertyDescriptor(value, key)
     Object.defineProperty(copy, key, {
-      value: ownCopy(Reflect.get(value, key), depth + 1, inside),
+      value: ownCopy(Reflect.get(value, key), depth + 1, inside, done),
       enumerable: described?.enumerable === true,
       writable: true,
       configurable: true
     })
   }
+  done.set(value, copy)
   return copy
 }

@@ -80,6 +80,33 @@ describe('ownCopy', () => {
     expect((copy as { polluted?: boolean }).polluted).toBeUndefined()
   })
 
+  it('copies an object reached twice once: the copy is shared too, and each getter runs once', () => {
+    let reads = 0
+    let node: Record<string, unknown> = {
+      get leaf() {
+        reads += 1
+        return 1
+      }
+    }
+    const shared = node
+    for (let level = 0; level < 24; level += 1) node = { a: node, b: node }
+
+    const copy = ownCopy(node) as Record<string, Record<string, unknown>>
+
+    expect(reads).toBe(1)
+    expect(copy['a']).toBe(copy['b'])
+    expect(copy['a']).not.toBe(node['a'])
+    expect(shared['leaf']).toBe(1)
+  })
+
+  it('still refuses a cycle that is reached through a shared object', () => {
+    const shared: Record<string, unknown> = {}
+    const top = { a: shared, b: shared }
+    shared['back'] = top
+
+    expect(() => ownCopy(top)).toThrow(RangeError)
+  })
+
   it('keeps a Date, a class instance and a function as they are', () => {
     class Widget {}
     const when = new Date(0)

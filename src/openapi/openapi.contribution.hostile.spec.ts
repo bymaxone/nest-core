@@ -323,4 +323,36 @@ describe('collectContributions, a fragment that cannot be read', () => {
     expect(schemas.A['two']).toEqual({ type: 'string' })
     expect(schemas.A['one']).not.toBe(shared)
   })
+
+  /**
+   * A component section that is a class instance is read under the guard like a plain one.
+   *
+   * The copy keeps a class instance as given, so the entries of a section are taken from it here:
+   * a getter that throws must fail the boot as the contributor's labelled error, with the cause, and
+   * not later as the raw host error from the merge.
+   */
+  it('labels a contributor whose component section is a class instance with a throwing getter', () => {
+    class Section {
+      constructor() {
+        Object.defineProperty(this, 'Item', {
+          enumerable: true,
+          get: (): never => {
+            throw new Error('SECRET-host')
+          }
+        })
+      }
+    }
+
+    const { thrown } = collectOne({
+      contractVersion: BYMAX_OPENAPI_CONTRACT_VERSION,
+      components: { schemas: new Section() }
+    })
+
+    expect(thrown).toMatchObject({
+      message:
+        '[BymaxCoreModule] an OpenAPI contributor failed to contribute to the OpenAPI document',
+      contributor: 'Odd',
+      cause: { message: 'SECRET-host' }
+    })
+  })
 })

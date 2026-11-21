@@ -135,6 +135,20 @@ interface ReadFragment {
 }
 
 /**
+ * A component section as an own copy of its entries, taken under the caller's guard whatever the
+ * section is: a class instance is kept as given by `ownCopy`, and its getters must still run here.
+ * Anything but an object offers no entries.
+ */
+function copySection(section: unknown): Readonly<Record<string, OpenApiFragmentObject>> {
+  return typeof section === 'object' && section !== null
+    ? (ownCopy(Object.fromEntries(Object.entries(section))) as Record<
+        string,
+        OpenApiFragmentObject
+      >)
+    : {}
+}
+
+/**
  * Ask one contributor for its fragments, failing with its name if it cannot.
  *
  * A contributor that throws fails the document build rather than being skipped:
@@ -161,10 +175,7 @@ function callContributor(contributor: IOpenApiContributor, label: string): ReadF
       contractVersion: given.contractVersion,
       operations: Object.entries(operations),
       components: Object.fromEntries(
-        Object.entries(components).map(([member, entries]) => [
-          member,
-          typeof entries === 'object' && entries !== null ? entries : {}
-        ])
+        Object.entries(components).map(([member, entries]) => [member, copySection(entries)])
       ) as ReadFragment['components']
     }
   } catch (cause) {
