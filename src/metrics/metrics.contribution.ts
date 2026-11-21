@@ -47,6 +47,24 @@ function isContributor(instance: unknown): instance is IMetricsContributor {
 }
 
 /**
+ * Whether a marked provider implements the contract, with a failure of reading it refused as a boot
+ * error that names the contributor and keeps what was thrown as the cause.
+ *
+ * @throws Error When reading the provider throws.
+ */
+function implementsContributor(instance: unknown, label: string): instance is IMetricsContributor {
+  try {
+    return isContributor(instance)
+  } catch (cause) {
+    throw bootError(
+      '[BymaxCoreModule] a provider marked @BymaxMetricsContributor() could not be read',
+      { contributor: label },
+      { cause: asHostError(cause) }
+    )
+  }
+}
+
+/**
  * Collect every marked contributor registered anywhere in the application.
  *
  * Sorted by label so contributors run in the same order on every boot: metric
@@ -69,7 +87,7 @@ export function discoverContributors(
     reflector,
     BYMAX_METRICS_CONTRIBUTOR_METADATA
   )) {
-    if (!isContributor(marked.instance)) {
+    if (!implementsContributor(marked.instance, marked.label)) {
       throw bootError(
         '[BymaxCoreModule] a provider marked @BymaxMetricsContributor() does not implement ' +
           'IMetricsContributor: it must expose a "registerMetrics" method.',

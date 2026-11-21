@@ -180,13 +180,32 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 // one module, `escapeUnseen`, which `bootError` now applies to every string a boot error carries (the
 // escape moved out of the OpenAPI bootstrap, where `./openapi` already had it), and the loop in `bootError`
 // that applies it: `./http` and the root reach it through the unknown-option refusal. Code only.
+// Root budget 24.37 KiB = 24955 B: measured 24930 B brotli (raw 108625 B) plus 25 B of headroom, from
+// 24658 B. `./openapi` budget 8.53 KiB = 8734 B: measured 8706 B (raw 35482 B) plus 28 B, from 8458 B.
+// `./http` budget 4.01 KiB = 4106 B: measured 4076 B (raw 15118 B) plus 30 B, from 3840 B; it reads the options
+// of `applyHttpFloors` through `readOptions`, which brings `ownCopy` and `bootError` into this entry. The
+// cause is what the host threw, as it was thrown: wrapping a non-Error with `asHostError` would add
+// 438 B here, measured, and the cause of this error is read by code, not logged. The growth is
+// `ownCopy`, the deep copy of what a host hands over (a contributor's fragment in `./openapi`, the options in
+// the root, which also carries the guarded reads of a marked provider), and the ten-item cap of a list a boot
+// error carries, which reaches `./http` through `bootError`. Code only.
+// Root budget 24.48 KiB = 25068 B: measured 25036 B brotli (raw 108880 B) plus 32 B of headroom, from
+// 24955 B. `./openapi` budget 8.60 KiB = 8806 B: measured 8771 B (raw 35733 B) plus 35 B, from 8734 B.
+// `./http` budget 4.09 KiB = 4188 B: measured 4154 B (raw 15369 B) plus 34 B, from 4106 B. The growth is the
+// copy taking every own property, enumerable or not, with its flag, symbols included, in `ownCopy`: the copy
+// must keep an option held by a non-enumerable property, such as a token behind a getter. Code only.
+// Root budget 24.50 KiB = 25088 B: measured 25053 B brotli (raw 109082 B) plus 35 B of headroom, from
+// 25068 B. `./openapi` budget 8.66 KiB = 8868 B: measured 8837 B (raw 36015 B) plus 31 B, from 8806 B.
+// `./http` budget 4.15 KiB = 4250 B: measured 4219 B (raw 15571 B) plus 31 B, from 4188 B. The growth is
+// the memo of finished copies in `ownCopy`, which keeps an object reached twice copied once, and the
+// snapshot of a component section's entries in `callContributor`. Code only.
 const BUDGETS = [
-  { name: '. (root)', path: 'dist/index.mjs', brotli: 24.08 * 1024 },
+  { name: '. (root)', path: 'dist/index.mjs', brotli: 24.5 * 1024 },
   { name: './pagination', path: 'dist/pagination/index.mjs', brotli: 1.5 * 1024 },
   { name: './health', path: 'dist/health/index.mjs', brotli: 0.5 * 1024 },
-  { name: './openapi', path: 'dist/openapi/index.mjs', brotli: 8.26 * 1024 },
+  { name: './openapi', path: 'dist/openapi/index.mjs', brotli: 8.66 * 1024 },
   { name: './metrics', path: 'dist/metrics/index.mjs', brotli: 0.5 * 1024 },
-  { name: './http', path: 'dist/http/index.mjs', brotli: 3.75 * 1024 }
+  { name: './http', path: 'dist/http/index.mjs', brotli: 4.15 * 1024 }
 ]
 
 const fmt = (n) => `${(n / 1024).toFixed(2)} kB`

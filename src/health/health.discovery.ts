@@ -12,6 +12,7 @@ import type { Reflector } from '@nestjs/core'
 import { bootError } from '../boot-error'
 import { findMarkedProviders } from '../discovery'
 import type { ProviderScanner } from '../discovery'
+import { asHostError } from '../host-error'
 import type { IHealthIndicator } from './health.interfaces'
 import { BYMAX_HEALTH_INDICATOR_METADATA } from './health.marker'
 
@@ -37,6 +38,24 @@ function isIndicator(instance: unknown): instance is IHealthIndicator {
 }
 
 /**
+ * Whether a marked provider implements the contract, with a failure of reading it refused as a boot
+ * error that names the provider and keeps what was thrown as the cause.
+ *
+ * @throws Error When reading the provider throws.
+ */
+function implementsIndicator(instance: unknown, label: string): instance is IHealthIndicator {
+  try {
+    return isIndicator(instance)
+  } catch (cause) {
+    throw bootError(
+      '[BymaxCoreModule] a provider marked @BymaxHealthIndicator() could not be read',
+      { provider: label },
+      { cause: asHostError(cause) }
+    )
+  }
+}
+
+/**
  * Collect every marked indicator registered anywhere in the application.
  *
  * A marked provider that does not satisfy the contract throws rather than being
@@ -56,7 +75,7 @@ export function discoverIndicators(
 ): readonly IHealthIndicator[] {
   const discovered: IHealthIndicator[] = []
   for (const marked of findMarkedProviders(discovery, reflector, BYMAX_HEALTH_INDICATOR_METADATA)) {
-    if (!isIndicator(marked.instance)) {
+    if (!implementsIndicator(marked.instance, marked.label)) {
       throw bootError(
         '[BymaxCoreModule] a provider marked @BymaxHealthIndicator() does not implement ' +
           'IHealthIndicator: it must expose a non-empty "name" and a "check" method.',

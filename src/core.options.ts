@@ -22,6 +22,7 @@ import type {
   HandlerTimeoutOptions,
   ResolvedHandlerTimeoutOptions
 } from './handler-timeout/handler-timeout.options'
+import { asHostError } from './host-error'
 import {
   booleanOption,
   checkedBlock,
@@ -32,6 +33,7 @@ import {
   stringOption
 } from './option-validation'
 import { MAX_TIMER_DELAY_MS, positiveSafeInteger } from './positive-integer'
+import { readOptions } from './read-options'
 import { DEFAULT_HEALTH_PATH, DEFAULT_METRICS_PATH } from './route-defaults'
 import { resolveShutdown } from './shutdown/shutdown.options'
 import type { ResolvedShutdownOptions, ShutdownOptions } from './shutdown/shutdown.options'
@@ -762,7 +764,7 @@ function resolveTelemetry(given: unknown): ResolvedTelemetryOptions {
  * @returns A fully-populated, deep-frozen options snapshot.
  */
 export function normalizeCoreOptions(given?: BymaxCoreModuleOptions): ResolvedCoreOptions {
-  const raw = checkedBlock<BymaxCoreModuleOptions>('options', given, OPTION_KEYS)
+  const raw = checkedBlock<BymaxCoreModuleOptions>('options', readOptions(given), OPTION_KEYS)
   const environment = stringOption('environment', raw?.environment, undefined)
   return deepFreeze({
     envelope: resolveEnvelope(raw?.envelope),

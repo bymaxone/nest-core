@@ -60,6 +60,15 @@ class IncompleteIndicator {
   readonly name = 'incomplete'
 }
 
+/** A marked class whose name cannot be read. */
+@BymaxHealthIndicator()
+class UnreadableIndicator {
+  /** Stands in for a getter that touches something that is gone. */
+  get name(): string {
+    throw new Error('SECRET-host')
+  }
+}
+
 /** An ordinary provider, marked by nobody. */
 class OrdinaryService {
   readonly name = 'ordinary'
@@ -85,6 +94,24 @@ function nodeFor(metatype: new () => object): ProviderNode {
 }
 
 describe('discoverIndicators', () => {
+  it('names the provider, and keeps what was thrown as the cause, when it cannot be read', () => {
+    const reflector = new Reflector()
+    const nodes: ProviderNode[] = [
+      { metatype: UnreadableIndicator, instance: new UnreadableIndicator(), name: 'UNREADABLE' }
+    ]
+    let caught: unknown
+    try {
+      discoverIndicators(scannerOver(nodes), reflector)
+    } catch (error) {
+      caught = error
+    }
+
+    expect(caught).toMatchObject({
+      message: '[BymaxCoreModule] a provider marked @BymaxHealthIndicator() could not be read',
+      provider: 'UnreadableIndicator',
+      cause: { message: 'SECRET-host' }
+    })
+  })
   const reflector = new Reflector()
 
   /**
