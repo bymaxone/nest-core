@@ -34,11 +34,14 @@ function namedCopy(value: unknown): unknown {
     for (const name of found) if (typeof name === 'string') names.add(name)
   }
   add(Reflect.ownKeys(value))
+  let links = 0
   for (
     let up = Reflect.getPrototypeOf(value);
     up && up !== Object.prototype;
     up = Reflect.getPrototypeOf(up)
   ) {
+    // A proxy can answer its own prototype for ever.
+    if (++links > MAX_NAMES) throw bootError('a map option has too long a prototype chain', {})
     add(Reflect.ownKeys(up))
   }
   if (names.size > MAX_NAMES) throw bootError('a map option holds too many names', {})

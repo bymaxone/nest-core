@@ -103,6 +103,19 @@ describe('a map option read by every name it answers to', () => {
     expect((error.cause as Error).message).toBe('SECRET')
   })
 
+  it('refuses a proxy that answers itself as its prototype, instead of walking for ever', () => {
+    const held: object = new Proxy({ defaultSrc: ["'none'"] }, { getPrototypeOf: () => held })
+    const error = refusal({ map: held }, NAMED)
+    expect(error.message).toBe('the options could not be read')
+    expect(error.cause).toMatchObject({ message: 'a map option has too long a prototype chain' })
+  })
+
+  it('keeps a map whose prototype chain is exactly as long as the limit allows', () => {
+    let held: object = { defaultSrc: ['x'] }
+    for (let i = 0; i < 999; i += 1) held = Object.create(held) as object
+    expect(Object.keys(read(held))).toEqual(['defaultSrc'])
+  })
+
   it('keeps a map that answers to exactly the limit', () => {
     const held = Object.fromEntries(Array.from({ length: 1000 }, (_, i) => [`k${i}`, 1]))
     expect(Object.keys(read(held))).toHaveLength(1000)
