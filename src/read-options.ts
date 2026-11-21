@@ -31,8 +31,7 @@ function namedCopy(value: unknown): unknown {
   const copy: Record<string, unknown> = {}
   const names = new Set<string>()
   const add = (found: readonly PropertyKey[]): void => {
-    for (const name of found)
-      if (typeof name === 'string' && name !== 'constructor') names.add(name)
+    for (const name of found) if (typeof name === 'string') names.add(name)
   }
   add(Reflect.ownKeys(value))
   for (

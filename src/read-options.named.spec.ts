@@ -103,6 +103,11 @@ describe('a map option read by every name it answers to', () => {
     expect((error.cause as Error).message).toBe('SECRET')
   })
 
+  it('keeps a map that answers to exactly the limit', () => {
+    const held = Object.fromEntries(Array.from({ length: 1000 }, (_, i) => [`k${i}`, 1]))
+    expect(Object.keys(read(held))).toHaveLength(1000)
+  })
+
   it('refuses a map that answers to more names than the limit', () => {
     const held = Object.fromEntries(Array.from({ length: 1001 }, (_, i) => [`k${i}`, 1]))
     const error = refusal({ map: held }, NAMED)
