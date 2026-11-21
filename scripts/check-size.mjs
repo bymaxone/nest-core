@@ -210,8 +210,11 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 // `./http` is unchanged at 4.32 KiB (4389 B). The growth is the one guarded read of the options that
 // `forRoot` hands to the builder, and the guarded reads of a marked class's name and of an indicator's
 // name; `./openapi` carries the class-name read through the shared discovery. Code only.
+// Root budget 24.87 KiB = 25466 B: measured 25439 B brotli (raw 111081 B) plus 27 B of headroom, from
+// 25395 B. Every other subpath is unchanged. The growth is the single read of each health indicator's
+// name, which refuses a name that is not a non-empty string and sorts the names read. Code only.
 const BUDGETS = [
-  { name: '. (root)', path: 'dist/index.mjs', brotli: 24.8 * 1024 },
+  { name: '. (root)', path: 'dist/index.mjs', brotli: 24.87 * 1024 },
   { name: './pagination', path: 'dist/pagination/index.mjs', brotli: 1.5 * 1024 },
   { name: './health', path: 'dist/health/index.mjs', brotli: 0.5 * 1024 },
   { name: './openapi', path: 'dist/openapi/index.mjs', brotli: 8.69 * 1024 },
