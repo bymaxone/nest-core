@@ -3,6 +3,8 @@
  * where a throw from the host can be attributed.
  * @layer Configuration
  */
+import { types } from 'node:util'
+
 import { bootError } from './boot-error'
 import { ownCopy } from './own-copy'
 
@@ -41,8 +43,14 @@ function readBlock(given: unknown, shape: Shape): unknown {
   const copy: Record<string, unknown> = {}
   for (const key of Object.keys(shape)) {
     const value: unknown = Reflect.get(given, key)
-    if (value !== undefined)
-      copy[key] = readEntry(value, shape[key] as Shape | readonly [Shape] | 0)
+    if (value !== undefined) {
+      const entry = shape[key] as Shape | readonly [Shape] | 0
+      // A map behind a proxy that answers only `get` lists no keys, and would read as empty.
+      if (entry === 0 && types.isProxy(value) && Reflect.ownKeys(value as object).length === 0) {
+        throw bootError('an option is held behind a proxy that lists no keys', { option: key })
+      }
+      copy[key] = readEntry(value, entry)
+    }
   }
   for (const key of Object.keys(given)) {
     if (!Object.hasOwn(shape, key)) {
