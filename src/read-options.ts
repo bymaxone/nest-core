@@ -41,10 +41,10 @@ function namedCopy(value: unknown): unknown {
     up = Reflect.getPrototypeOf(up)
   ) {
     // A proxy can answer its own prototype for ever.
-    if (++links > MAX_NAMES) throw bootError('a map option has too long a prototype chain', {})
+    if (++links > MAX_NAMES) throw bootError('a map option is too large', {})
     add(Reflect.ownKeys(up))
   }
-  if (names.size > MAX_NAMES) throw bootError('a map option holds too many names', {})
+  if (names.size > MAX_NAMES) throw bootError('a map option is too large', {})
   for (const name of names) {
     const held: unknown = Reflect.get(value, name)
     if (typeof held !== 'function')

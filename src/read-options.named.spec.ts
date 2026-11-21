@@ -107,7 +107,7 @@ describe('a map option read by every name it answers to', () => {
     const held: object = new Proxy({ defaultSrc: ["'none'"] }, { getPrototypeOf: () => held })
     const error = refusal({ map: held }, NAMED)
     expect(error.message).toBe('the options could not be read')
-    expect(error.cause).toMatchObject({ message: 'a map option has too long a prototype chain' })
+    expect(error.cause).toMatchObject({ message: 'a map option is too large' })
   })
 
   it('keeps a map whose prototype chain is exactly as long as the limit allows', () => {
@@ -124,7 +124,7 @@ describe('a map option read by every name it answers to', () => {
   it('refuses a map that answers to more names than the limit', () => {
     const held = Object.fromEntries(Array.from({ length: 1001 }, (_, i) => [`k${i}`, 1]))
     const error = refusal({ map: held }, NAMED)
-    expect(error.cause).toMatchObject({ message: 'a map option holds too many names' })
+    expect(error.cause).toMatchObject({ message: 'a map option is too large' })
   })
 })
 
