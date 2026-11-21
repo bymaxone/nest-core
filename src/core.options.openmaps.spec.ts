@@ -58,9 +58,9 @@ describe('an open map of the options held behind a proxy', () => {
         readOptions(options(block, name, listing(map)), OPTION_SHAPE)
       )
 
-      expect(
-        (resolved as unknown as Record<string, Record<string, unknown>>)[block]?.[name]
-      ).toEqual(map)
+      const section: unknown = Reflect.get(resolved, block)
+
+      expect(Reflect.get(section as object, name)).toEqual(map)
     }
   )
 
