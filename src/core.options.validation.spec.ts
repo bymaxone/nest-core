@@ -231,6 +231,18 @@ describe('metrics.authToken', () => {
   })
 })
 
+describe('options kept in a property that is not enumerable', () => {
+  it('still reach the resolved options: a token held by a getter is not dropped', () => {
+    const metrics = Object.defineProperty({ enabled: true, edgeProtected: true }, 'authToken', {
+      get: () => 'secret'
+    })
+
+    const resolved = normalizeCoreOptions({ metrics } as BymaxCoreModuleOptions)
+
+    expect(resolved.metrics.authToken).toBe('secret')
+  })
+})
+
 describe('metrics.defaultLabels', () => {
   it('copies the labels so the snapshot does not freeze the consumer object', () => {
     const labels = { service: 'api' }

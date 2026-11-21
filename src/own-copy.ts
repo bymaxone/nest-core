@@ -8,7 +8,7 @@
 const MAX_DEPTH = 64
 
 /**
- * An own copy of the plain objects and lists in `value`, at every depth, so nothing read from the
+ * An own copy of the plain objects and lists in `value`, at every depth, with every own property of an object (a non-enumerable one included), so nothing read from the
  * copy runs host code. Anything else (a number, a string, a `Date`, a function) is kept as it is.
  *
  * @param value - What the host handed over.
@@ -25,9 +25,19 @@ export function ownCopy(value: unknown, depth = 0, open: readonly object[] = [])
   const prototype = Object.getPrototypeOf(value) as unknown
   if (!Array.isArray(value) && prototype !== Object.prototype && prototype !== null) return value
   const inside = [...open, value]
-  return Array.isArray(value)
-    ? value.map((item) => ownCopy(item, depth + 1, inside))
-    : Object.fromEntries(
-        Object.entries(value).map(([key, item]) => [key, ownCopy(item, depth + 1, inside)])
-      )
+  if (Array.isArray(value)) return value.map((item) => ownCopy(item, depth + 1, inside))
+  // Every own property, enumerable or not, with the flag kept: an option kept in a property that is
+  // not enumerable (a getter holding a token) must still be there when the copy is read. Defined,
+  // not assigned, so a key such as `__proto__` stays an own property of the copy.
+  const copy: Record<PropertyKey, unknown> = {}
+  for (const key of Reflect.ownKeys(value)) {
+    const described = Reflect.getOwnPropertyDescriptor(value, key)
+    Object.defineProperty(copy, key, {
+      value: ownCopy(Reflect.get(value, key), depth + 1, inside),
+      enumerable: described?.enumerable === true,
+      writable: true,
+      configurable: true
+    })
+  }
+  return copy
 }

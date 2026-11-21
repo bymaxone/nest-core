@@ -39,6 +39,37 @@ describe('ownCopy', () => {
     expect(Object.getPrototypeOf(copy)).toBe(Object.prototype)
   })
 
+  it('keeps a property that is not enumerable, still not enumerable, with its value read once', () => {
+    let reads = 0
+    const source = Object.defineProperty({ shown: 1 }, 'hidden', {
+      get: () => {
+        reads += 1
+        return 'secret'
+      }
+    })
+
+    const copy = ownCopy(source) as Record<string, unknown>
+
+    expect(copy['hidden']).toBe('secret')
+    expect(Object.keys(copy)).toEqual(['shown'])
+    expect(Object.getOwnPropertyDescriptor(copy, 'hidden')?.enumerable).toBe(false)
+    expect(Object.getOwnPropertyDescriptor(copy, 'shown')?.enumerable).toBe(true)
+    expect(reads).toBe(1)
+  })
+
+  it('keeps a symbol key and a key named __proto__ as own properties of the copy', () => {
+    const tag = Symbol('tag')
+    const source = JSON.parse('{"__proto__": {"polluted": true}, "plain": 1}') as object
+    Object.defineProperty(source, tag, { value: 'marked', enumerable: true })
+
+    const copy = ownCopy(source) as Record<PropertyKey, unknown>
+
+    expect(copy[tag]).toBe('marked')
+    expect(Object.getOwnPropertyDescriptor(copy, '__proto__')?.value).toEqual({ polluted: true })
+    expect(Object.getPrototypeOf(copy)).toBe(Object.prototype)
+    expect((copy as { polluted?: boolean }).polluted).toBeUndefined()
+  })
+
   it('keeps a Date, a class instance and a function as they are', () => {
     class Widget {}
     const when = new Date(0)
