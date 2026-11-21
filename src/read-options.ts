@@ -40,8 +40,8 @@ function snapshot(list: readonly unknown[]): unknown[] {
 }
 
 /** A map read by every name it answers to, once. */
-function namedCopy(value: unknown): unknown {
-  if (!isBlock(value)) return ownCopy(value)
+function namedCopy(value: unknown, done: Map<object, unknown>): unknown {
+  if (!isBlock(value)) return ownCopy(value, 0, [], done)
   const copy: Record<string, unknown> = {}
   const names = new Set<string>()
   const add = (found: readonly PropertyKey[]): void => {
@@ -62,7 +62,7 @@ function namedCopy(value: unknown): unknown {
   for (const name of names) {
     const held: unknown = Reflect.get(value, name)
     if (typeof held !== 'function')
-      Object.defineProperty(copy, name, { value: ownCopy(held), enumerable: true })
+      Object.defineProperty(copy, name, { value: ownCopy(held, 0, [], done), enumerable: true })
   }
   return copy
 }
@@ -81,17 +81,18 @@ function isEmptyMap(value: unknown): boolean {
 function readEntry(
   value: unknown,
   entry: Shape | readonly [Shape] | 0 | 1,
-  strict: boolean
+  strict: boolean,
+  done: Map<object, unknown>
 ): unknown {
-  if (entry === 1) return namedCopy(value)
-  if (entry === 0) return ownCopy(value, 0, [], new Map(), strict)
+  if (entry === 1) return namedCopy(value, done)
+  if (entry === 0) return ownCopy(value, 0, [], done, strict)
   if (Array.isArray(entry)) {
     const shape = entry[0] as Shape
     return Array.isArray(value)
-      ? snapshot(value).map((item) => readBlock(item, shape))
-      : ownCopy(value)
+      ? snapshot(value).map((item) => readBlock(item, shape, done))
+      : ownCopy(value, 0, [], done)
   }
-  return readBlock(value, entry as Shape)
+  return readBlock(value, entry as Shape, done)
 }
 
 /**
@@ -100,7 +101,7 @@ function readEntry(
  * kept, with no value, so the block's own check can refuse it. Anything that is not a block comes
  * back as it is, for that check to refuse.
  */
-function readBlock(given: unknown, shape: Shape): unknown {
+function readBlock(given: unknown, shape: Shape, done: Map<object, unknown>): unknown {
   if (!isBlock(given)) return given
   const copy: Record<string, unknown> = {}
   for (const key of Object.keys(shape)) {
@@ -110,7 +111,15 @@ function readBlock(given: unknown, shape: Shape): unknown {
       const isMap = entry === 0 || entry === 1
       // The items are read once, here, so the one checked is the one copied.
       if (isMap && Array.isArray(value)) value = snapshot(value)
-      const made = readEntry(value, entry, SECURITY.has(key))
+      const strict = SECURITY.has(key)
+      let made: unknown
+      try {
+        made = readEntry(value, entry, strict, done)
+      } catch (cause) {
+        // A refusal by the strict copy names the option it came from.
+        if (!strict || !(cause instanceof RangeError)) throw cause
+        throw bootError('an option holds what is not plain data', { option: key }, { cause })
+      }
       // The copy is judged, not the original: a proxy that lists no keys reads as an empty map, and an
       // empty requirement is anonymous access.
       if (isMap && types.isProxy(value) && isEmptyMap(made)) {
@@ -139,7 +148,7 @@ function readBlock(given: unknown, shape: Shape): unknown {
  */
 export function readOptions<T>(given: T, shape: Shape): T {
   try {
-    return readBlock(given, shape) as T
+    return readBlock(given, shape, new Map()) as T
   } catch (cause) {
     throw bootError('the options could not be read', {}, { cause })
   }

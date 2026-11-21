@@ -76,8 +76,10 @@ function copyProperties(
   const keys = Reflect.ownKeys(value)
   spend(done, keys.length)
   for (const key of keys) {
-    // A name a proxy lists but holds no property under is not copied.
-    if (Reflect.getOwnPropertyDescriptor(value, key) === undefined) continue
+    // A name a proxy lists but holds no property under is refused, not dropped.
+    if (Reflect.getOwnPropertyDescriptor(value, key) === undefined) {
+      throw new RangeError('A proxy lists a name it holds no property under')
+    }
     const held: unknown = Reflect.get(value, key)
     Object.defineProperty(copy, key, {
       value: ownCopy(
@@ -118,7 +120,14 @@ export function ownCopy(
   done: Map<object, unknown> = new Map(),
   strict = false
 ): unknown {
-  if (typeof value !== 'object' || value === null) return value
+  if (typeof value !== 'object' || value === null) {
+    // Where the copy is strict, nothing that cannot be cloned is kept: a method (a `toJSON` among them)
+    // would change what the document serializes after the checks passed.
+    if (strict && depth > 0 && (typeof value === 'function' || typeof value === 'symbol')) {
+      throw new RangeError('A requirement must be plain data')
+    }
+    return value
+  }
   if (depth > MAX_DEPTH || open.includes(value)) {
     throw new RangeError('A value holds itself or is nested too deeply')
   }

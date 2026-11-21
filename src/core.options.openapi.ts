@@ -131,6 +131,7 @@ function assertServers(servers: readonly unknown[]): void {
 
 /** The values of the options that hold security, as the one copy the document is built from. */
 interface SecurityCopies {
+  readonly servers: unknown
   readonly securitySchemes: unknown
   readonly security: unknown
   readonly operationSecurity: unknown
@@ -139,8 +140,8 @@ interface SecurityCopies {
 /** Throws on a declaration the document could not be built from. */
 function assertDeclarations(raw: OpenApiOptions | undefined, copies: SecurityCopies): void {
   if (raw === undefined) return
-  if (raw.servers !== undefined && raw.servers !== null) {
-    assertServers(listOf('openapi.servers', raw.servers))
+  if (copies.servers !== undefined && copies.servers !== null) {
+    assertServers(listOf('openapi.servers', copies.servers))
   }
   if (copies.securitySchemes !== undefined && copies.securitySchemes !== null) {
     for (const [scheme, declared] of Object.entries(
@@ -198,11 +199,20 @@ export function resolveOpenApi(
   declaredEnvironment?: string
 ): ResolvedOpenApiOptions {
   const raw = checkedBlock<OpenApiOptions>('openapi', given, OPENAPI_KEYS)
-  // What is checked is what is built from: one strict copy of each, read once.
+  // What is checked is what is built from: one strict copy of each, read once, under one work limit.
+  const done = new Map<object, unknown>()
+  const copyOf = (name: string, value: unknown): unknown => {
+    try {
+      return ownCopy(value, 0, [], done, true)
+    } catch (cause) {
+      throw new Error(`openapi.${name} must hold only plain data`, { cause })
+    }
+  }
   const copies: SecurityCopies = {
-    securitySchemes: ownCopy(raw?.securitySchemes, 0, [], new Map(), true),
-    security: ownCopy(raw?.security, 0, [], new Map(), true),
-    operationSecurity: ownCopy(raw?.operationSecurity, 0, [], new Map(), true)
+    servers: copyOf('servers', raw?.servers),
+    securitySchemes: copyOf('securitySchemes', raw?.securitySchemes),
+    security: copyOf('security', raw?.security),
+    operationSecurity: copyOf('operationSecurity', raw?.operationSecurity)
   }
   assertDeclarations(raw, copies)
   const requested = booleanOption('openapi.enabled', raw?.enabled, false)
@@ -216,7 +226,7 @@ export function resolveOpenApi(
     title: stringOption('openapi.title', raw?.title, 'API'),
     description: stringOption('openapi.description', raw?.description, ''),
     version: stringOption('openapi.version', raw?.version, '1.0.0'),
-    servers: cloneServers(raw?.servers),
+    servers: cloneServers(copies.servers as readonly OpenApiServerDescriptor[] | null | undefined),
     securitySchemes: (copies.securitySchemes ?? {}) as ResolvedOpenApiOptions['securitySchemes'],
     security: (copies.security ?? []) as readonly OpenApiSecurityRequirement[],
     operationSecurity: (copies.operationSecurity ??

@@ -209,6 +209,15 @@ describe('ownCopy', () => {
     expect(() => ownCopy({ wide })).toThrow('A value is too large')
   })
 
+  it.each([
+    ['a method such as toJSON', () => ({ toJSON: () => ({}) })],
+    ['a function', () => ({ check: (): void => undefined })],
+    ['a symbol', () => ({ tag: Symbol('x') })]
+  ])('refuses %s held in what is copied strictly, and keeps it elsewhere', (_name, make) => {
+    expect(() => ownCopy({ security: [make()] })).toThrow('A requirement must be plain data')
+    expect(() => ownCopy({ extension: make() })).not.toThrow()
+  })
+
   it('keeps a requirement with no prototype as a plain copy, where it is strict', () => {
     const bare = Object.assign(Object.create(null) as object, { bearer: ['read'] })
 
@@ -263,10 +272,10 @@ describe('ownCopy', () => {
     expect(ownCopy({ security: [{}] })).toStrictEqual({ security: [{}] })
   })
 
-  it('does not copy a name a proxy lists but holds no property under', () => {
+  it('refuses a name a proxy lists but holds no property under, instead of dropping it', () => {
     const source = new Proxy({ real: 1 }, { ownKeys: () => ['real', 'ghost'] })
 
-    expect(ownCopy(source)).toStrictEqual({ real: 1 })
+    expect(() => ownCopy(source)).toThrow('A proxy lists a name it holds no property under')
   })
 
   it('defines each property of the copy as writable and configurable, as an assignment would', () => {

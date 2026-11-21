@@ -140,15 +140,21 @@ describe('a list item behind a proxy that lists no keys', () => {
   it('refuses a requirement that is a proxy over an empty object', () => {
     const item = new Proxy({}, { get: () => ['read'] })
     const error = refusal({ security: [item] }, SECURED)
-    expect(error.cause).toMatchObject({ message: 'A proxy lists no keys' })
+    expect((error.cause as Error).cause).toMatchObject({
+      message: 'A proxy lists no keys'
+    })
   })
 
   it('refuses a requirement behind a proxy deeper in a map, as operationSecurity and securitySchemes hold them', () => {
     const item = new Proxy({}, { get: () => ['read'] })
     const deep = refusal({ operationSecurity: { 'A.b': [item] } }, SECURED)
-    expect(deep.cause).toMatchObject({ message: 'A proxy lists no keys' })
+    expect((deep.cause as Error).cause).toMatchObject({
+      message: 'A proxy lists no keys'
+    })
     const scheme = refusal({ securitySchemes: { bearer: item } }, SECURED)
-    expect(scheme.cause).toMatchObject({ message: 'A proxy lists no keys' })
+    expect((scheme.cause as Error).cause).toMatchObject({
+      message: 'A proxy lists no keys'
+    })
   })
 
   it('keeps a block that is a proxy over an empty object as an empty block, as a block is read by name', () => {
@@ -160,10 +166,10 @@ describe('a list item behind a proxy that lists no keys', () => {
     const asFoo = new Proxy({}, { getPrototypeOf: () => Foo.prototype })
     const symbolic = new Proxy({ [Symbol('hidden')]: [] }, {})
 
-    expect(refusal({ security: [asFoo] }, SECURED).cause).toMatchObject({
+    expect((refusal({ security: [asFoo] }, SECURED).cause as Error).cause).toMatchObject({
       message: 'A proxy lists no keys'
     })
-    expect(refusal({ security: [symbolic] }, SECURED).cause).toMatchObject({
+    expect((refusal({ security: [symbolic] }, SECURED).cause as Error).cause).toMatchObject({
       message: 'A proxy lists no keys'
     })
     expect(refusal({ other: asFoo }, SECURED).cause).toMatchObject({
