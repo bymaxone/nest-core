@@ -125,20 +125,33 @@ describe('ownCopy', () => {
     expect(reads).toBe(1)
   })
 
-  it('reads each item of a list once, by its index, and copies a hole as undefined', () => {
-    let reads = 0
+  it('reads each item that is there once, by its index, and copies a hole as undefined', () => {
+    const reads = [0, 0, 0]
     const list: unknown[] = new Array<unknown>(3)
-    Object.defineProperty(list, 0, {
-      get: () => {
-        reads += 1
-        return 'first'
-      },
-      enumerable: true
-    })
-    list[2] = 'last'
+    for (const index of [0, 2]) {
+      Object.defineProperty(list, index, {
+        get: () => {
+          reads[index] = (reads[index] ?? 0) + 1
+          return `item ${index}`
+        },
+        enumerable: true
+      })
+    }
 
-    expect(ownCopy({ list })).toStrictEqual({ list: ['first', undefined, 'last'] })
-    expect(reads).toBe(1)
+    expect(ownCopy({ list })).toStrictEqual({ list: ['item 0', undefined, 'item 2'] })
+    expect(reads).toStrictEqual([1, 0, 1])
+  })
+
+  it('coerces the length of a list once, so a length object that grows on every coercion ends', () => {
+    let coercions = 0
+    const growing = { valueOf: (): number => (coercions += 1) }
+    const list = new Proxy([], {
+      get: (target, key, receiver) =>
+        key === 'length' ? growing : Reflect.get(target, key, receiver)
+    })
+
+    expect(ownCopy({ list })).toStrictEqual({ list: [undefined] })
+    expect(coercions).toBe(1)
   })
 
   it('reads a list subclass by its indexes, not by an iterator that disagrees with them', () => {

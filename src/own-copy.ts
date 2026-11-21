@@ -92,7 +92,7 @@ export function ownCopy(
   if (Array.isArray(value)) {
     // A plain list built by index, not `map`, which would build what the list's species names.
     const items: unknown[] = []
-    const length = value.length
+    const length = Number(value.length)
     for (let index = 0; index < length; index += 1) {
       items.push(ownCopy(Reflect.get(value, index), depth + 1, inside, done, strict))
     }
