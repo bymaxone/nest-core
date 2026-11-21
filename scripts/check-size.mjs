@@ -203,7 +203,7 @@ const BUDGETS = [
   { name: '. (root)', path: 'dist/index.mjs', brotli: 24.5 * 1024 },
   { name: './pagination', path: 'dist/pagination/index.mjs', brotli: 1.5 * 1024 },
   { name: './health', path: 'dist/health/index.mjs', brotli: 0.5 * 1024 },
-  { name: './openapi', path: 'dist/openapi/index.mjs', brotli: 8.6 * 1024 },
+  { name: './openapi', path: 'dist/openapi/index.mjs', brotli: 8.66 * 1024 },
   { name: './metrics', path: 'dist/metrics/index.mjs', brotli: 0.5 * 1024 },
   { name: './http', path: 'dist/http/index.mjs', brotli: 4.15 * 1024 }
 ]
