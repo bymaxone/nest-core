@@ -62,12 +62,30 @@ describe('ownCopy', () => {
     expect(ownCopy(source)).toStrictEqual({ extension: {}, schema: { example: {} } })
   })
 
-  it('refuses a proxy that lists no keys where an operation or a component holds security', () => {
+  it('refuses a proxy that lists no keys where an operation or a component holds a security list', () => {
     const operation = { security: [new Proxy({}, {})] }
-    const schemes = { securitySchemes: { bearer: new Proxy({}, {}) } }
 
     expect(() => ownCopy({ operation })).toThrow('A proxy lists no keys')
-    expect(() => ownCopy({ components: schemes })).toThrow('A proxy lists no keys')
+    expect(() => ownCopy({ components: { x: operation } })).toThrow('A proxy lists no keys')
+  })
+
+  it('refuses the proxy however the shared object is reached: first as an extension, then as a requirement', () => {
+    const shared = new Proxy({}, { get: () => ['read'] })
+
+    expect(() => ownCopy({ operation: { 'x-data': shared, security: [shared] } })).toThrow(
+      'A proxy lists no keys'
+    )
+    expect(() => ownCopy({ a: { extension: shared }, b: { security: [shared] } })).toThrow(
+      'A proxy lists no keys'
+    )
+  })
+
+  it('copies an empty proxy under a field that is only named security, not a list of requirements', () => {
+    const schema = { properties: { security: new Proxy({}, {}) } }
+
+    expect(ownCopy({ components: { schemas: { Account: schema } } })).toStrictEqual({
+      components: { schemas: { Account: { properties: { security: {} } } } }
+    })
   })
 
   it('keeps a plain empty requirement, which is intended anonymous access', () => {

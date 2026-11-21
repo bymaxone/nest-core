@@ -231,13 +231,17 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 // 4.90 KiB = 5018 B: measured 4978 B plus 40 B, from 4915 B. `./openapi` budget 8.76 KiB = 8970 B: measured 8941 B plus
 // 29 B, from 8929 B. The growth is the shared copy refusing a proxy that lists no keys where a security requirement
 // is held, a switch the options pass for the keys that hold one. Code only.
+// Root budget 25.44 KiB = 26050 B: measured 26017 B brotli plus 33 B of headroom, from 25958 B. `./http` budget
+// 4.96 KiB = 5079 B: measured 5048 B plus 31 B, from 5018 B. `./openapi` budget 8.83 KiB = 9042 B: measured 9011 B plus
+// 31 B, from 8970 B. The growth is the shared copy keeping its copies apart for the places that refuse a proxy
+// that lists no keys, so the order a shared object is reached in cannot decide the refusal. Code only.
 const BUDGETS = [
-  { name: '. (root)', path: 'dist/index.mjs', brotli: 25.35 * 1024 },
+  { name: '. (root)', path: 'dist/index.mjs', brotli: 25.44 * 1024 },
   { name: './pagination', path: 'dist/pagination/index.mjs', brotli: 1.5 * 1024 },
   { name: './health', path: 'dist/health/index.mjs', brotli: 0.5 * 1024 },
-  { name: './openapi', path: 'dist/openapi/index.mjs', brotli: 8.76 * 1024 },
+  { name: './openapi', path: 'dist/openapi/index.mjs', brotli: 8.83 * 1024 },
   { name: './metrics', path: 'dist/metrics/index.mjs', brotli: 0.5 * 1024 },
-  { name: './http', path: 'dist/http/index.mjs', brotli: 4.9 * 1024 }
+  { name: './http', path: 'dist/http/index.mjs', brotli: 4.96 * 1024 }
 ]
 
 const fmt = (n) => `${(n / 1024).toFixed(2)} kB`

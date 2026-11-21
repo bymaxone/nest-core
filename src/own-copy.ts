@@ -8,6 +8,16 @@ import { types } from 'node:util'
 /** How deep a value is copied before it is refused as a cycle in all but name. */
 const MAX_DEPTH = 64
 
+/** The copies made under the refusal, apart from the ones made without it, for each `done`. */
+const strictCaches = new WeakMap<Map<object, unknown>, Map<object, unknown>>()
+
+/** The map of copies made under the refusal that goes with `done`. */
+function strictCache(done: Map<object, unknown>): Map<object, unknown> {
+  const found = strictCaches.get(done) ?? new Map<object, unknown>()
+  strictCaches.set(done, found)
+  return found
+}
+
 /**
  * An own copy of the plain objects and lists in `value`, at every depth, with every own property of an object (a non-enumerable one included, made enumerable), so nothing read from the
  * copy runs host code. Anything else (a number, a string, a `Date`, a function) is kept as it is.
@@ -36,12 +46,15 @@ export function ownCopy(
   }
   const prototype = Object.getPrototypeOf(value) as unknown
   if (!Array.isArray(value) && prototype !== Object.prototype && prototype !== null) return value
-  const made = done.get(value)
+  // A copy made without the refusal is not reused where it applies, so the order a shared object is
+  // reached in cannot decide whether it is refused.
+  const cache = strict ? strictCache(done) : done
+  const made = cache.get(value)
   if (made !== undefined) return made
   const inside = [...open, value]
   if (Array.isArray(value)) {
     const items = value.map((item) => ownCopy(item, depth + 1, inside, done, strict))
-    done.set(value, items)
+    cache.set(value, items)
     return items
   }
   // Every own property, enumerable or not, and every one enumerable in the copy, so the copy is seen
@@ -50,13 +63,14 @@ export function ownCopy(
   for (const key of Reflect.ownKeys(value)) {
     // A name a proxy lists but holds no property under is not copied.
     if (Reflect.getOwnPropertyDescriptor(value, key) === undefined) continue
+    const held: unknown = Reflect.get(value, key)
     Object.defineProperty(copy, key, {
       value: ownCopy(
-        Reflect.get(value, key),
+        held,
         depth + 1,
         inside,
         done,
-        strict || key === 'security' || key === 'securitySchemes'
+        strict || (key === 'security' && Array.isArray(held))
       ),
       enumerable: true,
       writable: true,
@@ -68,6 +82,6 @@ export function ownCopy(
   if (strict && depth > 0 && types.isProxy(value) && Reflect.ownKeys(copy).length === 0) {
     throw new RangeError('A proxy lists no keys')
   }
-  done.set(value, copy)
+  cache.set(value, copy)
   return copy
 }
