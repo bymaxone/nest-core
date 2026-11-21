@@ -8,8 +8,22 @@ import { types } from 'node:util'
 /** The longest list copied: a proxy can answer any length. */
 const MAX_LENGTH = 100_000
 
+/** The most work one copy does, whatever the shape of what it copies. */
+const MAX_WORK = 1_000_000
+
 /** How deep a value is copied before it is refused as a cycle in all but name. */
 const MAX_DEPTH = 64
+
+/** The work a copy may still do, for each `done`: every object and every list item counts one. */
+const budgets = new WeakMap<Map<object, unknown>, { left: number }>()
+
+/** Counts `units` of work against the copy that `done` belongs to, refusing it past the limit. */
+function spend(done: Map<object, unknown>, units: number): void {
+  const budget = budgets.get(done) ?? { left: MAX_WORK }
+  budgets.set(done, budget)
+  budget.left -= units
+  if (budget.left < 0) throw new RangeError('A value is too large')
+}
 
 /** The copies made under the refusal, apart from the ones made without it, for each `done`. */
 const strictCaches = new WeakMap<Map<object, unknown>, Map<object, unknown>>()
@@ -19,6 +33,31 @@ function strictCache(done: Map<object, unknown>): Map<object, unknown> {
   const found = strictCaches.get(done) ?? new Map<object, unknown>()
   strictCaches.set(done, found)
   return found
+}
+
+/**
+ * A plain list built by index, not by `map`, which would build what the list's species names. A real
+ * list has an integer length from 0 up; anything else is a proxy, and a list it gives out as empty
+ * would read as no security at all.
+ */
+function copyList(
+  value: readonly unknown[],
+  depth: number,
+  inside: readonly object[],
+  done: Map<object, unknown>,
+  strict: boolean
+): unknown[] {
+  const items: unknown[] = []
+  const length = value.length as unknown
+  if (!Number.isInteger(length) || (length as number) < 0 || (length as number) > MAX_LENGTH) {
+    throw new RangeError('A list is too long')
+  }
+  const count = length as number
+  spend(done, count)
+  for (let index = 0; index < count; index += 1) {
+    items.push(ownCopy(Reflect.get(value, index), depth + 1, inside, done, strict))
+  }
+  return items
 }
 
 /**
@@ -66,8 +105,9 @@ function copyProperties(
  * @param strict - Whether a proxy below the root that lists no keys is refused instead of copied as `{}`; it
  *   holds for the items of a `security` list, where an empty requirement is anonymous access.
  * @returns The copy.
- * @throws RangeError When `value` holds itself or is deeper than {@link MAX_DEPTH}, or, if `strict`, holds
- *   a proxy that lists no keys.
+ * @throws RangeError When `value` holds itself, is deeper than {@link MAX_DEPTH}, holds a list that is
+ *   too long or more than {@link MAX_WORK} values, or, if `strict`, holds a proxy that lists no keys or
+ *   an object that is not plain.
  */
 export function ownCopy(
   value: unknown,
@@ -84,8 +124,16 @@ export function ownCopy(
   // object, so what is judged and kept is the copy and not a value that can answer differently later.
   if (!types.isProxy(value) && !Array.isArray(value)) {
     const prototype = Object.getPrototypeOf(value) as unknown
-    if (prototype !== Object.prototype && prototype !== null) return value
+    if (prototype !== Object.prototype && prototype !== null) {
+      // Where the copy is strict, an object the checks take for a record but that is kept by reference
+      // answers differently to the check and to the document, so only a plain one is accepted.
+      if (strict && Object.prototype.toString.call(value) === '[object Object]') {
+        throw new RangeError('A requirement must be a plain object')
+      }
+      return value
+    }
   }
+  spend(done, 1)
   // A copy made without the refusal is not reused where it applies, so the order a shared object is
   // reached in cannot decide whether it is refused.
   const cache = strict ? strictCache(done) : done
@@ -93,18 +141,7 @@ export function ownCopy(
   if (made !== undefined) return made
   const inside = [...open, value]
   if (Array.isArray(value)) {
-    // A plain list built by index, not `map`, which would build what the list's species names.
-    const items: unknown[] = []
-    const length = value.length as unknown
-    // A real list has an integer length from 0 up; anything else is a proxy, and a list it gives out
-    // as empty would read as no security at all.
-    if (!Number.isInteger(length) || (length as number) < 0 || (length as number) > MAX_LENGTH) {
-      throw new RangeError('A list is too long')
-    }
-    const count = length as number
-    for (let index = 0; index < count; index += 1) {
-      items.push(ownCopy(Reflect.get(value, index), depth + 1, inside, done, strict))
-    }
+    const items = copyList(value, depth, inside, done, strict)
     cache.set(value, items)
     return items
   }

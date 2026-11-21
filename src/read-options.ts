@@ -87,7 +87,9 @@ function readEntry(
   if (entry === 0) return ownCopy(value, 0, [], new Map(), strict)
   if (Array.isArray(entry)) {
     const shape = entry[0] as Shape
-    return Array.isArray(value) ? value.map((item) => readBlock(item, shape)) : ownCopy(value)
+    return Array.isArray(value)
+      ? snapshot(value).map((item) => readBlock(item, shape))
+      : ownCopy(value)
   }
   return readBlock(value, entry as Shape)
 }

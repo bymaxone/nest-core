@@ -181,6 +181,38 @@ describe('ownCopy', () => {
     expect((ownCopy({ list }) as { list: unknown[] }).list).toHaveLength(100_000)
   })
 
+  it('refuses a copy that would do more work than the limit, however it is nested', () => {
+    const wide = (levels: number): unknown[] =>
+      new Proxy([], {
+        get: (target, key, receiver) => {
+          if (key === 'length') return 2000
+          return typeof key === 'string' && /^\d+$/.test(key)
+            ? levels > 0
+              ? wide(levels - 1)
+              : 1
+            : Reflect.get(target, key, receiver)
+        }
+      })
+
+    expect(() => ownCopy({ list: wide(3) })).toThrow('A value is too large')
+  })
+
+  it('refuses, where it is strict, an object the checks take for a record but is not plain', () => {
+    class Held {
+      get bearer(): string[] {
+        return []
+      }
+    }
+
+    expect(() => ownCopy({ security: [new Held()] })).toThrow(
+      'A requirement must be a plain object'
+    )
+    expect(ownCopy({ extension: new Held() })).toBeInstanceOf(Object)
+    expect((ownCopy({ extension: new Held() }) as { extension: unknown }).extension).toBeInstanceOf(
+      Held
+    )
+  })
+
   it('reads a list subclass by its indexes, not by an iterator that disagrees with them', () => {
     class Listed extends Array<unknown> {
       override [Symbol.iterator](): ArrayIterator<unknown> {

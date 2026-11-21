@@ -241,13 +241,17 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 // Root budget 25.49 KiB = 26101 B: measured 26072 B brotli plus 29 B of headroom, from 26050 B. `./http` budget
 // 5.04 KiB = 5161 B: measured 5139 B plus 22 B, from 5120 B. `./openapi` budget 8.93 KiB = 9144 B: measured 9136 B plus
 // 8 B, from 9103 B. The growth is the shared copy refusing a list whose length is not an integer in range. Code only.
+// Root budget 25.59 KiB = 26204 B: measured 26170 B brotli plus 34 B of headroom, from 26101 B. `./http` budget
+// 5.17 KiB = 5294 B: measured 5260 B plus 34 B, from 5161 B. `./openapi` budget 9.08 KiB = 9298 B: measured 9258 B
+// plus 40 B, from 9144 B. The growth is the one strict copy the OpenAPI security options are checked and built from,
+// the plain-object requirement in it, and the shared work budget of a copy. Code only.
 const BUDGETS = [
-  { name: '. (root)', path: 'dist/index.mjs', brotli: 25.49 * 1024 },
+  { name: '. (root)', path: 'dist/index.mjs', brotli: 25.59 * 1024 },
   { name: './pagination', path: 'dist/pagination/index.mjs', brotli: 1.5 * 1024 },
   { name: './health', path: 'dist/health/index.mjs', brotli: 0.5 * 1024 },
-  { name: './openapi', path: 'dist/openapi/index.mjs', brotli: 8.93 * 1024 },
+  { name: './openapi', path: 'dist/openapi/index.mjs', brotli: 9.08 * 1024 },
   { name: './metrics', path: 'dist/metrics/index.mjs', brotli: 0.5 * 1024 },
-  { name: './http', path: 'dist/http/index.mjs', brotli: 5.04 * 1024 }
+  { name: './http', path: 'dist/http/index.mjs', brotli: 5.17 * 1024 }
 ]
 
 const fmt = (n) => `${(n / 1024).toFixed(2)} kB`
