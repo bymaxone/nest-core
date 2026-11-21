@@ -199,13 +199,18 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 // `./http` budget 4.15 KiB = 4250 B: measured 4219 B (raw 15571 B) plus 31 B, from 4188 B. The growth is
 // the memo of finished copies in `ownCopy`, which keeps an object reached twice copied once, and the
 // snapshot of a component section's entries in `callContributor`. Code only.
+// Root budget 24.74 KiB = 25334 B: measured 25302 B brotli (raw 110256 B) plus 32 B of headroom, from
+// 25088 B. `./http` budget 4.32 KiB = 4424 B: measured 4389 B (raw 16492 B) plus 35 B, from 4250 B.
+// `./openapi` is unchanged at 8.66 KiB (8837 B). The growth is `readBlock`, which reads each documented option
+// by its name from the tables the options are checked against, and the tables the root and `./http` now
+// carry for it. Reading by name keeps an option a host serves only through `get`. Code only.
 const BUDGETS = [
-  { name: '. (root)', path: 'dist/index.mjs', brotli: 24.5 * 1024 },
+  { name: '. (root)', path: 'dist/index.mjs', brotli: 24.74 * 1024 },
   { name: './pagination', path: 'dist/pagination/index.mjs', brotli: 1.5 * 1024 },
   { name: './health', path: 'dist/health/index.mjs', brotli: 0.5 * 1024 },
   { name: './openapi', path: 'dist/openapi/index.mjs', brotli: 8.66 * 1024 },
   { name: './metrics', path: 'dist/metrics/index.mjs', brotli: 0.5 * 1024 },
-  { name: './http', path: 'dist/http/index.mjs', brotli: 4.15 * 1024 }
+  { name: './http', path: 'dist/http/index.mjs', brotli: 4.32 * 1024 }
 ]
 
 const fmt = (n) => `${(n / 1024).toFixed(2)} kB`

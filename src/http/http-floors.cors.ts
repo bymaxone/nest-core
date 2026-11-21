@@ -41,7 +41,7 @@ export interface HttpFloorsCorsOptions {
 const WILDCARD = '*'
 
 /** The options of {@link HttpFloorsCorsOptions}; the compiler keeps this table complete. */
-const CORS_KEYS = {
+export const CORS_KEYS = {
   origins: 0,
   credentials: 0,
   methods: 0,

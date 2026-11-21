@@ -17,6 +17,7 @@ import {
 } from './core.options.keys'
 import { assertMetricsProtected } from './core.options.metrics-guard'
 import { resolveOpenApi } from './core.options.openapi'
+import { OPTION_SHAPE } from './core.options.shape'
 import { resolveHandlerTimeout } from './handler-timeout/handler-timeout.options'
 import type {
   HandlerTimeoutOptions,
@@ -764,7 +765,11 @@ function resolveTelemetry(given: unknown): ResolvedTelemetryOptions {
  * @returns A fully-populated, deep-frozen options snapshot.
  */
 export function normalizeCoreOptions(given?: BymaxCoreModuleOptions): ResolvedCoreOptions {
-  const raw = checkedBlock<BymaxCoreModuleOptions>('options', readOptions(given), OPTION_KEYS)
+  const raw = checkedBlock<BymaxCoreModuleOptions>(
+    'options',
+    readOptions(given, OPTION_SHAPE),
+    OPTION_KEYS
+  )
   const environment = stringOption('environment', raw?.environment, undefined)
   return deepFreeze({
     envelope: resolveEnvelope(raw?.envelope),

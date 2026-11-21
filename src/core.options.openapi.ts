@@ -21,7 +21,7 @@ import {
 import { isProductionRuntime, runtimeEnvironmentName } from './runtime.environment'
 
 /** The options of {@link OpenApiOptions}; the compiler keeps this table complete. */
-const OPENAPI_KEYS = {
+export const OPENAPI_KEYS = {
   enabled: 0,
   path: 0,
   jsonPath: 0,
@@ -37,7 +37,10 @@ const OPENAPI_KEYS = {
 } satisfies Record<keyof OpenApiOptions, 0>
 
 /** The options of a server entry. */
-const SERVER_KEYS = { url: 0, description: 0 } satisfies Record<keyof OpenApiServerDescriptor, 0>
+export const SERVER_KEYS = { url: 0, description: 0 } satisfies Record<
+  keyof OpenApiServerDescriptor,
+  0
+>
 
 /** The scheme types the OpenAPI specification defines. */
 const SCHEME_TYPES = ['apiKey', 'http', 'oauth2', 'openIdConnect', 'mutualTLS']

@@ -59,7 +59,7 @@ export interface ResolvedHandlerTimeoutOptions {
 }
 
 /** The options of {@link HandlerTimeoutOptions}; the compiler keeps this table complete. */
-const HANDLER_TIMEOUT_KEYS = { enabled: 0, timeoutMs: 0, excludePaths: 0 } satisfies Record<
+export const HANDLER_TIMEOUT_KEYS = { enabled: 0, timeoutMs: 0, excludePaths: 0 } satisfies Record<
   keyof HandlerTimeoutOptions,
   0
 >

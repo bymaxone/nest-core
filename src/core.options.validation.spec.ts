@@ -231,6 +231,54 @@ describe('metrics.authToken', () => {
   })
 })
 
+describe('options a proxy answers only through get', () => {
+  it('reads the metrics token and the other documented options by name', () => {
+    const metrics = new Proxy(
+      { enabled: true, edgeProtected: true },
+      { get: (target, key) => (key === 'authToken' ? 'secret' : Reflect.get(target, key)) }
+    )
+
+    const resolved = normalizeCoreOptions({ metrics } as BymaxCoreModuleOptions)
+
+    expect(resolved.metrics.authToken).toBe('secret')
+    expect(resolved.metrics.enabled).toBe(true)
+  })
+
+  it('keeps every block of options that answer lazily through get alone', () => {
+    const options = new Proxy(
+      {},
+      {
+        get: (_target, key) =>
+          key === 'metrics'
+            ? { enabled: true, authToken: 'secret' }
+            : key === 'health'
+              ? { path: 'status' }
+              : key === 'environment'
+                ? 'staging'
+                : undefined
+      }
+    )
+
+    const resolved = normalizeCoreOptions(options as BymaxCoreModuleOptions)
+
+    expect(resolved.metrics).toMatchObject({ enabled: true, authToken: 'secret' })
+    expect(resolved.health.path).toBe('status')
+    expect(resolved.environment).toBe('staging')
+  })
+
+  it('reads the options of a class instance, accessors included', () => {
+    class Settings {
+      get metrics(): object {
+        return { enabled: true, authToken: 'from a class' }
+      }
+    }
+
+    const resolved = normalizeCoreOptions(new Settings() as BymaxCoreModuleOptions)
+
+    expect(resolved.metrics.authToken).toBe('from a class')
+  })
+})
+
 describe('options kept in a property that is not enumerable', () => {
   it('still reach the resolved options: a token held by a getter is not dropped', () => {
     const metrics = Object.defineProperty({ enabled: true, edgeProtected: true }, 'authToken', {
