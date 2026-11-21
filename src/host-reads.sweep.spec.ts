@@ -205,6 +205,25 @@ describe('the options read through proxies that throw at the Nth trap', () => {
   })
 })
 
+/**
+ * `value` with every own property turned into a non-enumerable getter, for the options and for the
+ * properties of each block. What a block holds under a host-named key, an open map, is left as given.
+ */
+function hidden<T>(value: T, depth = 0): T {
+  if (typeof value !== 'object' || value === null || Array.isArray(value) || depth > 1) return value
+  const copy = {}
+  for (const [key, inner] of Object.entries(value)) {
+    Object.defineProperty(copy, key, { get: () => hidden(inner, depth + 1), enumerable: false })
+  }
+  return copy as T
+}
+
+describe('the documented options served only through non-enumerable getters', () => {
+  it('resolve as the same options as when they are plain properties', () => {
+    expect(normalizeCoreOptions(hidden(options()))).toEqual(normalizeCoreOptions(options()))
+  })
+})
+
 /** Sweep `read` to the end; the numbers of the runs whose error is not a boot error naming `property`. */
 function sweepProvider(read: (sweep: Sweep) => void, property: string): number[] {
   const raw: number[] = []
