@@ -384,6 +384,7 @@ describe('a built-in object is not a block', () => {
   })
 })
 
+/** The security options are copied strictly, so a built-in object there is refused as the copy is taken. */
 describe('a built-in object is not a record anywhere one is expected', () => {
   it.each([
     [
@@ -394,27 +395,23 @@ describe('a built-in object is not a record anywhere one is expected', () => {
     [
       'openapi.securitySchemes',
       () => given('openapi', 'securitySchemes', new Map()),
-      'openapi.securitySchemes must be an object, received a Map'
+      'the options could not be read'
     ],
     [
       'an openapi scheme',
       () => given('openapi', 'securitySchemes', { a: new Set() }),
-      'openapi.securitySchemes.a must be an object, received a Set'
+      'the options could not be read'
     ],
     [
       'oauth2 flows',
       () => given('openapi', 'securitySchemes', { a: { type: 'oauth2', flows: new Date() } }),
-      'openapi.securitySchemes.a.flows must be an object, received a Date'
+      'the options could not be read'
     ],
-    [
-      'a requirement',
-      () => given('openapi', 'security', [/x/]),
-      'openapi.security[0] must be an object, received a RegExp'
-    ],
+    ['a requirement', () => given('openapi', 'security', [/x/]), 'the options could not be read'],
     [
       'operationSecurity',
       () => given('openapi', 'operationSecurity', new Date()),
-      'openapi.operationSecurity must be an object, received a Date'
+      'the options could not be read'
     ]
   ])('%s', (_name, build, message) => {
     expect(refusal(build())).toBe(message)

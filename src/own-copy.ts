@@ -73,7 +73,9 @@ function copyProperties(
   strict: boolean
 ): Record<PropertyKey, unknown> {
   const copy: Record<PropertyKey, unknown> = {}
-  for (const key of Reflect.ownKeys(value)) {
+  const keys = Reflect.ownKeys(value)
+  spend(done, keys.length)
+  for (const key of keys) {
     // A name a proxy lists but holds no property under is not copied.
     if (Reflect.getOwnPropertyDescriptor(value, key) === undefined) continue
     const held: unknown = Reflect.get(value, key)
@@ -125,11 +127,9 @@ export function ownCopy(
   if (!types.isProxy(value) && !Array.isArray(value)) {
     const prototype = Object.getPrototypeOf(value) as unknown
     if (prototype !== Object.prototype && prototype !== null) {
-      // Where the copy is strict, an object the checks take for a record but that is kept by reference
-      // answers differently to the check and to the document, so only a plain one is accepted.
-      if (strict && Object.prototype.toString.call(value) === '[object Object]') {
-        throw new RangeError('A requirement must be a plain object')
-      }
+      // Where the copy is strict, nothing is kept by reference: an object that is not plain could answer
+      // differently to the check and to the document, whatever its tag says.
+      if (strict) throw new RangeError('A requirement must be a plain object')
       return value
     }
   }

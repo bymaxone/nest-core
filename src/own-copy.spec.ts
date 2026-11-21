@@ -197,6 +197,18 @@ describe('ownCopy', () => {
     expect(() => ownCopy({ list: wide(3) })).toThrow('A value is too large')
   })
 
+  it('refuses a copy whose single object is too wide for the work limit', () => {
+    const wide = new Proxy(
+      {},
+      {
+        ownKeys: () => Array.from({ length: 1_000_001 }, (_, index) => `key${index}`),
+        getOwnPropertyDescriptor: () => ({ value: 1, enumerable: true, configurable: true })
+      }
+    )
+
+    expect(() => ownCopy({ wide })).toThrow('A value is too large')
+  })
+
   it('refuses, where it is strict, an object the checks take for a record but is not plain', () => {
     class Held {
       get bearer(): string[] {

@@ -47,6 +47,14 @@ const PLACES: ReadonlyArray<readonly [string, (requirement: object) => object]> 
   ]
 ]
 
+/** A requirement whose tag answers a built-in one for the copy and `Object` afterwards. */
+function flipping(): object {
+  let answers = 0
+  return Object.defineProperty({ bearer: ['x'], toJSON: () => ({}) }, Symbol.toStringTag, {
+    get: () => ((answers += 1) <= 2 ? 'X' : 'Object')
+  })
+}
+
 describe('a requirement that is not a plain object', () => {
   describe.each(IMPOSSIBLE)('%s', (_kind, make) => {
     it.each(PLACES)('is refused in %s, read once by forRoot and as given', (_place, within) => {
@@ -67,9 +75,16 @@ describe('a requirement that is not a plain object', () => {
     const openapi = { enabled: true, security: [make()] }
 
     expect(() => normalizeCoreOptions({ openapi } as never)).toThrow(
-      'openapi.security[0] must be an object'
+      'the options could not be read'
     )
     expect(() => BymaxCoreModule.forRoot({ openapi } as never)).toThrow()
+  })
+
+  it('is refused whatever its tag answers, since plainness is not decided by the tag', () => {
+    const openapi = { enabled: true, security: [flipping()] }
+
+    expect(() => BymaxCoreModule.forRoot({ openapi } as never)).toThrow()
+    expect(() => normalizeCoreOptions({ openapi } as never)).toThrow()
   })
 
   it('is not what a plain requirement is: that one is emitted as it was given', () => {
