@@ -19,9 +19,8 @@ heading here.
   with what went wrong as `cause`. A fragment that holds itself, or is nested too deeply, is refused the same
   way.
 - The options, and the options of `applyHttpFloors`, are copied once, where a throw can be attributed. A getter that
-  throws, or a proxy that throws or
-  is revoked, anywhere in the options fails with `the options could not be read`, and what it threw is the
-  `cause`. If your code matched on the error your own getter threw, read `error.cause`; the error itself no
+  throws, or a proxy that throws or is revoked, anywhere in the options fails with
+  `the options could not be read`, and what it threw is the `cause`. If your code matched on the error your own getter threw, read `error.cause`; the error itself no
   longer is that one.
 - A provider marked as a health indicator or a metrics contributor that cannot be read fails with a boot error
   that names it (`provider` or `contributor`), and what it threw is the `cause`.
