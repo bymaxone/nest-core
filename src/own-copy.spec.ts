@@ -57,6 +57,16 @@ describe('ownCopy', () => {
     expect(reads).toBe(1)
   })
 
+  it('defines each property of the copy as writable and configurable, as an assignment would', () => {
+    const copy = ownCopy({ shown: 1 }) as Record<string, unknown>
+    const described = Object.getOwnPropertyDescriptor(copy, 'shown')
+
+    expect(described).toMatchObject({ writable: true, configurable: true, enumerable: true })
+    copy['shown'] = 2
+    expect(copy['shown']).toBe(2)
+    expect(delete copy['shown']).toBe(true)
+  })
+
   it('keeps a symbol key and a key named __proto__ as own properties of the copy', () => {
     const tag = Symbol('tag')
     const source = JSON.parse('{"__proto__": {"polluted": true}, "plain": 1}') as object
