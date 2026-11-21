@@ -60,6 +60,15 @@ class CacheMetrics implements IMetricsContributor {
 @BymaxMetricsContributor()
 class IncompleteContributor {}
 
+/** A marked class whose method cannot be read. */
+@BymaxMetricsContributor()
+class UnreadableContributor {
+  /** Stands in for a getter that touches something that is gone. */
+  get registerMetrics(): never {
+    throw new Error('SECRET-host')
+  }
+}
+
 /** An unmarked provider that happens to have the method. */
 class UnmarkedService implements IMetricsContributor {
   /**
@@ -91,6 +100,21 @@ function scannerOver(classes: ReadonlyArray<new () => object>): ProviderScanner 
 
 describe('discoverContributors', () => {
   const reflector = new Reflector()
+
+  it('names the contributor, and keeps what was thrown as the cause, when it cannot be read', () => {
+    let caught: unknown
+    try {
+      discoverContributors(scannerOver([UnreadableContributor]), reflector)
+    } catch (error) {
+      caught = error
+    }
+
+    expect(caught).toMatchObject({
+      message: '[BymaxCoreModule] a provider marked @BymaxMetricsContributor() could not be read',
+      contributor: 'UnreadableContributor',
+      cause: { message: 'SECRET-host' }
+    })
+  })
 
   /**
    * Only marked providers contribute.
