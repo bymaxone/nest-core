@@ -11,6 +11,7 @@
  */
 import { BymaxCoreModule } from './core.module'
 import { normalizeCoreOptions } from './core.options'
+import { resolveOpenApi } from './core.options.openapi'
 
 /** A requirement whose scheme is held by an accessor of the class. */
 class WithAccessor {
@@ -79,6 +80,17 @@ describe('a requirement that is not a plain object', () => {
     )
     expect(() => BymaxCoreModule.forRoot({ openapi } as never)).toThrow()
   })
+
+  describe.each(IMPOSSIBLE)(
+    '%s, given straight to the resolution of the OpenAPI block',
+    (_kind, make) => {
+      it.each(PLACES)('is refused in %s by the copy the resolution takes', (_place, within) => {
+        expect(() => resolveOpenApi({ enabled: true, ...within(make()) })).toThrow(
+          'A requirement must be a plain object'
+        )
+      })
+    }
+  )
 
   it('is refused whatever its tag answers, since plainness is not decided by the tag', () => {
     const openapi = { enabled: true, security: [flipping()] }
