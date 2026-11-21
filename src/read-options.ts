@@ -27,9 +27,9 @@ const MAX_NAMES = 1000
 
 /** A list read once, by index, and not past the limit: its length first, then each item. */
 function snapshot(list: readonly unknown[]): unknown[] {
-  const length: unknown = Reflect.get(list, 'length')
-  if (typeof length !== 'number' || !(length >= 0 && length <= MAX_NAMES)) {
-    throw bootError('a map option is too large', {})
+  const length = Reflect.get(list, 'length') as number
+  if (!(Number.isInteger(length) && length >= 0 && length <= MAX_NAMES)) {
+    throw bootError('an option is too large', {})
   }
   const items: unknown[] = []
   for (let index = 0; index < length; index += 1) items.push(Reflect.get(list, index))
@@ -52,10 +52,10 @@ function namedCopy(value: unknown): unknown {
     up = Reflect.getPrototypeOf(up)
   ) {
     // A proxy can answer its own prototype for ever.
-    if (++links > MAX_NAMES) throw bootError('a map option is too large', {})
+    if (++links > MAX_NAMES) throw bootError('an option is too large', {})
     add(Reflect.ownKeys(up))
   }
-  if (names.size > MAX_NAMES) throw bootError('a map option is too large', {})
+  if (names.size > MAX_NAMES) throw bootError('an option is too large', {})
   for (const name of names) {
     const held: unknown = Reflect.get(value, name)
     if (typeof held !== 'function')

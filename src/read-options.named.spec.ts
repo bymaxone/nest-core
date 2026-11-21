@@ -107,14 +107,14 @@ describe('a map option read by every name it answers to', () => {
     const held: object = new Proxy({ defaultSrc: ["'none'"] }, { getPrototypeOf: () => held })
     const error = refusal({ map: held }, NAMED)
     expect(error.message).toBe('the options could not be read')
-    expect(error.cause).toMatchObject({ message: 'a map option is too large' })
+    expect(error.cause).toMatchObject({ message: 'an option is too large' })
   })
 
   it('refuses a map whose prototype chain is one link past the limit', () => {
     let held: object = { defaultSrc: ['x'] }
     for (let i = 0; i < 1001; i += 1) held = Object.create(held) as object
     const error = refusal({ map: held }, NAMED)
-    expect(error.cause).toMatchObject({ message: 'a map option is too large' })
+    expect(error.cause).toMatchObject({ message: 'an option is too large' })
   })
 
   it('keeps a map whose prototype chain is exactly as long as the limit allows', () => {
@@ -131,7 +131,7 @@ describe('a map option read by every name it answers to', () => {
   it('refuses a map that answers to more names than the limit', () => {
     const held = Object.fromEntries(Array.from({ length: 1001 }, (_, i) => [`k${i}`, 1]))
     const error = refusal({ map: held }, NAMED)
-    expect(error.cause).toMatchObject({ message: 'a map option is too large' })
+    expect(error.cause).toMatchObject({ message: 'an option is too large' })
   })
 })
 
@@ -174,8 +174,24 @@ describe('a list item behind a proxy that lists no keys', () => {
     const exact = Array.from({ length: 1000 }, () => 1)
     expect(readOptions({ list: exact }, LISTED)).toEqual({ list: exact })
     const error = refusal({ list: [...exact, 1] }, LISTED)
-    expect(error.cause).toMatchObject({ message: 'a map option is too large' })
+    expect(error.cause).toMatchObject({ message: 'an option is too large' })
   })
+
+  it.each([1000.5, -1, Number.NaN, '3'])(
+    'refuses a list whose length is %p, which is not an integer from 0 to the limit',
+    (length) => {
+      const list = new Proxy([], {
+        get: (target, key, receiver) =>
+          key === 'length'
+            ? length
+            : /^\d+$/.test(String(key))
+              ? 1
+              : Reflect.get(target, key, receiver)
+      })
+      const error = refusal({ list }, LISTED)
+      expect(error.cause).toMatchObject({ message: 'an option is too large' })
+    }
+  )
 
   it('keeps a plain empty requirement', () => {
     expect(readOptions({ list: [{}] }, LISTED)).toEqual({ list: [{}] })
