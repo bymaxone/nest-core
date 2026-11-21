@@ -35,7 +35,9 @@ heading here.
 - A security requirement held behind a proxy that lists no keys fails with
   `the options could not be read`, as the map options do, and is not read as `{}`, which OpenAPI takes to
   allow anonymous access. The copy is judged, so a proxy whose `ownKeys` answers differently on a second
-  read cannot pass. A property that is not enumerable is enumerable in the copy the library takes.
+  read cannot pass. A property that is not enumerable is enumerable in the copy the library takes. Only the
+  requirements of a `security` list are judged this way: an empty scheme, schema or extension held behind such
+  a proxy is copied as `{}`.
 - `forRootAsync`: Nest reads the factory's result before the library can guard it. See
   `docs/forrootasync-factory-result.md`.
 
