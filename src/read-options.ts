@@ -78,11 +78,13 @@ function readBlock(given: unknown, shape: Shape): unknown {
   if (!isBlock(given)) return given
   const copy: Record<string, unknown> = {}
   for (const key of Object.keys(shape)) {
-    const value: unknown = Reflect.get(given, key)
+    let value: unknown = Reflect.get(given, key)
     if (value !== undefined) {
       const entry = shape[key] as Shape | readonly [Shape] | 0 | 1
-      // A proxy that lists no keys would read as empty, and an empty requirement is anonymous access.
       const isMap = entry === 0 || entry === 1
+      // The items are read once, here, so the one checked is the one copied.
+      if (isMap && Array.isArray(value)) value = Array.from(value)
+      // A proxy that lists no keys would read as empty, and an empty requirement is anonymous access.
       if (isMap && (isUnlisted(value) || (Array.isArray(value) && value.some(isUnlisted)))) {
         throw bootError('an option is held behind a proxy that lists no keys', { option: key })
       }

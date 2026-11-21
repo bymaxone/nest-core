@@ -145,6 +145,20 @@ describe('a list item behind a proxy that lists no keys', () => {
     })
   })
 
+  it('reads each item once, so the item that is checked is the item that is copied', () => {
+    const items: unknown[] = []
+    let reads = 0
+    Object.defineProperty(items, 0, {
+      get: () => {
+        reads += 1
+        return reads === 1 ? { bearer: [] } : new Proxy({}, { get: () => [] })
+      },
+      enumerable: true
+    })
+    expect(readOptions({ list: items }, LISTED)).toEqual({ list: [{ bearer: [] }] })
+    expect(reads).toBe(1)
+  })
+
   it('keeps a plain empty requirement', () => {
     expect(readOptions({ list: [{}] }, LISTED)).toEqual({ list: [{}] })
   })
