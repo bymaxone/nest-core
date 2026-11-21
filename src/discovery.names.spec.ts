@@ -2,9 +2,10 @@
  * Unit tests for the names a host's marked provider answers while discovery reads them.
  *
  * Layer: unit.
- * Goal: a class whose `name` throws, and an indicator whose `name` answers once and then throws,
- * fail the boot as a labelled error with what the host threw as the cause, and no host text in the
- * message.
+ * Goal: a class whose `name` throws, and an indicator whose `name` throws or changes into something
+ * else after it was first read, fail the boot as a labelled error with what the host threw as the
+ * cause and no host text in the message; an explicit indicator whose name is empty, not a string or
+ * missing fails the merge the same way.
  * Mocks: a scanner that lists the provider under test.
  */
 import { Reflector } from '@nestjs/core'

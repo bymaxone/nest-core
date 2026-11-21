@@ -12,6 +12,30 @@ heading here.
 
 ## [Unreleased]
 
+**Changed (since 1.6.20):**
+
+- With `autoDiscover: true`, an indicator you list explicitly whose `name` is empty, is not a string or is
+  missing now fails the boot with `[BymaxCoreModule] a health indicator name must be a non-empty string`.
+  Before, it was skipped silently when discovery was on.
+
+**Apply to your observability:**
+
+- An indicator's `name` is read once as discovery or the merge takes it and the name that is sorted and
+  compared is that one; a `name` that throws, or turns into a non-string afterwards, fails the boot as a boot
+  error with what it threw as the `cause`. `HealthService` serves that name at probe time, so a getter that
+  answers differently later cannot change the response or the log.
+- `HealthService` runs no indicator when health is resolved disabled, whichever way the options were given.
+- The `directives` of the `contentSecurityPolicy` block of `applyHttpFloors` are read by every name they
+  answer to: an own property, one that is not enumerable, an accessor or a property a class or a prototype
+  holds. A host that held them that way no longer loses a directive and falls back to the default
+  (`default-src 'self'` in place of `'none'`). A proxy that lists only some of the names it answers to
+  cannot be told from a map that holds only those, so list every name.
+- An `openapi.security` entry held behind a proxy that lists no keys fails with
+  `the options could not be read`, as the map options do, and is not read as `{}`, which OpenAPI takes to
+  allow anonymous access.
+- `forRootAsync`: Nest reads the factory's result before the library can guard it. See
+  `docs/forrootasync-factory-result.md` (`@nestjs/core` `injector.js` lines 615 and 365).
+
 ## [1.6.20] - 2026-11-21
 
 A patch release. What a host hands over is copied once under a guard, so a throw from it is attributed to it and

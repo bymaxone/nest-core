@@ -140,6 +140,19 @@ describe('health contract', () => {
     await request(app.getHttpServer()).get('/health/ready').expect(404)
   })
 
+  /** The async path registers the route unconditionally, so a disabled health must read as absent. */
+  it('answers 404 on readiness when health resolves disabled through forRootAsync', async () => {
+    const moduleRef = await Test.createTestingModule({
+      imports: [
+        BymaxCoreModule.forRootAsync({ useFactory: () => ({ health: { enabled: false } }) })
+      ]
+    }).compile()
+    app = moduleRef.createNestApplication()
+    await app.init()
+
+    await request(app.getHttpServer()).get('/health/ready').expect(404)
+  })
+
   /**
    * No indicators bound at all.
    *

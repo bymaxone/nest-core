@@ -27,8 +27,7 @@ import { BYMAX_HEALTH_INDICATOR_METADATA } from './health.marker'
  * @throws Error When reading the provider throws.
  */
 function readIndicator(instance: unknown, label: string): NamedIndicator | undefined {
-  // Only nullish values need guarding against: they are the two things a destructuring read throws
-  // on without a host getter being involved.
+  // Destructuring throws on a nullish value even where no host getter is involved.
   if (instance === null || instance === undefined) {
     return undefined
   }
@@ -48,7 +47,7 @@ function readIndicator(instance: unknown, label: string): NamedIndicator | undef
 
 /**
  * An indicator's name, read once: a failure of reading it, or a value that is not a non-empty
- * string, is refused as a boot error, so what is sorted and compared afterwards cannot change.
+ * string, is refused as a boot error, so the name that is sorted and compared is the one checked here.
  *
  * @param indicator - The indicator to read.
  * @throws Error When reading the name throws, or it is not a non-empty string.

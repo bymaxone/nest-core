@@ -11,10 +11,11 @@ import { ownCopy } from './own-copy'
 /**
  * What an options block documents: each key is an option, `0` for a value copied as it is (a number,
  * a string, a list or a map whose keys are the host's own data), a table for a block read by name,
- * and a one-item list holding a table for a list of such blocks.
+ * and a one-item list holding a table for a list of such blocks. `1` is a map read by every name it
+ * answers to, inherited accessors and non-enumerable properties included.
  */
 export interface Shape {
-  readonly [key: string]: Shape | readonly [Shape] | 0
+  readonly [key: string]: Shape | readonly [Shape] | 0 | 1
 }
 
 /** Whether `value` is an object that holds settings, as `isPlainRecord` reads it, a class instance included. */
@@ -22,8 +23,42 @@ function isBlock(value: unknown): value is object {
   return Object.prototype.toString.call(value) === '[object Object]'
 }
 
+const MAX_NAMES = 1000
+
+/** A map read by every name it answers to, once. */
+function namedCopy(value: unknown): unknown {
+  if (!isBlock(value)) return ownCopy(value)
+  const copy: Record<string, unknown> = {}
+  const names = new Set<string>()
+  const add = (found: readonly PropertyKey[]): void => {
+    for (const name of found)
+      if (typeof name === 'string' && name !== 'constructor') names.add(name)
+  }
+  add(Reflect.ownKeys(value))
+  for (
+    let up = Reflect.getPrototypeOf(value);
+    up && up !== Object.prototype;
+    up = Reflect.getPrototypeOf(up)
+  ) {
+    add(Reflect.ownKeys(up))
+  }
+  if (names.size > MAX_NAMES)
+    throw bootError('a map option holds too many names', { limit: MAX_NAMES })
+  for (const name of names) {
+    const held: unknown = Reflect.get(value, name)
+    if (typeof held !== 'function')
+      Object.defineProperty(copy, name, { value: ownCopy(held), enumerable: true })
+  }
+  return copy
+}
+
+function isUnlisted(value: unknown): boolean {
+  return types.isProxy(value) && Reflect.ownKeys(value as object).length === 0
+}
+
 /** One value of a block, read as its entry in the shape says. */
-function readEntry(value: unknown, entry: Shape | readonly [Shape] | 0): unknown {
+function readEntry(value: unknown, entry: Shape | readonly [Shape] | 0 | 1): unknown {
+  if (entry === 1) return namedCopy(value)
   if (entry === 0) return ownCopy(value)
   if (Array.isArray(entry)) {
     const shape = entry[0] as Shape
@@ -44,9 +79,10 @@ function readBlock(given: unknown, shape: Shape): unknown {
   for (const key of Object.keys(shape)) {
     const value: unknown = Reflect.get(given, key)
     if (value !== undefined) {
-      const entry = shape[key] as Shape | readonly [Shape] | 0
-      // A map behind a proxy that answers only `get` lists no keys, and would read as empty.
-      if (entry === 0 && types.isProxy(value) && Reflect.ownKeys(value as object).length === 0) {
+      const entry = shape[key] as Shape | readonly [Shape] | 0 | 1
+      // A proxy that lists no keys would read as empty, and an empty requirement is anonymous access.
+      const isMap = entry === 0 || entry === 1
+      if (isMap && (isUnlisted(value) || (Array.isArray(value) && value.some(isUnlisted)))) {
         throw bootError('an option is held behind a proxy that lists no keys', { option: key })
       }
       copy[key] = readEntry(value, entry)
