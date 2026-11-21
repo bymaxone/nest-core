@@ -209,6 +209,12 @@ describe('ownCopy', () => {
     expect(() => ownCopy({ wide })).toThrow('A value is too large')
   })
 
+  it('keeps a requirement with no prototype as a plain copy, where it is strict', () => {
+    const bare = Object.assign(Object.create(null) as object, { bearer: ['read'] })
+
+    expect(ownCopy({ security: [bare] })).toStrictEqual({ security: [{ bearer: ['read'] }] })
+  })
+
   it('refuses, where it is strict, an object the checks take for a record but is not plain', () => {
     class Held {
       get bearer(): string[] {

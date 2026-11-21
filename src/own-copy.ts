@@ -14,7 +14,7 @@ const MAX_WORK = 1_000_000
 /** How deep a value is copied before it is refused as a cycle in all but name. */
 const MAX_DEPTH = 64
 
-/** The work a copy may still do, for each `done`: every object and every list item counts one. */
+/** The work a copy may still do, for each `done`: every list item and every key counts one. */
 const budgets = new WeakMap<Map<object, unknown>, { left: number }>()
 
 /** Counts `units` of work against the copy that `done` belongs to, refusing it past the limit. */
@@ -133,7 +133,6 @@ export function ownCopy(
       return value
     }
   }
-  spend(done, 1)
   // A copy made without the refusal is not reused where it applies, so the order a shared object is
   // reached in cannot decide whether it is refused.
   const cache = strict ? strictCache(done) : done
