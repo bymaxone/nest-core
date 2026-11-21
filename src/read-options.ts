@@ -42,8 +42,7 @@ function namedCopy(value: unknown): unknown {
   ) {
     add(Reflect.ownKeys(up))
   }
-  if (names.size > MAX_NAMES)
-    throw bootError('a map option holds too many names', { limit: MAX_NAMES })
+  if (names.size > MAX_NAMES) throw bootError('a map option holds too many names')
   for (const name of names) {
     const held: unknown = Reflect.get(value, name)
     if (typeof held !== 'function')
