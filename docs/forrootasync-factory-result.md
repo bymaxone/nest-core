@@ -12,13 +12,13 @@ before `normalizeCoreOptions` runs.
 
 In `@nestjs/core` `injector/injector.js`:
 
-- `instanceHost.instance = await factoryReturnValue` (line 615) reads `then` on the value the factory
+- `instanceHost.instance = await factoryReturnValue` reads `then` on the value the factory
   returned.
-- `host.instance = await host.instance` (line 365) reads it again when the host is resolved.
+- `host.instance = await host.instance` reads it again when the host is resolved.
 - The lifecycle-hook predicates read the instance's hook names later, at bootstrap and at close.
 
 `@nestjs/common` `module-utils/configurable-module.builder.js` passes `options.useFactory` straight to
-the provider for the builder's options token (around line 194), and wraps `useClass` and
+the provider for the builder's options token, and wraps `useClass` and
 `useExisting` in an internal `async (factory) => await factory.create()` that the library cannot
 reach.
 
@@ -30,7 +30,7 @@ hook names) fails the boot with the host's own error, unlabelled.
 - Fail closed: the boot fails with the host's error. Nothing is dropped silently, no option falls
   back to a default and no authentication decision depends on it.
 - It needs the factory's own result to be a hostile `Proxy`.
-- Nest's own reads are not the library's code, and every read the library makes is guarded.
+- Nest's own reads are not the library's code.
 
 ## Option that was weighed
 
@@ -51,10 +51,10 @@ Rejected because:
   host's own async function, which is indistinguishable from the factory's own throw, so a residual
   stays raw.
 - `useClass` and `useExisting` stay uncovered unless the builder's internal factory is replaced.
-- It costs roughly 150 to 250 B of root brotli, and the root budget has 3 B of headroom.
+- It costs root brotli bytes, and the root budget has little headroom.
 - A marker on the factory's own errors does not work: a thrown primitive cannot carry one, and an
   async factory's own error and a `then`-trap error share one rejection channel.
 
 If it is reopened, verify with an Nth-trap sweep through real Nest
-(`Test.createTestingModule` with a trapped options factory, about 170 cells) and settle the size
+(`Test.createTestingModule` with a trapped options factory) and settle the size
 budget first.
