@@ -283,6 +283,36 @@ describe('ownCopy', () => {
     expect(ownCopy({ security: [{}] })).toStrictEqual({ security: [{}] })
   })
 
+  it.each([
+    [
+      'an extension first, then a requirement',
+      (req: object) => ({ 'x-requirement': req, security: [req] })
+    ],
+    [
+      'a requirement first, then an extension',
+      (req: object) => ({ security: [req], 'x-requirement': req })
+    ]
+  ])(
+    'reads an object shared by %s once, so the requirement judged is the one kept',
+    (_order, build) => {
+      let reads = 0
+      const req = {
+        get oauth(): string[] {
+          reads += 1
+          return reads === 1 ? ['write'] : []
+        }
+      }
+
+      const copy = ownCopy({ 'ItemsController.list': build(req) }) as Record<
+        string,
+        Record<string, unknown>
+      >
+
+      expect(reads).toBe(1)
+      expect(copy['ItemsController.list']?.['security']).toStrictEqual([{ oauth: ['write'] }])
+    }
+  )
+
   it('refuses a name a proxy lists but holds no property under, instead of dropping it', () => {
     const source = new Proxy({ real: 1 }, { ownKeys: () => ['real', 'ghost'] })
 

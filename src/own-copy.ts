@@ -25,6 +25,9 @@ function spend(done: Map<object, unknown>, units: number): void {
   if (budget.left < 0) throw new RangeError('A value is too large')
 }
 
+/** The copies that were made of a proxy, so a copy of one is still judged as one. */
+const proxies = new WeakSet<object>()
+
 /** The copies made under the refusal, apart from the ones made without it, for each `done`. */
 const strictCaches = new WeakMap<Map<object, unknown>, Map<object, unknown>>()
 
@@ -98,6 +101,37 @@ function copyProperties(
 }
 
 /**
+ * A copy already made of `value`, if any. One snapshot of the host object serves both kinds of copy: a
+ * copy made without the refusal is judged again, as data, where the refusal applies, and one made under
+ * it serves where it does not. So the host is read once, whatever order a shared object is reached in.
+ */
+function reuse(
+  value: object,
+  depth: number,
+  open: readonly object[],
+  done: Map<object, unknown>,
+  strict: boolean
+): unknown {
+  const made = (strict ? strictCache(done) : done).get(value)
+  if (made !== undefined) return made
+  const other = strict ? done.get(value) : strictCache(done).get(value)
+  if (other === undefined) return undefined
+  return strict ? ownCopy(other, depth, open, done, true) : other
+}
+
+/**
+ * Refuses the copy of a proxy that lists no keys, where the copy is strict: it reads as `{}`, and an empty
+ * requirement is anonymous access.
+ */
+function judge(value: object, copy: object, depth: number, strict: boolean): void {
+  const proxied = types.isProxy(value)
+  if (proxied) proxies.add(copy)
+  if (strict && depth > 0 && (proxied || proxies.has(value)) && Object.keys(copy).length === 0) {
+    throw new RangeError('A proxy lists no keys')
+  }
+}
+
+/**
  * An own copy of the plain objects and lists in `value`, at every depth, with every own property of an object (a non-enumerable one included, made enumerable), so nothing read from the
  * copy runs host code. Anything else (a number, a string, a `Date`, a function) is kept as it is.
  *
@@ -142,11 +176,9 @@ export function ownCopy(
       return value
     }
   }
-  // A copy made without the refusal is not reused where it applies, so the order a shared object is
-  // reached in cannot decide whether it is refused.
+  const reused = reuse(value, depth, open, done, strict)
+  if (reused !== undefined) return reused
   const cache = strict ? strictCache(done) : done
-  const made = cache.get(value)
-  if (made !== undefined) return made
   const inside = [...open, value]
   if (Array.isArray(value)) {
     const items = copyList(value, depth, inside, done, strict)
@@ -156,9 +188,7 @@ export function ownCopy(
   const copy = copyProperties(value, depth, inside, done, strict)
   // The copy is judged: a proxy inside an option that lists no keys reads as `{}`, and an empty
   // requirement is anonymous access.
-  if (strict && depth > 0 && types.isProxy(value) && Object.keys(copy).length === 0) {
-    throw new RangeError('A proxy lists no keys')
-  }
+  judge(value, copy, depth, strict)
   cache.set(value, copy)
   return copy
 }
