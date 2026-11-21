@@ -121,7 +121,7 @@ describe('a name the host answers while discovery reads it', () => {
     )
   })
 
-  it('reads each name once, so the order is that of the names read and stable', () => {
+  it('reads every name the same three times, however the sort compares them', () => {
     @BymaxHealthIndicator()
     class Database {}
 
@@ -144,8 +144,9 @@ describe('a name the host answers while discovery reads it', () => {
       },
       reflector
     )
+    // Two reads check the contract and one reads the name that is sorted, for each of the five.
+    expect([...reads.values()]).toEqual([3, 3, 3, 3, 3])
     expect(found.map((item) => item.name)).toEqual(['a', 'b', 'c', 'd', 'e'])
-    expect([...reads.values()].every((count) => count <= 4)).toBe(true)
   })
 
   it.each([42, '', undefined])(
