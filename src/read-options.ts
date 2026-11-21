@@ -25,6 +25,9 @@ function isBlock(value: unknown): value is object {
 
 const MAX_NAMES = 1000
 
+/** The options that hold security requirements, whose proxies that list no keys are refused. */
+const SECURITY = new Set(['security', 'operationSecurity', 'securitySchemes'])
+
 /** A list read once, by index, and not past the limit: its length first, then each item. */
 function snapshot(list: readonly unknown[]): unknown[] {
   const length = Reflect.get(list, 'length') as number
@@ -75,9 +78,13 @@ function isEmptyMap(value: unknown): boolean {
 }
 
 /** One value of a block, read as its entry in the shape says. */
-function readEntry(value: unknown, entry: Shape | readonly [Shape] | 0 | 1): unknown {
+function readEntry(
+  value: unknown,
+  entry: Shape | readonly [Shape] | 0 | 1,
+  strict: boolean
+): unknown {
   if (entry === 1) return namedCopy(value)
-  if (entry === 0) return ownCopy(value)
+  if (entry === 0) return ownCopy(value, 0, [], new Map(), strict)
   if (Array.isArray(entry)) {
     const shape = entry[0] as Shape
     return Array.isArray(value) ? value.map((item) => readBlock(item, shape)) : ownCopy(value)
@@ -101,7 +108,7 @@ function readBlock(given: unknown, shape: Shape): unknown {
       const isMap = entry === 0 || entry === 1
       // The items are read once, here, so the one checked is the one copied.
       if (isMap && Array.isArray(value)) value = snapshot(value)
-      const made = readEntry(value, entry)
+      const made = readEntry(value, entry, SECURITY.has(key))
       // The copy is judged, not the original: a proxy that lists no keys reads as an empty map, and an
       // empty requirement is anonymous access.
       if (isMap && types.isProxy(value) && isEmptyMap(made)) {

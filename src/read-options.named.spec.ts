@@ -13,6 +13,7 @@ import type { Shape } from './read-options'
 
 const NAMED: Shape = { map: 1 }
 const LISTED: Shape = { list: 0 }
+const SECURED: Shape = { security: 0, operationSecurity: 0, securitySchemes: 0, other: 0 }
 
 /** What `readOptions` returns for `map`, read as the map option. */
 function read(map: unknown): Record<string, unknown> {
@@ -138,16 +139,21 @@ describe('a map option read by every name it answers to', () => {
 describe('a list item behind a proxy that lists no keys', () => {
   it('refuses a requirement that is a proxy over an empty object', () => {
     const item = new Proxy({}, { get: () => ['read'] })
-    const error = refusal({ list: [item] }, LISTED)
+    const error = refusal({ security: [item] }, SECURED)
     expect(error.cause).toMatchObject({ message: 'A proxy lists no keys' })
   })
 
   it('refuses a requirement behind a proxy deeper in a map, as operationSecurity and securitySchemes hold them', () => {
     const item = new Proxy({}, { get: () => ['read'] })
-    const deep = refusal({ map: { 'A.b': [item] } }, { map: 0 })
+    const deep = refusal({ operationSecurity: { 'A.b': [item] } }, SECURED)
     expect(deep.cause).toMatchObject({ message: 'A proxy lists no keys' })
-    const scheme = refusal({ map: { bearer: item } }, { map: 0 })
+    const scheme = refusal({ securitySchemes: { bearer: item } }, SECURED)
     expect(scheme.cause).toMatchObject({ message: 'A proxy lists no keys' })
+  })
+
+  it('keeps a proxy over an empty object in an option that holds no requirement', () => {
+    const extension = new Proxy({}, { get: () => 'x' })
+    expect(readOptions({ other: { value: extension } }, SECURED)).toEqual({ other: { value: {} } })
   })
 
   it('reads the keys once: an ownKeys trap that lists them once and none after is copied whole', () => {

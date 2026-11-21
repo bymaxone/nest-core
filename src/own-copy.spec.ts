@@ -56,6 +56,24 @@ describe('ownCopy', () => {
     expect(reads).toBe(1)
   })
 
+  it('copies a proxy that lists no keys as an empty map, where it is not a security requirement', () => {
+    const source = { extension: new Proxy({}, {}), schema: { example: new Proxy({}, {}) } }
+
+    expect(ownCopy(source)).toStrictEqual({ extension: {}, schema: { example: {} } })
+  })
+
+  it('refuses a proxy that lists no keys where an operation or a component holds security', () => {
+    const operation = { security: [new Proxy({}, {})] }
+    const schemes = { securitySchemes: { bearer: new Proxy({}, {}) } }
+
+    expect(() => ownCopy({ operation })).toThrow('A proxy lists no keys')
+    expect(() => ownCopy({ components: schemes })).toThrow('A proxy lists no keys')
+  })
+
+  it('keeps a plain empty requirement, which is intended anonymous access', () => {
+    expect(ownCopy({ security: [{}] })).toStrictEqual({ security: [{}] })
+  })
+
   it('does not copy a name a proxy lists but holds no property under', () => {
     const source = new Proxy({ real: 1 }, { ownKeys: () => ['real', 'ghost'] })
 

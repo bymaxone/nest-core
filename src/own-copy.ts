@@ -17,14 +17,18 @@ const MAX_DEPTH = 64
  * @param open - The objects being copied above this one, to tell a cycle from a shared object.
  * @param done - The copies already made in this call, so an object reached twice is copied once
  *   and the copy is shared as the original was.
+ * @param strict - Whether a proxy below the root that lists no keys is refused instead of copied as `{}`; it
+ *   holds under a `security` or `securitySchemes` key, where an empty requirement is anonymous access.
  * @returns The copy.
- * @throws RangeError When `value` holds itself or is deeper than {@link MAX_DEPTH}.
+ * @throws RangeError When `value` holds itself or is deeper than {@link MAX_DEPTH}, or, if `strict`, holds
+ *   a proxy that lists no keys.
  */
 export function ownCopy(
   value: unknown,
   depth = 0,
   open: readonly object[] = [],
-  done: Map<object, unknown> = new Map()
+  done: Map<object, unknown> = new Map(),
+  strict = false
 ): unknown {
   if (typeof value !== 'object' || value === null) return value
   if (depth > MAX_DEPTH || open.includes(value)) {
@@ -36,7 +40,7 @@ export function ownCopy(
   if (made !== undefined) return made
   const inside = [...open, value]
   if (Array.isArray(value)) {
-    const items = value.map((item) => ownCopy(item, depth + 1, inside, done))
+    const items = value.map((item) => ownCopy(item, depth + 1, inside, done, strict))
     done.set(value, items)
     return items
   }
@@ -47,15 +51,21 @@ export function ownCopy(
     // A name a proxy lists but holds no property under is not copied.
     if (Reflect.getOwnPropertyDescriptor(value, key) === undefined) continue
     Object.defineProperty(copy, key, {
-      value: ownCopy(Reflect.get(value, key), depth + 1, inside, done),
+      value: ownCopy(
+        Reflect.get(value, key),
+        depth + 1,
+        inside,
+        done,
+        strict || key === 'security' || key === 'securitySchemes'
+      ),
       enumerable: true,
       writable: true,
       configurable: true
     })
   }
-  // The copy is judged: a proxy inside a value that lists no keys reads as `{}`, and an empty
+  // The copy is judged: a proxy inside an option that lists no keys reads as `{}`, and an empty
   // requirement is anonymous access.
-  if (depth > 0 && types.isProxy(value) && Reflect.ownKeys(copy).length === 0) {
+  if (strict && depth > 0 && types.isProxy(value) && Reflect.ownKeys(copy).length === 0) {
     throw new RangeError('A proxy lists no keys')
   }
   done.set(value, copy)
