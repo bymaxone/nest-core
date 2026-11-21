@@ -110,9 +110,16 @@ describe('a map option read by every name it answers to', () => {
     expect(error.cause).toMatchObject({ message: 'a map option is too large' })
   })
 
+  it('refuses a map whose prototype chain is one link past the limit', () => {
+    let held: object = { defaultSrc: ['x'] }
+    for (let i = 0; i < 1001; i += 1) held = Object.create(held) as object
+    const error = refusal({ map: held }, NAMED)
+    expect(error.cause).toMatchObject({ message: 'a map option is too large' })
+  })
+
   it('keeps a map whose prototype chain is exactly as long as the limit allows', () => {
     let held: object = { defaultSrc: ['x'] }
-    for (let i = 0; i < 999; i += 1) held = Object.create(held) as object
+    for (let i = 0; i < 1000; i += 1) held = Object.create(held) as object
     expect(Object.keys(read(held))).toEqual(['defaultSrc'])
   })
 
