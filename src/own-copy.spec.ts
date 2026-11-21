@@ -114,6 +114,17 @@ describe('ownCopy', () => {
     expect(() => ownCopy({ security: [symbolic] })).toThrow('A proxy lists no keys')
   })
 
+  it('reads the length of a list once, so a length that grows on every read ends', () => {
+    let reads = 0
+    const list = new Proxy(['only'], {
+      get: (target, key, receiver) =>
+        key === 'length' ? (reads += 1) : Reflect.get(target, key, receiver)
+    })
+
+    expect(ownCopy({ list })).toStrictEqual({ list: ['only'] })
+    expect(reads).toBe(1)
+  })
+
   it('builds a list as a plain array, whatever its species names', () => {
     const list: unknown[] = [1, 2]
     Object.defineProperty(list, 'constructor', {
