@@ -28,7 +28,8 @@ import {
 import type { ProviderScanner } from '../discovery'
 import { asHostError } from '../host-error'
 import { writeLog } from '../write-log'
-import { discoverIndicators, mergeIndicators } from './health.discovery'
+import { discoverIndicators, mergeIndicators, nameIndicators } from './health.discovery'
+import type { NamedIndicator } from './health.discovery'
 import type { HealthCheckEntry, HealthResponse, IHealthIndicator } from './health.interfaces'
 import { BYMAX_HEALTH_STATUS_RECORDER } from './health.status-recorder'
 import type { IHealthStatusRecorder } from './health.status-recorder'
@@ -106,12 +107,12 @@ type IndicatorOutcome =
  * and by then the signal handed to the indicator is already aborted, so a check that can cancel its
  * query is told to stop.
  *
- * @param indicator - The indicator the timeout belongs to.
+ * @param name - The name of the indicator the timeout belongs to.
  * @param timeoutMs - The per-indicator timeout, in milliseconds.
  * @returns The signal to pass to `check()`, the timeout outcome, and the call that clears the timer.
  */
 function startTimeout(
-  indicator: IHealthIndicator,
+  name: string,
   timeoutMs: number
 ): { signal: AbortSignal; timedOut: Promise<IndicatorOutcome>; clear: () => void } {
   const controller = new AbortController()
@@ -120,7 +121,7 @@ function startTimeout(
     timer = setTimeout(() => {
       controller.abort()
       resolve({
-        entry: { name: indicator.name, status: 'down', details: { timedOutAfterMs: timeoutMs } },
+        entry: { name, status: 'down', details: { timedOutAfterMs: timeoutMs } },
         isUp: false,
         cause: { kind: 'timed-out', timeoutMs }
       })
@@ -138,7 +139,7 @@ function startTimeout(
  * Nothing is logged here. Every down path returns its cause instead, and the
  * caller decides what is worth a line.
  *
- * @param indicator - The indicator to run.
+ * @param named - The indicator to run, with the name it was read under.
  * @param timeoutMs - The per-indicator timeout, in milliseconds.
  * @param exposeErrors - Whether a rejection's message is copied into the served
  *   entry's `details.error`; it reaches the cause either way.
@@ -147,11 +148,11 @@ function startTimeout(
  *   cause behind it.
  */
 async function runIndicator(
-  indicator: IHealthIndicator,
+  { name, indicator }: NamedIndicator,
   timeoutMs: number,
   exposeErrors: boolean
 ): Promise<IndicatorOutcome> {
-  const { signal, timedOut, clear } = startTimeout(indicator, timeoutMs)
+  const { signal, timedOut, clear } = startTimeout(name, timeoutMs)
   // `Promise.resolve().then(...)` defers the actual `indicator.check()` call
   // into a `.then()` callback, so a misbehaving indicator that throws
   // synchronously (instead of returning a rejected promise) is caught by the
@@ -165,9 +166,7 @@ async function runIndicator(
     .then((result): IndicatorOutcome => {
       // The details are whatever the indicator chose to return, and the response is usually
       // reachable without credentials, so they are served only with the diagnostics switch on.
-      const entry = exposeErrors
-        ? { ...result, name: indicator.name }
-        : { name: indicator.name, status: result.status }
+      const entry = exposeErrors ? { ...result, name } : { name, status: result.status }
       // Anything that is not `up` counts as down, matching how the aggregate
       // status below reads the same field, so a misbehaving indicator cannot
       // be down in the response and up in the log.
@@ -179,8 +178,8 @@ async function runIndicator(
       const message = summarizeRejection(reason)
       return {
         entry: exposeErrors
-          ? { name: indicator.name, status: 'down', details: { error: message } }
-          : { name: indicator.name, status: 'down' },
+          ? { name, status: 'down', details: { error: message } }
+          : { name, status: 'down' },
         isUp: false,
         cause: { kind: 'rejected', message }
       }
@@ -243,7 +242,7 @@ export class HealthService implements OnApplicationBootstrap, BeforeApplicationS
    * request would put that walk on the probe's path for no benefit, since the
    * container's providers do not change after bootstrap.
    */
-  private effectiveIndicators: readonly IHealthIndicator[] | undefined
+  private effectiveIndicators: readonly NamedIndicator[] | undefined
 
   /**
    * The last state observed per check name, absent until the first observation,
@@ -490,7 +489,7 @@ export class HealthService implements OnApplicationBootstrap, BeforeApplicationS
    *   `BymaxCoreModule`; a silent fallback would leave an operator believing
    *   checks are running that never run.
    */
-  private resolveIndicators(): readonly IHealthIndicator[] {
+  private resolveIndicators(): readonly NamedIndicator[] {
     if (this.effectiveIndicators !== undefined) {
       return this.effectiveIndicators
     }
@@ -498,8 +497,12 @@ export class HealthService implements OnApplicationBootstrap, BeforeApplicationS
     // registers this service whatever the options say, and scanning for a
     // feature that is switched off would let a misdeclared indicator fail a boot
     // that never asked for readiness at all.
-    if (!this.options.health.enabled || !this.options.health.autoDiscover) {
-      this.effectiveIndicators = this.indicators
+    if (!this.options.health.enabled) {
+      this.effectiveIndicators = []
+      return this.effectiveIndicators
+    }
+    if (!this.options.health.autoDiscover) {
+      this.effectiveIndicators = nameIndicators(this.indicators)
       return this.effectiveIndicators
     }
     if (this.discovery === undefined || this.reflector === undefined) {
@@ -576,7 +579,7 @@ export class HealthService implements OnApplicationBootstrap, BeforeApplicationS
     // started rather than by when it happened to finish.
     const seq = ++this.probeSequence
     const outcomes = await Promise.all(
-      this.resolveIndicators().map((indicator) => runIndicator(indicator, timeoutMs, exposeErrors))
+      this.resolveIndicators().map((entry) => runIndicator(entry, timeoutMs, exposeErrors))
     )
     // After every indicator has settled, not as each one does, so the lines
     // follow the declared indicator order rather than which dependency answered
