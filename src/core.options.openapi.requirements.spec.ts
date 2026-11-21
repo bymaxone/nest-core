@@ -84,10 +84,16 @@ describe('a requirement that is not a plain object', () => {
   describe.each(IMPOSSIBLE)(
     '%s, given straight to the resolution of the OpenAPI block',
     (_kind, make) => {
-      it.each(PLACES)('is refused in %s by the copy the resolution takes', (_place, within) => {
-        expect(() => resolveOpenApi({ enabled: true, ...within(make()) })).toThrow(
-          'must hold only plain data'
-        )
+      it.each(PLACES)('is refused in %s by the copy the resolution takes', (place, within) => {
+        let thrown: Error | undefined
+        try {
+          resolveOpenApi({ enabled: true, ...within(make()) })
+        } catch (error) {
+          thrown = error as Error
+        }
+
+        expect(thrown?.message).toBe(`openapi.${place} must hold only plain data`)
+        expect(thrown?.cause).toBeInstanceOf(RangeError)
       })
     }
   )
@@ -155,7 +161,29 @@ describe('a requirement that is not a plain object', () => {
     }
 
     expect(thrown?.message).toBe('the options could not be read')
-    expect(thrown?.cause).toMatchObject({ option })
+    expect(thrown?.cause).toMatchObject({
+      option,
+      message: 'an option holds what is not plain data'
+    })
+  })
+
+  it('leaves a host error thrown while the security copy is taken as it was', () => {
+    const security = [
+      {
+        get bearer(): string[] {
+          throw new Error('host error')
+        }
+      }
+    ]
+    let thrown: Error | undefined
+    try {
+      BymaxCoreModule.forRoot({ openapi: { enabled: true, security } } as never)
+    } catch (error) {
+      thrown = error as Error
+    }
+
+    expect(thrown?.message).toBe('the options could not be read')
+    expect((thrown?.cause as Error).message).toBe('host error')
   })
 
   it('is refused whatever its tag answers, since plainness is not decided by the tag', () => {

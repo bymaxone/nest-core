@@ -181,6 +181,17 @@ describe('ownCopy', () => {
     expect((ownCopy({ list }) as { list: unknown[] }).list).toHaveLength(100_000)
   })
 
+  it('copies exactly as much as the work limit allows, and refuses one more', () => {
+    const listOf = (length: number): number[] => Array.from({ length }, () => 0)
+    // The key `list` counts 1, the outer list 10, and the inner lists the rest of the 1,000,000.
+    const inner = [...Array.from({ length: 9 }, () => listOf(100_000)), listOf(99_989)]
+
+    expect(() => ownCopy({ list: inner })).not.toThrow()
+    expect(() => ownCopy({ list: [...inner.slice(0, 9), listOf(99_990)] })).toThrow(
+      'A value is too large'
+    )
+  })
+
   it('refuses a copy that would do more work than the limit, however it is nested', () => {
     const wide = (levels: number): unknown[] =>
       new Proxy([], {
