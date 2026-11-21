@@ -12,6 +12,11 @@ heading here.
 
 ## [Unreleased]
 
+## [1.6.20] - 2026-11-21
+
+A patch release. What a host hands over is copied once under a guard, so a throw from it is attributed to it and
+nothing read afterwards runs the host's code.
+
 **Apply to your observability:**
 
 - A contributor's `operations` and `components` are copied under the guard at every depth: a proxy that throws
@@ -1796,6 +1801,7 @@ have regressed from. They are kept because the reasoning is worth having.
 [1.6.13]: https://github.com/bymaxone/nest-core/compare/v1.6.10...v1.6.13
 [1.6.14]: https://github.com/bymaxone/nest-core/compare/v1.6.13...v1.6.14
 [1.6.15]: https://github.com/bymaxone/nest-core/compare/v1.6.14...v1.6.15
+[1.6.20]: https://github.com/bymaxone/nest-core/compare/v1.6.19...v1.6.20
 [1.6.19]: https://github.com/bymaxone/nest-core/compare/v1.6.18...v1.6.19
 [1.6.18]: https://github.com/bymaxone/nest-core/compare/v1.6.17...v1.6.18
 [1.6.17]: https://github.com/bymaxone/nest-core/compare/v1.6.16...v1.6.17
