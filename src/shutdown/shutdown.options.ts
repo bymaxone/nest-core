@@ -40,7 +40,7 @@ export interface ResolvedShutdownOptions {
 }
 
 /** The options of {@link ShutdownOptions}; the compiler keeps this table complete. */
-const SHUTDOWN_KEYS = { deadlineMs: 0 } satisfies Record<keyof ShutdownOptions, 0>
+export const SHUTDOWN_KEYS = { deadlineMs: 0 } satisfies Record<keyof ShutdownOptions, 0>
 
 /**
  * Resolve the shutdown options.

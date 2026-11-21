@@ -23,7 +23,8 @@ import {
 } from '../option-validation'
 import { MAX_TIMER_DELAY_MS, positiveSafeInteger } from '../positive-integer'
 import { readOptions } from '../read-options'
-import { resolveCors } from './http-floors.cors'
+import type { Shape } from '../read-options'
+import { CORS_KEYS, resolveCors } from './http-floors.cors'
 import type { HttpFloorsCorsOptions } from './http-floors.cors'
 import { loadHelmet } from './http.loader'
 import type { HelmetFactory } from './http.loader'
@@ -180,6 +181,9 @@ const FLOORS_KEYS = {
   cors: 0
 } satisfies Record<keyof HttpFloorsOptions, 0>
 
+/** What `applyHttpFloors` reads by name: its options, and the two blocks inside them. */
+const FLOORS_SHAPE: Shape = { ...FLOORS_KEYS, bodyLimit: BODY_LIMIT_KEYS, cors: CORS_KEYS }
+
 /**
  * The names `helmet` documents as options, aliases included. `helmet` ignores a name it does not
  * know, so a misspelt one would silently leave a header on its default; a test pins this list to
@@ -315,7 +319,7 @@ interface ResolvedFloors {
 function resolveFloors(given: unknown): ResolvedFloors {
   const options = checkedBlock<HttpFloorsOptions>(
     'options',
-    readOptions(given) ?? {},
+    readOptions(given, FLOORS_SHAPE) ?? {},
     FLOORS_KEYS
   ) as HttpFloorsOptions
   const headersTimeoutMs = options.headersTimeoutMs ?? DEFAULT_HEADERS_TIMEOUT_MS
