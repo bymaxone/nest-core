@@ -25,6 +25,7 @@ import {
   Logger,
   Req,
   Res,
+  ServiceUnavailableException,
   UnauthorizedException
 } from '@nestjs/common'
 import type { Type } from '@nestjs/common'
@@ -32,6 +33,7 @@ import { HttpAdapterHost } from '@nestjs/core'
 
 import type { ResolvedCoreOptions } from '../core.options'
 import { BYMAX_CORE_OPTIONS, BYMAX_METRICS_REGISTRY } from '../core.tokens'
+import { assertObjectPrototypeClean } from '../object-prototype'
 import { assertAsyncFeatureEnabled } from '../passthrough.providers'
 import type { MetricsRegistry } from './metrics.registry'
 import { ScrapeRun } from './scrape-run'
@@ -99,6 +101,29 @@ function bearerMatches(authorization: unknown, expected: string): boolean {
 }
 
 /**
+ * The checks a scrape passes before anything is read or collected: the controller matches the options, and
+ * `Object.prototype` is the standard one (`503` otherwise, the guard's own error as the cause), since what
+ * `prom-client` reads of its labels would answer a name planted there.
+ */
+function admit(options: ResolvedCoreOptions, registeredPath: string): void {
+  assertControllerMatchesOptions(options, registeredPath)
+  try {
+    assertObjectPrototypeClean()
+  } catch (cause) {
+    throw new ServiceUnavailableException('Metrics are unavailable', { cause })
+  }
+}
+
+/** The registry's text, with any failure of a collector answered `503` and never left unhandled. */
+async function collectOrRefuse(registry: MetricsRegistry): Promise<string> {
+  try {
+    return await registry.metrics()
+  } catch (cause) {
+    throw new ServiceUnavailableException('Metrics collection failed', { cause })
+  }
+}
+
+/**
  * A `ScrapeRun` that warns once, under the controller's name, when a collection passes its deadline.
  *
  * @param scrapeTimeoutMs - The deadline, from `metrics.scrapeTimeoutMs`.
@@ -154,7 +179,7 @@ export function createMetricsController(registeredPath: string): Type<object> {
       @Res() response: unknown,
       @Req() request: { readonly headers?: Record<string, unknown> }
     ): Promise<void> {
-      assertControllerMatchesOptions(this.options, registeredPath)
+      admit(this.options, registeredPath)
       // When a token is configured the scrape is credentialed: without it the
       // exposition publishes the route inventory and process internals to anyone.
       // Unset (the default) leaves the endpoint open, to be protected at the edge.
@@ -165,7 +190,7 @@ export function createMetricsController(registeredPath: string): Type<object> {
       ) {
         throw new UnauthorizedException()
       }
-      const body = await this.scrapes.run(() => this.registry.metrics())
+      const body = await this.scrapes.run(() => collectOrRefuse(this.registry))
       this.adapterHost.httpAdapter.setHeader(response, 'Content-Type', this.registry.contentType)
       this.adapterHost.httpAdapter.reply(response, body, HttpStatus.OK)
     }

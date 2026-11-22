@@ -217,7 +217,7 @@ options object itself, refuses a key it does not document, so a misspelt option 
 nothing. A block must be a plain object: a `Date`, `Map`, `Set` or `RegExp` is refused. An option, or a whole block, given as `undefined` or `null` reads as unset and takes its
 default; the one exception is an option of `helmet`, where `null` is refused.
 
-**`Object.prototype` must be the standard one.** `BymaxCoreModule.forRoot`, `applyBymaxOpenApi` (only when it goes on to mount the document) and `applyHttpFloors` refuse to boot while `Object.prototype` of the realm holds a string key outside the ones it has by default, or one of those has been replaced: every plain object that `helmet` and `@nestjs/swagger` read a name from would inherit it, and no option can shadow it. A host that extends `Object.prototype` cannot boot this package. The error reports a count only (`count`).
+**`Object.prototype` must be the standard one.** `BymaxCoreModule.forRoot`, `applyBymaxOpenApi` (only when it goes on to mount the document) and `applyHttpFloors` refuse to boot while `Object.prototype` of the realm holds a string key outside the ones it has by default, or one of those has been replaced: every plain object that `helmet` and `@nestjs/swagger` read a name from would inherit it, and no option can shadow it. A host that extends `Object.prototype` cannot boot this package. The error reports a count only (`count`). The guard runs again after the last `await` of `applyBymaxOpenApi` and `applyHttpFloors`, and the metrics scrape answers `503` while it holds.
 
 What is handed over is read once, and the limits are fixed. A list an option holds is read by index and is
 refused, never cut short, past `1000` items; a list inside what is copied (an OpenAPI contributor's operation,

@@ -157,3 +157,26 @@ describe('loadPromClient, present optional peer', () => {
     expect(typeof promClient.Registry).toBe('function')
   })
 })
+
+describe('the garbage-collection histogram beside a changed Object.prototype', () => {
+  it('drops an observation that prom-client refuses, instead of throwing out of its observer', async () => {
+    const registry = await createMetricsRegistry(
+      normalizeCoreOptions({ metrics: { enabled: true, collectDefaultMetrics: true } })
+    )
+    const histogram = registry.getSingleMetric('nodejs_gc_duration_seconds') as unknown as {
+      observe(labels: object, value: number): void
+    }
+    Object.defineProperty(Object.prototype, 'planted', {
+      value: 'x',
+      enumerable: true,
+      configurable: true,
+      writable: true
+    })
+    try {
+      expect(() => histogram.observe({ kind: 'major' }, 0.01)).not.toThrow()
+    } finally {
+      delete (Object.prototype as Record<string, unknown>)['planted']
+    }
+    expect(() => histogram.observe({ kind: 'major' }, 0.01)).not.toThrow()
+  })
+})

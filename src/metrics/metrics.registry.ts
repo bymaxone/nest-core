@@ -91,6 +91,27 @@ export async function createMetricsRegistry(
   registry.setDefaultLabels(options.metrics.defaultLabels)
   if (options.metrics.collectDefaultMetrics) {
     promClient.collectDefaultMetrics({ register: registry })
+    containGcObservations(registry)
   }
   return registry
+}
+
+/**
+ * The garbage-collection histogram of `prom-client` is written from a `PerformanceObserver` callback, where
+ * a throw is an uncaught exception that ends the process. It throws when a name planted on
+ * `Object.prototype` is enumerable (it checks the labels with `for...in`), so its writes are contained: the
+ * observation is dropped, and the scrape, which refuses beside a changed `Object.prototype`, answers `503`.
+ */
+function containGcObservations(registry: MetricsRegistry): void {
+  const histogram = registry.getSingleMetric('nodejs_gc_duration_seconds') as
+    { observe(...args: unknown[]): unknown } | undefined
+  if (histogram === undefined) return
+  const observe = histogram.observe.bind(histogram)
+  histogram.observe = (...args: unknown[]): unknown => {
+    try {
+      return observe(...args)
+    } catch {
+      return undefined
+    }
+  }
 }
