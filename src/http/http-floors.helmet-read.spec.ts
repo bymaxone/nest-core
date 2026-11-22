@@ -113,4 +113,16 @@ describe('the helmet options read by name', () => {
       'the options could not be read'
     )
   })
+
+  it('keeps the directives a class holds as accessors, so default-src stays none', async () => {
+    class Directives {
+      get defaultSrc(): string[] {
+        return ["'none'"]
+      }
+    }
+    const headers = await headersOf({
+      contentSecurityPolicy: { useDefaults: true, directives: new Directives() }
+    })
+    expect(headers['content-security-policy']).toMatch(/^default-src 'none'/)
+  })
 })

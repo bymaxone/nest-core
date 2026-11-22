@@ -217,13 +217,50 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 // budget 4.46 KiB = 4570 B: measured 4535 B plus 35 B, from 4424 B. `./openapi` is unchanged. The growth is the
 // table of the settings the options of `helmet` take, which `./http` reads them by, and the refusal of an
 // option held behind a proxy that lists no keys, in the shared `readBlock`. Code only.
+// Root budget 25.18 KiB = 25784 B: measured 25756 B brotli plus 28 B of headroom, from 25540 B. `./http`
+// budget 4.70 KiB = 4812 B: measured 4794 B plus 18 B, from 4570 B. The growth is the read of a map option by
+// every name it answers to (own, non-enumerable and inherited accessors, capped) that the policy
+// `directives` are read by, and the refusal of a list item behind a proxy that lists no keys. Code only.
+// Root budget 25.26 KiB = 25866 B: measured 25839 B brotli plus 27 B of headroom, from 25784 B. `./http` budget
+// 4.80 KiB = 4915 B: measured 4885 B plus 30 B, from 4812 B. The growth is the read of a list option once, by
+// index, under a cap, which is the one place an item is checked and copied. Code only.
+// `./openapi` budget 8.72 KiB = 8929 B: measured 8907 B brotli plus 22 B of headroom, from 8898 B. Root (25850 B)
+// and `./http` (4890 B) stay within the budgets above. The growth is the shared copy judging a proxy that lists no
+// keys at every depth, and copying each property as an enumerable one. Code only.
+// Root budget 25.35 KiB = 25958 B: measured 25927 B brotli plus 31 B of headroom, from 25866 B. `./http` budget
+// 4.90 KiB = 5018 B: measured 4978 B plus 40 B, from 4915 B. `./openapi` budget 8.76 KiB = 8970 B: measured 8941 B plus
+// 29 B, from 8929 B. The growth is the shared copy refusing a proxy that lists no keys where a security requirement
+// is held, a switch the options pass for the keys that hold one. Code only.
+// Root budget 25.44 KiB = 26050 B: measured 26017 B brotli plus 33 B of headroom, from 25958 B. `./http` budget
+// 4.96 KiB = 5079 B: measured 5048 B plus 31 B, from 5018 B. `./openapi` budget 8.83 KiB = 9042 B: measured 9011 B plus
+// 31 B, from 8970 B. The growth is the shared copy keeping its copies apart for the places that refuse a proxy
+// that lists no keys, so the order a shared object is reached in cannot decide the refusal. Code only.
+// `./http` budget 5.00 KiB = 5120 B: measured 5101 B brotli plus 19 B of headroom, from 5079 B. `./openapi` budget
+// 8.89 KiB = 9103 B: measured 9076 B plus 27 B, from 9042 B. Root (26025 B) stays within its budget. The growth is the
+// shared copy never handing back a proxy as itself and building a list by index. Code only.
+// Root budget 25.49 KiB = 26101 B: measured 26072 B brotli plus 29 B of headroom, from 26050 B. `./http` budget
+// 5.04 KiB = 5161 B: measured 5139 B plus 22 B, from 5120 B. `./openapi` budget 8.93 KiB = 9144 B: measured 9136 B plus
+// 8 B, from 9103 B. The growth is the shared copy refusing a list whose length is not an integer in range. Code only.
+// Root budget 25.59 KiB = 26204 B: measured 26170 B brotli plus 34 B of headroom, from 26101 B. `./http` budget
+// 5.17 KiB = 5294 B: measured 5260 B plus 34 B, from 5161 B. `./openapi` budget 9.08 KiB = 9298 B: measured 9258 B
+// plus 40 B, from 9144 B. The growth is the one strict copy the OpenAPI security options are checked and built from,
+// the plain-object requirement in it, and the shared work budget of a copy. Code only.
+// Root budget 25.78 KiB = 26398 B: measured 26365 B brotli plus 33 B of headroom, from 26204 B. `./http` budget
+// 5.29 KiB = 5417 B: measured 5384 B plus 33 B, from 5294 B. `./openapi` is unchanged at 9.08 KiB (9291 B measured).
+// The growth is the servers taken through the same strict copy, a refusal of what a proxy lists without holding,
+// the functions a strict copy refuses, the one work limit shared by a call, and the option a strict refusal names.
+// Code only.
+// Root budget 25.85 KiB = 26470 B: measured 26438 B brotli plus 32 B of headroom, from 26398 B. `./http` budget
+// 5.41 KiB = 5540 B: measured 5501 B plus 39 B, from 5417 B. `./openapi` budget 9.22 KiB = 9441 B: measured 9405 B plus
+// 36 B, from 9298 B. The growth is the one snapshot a shared object gets for both kinds of copy, so the host is
+// read once whatever order the object is reached in. Code only.
 const BUDGETS = [
-  { name: '. (root)', path: 'dist/index.mjs', brotli: 24.94 * 1024 },
+  { name: '. (root)', path: 'dist/index.mjs', brotli: 25.85 * 1024 },
   { name: './pagination', path: 'dist/pagination/index.mjs', brotli: 1.5 * 1024 },
   { name: './health', path: 'dist/health/index.mjs', brotli: 0.5 * 1024 },
-  { name: './openapi', path: 'dist/openapi/index.mjs', brotli: 8.69 * 1024 },
+  { name: './openapi', path: 'dist/openapi/index.mjs', brotli: 9.22 * 1024 },
   { name: './metrics', path: 'dist/metrics/index.mjs', brotli: 0.5 * 1024 },
-  { name: './http', path: 'dist/http/index.mjs', brotli: 4.46 * 1024 }
+  { name: './http', path: 'dist/http/index.mjs', brotli: 5.41 * 1024 }
 ]
 
 const fmt = (n) => `${(n / 1024).toFixed(2)} kB`

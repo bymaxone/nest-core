@@ -11,10 +11,11 @@ import { ownCopy } from './own-copy'
 /**
  * What an options block documents: each key is an option, `0` for a value copied as it is (a number,
  * a string, a list or a map whose keys are the host's own data), a table for a block read by name,
- * and a one-item list holding a table for a list of such blocks.
+ * and a one-item list holding a table for a list of such blocks. `1` is a map read by every name it
+ * answers to, inherited accessors and non-enumerable properties included.
  */
 export interface Shape {
-  readonly [key: string]: Shape | readonly [Shape] | 0
+  readonly [key: string]: Shape | readonly [Shape] | 0 | 1
 }
 
 /** Whether `value` is an object that holds settings, as `isPlainRecord` reads it, a class instance included. */
@@ -22,14 +23,76 @@ function isBlock(value: unknown): value is object {
   return Object.prototype.toString.call(value) === '[object Object]'
 }
 
+const MAX_NAMES = 1000
+
+/** The options that hold security requirements, whose proxies that list no keys are refused. */
+const SECURITY = new Set(['security', 'operationSecurity', 'securitySchemes'])
+
+/** A list read once, by index, and not past the limit: its length first, then each item. */
+function snapshot(list: readonly unknown[]): unknown[] {
+  const length = Reflect.get(list, 'length') as number
+  if (!(Number.isInteger(length) && length >= 0 && length <= MAX_NAMES)) {
+    throw bootError('an option is too large', {})
+  }
+  const items: unknown[] = []
+  for (let index = 0; index < length; index += 1) items.push(Reflect.get(list, index))
+  return items
+}
+
+/** A map read by every name it answers to, once. */
+function namedCopy(value: unknown, done: Map<object, unknown>): unknown {
+  if (!isBlock(value)) return ownCopy(value, 0, [], done)
+  const copy: Record<string, unknown> = {}
+  const names = new Set<string>()
+  const add = (found: readonly PropertyKey[]): void => {
+    for (const name of found) if (typeof name === 'string') names.add(name)
+  }
+  add(Reflect.ownKeys(value))
+  let links = 0
+  for (
+    let up = Reflect.getPrototypeOf(value);
+    up && up !== Object.prototype;
+    up = Reflect.getPrototypeOf(up)
+  ) {
+    // A proxy can answer its own prototype for ever.
+    if (++links > MAX_NAMES) throw bootError('an option is too large', {})
+    add(Reflect.ownKeys(up))
+  }
+  if (names.size > MAX_NAMES) throw bootError('an option is too large', {})
+  for (const name of names) {
+    const held: unknown = Reflect.get(value, name)
+    if (typeof held !== 'function')
+      Object.defineProperty(copy, name, { value: ownCopy(held, 0, [], done), enumerable: true })
+  }
+  return copy
+}
+
+/** Whether `value` is a map with no keys, a copy of one that listed none. */
+function isEmptyMap(value: unknown): boolean {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    !Array.isArray(value) &&
+    Object.keys(value).length === 0
+  )
+}
+
 /** One value of a block, read as its entry in the shape says. */
-function readEntry(value: unknown, entry: Shape | readonly [Shape] | 0): unknown {
-  if (entry === 0) return ownCopy(value)
+function readEntry(
+  value: unknown,
+  entry: Shape | readonly [Shape] | 0 | 1,
+  strict: boolean,
+  done: Map<object, unknown>
+): unknown {
+  if (entry === 1) return namedCopy(value, done)
+  if (entry === 0) return ownCopy(value, 0, [], done, strict)
   if (Array.isArray(entry)) {
     const shape = entry[0] as Shape
-    return Array.isArray(value) ? value.map((item) => readBlock(item, shape)) : ownCopy(value)
+    return Array.isArray(value)
+      ? snapshot(value).map((item) => readBlock(item, shape, done))
+      : ownCopy(value, 0, [], done)
   }
-  return readBlock(value, entry as Shape)
+  return readBlock(value, entry as Shape, done)
 }
 
 /**
@@ -38,18 +101,31 @@ function readEntry(value: unknown, entry: Shape | readonly [Shape] | 0): unknown
  * kept, with no value, so the block's own check can refuse it. Anything that is not a block comes
  * back as it is, for that check to refuse.
  */
-function readBlock(given: unknown, shape: Shape): unknown {
+function readBlock(given: unknown, shape: Shape, done: Map<object, unknown>): unknown {
   if (!isBlock(given)) return given
   const copy: Record<string, unknown> = {}
   for (const key of Object.keys(shape)) {
-    const value: unknown = Reflect.get(given, key)
+    let value: unknown = Reflect.get(given, key)
     if (value !== undefined) {
-      const entry = shape[key] as Shape | readonly [Shape] | 0
-      // A map behind a proxy that answers only `get` lists no keys, and would read as empty.
-      if (entry === 0 && types.isProxy(value) && Reflect.ownKeys(value as object).length === 0) {
+      const entry = shape[key] as Shape | readonly [Shape] | 0 | 1
+      const isMap = entry === 0 || entry === 1
+      // The items are read once, here, so the one checked is the one copied.
+      if (isMap && Array.isArray(value)) value = snapshot(value)
+      const strict = SECURITY.has(key)
+      let made: unknown
+      try {
+        made = readEntry(value, entry, strict, done)
+      } catch (cause) {
+        // A refusal by the strict copy names the option it came from.
+        if (!strict || !(cause instanceof RangeError)) throw cause
+        throw bootError('an option holds what is not plain data', { option: key }, { cause })
+      }
+      // The copy is judged, not the original: a proxy that lists no keys reads as an empty map, and an
+      // empty requirement is anonymous access.
+      if (isMap && types.isProxy(value) && isEmptyMap(made)) {
         throw bootError('an option is held behind a proxy that lists no keys', { option: key })
       }
-      copy[key] = readEntry(value, entry)
+      copy[key] = made
     }
   }
   for (const key of Object.keys(given)) {
@@ -72,7 +148,7 @@ function readBlock(given: unknown, shape: Shape): unknown {
  */
 export function readOptions<T>(given: T, shape: Shape): T {
   try {
-    return readBlock(given, shape) as T
+    return readBlock(given, shape, new Map()) as T
   } catch (cause) {
     throw bootError('the options could not be read', {}, { cause })
   }

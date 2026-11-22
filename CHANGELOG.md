@@ -12,6 +12,33 @@ heading here.
 
 ## [Unreleased]
 
+**Changed:**
+
+- An indicator you list explicitly whose `name` is empty, is not a string or is missing fails the boot with
+  `[BymaxCoreModule] a health indicator name must be a non-empty string`. With `autoDiscover: false`, the default,
+  that name was not checked before.
+
+**Apply to your observability:**
+
+- An indicator's `name` is read once, when the readiness set is resolved, and that is the name that is sorted
+  and compared; a `name` that throws, or turns into a non-string afterwards, fails the boot as a boot
+  error with what it threw as the `cause`. `HealthService` serves that name at probe time, so a getter that
+  answers differently later cannot change the response or the log.
+- `HealthService` runs no indicator when health is resolved disabled, whichever way the options were given.
+- The `directives` of the `contentSecurityPolicy` block of `applyHttpFloors` are read by every name they
+  answer to: an own property, one that is not enumerable, an accessor or a property a class or a prototype
+  holds. A host that held them that way no longer loses a directive and falls back to the default
+  (`default-src 'self'` in place of `'none'`). A proxy that lists only some of the names it answers to
+  cannot be told from a map that holds only those, so list every name.
+- A list that an option holds is read once, by index, and is refused past its size limit with a
+  boot error, never cut short. Reading it once means the item that is checked is the item that is copied.
+- A security requirement held behind a proxy that lists no keys fails with
+  `the options could not be read`, as the map options do, and is not read as `{}`, which OpenAPI takes to
+  allow anonymous access. The copy is judged, so a proxy whose `ownKeys` answers differently on a second
+  read cannot pass. A property that is not enumerable is enumerable in the copy the library takes.
+- `forRootAsync`: Nest reads the factory's result before the library can guard it. See
+  `docs/forrootasync-factory-result.md`.
+
 ## [1.6.20] - 2026-11-21
 
 A patch release. What a host hands over is copied once under a guard, so a throw from it is attributed to it and

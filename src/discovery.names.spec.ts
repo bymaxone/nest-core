@@ -2,9 +2,10 @@
  * Unit tests for the names a host's marked provider answers while discovery reads them.
  *
  * Layer: unit.
- * Goal: a class whose `name` throws, and an indicator whose `name` answers once and then throws,
- * fail the boot as a labelled error with what the host threw as the cause, and no host text in the
- * message.
+ * Goal: a class whose `name` throws, and an indicator whose `name` throws or changes into something
+ * else after it was first read, fail the boot as a labelled error with what the host threw as the
+ * cause and no host text in the message; an explicit indicator whose name is empty, not a string or
+ * missing fails the merge the same way.
  * Mocks: a scanner that lists the provider under test.
  */
 import { Reflector } from '@nestjs/core'
@@ -63,24 +64,24 @@ describe('a name the host answers while discovery reads it', () => {
     expect((error?.cause as Error).message).toBe(SECRET)
   })
 
-  it('an indicator whose name throws once it is sorted fails as a boot error', () => {
+  it('a discovered indicator whose name throws fails as a boot error naming the provider', () => {
     @BymaxHealthIndicator()
     class Database {}
 
-    const other = { name: 'zz', check: () => Promise.resolve({ status: 'up' }) }
     const error = thrownBy(() =>
       discoverIndicators(
         {
           getProviders: () => [
-            { metatype: Database, instance: indicatorNamedOnce(2), name: 'Database' },
-            { metatype: Database, instance: other, name: 'Other' }
+            { metatype: Database, instance: indicatorNamedOnce(0), name: 'Database' }
           ]
         },
         reflector
       )
     )
-    expect(error?.message).toMatch(/^\[BymaxCoreModule\] a health indicator name could not be read/)
-    expect(error?.message).not.toContain(SECRET)
+    expect(error?.message).toBe(
+      '[BymaxCoreModule] a provider marked @BymaxHealthIndicator() could not be read'
+    )
+    expect(error).toMatchObject({ provider: 'Database' })
     expect((error?.cause as Error).message).toBe(SECRET)
   })
 
@@ -90,38 +91,7 @@ describe('a name the host answers while discovery reads it', () => {
     expect((error?.cause as Error).message).toBe(SECRET)
   })
 
-  it('an indicator whose name turns into a number once it is sorted fails as a boot error, not a TypeError', () => {
-    @BymaxHealthIndicator()
-    class Database {}
-
-    let reads = 0
-    const flipping = {
-      get name(): unknown {
-        reads += 1
-        return reads > 2 ? 42 : 'qa'
-      },
-      check: () => Promise.resolve({ status: 'up' })
-    }
-    const other = { name: 'zz', check: () => Promise.resolve({ status: 'up' }) }
-    const error = thrownBy(() =>
-      discoverIndicators(
-        {
-          getProviders: () => [
-            { metatype: Database, instance: flipping, name: 'Database' },
-            { metatype: Database, instance: other, name: 'Other' }
-          ]
-        },
-        reflector
-      )
-    )
-    expect(error).toBeInstanceOf(Error)
-    expect(error?.constructor).not.toBe(TypeError)
-    expect(error?.message).toMatch(
-      /^\[BymaxCoreModule\] a health indicator name must be a non-empty string/
-    )
-  })
-
-  it('reads every name the same three times, however the sort compares them', () => {
+  it('reads the name of each discovered indicator exactly once, whatever the sort compares', () => {
     @BymaxHealthIndicator()
     class Database {}
 
@@ -144,8 +114,7 @@ describe('a name the host answers while discovery reads it', () => {
       },
       reflector
     )
-    // Two reads check the contract and one reads the name that is sorted, for each of the five.
-    expect([...reads.values()]).toEqual([3, 3, 3, 3, 3])
+    expect([...reads.values()]).toEqual([1, 1, 1, 1, 1])
     expect(found.map((item) => item.name)).toEqual(['a', 'b', 'c', 'd', 'e'])
   })
 

@@ -18,6 +18,7 @@ import {
   routeOption,
   stringOption
 } from './option-validation'
+import { ownCopy } from './own-copy'
 import { isProductionRuntime, runtimeEnvironmentName } from './runtime.environment'
 
 /** The options of {@link OpenApiOptions}; the compiler keeps this table complete. */
@@ -128,24 +129,32 @@ function assertServers(servers: readonly unknown[]): void {
   })
 }
 
+/** The values of the options that hold security, as the one copy the document is built from. */
+interface SecurityCopies {
+  readonly servers: unknown
+  readonly securitySchemes: unknown
+  readonly security: unknown
+  readonly operationSecurity: unknown
+}
+
 /** Throws on a declaration the document could not be built from. */
-function assertDeclarations(raw: OpenApiOptions | undefined): void {
+function assertDeclarations(raw: OpenApiOptions | undefined, copies: SecurityCopies): void {
   if (raw === undefined) return
-  if (raw.servers !== undefined && raw.servers !== null) {
-    assertServers(listOf('openapi.servers', raw.servers))
+  if (copies.servers !== undefined && copies.servers !== null) {
+    assertServers(listOf('openapi.servers', copies.servers))
   }
-  if (raw.securitySchemes !== undefined && raw.securitySchemes !== null) {
+  if (copies.securitySchemes !== undefined && copies.securitySchemes !== null) {
     for (const [scheme, declared] of Object.entries(
-      recordOf('openapi.securitySchemes', raw.securitySchemes)
+      recordOf('openapi.securitySchemes', copies.securitySchemes)
     )) {
       assertScheme(`openapi.securitySchemes.${scheme}`, declared)
     }
   }
-  if (raw.security !== undefined && raw.security !== null) {
-    assertRequirements('openapi.security', raw.security)
+  if (copies.security !== undefined && copies.security !== null) {
+    assertRequirements('openapi.security', copies.security)
   }
-  if (raw.operationSecurity !== undefined && raw.operationSecurity !== null) {
-    const entries = Object.entries(recordOf('openapi.operationSecurity', raw.operationSecurity))
+  if (copies.operationSecurity !== undefined && copies.operationSecurity !== null) {
+    const entries = Object.entries(recordOf('openapi.operationSecurity', copies.operationSecurity))
     entries.forEach(([key, requirements], index) => {
       if (!OPERATION_KEY.test(key)) {
         throw new Error(
@@ -190,7 +199,22 @@ export function resolveOpenApi(
   declaredEnvironment?: string
 ): ResolvedOpenApiOptions {
   const raw = checkedBlock<OpenApiOptions>('openapi', given, OPENAPI_KEYS)
-  assertDeclarations(raw)
+  // What is checked is what is built from: one strict copy of each, read once, under one work limit.
+  const done = new Map<object, unknown>()
+  const copyOf = (name: string, value: unknown): unknown => {
+    try {
+      return ownCopy(value, 0, [], done, true)
+    } catch (cause) {
+      throw new Error(`openapi.${name} must hold only plain data`, { cause })
+    }
+  }
+  const copies: SecurityCopies = {
+    servers: copyOf('servers', raw?.servers),
+    securitySchemes: copyOf('securitySchemes', raw?.securitySchemes),
+    security: copyOf('security', raw?.security),
+    operationSecurity: copyOf('operationSecurity', raw?.operationSecurity)
+  }
+  assertDeclarations(raw, copies)
   const requested = booleanOption('openapi.enabled', raw?.enabled, false)
   const production = isProductionRuntime(runtimeEnvironmentName(declaredEnvironment))
   const factory = raw?.operationIdFactory
@@ -202,12 +226,11 @@ export function resolveOpenApi(
     title: stringOption('openapi.title', raw?.title, 'API'),
     description: stringOption('openapi.description', raw?.description, ''),
     version: stringOption('openapi.version', raw?.version, '1.0.0'),
-    servers: cloneServers(raw?.servers),
-    // Structured-cloned rather than shallow-copied: the values are consumer-owned nested objects,
-    // and the deep-freeze applied to the snapshot would otherwise reach into them.
-    securitySchemes: structuredClone(raw?.securitySchemes ?? {}),
-    security: structuredClone<readonly OpenApiSecurityRequirement[]>(raw?.security ?? []),
-    operationSecurity: structuredClone(raw?.operationSecurity ?? {}),
+    servers: cloneServers(copies.servers as readonly OpenApiServerDescriptor[] | null | undefined),
+    securitySchemes: (copies.securitySchemes ?? {}) as ResolvedOpenApiOptions['securitySchemes'],
+    security: (copies.security ?? []) as readonly OpenApiSecurityRequirement[],
+    operationSecurity: (copies.operationSecurity ??
+      {}) as ResolvedOpenApiOptions['operationSecurity'],
     // Carried by reference: it is a function the consumer owns, which `structuredClone` cannot copy.
     ...(factory === undefined || factory === null ? {} : { operationIdFactory: factory }),
     includeCoreSchemas: booleanOption('openapi.includeCoreSchemas', raw?.includeCoreSchemas, true)

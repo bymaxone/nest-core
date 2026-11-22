@@ -226,7 +226,7 @@ describe('the documented options served only through non-enumerable getters', ()
 })
 
 describe('an open map, whose keys the host names', () => {
-  it('is read as the host would enumerate it: a key that is not enumerable is not one of its entries', () => {
+  it('is read whole, as the options are: a key that is not enumerable is one of its entries', () => {
     const labels = {}
     Object.defineProperty(labels, 'team', { value: 'core', enumerable: false })
     Object.defineProperty(labels, 'app', { value: 'api', enumerable: true })
@@ -234,7 +234,7 @@ describe('an open map, whose keys the host names', () => {
       environment: 'test',
       metrics: { enabled: true, defaultLabels: labels }
     })
-    expect(resolved.metrics.defaultLabels).toEqual({ app: 'api' })
+    expect(resolved.metrics.defaultLabels).toEqual({ app: 'api', team: 'core' })
   })
 })
 

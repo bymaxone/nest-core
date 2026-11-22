@@ -228,7 +228,7 @@ type HelmetSettingNames = {
 const HELMET_SETTINGS = {
   reportOnly: 0,
   useDefaults: 0,
-  directives: 0,
+  directives: 1,
   policy: 0,
   maxAge: 0,
   includeSubDomains: 0,
@@ -236,7 +236,7 @@ const HELMET_SETTINGS = {
   allow: 0,
   action: 0,
   permittedPolicies: 0
-} satisfies Record<HelmetSettingNames, 0>
+} satisfies Record<HelmetSettingNames, 0 | 1>
 
 /** What `applyHttpFloors` reads by name: its options, and the blocks inside them. */
 const FLOORS_SHAPE: Shape = {
