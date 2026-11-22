@@ -138,7 +138,11 @@ interface SecurityCopies {
 }
 
 /** Throws on a declaration the document could not be built from. */
-function assertDeclarations(raw: OpenApiOptions | undefined, copies: SecurityCopies): void {
+function assertDeclarations(
+  raw: OpenApiOptions | undefined,
+  copies: SecurityCopies,
+  factory: unknown
+): void {
   if (raw === undefined) return
   if (copies.servers !== undefined && copies.servers !== null) {
     assertServers(listOf('openapi.servers', copies.servers))
@@ -164,7 +168,6 @@ function assertDeclarations(raw: OpenApiOptions | undefined, copies: SecurityCop
       assertRequirements(`openapi.operationSecurity entry ${index + 1}`, requirements)
     })
   }
-  const factory = raw.operationIdFactory as unknown
   if (factory !== undefined && factory !== null && typeof factory !== 'function') {
     throw refusal('openapi.operationIdFactory', 'a function', factory)
   }
@@ -214,10 +217,11 @@ export function resolveOpenApi(
     security: copyOf('security', raw?.security),
     operationSecurity: copyOf('operationSecurity', raw?.operationSecurity)
   }
-  assertDeclarations(raw, copies)
+  // Read once: the factory that is checked is the one that is kept.
+  const factory = raw?.operationIdFactory
+  assertDeclarations(raw, copies, factory)
   const requested = booleanOption('openapi.enabled', raw?.enabled, false)
   const production = isProductionRuntime(runtimeEnvironmentName(declaredEnvironment))
-  const factory = raw?.operationIdFactory
   return {
     enabled: requested && !production,
     suppressedInProduction: requested && production,
