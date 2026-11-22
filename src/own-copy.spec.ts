@@ -289,6 +289,26 @@ describe('ownCopy', () => {
     expect(() => ownCopy({ security: list })).toThrow('A requirement cannot be a proxy')
   })
 
+  it('refuses an object derived from a prototype a host made to look like a root, whatever it holds', () => {
+    const forged = Object.create(null) as Record<string, unknown>
+    forged['constructor'] = { prototype: forged }
+    Object.defineProperty(forged, 'o', { get: () => ['write'], enumerable: true })
+    const derived = Object.create(forged) as Record<string, unknown>
+    derived['b'] = []
+
+    expect(() => ownCopy({ security: [derived] })).toThrow('A requirement must be a plain object')
+  })
+
+  it('refuses an object derived from a root made to carry a name of a requirement as well as its own', () => {
+    const forged = Object.create(null) as Record<string, unknown>
+    for (const name of Reflect.ownKeys(Object.prototype))
+      forged[name as string] = Object.prototype[name as keyof object]
+    forged['bearer'] = ['read']
+    const derived = Object.create(forged) as object
+
+    expect(() => ownCopy({ security: [derived] })).toThrow('A requirement must be a plain object')
+  })
+
   it('keeps a plain requirement made in another realm, which has its own Object.prototype', () => {
     const foreign = runInNewContext('({ bearer: ["read"] })') as object
 

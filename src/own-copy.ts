@@ -125,13 +125,23 @@ function reuse(
   return strict ? ownCopy(other, depth, open, done, true) : other
 }
 
-/** Whether `prototype` is the root of a realm's objects, this one's or another's: an object that has no further prototype and names itself as its constructor's. */
+/** The names `Object.prototype` holds: a root of another realm has these and no others (a requirement is named by a string). */
+const ROOT_NAMES = Object.getOwnPropertyNames(Object.prototype)
+
+/**
+ * Whether `prototype` is the root of a realm's objects, this one's or another's: it has no prototype and
+ * holds exactly the names of `Object.prototype`, so it cannot hold the name of a requirement. A prototype
+ * a host makes, with a name of its own, is not a root.
+ */
 function isPlainPrototype(prototype: unknown): boolean {
-  if (prototype === null) return true
+  if (prototype === null || prototype === Object.prototype) return true
   const root = prototype as object
-  const named = Reflect.getOwnPropertyDescriptor(root, 'constructor')?.value as
-    { prototype?: unknown } | undefined
-  return Reflect.getPrototypeOf(root) === null && named?.prototype === root
+  const names = Object.getOwnPropertyNames(root)
+  return (
+    Reflect.getPrototypeOf(root) === null &&
+    names.length === ROOT_NAMES.length &&
+    names.every((name) => ROOT_NAMES.includes(name))
+  )
 }
 
 /**
