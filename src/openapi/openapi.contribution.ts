@@ -21,7 +21,7 @@ import { bootError } from '../boot-error'
 import { findMarkedProviders } from '../discovery'
 import type { ProviderScanner } from '../discovery'
 import { asHostError, describeUnreadable } from '../host-error'
-import { copiedFromEmptyProxy, ownCopy } from '../own-copy'
+import { copiedFromLessThanItHeld, ownCopy } from '../own-copy'
 import {
   BYMAX_OPENAPI_CONTRACT_VERSION,
   BYMAX_OPENAPI_CONTRIBUTOR_METADATA
@@ -155,7 +155,7 @@ function plainRecord<T>(value: T): T {
     typeof value !== 'object' ||
     value === null ||
     (prototype !== Object.prototype && prototype !== null) ||
-    copiedFromEmptyProxy(value)
+    copiedFromLessThanItHeld(value)
   ) {
     throw new RangeError('An OpenAPI fragment must be a plain object')
   }

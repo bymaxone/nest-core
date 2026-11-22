@@ -25,12 +25,18 @@ function spend(done: Map<object, unknown>, units: number): void {
   if (budget.left < 0) throw new RangeError('A value is too large')
 }
 
+/** The copies that were made of a proxy whose prototype is not plain: names held on that prototype are not in them. */
+const oddProxies = new WeakSet<object>()
+
 /** The copies that were made of a proxy, so a copy of one is still judged as one. */
 const proxies = new WeakSet<object>()
 
-/** Whether `copy` is the copy of a proxy that listed no key, so what it stands for is not known. */
-export function copiedFromEmptyProxy(copy: object): boolean {
-  return proxies.has(copy) && Object.keys(copy).length === 0
+/**
+ * Whether `copy` stands for less than its proxy held: the copy of a proxy that listed no key, or of one
+ * whose prototype is not plain, whose names on that prototype are not in the copy.
+ */
+export function copiedFromLessThanItHeld(copy: object): boolean {
+  return oddProxies.has(copy) || (proxies.has(copy) && Object.keys(copy).length === 0)
 }
 
 /** The copies made under the refusal, apart from the ones made without it, for each `done`. */
@@ -126,12 +132,28 @@ function reuse(
 }
 
 /**
+ * What is done with an object by its prototype, read through a proxy too, inside the guard: `copy` it,
+ * `keep` it as given (not a proxy, not plain, not strict), or copy it as `odd` (a proxy whose prototype is
+ * not plain, copied by its own keys). Where the copy is strict, nothing is kept by reference and nothing
+ * is copied by its own keys alone: an object that is not plain could answer differently to the check and
+ * to the document, or hold some of its names on the prototype, whatever its tag says.
+ */
+function kindOf(value: object, strict: boolean): 'copy' | 'keep' | 'odd' {
+  if (Array.isArray(value)) return 'copy'
+  const prototype = Reflect.getPrototypeOf(value) as unknown
+  if (prototype === Object.prototype || prototype === null) return 'copy'
+  if (strict) throw new RangeError('A requirement must be a plain object')
+  return types.isProxy(value) ? 'odd' : 'keep'
+}
+
+/**
  * Refuses the copy of a proxy that lists no keys, where the copy is strict: it reads as `{}`, and an empty
  * requirement is anonymous access.
  */
-function judge(value: object, copy: object, depth: number, strict: boolean): void {
+function judge(value: object, copy: object, depth: number, strict: boolean, odd: boolean): void {
   const proxied = types.isProxy(value)
   if (proxied) proxies.add(copy)
+  if (odd) oddProxies.add(copy)
   if (strict && depth > 0 && (proxied || proxies.has(value)) && Object.keys(copy).length === 0) {
     throw new RangeError('A proxy lists no keys')
   }
@@ -171,19 +193,8 @@ export function ownCopy(
   if (depth > MAX_DEPTH || open.includes(value)) {
     throw new RangeError('A value holds itself or is nested too deeply')
   }
-  // The prototype is read through a proxy too, inside the guard. A proxy is never handed back as itself,
-  // whatever prototype it answers: it is copied like a plain object, so what is judged and kept is the
-  // copy and not a value that can answer differently later.
-  if (!Array.isArray(value)) {
-    const prototype = Reflect.getPrototypeOf(value) as unknown
-    if (prototype !== Object.prototype && prototype !== null) {
-      // Where the copy is strict, nothing is kept by reference and nothing is copied by its own keys
-      // alone: an object that is not plain could answer differently to the check and to the document, or
-      // hold some of its names on the prototype, whatever its tag says.
-      if (strict) throw new RangeError('A requirement must be a plain object')
-      if (!types.isProxy(value)) return value
-    }
-  }
+  const kind = kindOf(value, strict)
+  if (kind === 'keep') return value
   const reused = reuse(value, depth, open, done, strict)
   if (reused !== undefined) return reused
   const cache = strict ? strictCache(done) : done
@@ -196,7 +207,7 @@ export function ownCopy(
   const copy = copyProperties(value, depth, inside, done, strict)
   // The copy is judged: a proxy inside an option that lists no keys reads as `{}`, and an empty
   // requirement is anonymous access.
-  judge(value, copy, depth, strict)
+  judge(value, copy, depth, strict, kind === 'odd')
   cache.set(value, copy)
   return copy
 }

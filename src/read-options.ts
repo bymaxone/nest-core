@@ -110,33 +110,33 @@ function readBlock(given: unknown, shape: Shape, done: Map<object, unknown>): un
   if (!isBlock(given)) return given
   const copy: Record<string, unknown> = {}
   for (const key of Object.keys(shape)) {
-    let value: unknown = Reflect.get(given, key)
-    if (value !== undefined) {
-      const entry = shape[key] as Shape | readonly [Shape] | 0 | 1
-      const isMap = entry === 0 || entry === 1
-      const strict = SECURITY.has(key)
-      let made: unknown
-      try {
-        // The items are read once, here, so the one checked is the one copied.
-        if (isMap && Array.isArray(value)) value = snapshot(value)
-        made = readEntry(value, entry, strict, done)
-      } catch (cause) {
-        // Whatever stops a security option from being copied (a refusal, a list too long, a getter that
-        // throws, a revoked proxy) names the option it came from.
-        if (!strict) throw cause
-        throw bootError(
-          'an option holds what cannot be copied as plain data',
-          { option: key },
-          { cause }
-        )
-      }
-      // The copy is judged, not the original: a proxy that lists no keys reads as an empty map, and an
-      // empty requirement is anonymous access.
-      if (isMap && types.isProxy(value) && isEmptyMap(made)) {
-        throw bootError('an option is held behind a proxy that lists no keys', { option: key })
-      }
-      copy[key] = made
+    const entry = shape[key] as Shape | readonly [Shape] | 0 | 1
+    const isMap = entry === 0 || entry === 1
+    const strict = SECURITY.has(key)
+    let value: unknown
+    let made: unknown
+    try {
+      value = Reflect.get(given, key)
+      if (value === undefined) continue
+      // The items are read once, here, so the one checked is the one copied.
+      if (isMap && Array.isArray(value)) value = snapshot(value)
+      made = readEntry(value, entry, strict, done)
+    } catch (cause) {
+      // Whatever stops a security option from being copied (a getter of its own that throws, a refusal, a
+      // list too long, a revoked proxy) names the option it came from.
+      if (!strict) throw cause
+      throw bootError(
+        'an option holds what cannot be copied as plain data',
+        { option: key },
+        { cause }
+      )
     }
+    // The copy is judged, not the original: a proxy that lists no keys reads as an empty map, and an
+    // empty requirement is anonymous access.
+    if (isMap && types.isProxy(value) && isEmptyMap(made)) {
+      throw bootError('an option is held behind a proxy that lists no keys', { option: key })
+    }
+    copy[key] = made
   }
   for (const key of Object.keys(given)) {
     if (!Object.hasOwn(shape, key)) {

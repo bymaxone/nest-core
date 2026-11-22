@@ -238,6 +238,25 @@ describe('a requirement that is not a plain object', () => {
     expect(thrown?.cause).toMatchObject({ option: 'security' })
   })
 
+  it('names the option when a getter of the security option itself throws', () => {
+    const openapi = {
+      enabled: true,
+      get security(): never {
+        throw new Error('host error')
+      }
+    }
+    let thrown: Error | undefined
+    try {
+      BymaxCoreModule.forRoot({ openapi } as never)
+    } catch (error) {
+      thrown = error as Error
+    }
+
+    expect(thrown?.message).toBe('the options could not be read')
+    expect(thrown?.cause).toMatchObject({ option: 'security' })
+    expect(((thrown?.cause as Error).cause as Error).message).toBe('host error')
+  })
+
   it('is refused whatever its tag answers, since plainness is not decided by the tag', () => {
     const openapi = { enabled: true, security: [flipping()] }
 

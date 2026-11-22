@@ -388,6 +388,32 @@ describe('collectContributions, a fragment that cannot be read', () => {
     })
   })
 
+  it('refuses an operation, and a map, that is a proxy around a class holding names on its prototype', () => {
+    class Op {
+      responses = {}
+      get security(): object[] {
+        return [{ bearer: ['read'] }]
+      }
+    }
+    class Operations {
+      get 'Items.list'(): object {
+        return { responses: {} }
+      }
+    }
+
+    const asEntry = collectOne({
+      contractVersion: BYMAX_OPENAPI_CONTRACT_VERSION,
+      operations: { 'Items.list': new Proxy(new Op(), {}) }
+    })
+    const asMap = collectOne({
+      contractVersion: BYMAX_OPENAPI_CONTRACT_VERSION,
+      operations: new Proxy(new Operations(), {})
+    })
+
+    expect(asEntry.thrown).toMatchObject({ contributor: 'Odd' })
+    expect(asMap.thrown).toMatchObject({ contributor: 'Odd' })
+  })
+
   it('refuses a list with a hole in an operation instead of serving a null entry', () => {
     const holey: unknown[] = new Array<unknown>(2)
     holey[1] = { name: 'id' }
