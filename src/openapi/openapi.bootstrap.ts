@@ -31,6 +31,7 @@ import type { INestApplication, VersioningOptions } from '@nestjs/common'
 import { ApplicationConfig, DiscoveryService, Reflector } from '@nestjs/core'
 import type * as Swagger from '@nestjs/swagger'
 
+import { bootError } from '../boot-error'
 import type { ResolvedCoreOptions, ResolvedOpenApiOptions } from '../core.options'
 import { BYMAX_CORE_OPTIONS } from '../core.tokens'
 import { escapeUnseen } from '../escape-unseen'
@@ -373,6 +374,23 @@ function buildConfig(
   return builder.build()
 }
 
+/** The names `@nestjs/swagger` reads from its own instances without having set them. */
+const PEER_INSTANCE_NAMES: readonly string[] = ['explorer', 'schemas']
+
+/** Throws when something planted on `Object.prototype` is a name the peer reads from its own instances, where nothing of ours can shadow it. */
+function assertPeerNamesFree(): void {
+  for (const name of PEER_INSTANCE_NAMES) {
+    if (name in Object.prototype) {
+      throw bootError(
+        'Object.prototype holds a name the OpenAPI peer reads from its own instances',
+        {
+          name
+        }
+      )
+    }
+  }
+}
+
 /**
  * The options handed to `@nestjs/swagger` with no prototype, so a name it reads that this call did not
  * set (`ui`, `raw`, `yamlDocumentUrl`, `customJs`, ...) is not one that something planted on
@@ -403,6 +421,21 @@ function scanApplication(
         Object.hasOwn(options, 'operationIdFactory') ? options.operationIdFactory : undefined
       )
     })
+  )
+}
+
+/** Mount the document and its UI, handing the peer options with no prototype. */
+function mountDocument(
+  swagger: SwaggerModuleSurface,
+  app: INestApplication,
+  document: Swagger.OpenAPIObject,
+  options: ResolvedOpenApiOptions
+): void {
+  swagger.SwaggerModule.setup(
+    options.path,
+    app,
+    document,
+    withoutPrototype({ jsonDocumentUrl: options.jsonPath })
   )
 }
 
@@ -473,6 +506,7 @@ export async function applyBymaxOpenApi(app: INestApplication): Promise<OpenApiM
     return { mounted: false, reason: 'disabled' }
   }
 
+  assertPeerNamesFree()
   const swagger = await loadSwagger()
   const config = buildConfig(new swagger.DocumentBuilder(), options)
   // The map is filled by the scan below, which calls the factory once per
@@ -491,12 +525,7 @@ export async function applyBymaxOpenApi(app: INestApplication): Promise<OpenApiM
   )
   warnUnsecuredOperations(logger, unsecuredOperations(document, resolved, prefixes))
   warnDiscardedComponents(logger, discarded)
-  swagger.SwaggerModule.setup(
-    options.path,
-    app,
-    document,
-    withoutPrototype({ jsonDocumentUrl: options.jsonPath })
-  )
+  mountDocument(swagger, app, document, options)
   logServed(logger, options)
   return { mounted: true, path: options.path, discarded }
 }

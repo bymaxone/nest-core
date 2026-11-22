@@ -7,10 +7,17 @@
  * documents are the ones of an unplanted run.
  * Mocks: none; the real `@nestjs/swagger` runs against a real Nest application.
  */
+import { readFileSync } from 'node:fs'
+import { createRequire } from 'node:module'
+import { dirname, join } from 'node:path'
+
 import request from 'supertest'
 
 import { applyBymaxOpenApi } from './openapi.bootstrap'
 import { bootApp, ExampleController } from './__tests__/bootstrap.harness'
+
+/** What boot says when a name the peer reads from its own instances is planted. */
+const REFUSED = 'Object.prototype holds a name the OpenAPI peer reads from its own instances'
 
 /** The paths the peer serves, and one a planted `yamlDocumentUrl` would add. */
 const PATHS = [
@@ -34,6 +41,16 @@ async function served(): Promise<string> {
   }
   await app.close()
   return out.join('\n')
+}
+
+/** The generated document, as text. */
+async function document(): Promise<string> {
+  const app = await bootApp({ openapi: { enabled: true } } as never, [ExampleController])
+  await applyBymaxOpenApi(app)
+  await app.init()
+  const answer = await request(app.getHttpServer()).get('/docs-json')
+  await app.close()
+  return JSON.stringify(answer.body)
 }
 
 /** `value` planted under `name` while `run` executes. */
@@ -67,4 +84,43 @@ describe('a name planted on Object.prototype under the options of the swagger pe
 
     expect(await planted(name, value, served)).toBe(baseline)
   })
+
+  it.each(['explorer', 'schemas'])(
+    'refuses to boot when %s, read from the peer instances, is planted',
+    async (name) => {
+      const app = await bootApp({ openapi: { enabled: true } } as never, [ExampleController])
+
+      await expect(planted(name, 'x', () => applyBymaxOpenApi(app))).rejects.toMatchObject({
+        message: REFUSED,
+        name
+      })
+      await app.close()
+    }
+  )
+
+  it('serves the same document whichever name the peer instances read is planted, or refuses to boot', async () => {
+    const dist = join(dirname(createRequire(__filename).resolve('@nestjs/swagger')))
+    const read = new Set<string>()
+    for (const file of ['swagger-module.js', 'swagger-scanner.js', 'swagger-explorer.js']) {
+      for (const found of readFileSync(join(dist, file), 'utf8').matchAll(/this\.([A-Za-z_]+)/g)) {
+        read.add(found[1] as string)
+      }
+    }
+    const baseline = await document()
+    const changed: string[] = []
+
+    for (const name of read) {
+      let answer: string
+      try {
+        answer = await planted(name, 'x', document)
+      } catch (error) {
+        if ((error as Error).message !== REFUSED) changed.push(name)
+        continue
+      }
+      if (answer !== baseline) changed.push(name)
+    }
+
+    expect(read.size).toBeGreaterThan(30)
+    expect(changed).toEqual([])
+  }, 120_000)
 })

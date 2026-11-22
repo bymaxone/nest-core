@@ -948,20 +948,21 @@ not on the text. `message` is this package's own text: what code of yours threw 
 
 A boot error about something you declared has a message that is this package's own text, with what you declared as properties of the error. A string property, or each string of a list, is written out and cut, and a list keeps its first ten items and ends with `and <n> more`. Match on those, not on the message; what your contributor threw is its `cause`.
 
-| Property               | On the error about                                                         | Holds                                         |
-| ---------------------- | -------------------------------------------------------------------------- | --------------------------------------------- |
-| `contributor`          | an OpenAPI or metrics contributor that failed or does not fit the contract | its class name                                |
-| `provider`             | a provider marked as a health indicator that does not implement it         | its class name or token                       |
-| `handlerKey`           | two route handlers that answer to one key                                  | the key, `<ControllerClassName>.<methodName>` |
-| `handlerKeys`          | a fragment that addresses handlers the application does not have           | the keys it addressed                         |
-| `knownHandlers`        | the same error                                                             | the keys the application has                  |
-| `duplicates`           | OpenAPI contributors that share a class name                               | the names                                     |
-| `schemes`              | a security requirement that names a scheme the document does not define    | the scheme names                              |
-| `declaredSchemes`      | the same error                                                             | the schemes the document defines              |
-| `operations`           | an `openapi.operationSecurity` key that addresses no documented operation  | the keys                                      |
-| `documentedOperations` | the same error                                                             | the operations the document contains          |
-| `option`               | an option block with a key it does not document                            | the key, cut at 40 characters                 |
-| `label`                | a `metrics.defaultLabels` value that is not a string                       | the label name                                |
+| Property               | On the error about                                                              | Holds                                         |
+| ---------------------- | ------------------------------------------------------------------------------- | --------------------------------------------- |
+| `contributor`          | an OpenAPI or metrics contributor that failed or does not fit the contract      | its class name                                |
+| `provider`             | a provider marked as a health indicator that does not implement it              | its class name or token                       |
+| `handlerKey`           | two route handlers that answer to one key                                       | the key, `<ControllerClassName>.<methodName>` |
+| `handlerKeys`          | a fragment that addresses handlers the application does not have                | the keys it addressed                         |
+| `knownHandlers`        | the same error                                                                  | the keys the application has                  |
+| `duplicates`           | OpenAPI contributors that share a class name                                    | the names                                     |
+| `schemes`              | a security requirement that names a scheme the document does not define         | the scheme names                              |
+| `declaredSchemes`      | the same error                                                                  | the schemes the document defines              |
+| `operations`           | an `openapi.operationSecurity` key that addresses no documented operation       | the keys                                      |
+| `documentedOperations` | the same error                                                                  | the operations the document contains          |
+| `option`               | an option block with a key it does not document                                 | the key, cut at 40 characters                 |
+| `label`                | a `metrics.defaultLabels` value that is not a string                            | the label name                                |
+| `name`                 | `Object.prototype` holding a name the OpenAPI peer reads from its own instances | the name                                      |
 
 | `event`                           | Level | When                                                                                                                                                                                          | Fields                               |
 | --------------------------------- | ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------ |

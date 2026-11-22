@@ -388,6 +388,27 @@ describe('collectContributions, a fragment that cannot be read', () => {
     })
   })
 
+  it('accepts an empty object shared between a security requirement and an operation, in either order', () => {
+    const shared = {}
+    const first = { 'Items.list': { security: [shared] }, 'Items.get': shared }
+    const second = { 'Items.get': shared, 'Items.list': { security: [shared] } }
+
+    for (const operations of [first, second]) {
+      const Odd = contributorClass('Odd', {
+        contractVersion: BYMAX_OPENAPI_CONTRACT_VERSION,
+        operations
+      } as OpenApiFragment)
+
+      expect(() =>
+        collectContributions(
+          scannerOf([{ metatype: Odd, instance: new Odd() }]),
+          reflector,
+          mapOf({ 'Items.list': 'Items_list', 'Items.get': 'Items_get' })
+        )
+      ).not.toThrow()
+    }
+  })
+
   it('names why a Map is refused, and accepts a map and an operation made with no prototype', () => {
     const refused = collectOne({
       contractVersion: BYMAX_OPENAPI_CONTRACT_VERSION,
