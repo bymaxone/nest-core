@@ -280,8 +280,8 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 // four more names of the peer's own objects in the boot refusal. Code only.
 // Budgets for the refusal of a changed `Object.prototype`, measured + about 30 B: root 26.35 KiB = 26982 B (measured
 // 26949 B), `./http` 6.11 KiB = 6257 B (6222 B), `./openapi` 9.83 KiB = 10066 B (10032 B), from 26603 B, 5857 B and
-// 9820 B. The growth is that one module, which each bundle carries: a name list, the snapshot of the standard
-// descriptors, the comparison and the check that a standard function is the engine's. Code only.
+// 9820 B. The growth is that one module, which each bundle carries: a fresh realm's `Object.prototype` to compare
+// with, and the comparison of every name, flag and function text. Code only.
 const BUDGETS = [
   { name: '. (root)', path: 'dist/index.mjs', brotli: 26.35 * 1024 },
   { name: './pagination', path: 'dist/pagination/index.mjs', brotli: 1.5 * 1024 },

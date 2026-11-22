@@ -125,6 +125,47 @@ describe('a changed Object.prototype', () => {
     }
   })
 
+  it('is refused when a standard name is missing, or changed in its flags', async () => {
+    const valueOf = Object.getOwnPropertyDescriptor(
+      Object.prototype,
+      'valueOf'
+    ) as PropertyDescriptor
+    const toString = Object.getOwnPropertyDescriptor(
+      Object.prototype,
+      'toString'
+    ) as PropertyDescriptor
+    delete (Object.prototype as unknown as Record<string, unknown>)['valueOf']
+    Object.defineProperty(Object.prototype, 'toString', { ...toString, writable: false })
+    try {
+      expect((await thrown(() => assertObjectPrototypeClean()))?.count).toBe(2)
+    } finally {
+      Object.defineProperty(Object.prototype, 'valueOf', valueOf)
+      Object.defineProperty(Object.prototype, 'toString', toString)
+    }
+  })
+
+  it('is refused when a standard accessor is replaced, whatever Function.prototype.toString answers', async () => {
+    const proto = Object.getOwnPropertyDescriptor(
+      Object.prototype,
+      '__proto__'
+    ) as PropertyDescriptor
+    const source = Object.getOwnPropertyDescriptor(
+      Function.prototype,
+      'toString'
+    ) as PropertyDescriptor
+    Object.defineProperty(Object.prototype, '__proto__', { ...proto, get: () => ({}) })
+    Object.defineProperty(Function.prototype, 'toString', {
+      ...source,
+      value: () => 'function get __proto__() { [native code] }'
+    })
+    try {
+      expect((await thrown(() => assertObjectPrototypeClean()))?.count).toBe(1)
+    } finally {
+      Object.defineProperty(Function.prototype, 'toString', source)
+      Object.defineProperty(Object.prototype, '__proto__', proto)
+    }
+  })
+
   it('is not refused for a symbol key, which no option or document is read through by name', async () => {
     const key = Symbol('host')
     Object.defineProperty(Object.prototype, key, { value: 1, configurable: true })
