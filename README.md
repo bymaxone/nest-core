@@ -357,7 +357,7 @@ is not. That hold does not keep the process alive, so the log of a late error is
 answered `504` too. A promise handler stops early, and releases what it holds, only if it takes the
 signal and acts on it: `@HandlerSignal()` gives it an `AbortSignal` that is aborted when the bound
 expires and when the client goes away, to pass to a driver, a `fetch` or an `await` that accepts one. The
-signal is `undefined` when the bound is off or does not apply to the route. The bound is the handler's own
+signal is `undefined` when neither the bound nor a request deadline applies to the route. The bound is the handler's own
 promise or observable: a handler that takes the response with `@Res()`, returns, and writes later has
 finished as far as this can see, and one that has already sent its headers when the bound expires has its
 connection cut, because a `504` can no longer be sent.
