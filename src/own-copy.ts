@@ -143,12 +143,12 @@ function isPlainPrototype(prototype: unknown): boolean {
  * @param open - The objects being copied above this one, to tell a cycle from a shared object.
  * @param done - The copies already made in this call, so an object reached twice is copied once
  *   and the copy is shared as the original was.
- * @param strict - Whether a proxy below the root that lists no keys is refused instead of copied as `{}`; it
- *   holds for the items of a `security` list, where an empty requirement is anonymous access.
+ * @param strict - Whether a proxy, an object that is not plain, a function and a symbol are refused instead of
+ *   copied or kept; it holds for the items of a `security` list, where an empty requirement is anonymous access.
  * @returns The copy.
  * @throws RangeError When `value` holds itself, is deeper than {@link MAX_DEPTH}, holds a list that is
- *   too long or more than {@link MAX_WORK} values, or, if `strict`, holds a proxy that lists no keys or
- *   an object that is not plain.
+ *   too long or more than {@link MAX_WORK} values, or, if `strict`, holds a proxy, a function, a
+ *   symbol or an object that is not plain.
  */
 export function ownCopy(
   value: unknown,
