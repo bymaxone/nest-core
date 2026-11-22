@@ -103,8 +103,8 @@ function readEntry(
 /**
  * What `given` holds under `key`, unless the first holder of the key is a root: an object with no
  * prototype that is not `given` itself, of any realm. Whatever a root holds is never read, however it is
- * held, so a proxy that forwards to it is not asked either. Only a name held nowhere on the chain is
- * asked of a proxy, which may answer it by itself.
+ * held, so a proxy that forwards to it is not asked either. Any other name is asked as it always was,
+ * a proxy included, which may hold it or answer it by itself.
  */
 function heldBy(given: object, key: string): unknown {
   let holder: object | null = given
