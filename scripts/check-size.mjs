@@ -287,7 +287,6 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 // and `./openapi` (10245 B) are unchanged under their budgets. The growth is the second run of the guard after the
 // last `await`, the scrape's refusal and containment of a failing collection, and the containment of the writes of
 // every write of the default metrics. Code only.
-// Budgets of the 1.6.22 hardening, measured + about 30 B: root 26.82 KiB = 27463 B (measured 27432 B), `./http`
 // Budgets of the 1.6.22 hardening, measured + about 30 B: root 26.87 KiB = 27514 B (measured 27483 B), `./http`
 // 7.35 KiB = 7526 B (7488 B), `./openapi` 10.19 KiB = 10435 B (10399 B), from 27136 B, 6451 B and 10250 B. The growth
 // is the request deadline (the middleware, its options and the signal key, in `./http`), the single decision on the

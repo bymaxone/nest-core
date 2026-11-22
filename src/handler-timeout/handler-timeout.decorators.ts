@@ -49,7 +49,7 @@ export function NoHandlerTimeout(): CustomDecorator {
 /**
  * The signal of the request's handler, aborted when the handler timeout expires and when the client
  * goes away, so a handler can stop work done for nobody by passing it to a driver or an `await`.
- * `undefined` when the handler timeout is off or does not apply to the route.
+ * `undefined` when neither the handler timeout nor a request deadline applies to the route.
  */
 export const HandlerSignal = createParamDecorator(
   (_data: unknown, context: ExecutionContext): AbortSignal | undefined => {
