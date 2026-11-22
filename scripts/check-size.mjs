@@ -283,12 +283,12 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 // 9820 B. The growth is that one module, which each bundle carries: a fresh realm's `Object.prototype` to compare
 // with, the snapshot taken at load, and the comparison of every name and function, each field of a descriptor
 // read as its own property. Code only.
-// Root budget 26.67 KiB = 27310 B: measured 27273 B brotli plus 37 B of headroom, from 27136 B. `./http` (6419 B)
+// Root budget 26.70 KiB = 27341 B: measured 27314 B brotli plus 27 B of headroom, from 27136 B. `./http` (6419 B)
 // and `./openapi` (10245 B) are unchanged under their budgets. The growth is the second run of the guard after the
 // last `await`, the scrape's refusal and containment of a failing collection, and the containment of the writes of
-// the garbage-collection histogram. Code only.
+// every write of the default metrics. Code only.
 const BUDGETS = [
-  { name: '. (root)', path: 'dist/index.mjs', brotli: 26.67 * 1024 },
+  { name: '. (root)', path: 'dist/index.mjs', brotli: 26.7 * 1024 },
   { name: './pagination', path: 'dist/pagination/index.mjs', brotli: 1.5 * 1024 },
   { name: './health', path: 'dist/health/index.mjs', brotli: 0.5 * 1024 },
   { name: './openapi', path: 'dist/openapi/index.mjs', brotli: 10.01 * 1024 },
