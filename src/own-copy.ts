@@ -115,7 +115,6 @@ function reuse(
   const made = (strict ? strictCache(done) : done).get(value)
   if (made !== undefined) return made
   const other = strict ? done.get(value) : strictCache(done).get(value)
-  if (other === undefined) return undefined
   return strict ? ownCopy(other, depth, open, done, true) : other
 }
 
