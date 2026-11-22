@@ -222,6 +222,61 @@ if (out !== '503 ALIVE') {
 console.log('  ✓ a scrape after a planted name answers 503 and the process lives')
 `
 
+/**
+ * A name planted on `Object.prototype` that `node:vm` reads from its options (`timeout`, ...) makes the
+ * guard's own realm fail to build. The guard must still answer with its count-only refusal and never with
+ * the TypeError of `vm`, which quotes the planted value. Each case runs in a child process, because the
+ * planted value reaches `vm` only through the process's own `Object.prototype`: before the package loads
+ * (the root bundle builds its realm at import) and after (`./http` builds it at its first call).
+ */
+const plantedProbe = `
+const { execFileSync } = require('node:child_process')
+const PACKAGE = ${JSON.stringify(packageName)}
+const NAMES = ['microtaskMode', 'contextCodeGeneration', 'timeout', 'filename', 'displayErrors']
+const REFUSAL = 'Object.prototype holds names or changes this package cannot run beside'
+const failures = []
+
+const plant = (name) =>
+  'Object.defineProperty(Object.prototype, ' + JSON.stringify(name) +
+  ', { value: "PLANTED-VALUE", configurable: true, writable: true });'
+const report =
+  'const done = (e) => { console.log(JSON.stringify({ message: e && e.message, count: e && e.count })); process.exit(0) };'
+
+const CASES = {
+  'before the package loads': (name) =>
+    plant(name) + report + 'try { require(' + JSON.stringify(PACKAGE) + '); done(null) } catch (e) { done(e) }',
+  'after ./http loaded, at its first call': (name) =>
+    'const { applyHttpFloors } = require(' + JSON.stringify(PACKAGE + '/http') + ');' + plant(name) + report +
+    'const app = { getHttpAdapter: () => ({ getType: () => "express" }), getHttpServer: () => ({ listening: false }),' +
+    ' use() {}, enableCors() {}, useBodyParser() {} };' +
+    'applyHttpFloors(app, {}).then(() => done(null), done)'
+}
+
+for (const [when, code] of Object.entries(CASES)) {
+  for (const name of NAMES) {
+    let out
+    try {
+      out = execFileSync(process.execPath, ['-e', code(name)], { encoding: 'utf8', stdio: 'pipe' })
+    } catch (error) {
+      failures.push(when + ' / ' + name + ': the process died: ' + String((error.stderr || '') + (error.stdout || '')).slice(0, 200))
+      continue
+    }
+    const text = out.trim()
+    let answer
+    try { answer = JSON.parse(text) } catch { answer = {} }
+    if (answer.message !== REFUSAL || answer.count !== 1 || text.includes('PLANTED-VALUE')) {
+      failures.push(when + ' / ' + name + ': expected the count-only refusal, got ' + text.slice(0, 160))
+    }
+  }
+}
+
+if (failures.length > 0) {
+  console.error(failures.map((line) => '  ✗ ' + line).join('\\n'))
+  process.exit(1)
+}
+console.log('  ✓ a planted vm option gets the guard refusal, count only (' + NAMES.length * Object.keys(CASES).length + ' cases)')
+`
+
 const bootBody = `
 const failures = []
 
@@ -380,11 +435,19 @@ try {
   writeFileSync(join(consumerDir, 'boot.mjs'), esmBoot)
   writeFileSync(join(consumerDir, 'boot.cjs'), cjsBoot)
   writeFileSync(join(consumerDir, 'scrape.cjs'), scrapeProbe)
+  writeFileSync(join(consumerDir, 'planted.cjs'), plantedProbe)
 
   // The boot probes run last: they are the only ones that need the framework
   // peers resolvable, and a failure to even load a subpath is a clearer message
   // than a failure to bootstrap one.
-  for (const probe of ['probe.mjs', 'probe.cjs', 'boot.mjs', 'boot.cjs', 'scrape.cjs']) {
+  for (const probe of [
+    'probe.mjs',
+    'probe.cjs',
+    'boot.mjs',
+    'boot.cjs',
+    'scrape.cjs',
+    'planted.cjs'
+  ]) {
     try {
       process.stdout.write(run('node', [probe], { cwd: consumerDir, stdio: 'pipe' }))
     } catch (error) {

@@ -22,16 +22,29 @@ const loaded = Object.getOwnPropertyDescriptors(Object.prototype) as Record<
 let pristine: Pristine | undefined
 
 /**
- * A fresh realm's `Object.prototype`, read once. Nothing a host did to this realm, before or after this
- * package loaded, reaches it, so it is the one standard to compare against, and the engine's own list of
- * names is not a list kept here.
+ * A fresh realm's `Object.prototype`, read once, or `undefined` when the realm cannot be built: `vm` reads
+ * its options with inheritance, so a name planted on this realm's `Object.prototype` (`timeout`,
+ * `microtaskMode`, ...) makes it throw, with the planted value in its message. Nothing a host did to this
+ * realm, before or after this package loaded, reaches the fresh one, so it is the one standard to compare
+ * against, and the engine's own list of names is not a list kept here.
  */
-function standard(): Pristine {
-  pristine ??= runInNewContext(
-    '({ descriptors: Object.getOwnPropertyDescriptors(Object.prototype), ' +
-      'sourceOf: (value) => Function.prototype.toString.call(value) })'
-  ) as Pristine
+function standard(): Pristine | undefined {
+  try {
+    pristine ??= runInNewContext(
+      '({ descriptors: Object.getOwnPropertyDescriptors(Object.prototype), ' +
+        'sourceOf: (value) => Function.prototype.toString.call(value) })'
+    ) as Pristine
+  } catch {
+    return undefined
+  }
   return pristine
+}
+
+/** The refusal, which holds a count and nothing a host wrote, nor anything `vm` quoted. */
+function refusal(count: number): Error {
+  return bootError('Object.prototype holds names or changes this package cannot run beside', {
+    count
+  })
 }
 
 /**
@@ -60,7 +73,10 @@ function alike(now: unknown, was: unknown, sourceOf: Pristine['sourceOf']): bool
  * @throws Error With the number of names or changes, and nothing the host wrote.
  */
 export function assertObjectPrototypeClean(): void {
-  const { descriptors, sourceOf } = standard()
+  const fresh = standard()
+  // A realm that cannot be built is a polluted one: the planted name is what stopped it.
+  if (fresh === undefined) throw refusal(1)
+  const { descriptors, sourceOf } = fresh
   const now = Object.getOwnPropertyDescriptors(Object.prototype) as Record<
     string,
     PropertyDescriptor
@@ -89,8 +105,6 @@ export function assertObjectPrototypeClean(): void {
     if (!same) found += 1
   }
   if (found > 0) {
-    throw bootError('Object.prototype holds names or changes this package cannot run beside', {
-      count: found
-    })
+    throw refusal(found)
   }
 }
