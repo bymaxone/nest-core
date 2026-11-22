@@ -113,4 +113,48 @@ describe('a name planted on Object.prototype', () => {
       '"exposeInternals":true'
     )
   })
+
+  it('does not rely on anything a root holds: a polluted constructor changes nothing', () => {
+    const baseline = resolved({ envelope: {} })
+    const constructed = Object.getOwnPropertyDescriptor(Object.prototype, 'constructor')
+
+    Object.defineProperty(Object.prototype, 'constructor', { value: {}, configurable: true })
+    try {
+      expect(planted('exposeInternals', true, () => resolved({ envelope: {} }))).toBe(baseline)
+    } finally {
+      Object.defineProperty(Object.prototype, 'constructor', constructed as PropertyDescriptor)
+    }
+  })
+
+  it('ignores a name planted on the root of another realm, with its constructor overwritten', () => {
+    const realm = runInNewContext(
+      '({ block: {}, root: Object.prototype, plain: Object.create(null) })'
+    ) as { block: object; root: Record<string, unknown>; plain: object }
+    const baseline = resolved({ envelope: {} })
+    realm.root['constructor'] = {}
+    realm.root['exposeInternals'] = true
+
+    expect(resolved({ envelope: realm.block })).toBe(baseline)
+    expect(resolved({ envelope: Object.assign(realm.block, { exposeInternals: true }) })).toContain(
+      '"exposeInternals":true'
+    )
+    delete realm.root['exposeInternals']
+  })
+
+  it('reads a name a null-prototype block holds itself, and one a derived object holds below the root', () => {
+    const bare = Object.assign(Object.create(null) as object, { exposeInternals: true })
+    const derived = Object.create(
+      Object.create(Object.prototype, { exposeInternals: { value: true } }) as object
+    ) as object
+
+    expect(resolved({ envelope: bare })).toContain('"exposeInternals":true')
+    expect(resolved({ envelope: derived })).toContain('"exposeInternals":true')
+  })
+
+  it('refuses an option whose prototype chain never ends', () => {
+    const endless: object = new Proxy({}, { getPrototypeOf: () => new Proxy({}, endlessTraps) })
+    const endlessTraps: ProxyHandler<object> = { getPrototypeOf: () => new Proxy({}, endlessTraps) }
+
+    expect(() => resolved({ envelope: endless })).toThrow('the options could not be read')
+  })
 })

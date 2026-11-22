@@ -100,20 +100,26 @@ function readEntry(
   return readBlock(value, entry as Shape, done)
 }
 
-/** What `given` holds under `key`, unless it is found only on this realm's `Object.prototype`. */
+/**
+ * What `given` holds under `key`, unless the first holder of the key is a root: an object with no
+ * prototype that is not `given` itself, of any realm. Nothing of a root is read to tell, not even the key.
+ */
 function heldBy(given: object, key: string): unknown {
+  let holder: object | null = given
+  for (let links = 0; holder !== null && !Object.hasOwn(holder, key); links += 1) {
+    // A proxy can answer its own prototype for ever.
+    if (links > MAX_NAMES) throw bootError('an option is too large', {})
+    holder = Reflect.getPrototypeOf(holder)
+  }
+  const root = holder !== null && holder !== given && Reflect.getPrototypeOf(holder) === null
   if (types.isProxy(given)) {
+    // A proxy answers as it always did, except with the very value a root holds, which it forwarded.
     const answer: unknown = Reflect.get(given, key)
-    const planted = Object.hasOwn(Object.prototype, key)
-    return planted && !Object.hasOwn(given, key) && answer === Reflect.get(Object.prototype, key)
+    return root && answer === Object.getOwnPropertyDescriptor(holder, key)?.value
       ? undefined
       : answer
   }
-  for (let at: object | null = given; at !== null; at = Reflect.getPrototypeOf(at)) {
-    if (at === Object.prototype) return undefined
-    if (Object.hasOwn(at, key)) return Reflect.get(given, key)
-  }
-  return undefined
+  return holder === null || root ? undefined : Reflect.get(given, key)
 }
 
 /**

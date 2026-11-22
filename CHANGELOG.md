@@ -57,9 +57,9 @@ value that answers differently on a second read cannot change what is served.
   derived from another, a proxy) is the contributor's failure and not an operation with no
   security.
 - An option the host leaves out keeps its default whatever was planted on `Object.prototype`: a name found only
-  on the root of all objects (`exposeInternals`, `exposeIndicatorErrors`, `edgeProtected`, `authToken`,
+  on the root of all objects, of this realm or another (`exposeInternals`, `exposeIndicatorErrors`, `edgeProtected`, `authToken`,
   `enabled` and the rest, or a whole block) is not an option the host set. A value the host sets, one a class
-  holds on its prototype and one an object from another realm holds are still read.
+  holds on its prototype and one an object from another realm holds itself are still read.
 - The limits on what is copied are in the README.
 - With `forRootAsync`, Nest reads the factory's result before the library receives it, so a hostile value the
   factory returns (a proxy whose trap throws) fails the boot with the host's own error and not with
