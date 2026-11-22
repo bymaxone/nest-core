@@ -217,7 +217,7 @@ options object itself, refuses a key it does not document, so a misspelt option 
 nothing. A block must be a plain object: a `Date`, `Map`, `Set` or `RegExp` is refused. An option, or a whole block, given as `undefined` or `null` reads as unset and takes its
 default; the one exception is an option of `helmet`, where `null` is refused.
 
-**`Object.prototype` must be the standard one.** `BymaxCoreModule.forRoot`, `applyBymaxOpenApi` (only when it goes on to mount the document) and `applyHttpFloors` refuse to boot while `Object.prototype` of the realm holds a string key outside the ones it has by default, or one of those has been replaced: every plain object that `helmet` and `@nestjs/swagger` read a name from would inherit it, and no option can shadow it. A host that extends `Object.prototype` cannot boot this package. The error reports a count only (`count`). The guard runs again after the last `await` of `applyBymaxOpenApi` and `applyHttpFloors`, and the metrics scrape answers `503` while it holds (after the bearer check, so a caller without the token learns nothing). Only the default metrics this package creates have their writes contained: a metric your own code registers on the registry is not wrapped, and a write of it that `prom-client` refuses throws where you made it. A name planted after boot does not reach the OpenAPI document, even an enumerable one: the guard refuses it before `@nestjs/swagger` scans, and the document is built at boot and served from its own keys.
+**`Object.prototype` must be the standard one.** `BymaxCoreModule.forRoot`, `applyBymaxOpenApi` (only when it goes on to mount the document) and `applyHttpFloors` refuse to boot while `Object.prototype` of the realm holds a string key outside the ones it has by default, or one of those has been replaced: every plain object a dependency reads a name from would inherit it, and no option can shadow it. A host that extends `Object.prototype` cannot boot this package. The error reports a count only (`count`). The guard runs again after the last `await` of `applyBymaxOpenApi` and `applyHttpFloors`, and the metrics scrape answers `503` while the guard refuses (after the bearer check, so a caller without the token learns nothing). Only the default metrics this package creates have their writes contained: a metric your own code registers on the registry is not wrapped, and a write of it that `prom-client` refuses throws where you made it. A name planted after boot does not reach the OpenAPI document, even an enumerable one: the guard refuses it before `@nestjs/swagger` scans, and the document is built at boot and served from its own keys.
 
 What is handed over is read once, and the limits are fixed. A list an option holds is read by index and is
 refused, never cut short, past `1000` items, and so is a map an option holds (`metrics.defaultLabels`,
@@ -1560,11 +1560,11 @@ once, and the signal `@HandlerSignal()` returns is aborted by it as well as by t
   `handlerTimeout.excludePaths`: list an SSE or long-poll path in both. A WebSocket upgrade never goes through
   the middleware.
 - The `504` is the answer: whatever the guard, the handler or the filter writes afterwards is dropped, so the
-  response is sent once and nothing is logged for it. A guard that is still running cannot be stopped; give it
+  response is sent once. A guard that is still running cannot be stopped; give it
   `@HandlerSignal()` to stop on the abort.
 - Keep it above `handlerTimeout.timeoutMs`; if it is shorter, the deadline answers first.
 - The `504` body carries `statusCode`, `code`, `message`, `timestamp` and `path`, and no `correlationId`: the floors
-  are mounted before the module, so no correlation provider exists yet.
+  write it themselves, not through the exception filter.
 
 ## 🚀 Production Checklist
 
