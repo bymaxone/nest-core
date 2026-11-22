@@ -50,6 +50,9 @@ export const CORS_KEYS = {
   maxAgeSeconds: 0
 } satisfies Record<keyof HttpFloorsCorsOptions, 0>
 
+/** The methods `cors` answers a preflight with when the host lists none. */
+const CORS_DEFAULT_METHODS = 'GET,HEAD,PUT,PATCH,POST,DELETE'
+
 /** The methods `cors.methods` may list, in the exact case a browser compares them. */
 const HTTP_METHODS: readonly string[] = ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS']
 
@@ -67,18 +70,6 @@ function isExactOrigin(origin: unknown): origin is string {
     return (url.protocol === 'http:' || url.protocol === 'https:') && url.origin === origin
   } catch {
     return false
-  }
-}
-
-/**
- * The entries whose value is set. An option left out must stay out, not be present as `undefined`:
- * the `cors` middleware lets a present key override its own default.
- */
-function withoutUndefined<T extends object>(
-  entries: T
-): { [K in keyof T]?: Exclude<T[K], undefined> } {
-  return Object.fromEntries(Object.entries(entries).filter(([, value]) => value !== undefined)) as {
-    [K in keyof T]?: Exclude<T[K], undefined>
   }
 }
 
@@ -187,15 +178,17 @@ export function resolveCors(given: unknown): CorsOptionsDelegate<CorsRequest> {
     throw new Error(`cors.origins "${WILDCARD}" cannot be combined with cors.credentials: true`)
   }
   if (!wildcard) assertOrigins(origins)
-  const offers: CorsOptions = {
+  // Every name `cors` reads is an own property, left `undefined` when the host gave none (`methods` takes
+  // the default of `cors`, which merges over its defaults and would otherwise find none): a name planted on
+  // `Object.prototype` afterwards answers none of them. `headers` is the alias `cors` falls back to.
+  const offers = {
     credentials,
-    ...withoutUndefined({
-      methods: methods?.slice(),
-      allowedHeaders: allowedHeaders?.slice(),
-      exposedHeaders: exposedHeaders?.slice(),
-      maxAge
-    })
-  }
+    methods: methods?.slice() ?? CORS_DEFAULT_METHODS,
+    allowedHeaders: allowedHeaders?.slice(),
+    headers: undefined,
+    exposedHeaders: exposedHeaders?.slice(),
+    maxAge
+  } as CorsOptions
   const listed: ReadonlySet<string> = new Set(origins as readonly string[])
   return (request, callback) => {
     if (wildcard) return callback(null, { ...offers, origin: WILDCARD })
