@@ -89,7 +89,10 @@ describe('a name planted on Object.prototype under the options of the swagger pe
     ['content', {}],
     ['$ref', '#/components/schemas/Planted'],
     ['description', 'planted description'],
-    ['description', '']
+    ['description', ''],
+    ['responses', { '200': { description: 'planted response' } }],
+    ['operationId', 'planted_operation'],
+    ['type', 'string']
   ])('serves the document it was configured with when %s is planted as %j', async (name, value) => {
     const configured = {
       openapi: {

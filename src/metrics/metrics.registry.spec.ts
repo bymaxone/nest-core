@@ -157,3 +157,79 @@ describe('loadPromClient, present optional peer', () => {
     expect(typeof promClient.Registry).toBe('function')
   })
 })
+
+describe('the writes of the default metrics beside a changed Object.prototype', () => {
+  it('are contained for every default metric, so none throws out of an observer or a timer', async () => {
+    const registry = await createMetricsRegistry(
+      normalizeCoreOptions({ metrics: { enabled: true, collectDefaultMetrics: true } })
+    )
+    const metrics = registry.getMetricsAsArray() as unknown as Array<{
+      name: string
+      set?: (labels: object, value: number) => void
+      inc?: (labels: object) => void
+      observe?: (labels: object, value: number) => void
+    }>
+    Object.defineProperty(Object.prototype, 'planted', {
+      value: 'x',
+      enumerable: true,
+      configurable: true,
+      writable: true
+    })
+    try {
+      expect(metrics.map((metric) => metric.name)).toEqual(
+        expect.arrayContaining(['nodejs_gc_duration_seconds', 'nodejs_eventloop_lag_seconds'])
+      )
+      for (const metric of metrics) {
+        expect(() => metric.set?.({}, 1)).not.toThrow()
+        expect(() => metric.inc?.({})).not.toThrow()
+        expect(() => metric.observe?.({ kind: 'major' }, 0.01)).not.toThrow()
+      }
+    } finally {
+      delete (Object.prototype as Record<string, unknown>)['planted']
+    }
+  })
+
+  it('add no writer to a metric that has none: a counter has no set and a gauge no observe', async () => {
+    const registry = await createMetricsRegistry(
+      normalizeCoreOptions({ metrics: { enabled: true, collectDefaultMetrics: true } })
+    )
+    const counter = registry.getSingleMetric('process_cpu_seconds_total') as unknown as Record<
+      string,
+      unknown
+    >
+    const gauge = registry.getSingleMetric('process_start_time_seconds') as unknown as Record<
+      string,
+      unknown
+    >
+
+    expect(typeof counter['set']).toBe('undefined')
+    expect(typeof counter['observe']).toBe('undefined')
+    expect(typeof gauge['observe']).toBe('undefined')
+    expect(typeof counter['inc']).toBe('function')
+    expect(typeof gauge['set']).toBe('function')
+  })
+
+  it('keep writing on the same metric once the name is gone, the refused write not recorded', async () => {
+    const registry = await createMetricsRegistry(
+      normalizeCoreOptions({ metrics: { enabled: true, collectDefaultMetrics: true } })
+    )
+    const histogram = registry.getSingleMetric('nodejs_gc_duration_seconds') as unknown as {
+      observe(labels: object, value: number): void
+    }
+    Object.defineProperty(Object.prototype, 'planted', {
+      value: 'x',
+      enumerable: true,
+      configurable: true,
+      writable: true
+    })
+    try {
+      histogram.observe({ kind: 'major' }, 0.01)
+    } finally {
+      delete (Object.prototype as Record<string, unknown>)['planted']
+    }
+
+    histogram.observe({ kind: 'major' }, 0.01)
+
+    expect(await registry.metrics()).toContain('nodejs_gc_duration_seconds_count{kind="major"} 1')
+  })
+})

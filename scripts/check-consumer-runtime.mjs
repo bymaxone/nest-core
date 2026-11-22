@@ -186,6 +186,42 @@ ${peerGuard}`
  * The decorator is applied as a plain call rather than with `@` syntax so the
  * probe is valid JavaScript in both module formats with no transpiler involved.
  */
+/**
+ * A name planted on `Object.prototype` after boot, with metrics on: the scrape is answered `503` and the
+ * process lives. Without the guard at the scrape, `prom-client` throws from a collector, outside any promise
+ * a scrape can catch, and the process dies. Run in a child process against the packed artifact.
+ */
+const scrapeProbe = `
+const { execFileSync } = require('node:child_process')
+const PACKAGE = ${JSON.stringify(packageName)}
+const CODE =
+  'process.env.NODE_ENV = "development"; require("reflect-metadata");' +
+  'const { NestFactory } = require("@nestjs/core"); const { Module } = require("@nestjs/common");' +
+  'const { BymaxCoreModule } = require(' + JSON.stringify(PACKAGE) + ');' +
+  'class Probe {} Module({ imports: [BymaxCoreModule.forRoot({ metrics: { enabled: true } })] })(Probe);' +
+  'process.on("uncaughtException", (e) => { console.log("UNCAUGHT " + (e && e.message)); process.exit(3) });' +
+  '(async () => {' +
+  ' const app = await NestFactory.create(Probe, { logger: false });' +
+  ' await app.listen(0);' +
+  ' const port = app.getHttpServer().address().port;' +
+  ' Object.defineProperty(Object.prototype, "planted", { value: "x", enumerable: true, configurable: true, writable: true });' +
+  ' const answer = await fetch("http://127.0.0.1:" + port + "/metrics");' +
+  ' await new Promise((resolve) => setTimeout(resolve, 300));' +
+  ' console.log(answer.status + " ALIVE"); process.exit(0) })()'
+let out
+try {
+  out = execFileSync(process.execPath, ['-e', CODE], { encoding: 'utf8', stdio: 'pipe' }).trim()
+} catch (error) {
+  console.error('  ✗ a scrape after a plant: the process died: ' + String((error.stdout || '') + (error.stderr || '')).slice(0, 200))
+  process.exit(1)
+}
+if (out !== '503 ALIVE') {
+  console.error('  ✗ a scrape after a plant: expected "503 ALIVE", got ' + out.slice(0, 160))
+  process.exit(1)
+}
+console.log('  ✓ a scrape after a planted name answers 503 and the process lives')
+`
+
 const bootBody = `
 const failures = []
 
@@ -343,11 +379,12 @@ try {
   writeFileSync(join(consumerDir, 'probe.cjs'), cjsProbe)
   writeFileSync(join(consumerDir, 'boot.mjs'), esmBoot)
   writeFileSync(join(consumerDir, 'boot.cjs'), cjsBoot)
+  writeFileSync(join(consumerDir, 'scrape.cjs'), scrapeProbe)
 
   // The boot probes run last: they are the only ones that need the framework
   // peers resolvable, and a failure to even load a subpath is a clearer message
   // than a failure to bootstrap one.
-  for (const probe of ['probe.mjs', 'probe.cjs', 'boot.mjs', 'boot.cjs']) {
+  for (const probe of ['probe.mjs', 'probe.cjs', 'boot.mjs', 'boot.cjs', 'scrape.cjs']) {
     try {
       process.stdout.write(run('node', [probe], { cwd: consumerDir, stdio: 'pipe' }))
     } catch (error) {
