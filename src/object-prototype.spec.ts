@@ -346,3 +346,151 @@ describe('a realm that cannot be built', () => {
     }
   })
 })
+
+/** The built-ins the rows below replace, held from before any row does. */
+const define = Object.defineProperty
+const own = Object.getOwnPropertyDescriptor
+const PlainObject = Object
+
+/** What `assertObjectPrototypeClean` throws while `key` of `target` is `replacement`, restored before returning. */
+function whileReplaced(
+  target: object,
+  key: PropertyKey,
+  replacement: unknown,
+  planted: string | undefined
+): (Error & { count?: number }) | undefined {
+  const original = own(target, key) as PropertyDescriptor
+  if (planted !== undefined) {
+    define(PlainObject.prototype, planted, {
+      value: 1,
+      enumerable: true,
+      configurable: true,
+      writable: true
+    })
+  }
+  define(target, key, { ...original, value: replacement })
+  let thrown: (Error & { count?: number }) | undefined
+  try {
+    assertObjectPrototypeClean()
+  } catch (error) {
+    thrown = error as Error & { count?: number }
+  } finally {
+    define(target, key, original)
+    if (planted !== undefined) delete (PlainObject.prototype as Record<string, unknown>)[planted]
+  }
+  return thrown
+}
+
+describe('the guard beside a built-in the host replaced after it loaded', () => {
+  it.each([
+    ['Object.getOwnPropertyNames', Object, 'getOwnPropertyNames', (): string[] => []],
+    ['Object.getOwnPropertyDescriptors', Object, 'getOwnPropertyDescriptors', (): object => ({})],
+    [
+      'Object.getOwnPropertyDescriptor',
+      Object,
+      'getOwnPropertyDescriptor',
+      (): undefined => undefined
+    ],
+    ['Object.hasOwn', Object, 'hasOwn', (): boolean => false],
+    [
+      'Object.defineProperty',
+      Object,
+      'defineProperty',
+      (): never => {
+        throw new Error('HOST')
+      }
+    ],
+    [
+      'Reflect.apply',
+      Reflect,
+      'apply',
+      (): never => {
+        throw new Error('HOST')
+      }
+    ],
+    [
+      'Array.prototype[Symbol.iterator]',
+      Array.prototype,
+      Symbol.iterator,
+      function* (): Generator<never> {
+        // yields nothing
+      }
+    ],
+    ['Array.prototype.push', Array.prototype, 'push', (): number => 0],
+    [
+      'Function.prototype.call',
+      Function.prototype,
+      'call',
+      (): never => {
+        throw new Error('HOST')
+      }
+    ],
+    [
+      'Function.prototype.apply',
+      Function.prototype,
+      'apply',
+      (): never => {
+        throw new Error('HOST')
+      }
+    ],
+    [
+      'Function.prototype.bind',
+      Function.prototype,
+      'bind',
+      (): never => {
+        throw new Error('HOST')
+      }
+    ]
+  ])(
+    'still refuses a planted name, with its own error, when %s is replaced',
+    (_name, target, key, replacement) => {
+      const error = whileReplaced(target, key, replacement, 'planted')
+
+      expect(error?.message).toBe(MESSAGE)
+      expect(typeof error?.count).toBe('number')
+      expect((error?.count as number) >= 1).toBe(true)
+    }
+  )
+
+  it.each(['Object', 'Reflect', 'Array', 'JSON'])(
+    'refuses, with its own error, when the global %s is not the one it met',
+    (name) => {
+      const original = own(globalThis, name) as PropertyDescriptor
+      define(globalThis, name, { ...original, value: {} })
+      let error: (Error & { count?: number }) | undefined
+      try {
+        assertObjectPrototypeClean()
+      } catch (thrown) {
+        error = thrown as Error & { count?: number }
+      } finally {
+        define(globalThis, name, original)
+      }
+
+      expect(error?.message).toBe(MESSAGE)
+      expect(error?.count).toBe(1)
+    }
+  )
+
+  it('builds its error from the captured Error, whichever Error the host swapped in', () => {
+    const original = own(globalThis, 'Error') as PropertyDescriptor
+    define(globalThis, 'Error', { ...original, value: class Fake extends Array {} })
+    let error: (Error & { count?: number }) | undefined
+    define(PlainObject.prototype, 'planted', {
+      value: 1,
+      enumerable: true,
+      configurable: true,
+      writable: true
+    })
+    try {
+      assertObjectPrototypeClean()
+    } catch (thrown) {
+      error = thrown as Error & { count?: number }
+    } finally {
+      delete (PlainObject.prototype as Record<string, unknown>)['planted']
+      define(globalThis, 'Error', original)
+    }
+
+    expect(error).toBeInstanceOf(Error)
+    expect(error?.message).toBe(MESSAGE)
+  })
+})

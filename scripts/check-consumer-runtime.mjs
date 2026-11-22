@@ -227,7 +227,8 @@ console.log('  ✓ a scrape after a planted name answers 503 and the process liv
  * guard's own realm fail to build. The guard must still answer with its count-only refusal and never with
  * the TypeError of `vm`, which quotes the planted value. Each case runs in a child process, because the
  * planted value reaches `vm` only through the process's own `Object.prototype`: before the package loads
- * (the root bundle builds its realm at import) and after (`./http` builds it at its first call).
+ * (importing it must not throw; `forRoot` is where the guard speaks) and after (`./http` builds its realm at
+ * its first call).
  */
 const plantedProbe = `
 const { execFileSync } = require('node:child_process')
@@ -243,8 +244,9 @@ const report =
   'const done = (e) => { console.log(JSON.stringify({ message: e && e.message, count: e && e.count })); process.exit(0) };'
 
 const CASES = {
-  'before the package loads': (name) =>
-    plant(name) + report + 'try { require(' + JSON.stringify(PACKAGE) + '); done(null) } catch (e) { done(e) }',
+  'before the package loads, at forRoot': (name) =>
+    plant(name) + report + 'let m; try { m = require(' + JSON.stringify(PACKAGE) + ') } catch (e) { done({ message: "IMPORT THREW" }) }' +
+    'try { m.BymaxCoreModule.forRoot(); done(null) } catch (e) { done(e) }',
   'after ./openapi loaded, at its first call': (name) =>
     'process.env.NODE_ENV = "development"; require("reflect-metadata");' +
     'const { NestFactory } = require("@nestjs/core"); const { Module } = require("@nestjs/common");' +
