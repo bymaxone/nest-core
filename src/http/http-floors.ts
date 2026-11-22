@@ -15,6 +15,7 @@
 import type { INestApplication } from '@nestjs/common'
 import type { HelmetOptions } from 'helmet'
 
+import { assertObjectPrototypeClean } from '../object-prototype'
 import {
   booleanOption,
   checkedBlock,
@@ -255,10 +256,10 @@ const FLOORS_SHAPE: Shape = {
  */
 function resolveHelmet(given: unknown): Record<string, unknown> | false {
   if (given === false) return false
-  if (given === undefined || given === null) return {}
+  if (given === undefined || given === null) return withSettings([])
   if (!isPlainRecord(given)) throw refusal('helmet', 'an object or false', given)
   checkedBlock('helmet', given, Object.fromEntries(HELMET_OPTION_NAMES.map((name) => [name, 0])))
-  return Object.fromEntries(
+  return withSettings(
     HELMET_OPTION_NAMES.flatMap((name) => {
       const value: unknown = Reflect.get(given, name)
       if (value === null) {
@@ -271,6 +272,47 @@ function resolveHelmet(given: unknown): Record<string, unknown> | false {
       return [[name, value]]
     })
   )
+}
+
+/** Each option of `helmet` that takes settings, with its aliases, and whether it is on when left out. */
+const SETTINGS_OPTIONS: ReadonlyArray<readonly [readonly string[], boolean]> = [
+  [['contentSecurityPolicy'], true],
+  [['crossOriginEmbedderPolicy'], false],
+  [['crossOriginOpenerPolicy'], true],
+  [['crossOriginResourcePolicy'], true],
+  [['referrerPolicy'], true],
+  [['strictTransportSecurity', 'hsts'], false],
+  [['xDnsPrefetchControl', 'dnsPrefetchControl'], true],
+  [['xFrameOptions', 'frameguard'], true],
+  [['xPermittedCrossDomainPolicies', 'permittedCrossDomainPolicies'], true]
+]
+
+/**
+ * The options as `helmet` is handed them, with each one that takes settings and is on holding its own
+ * settings object. `helmet` reads a name of the settings it was not given from the object it is handed,
+ * and falls back to an object of its own where there is none, which would answer with whatever was
+ * planted on `Object.prototype`. An alias given on its own stays as given: `helmet` refuses both.
+ */
+function withSettings(entries: ReadonlyArray<readonly [string, unknown]>): Record<string, unknown> {
+  const options = bare(entries)
+  for (const [names, on] of SETTINGS_OPTIONS) {
+    const named = names.find((name) => name in options)
+    if (named === undefined) {
+      if (on) options[names[0] as string] = bare([])
+    } else if (options[named] === true) {
+      options[named] = bare([])
+    }
+  }
+  return options
+}
+
+/**
+ * An object of `entries` with no prototype. `helmet` reads a name it was not given (`contentSecurityPolicy`,
+ * `reportOnly`, ...) and tests aliases with `in`, so an object that inherits from `Object.prototype` would
+ * answer with whatever was planted there.
+ */
+function bare(entries: ReadonlyArray<readonly [string, unknown]>): Record<string, unknown> {
+  return Object.assign(Object.create(null) as Record<string, unknown>, Object.fromEntries(entries))
 }
 
 /** The helmet options that are switches and take no settings, aliases included. */
@@ -313,7 +355,7 @@ function helmetOrRefusal(
   } catch {
     const culprit = Object.entries(options).find(([name, value]) => {
       try {
-        helmet({ [name]: value })
+        helmet(bare([[name, value]]))
         return false
       } catch {
         return true
@@ -431,6 +473,7 @@ export async function applyHttpFloors(
   app: INestApplication,
   options: HttpFloorsOptions = {}
 ): Promise<void> {
+  assertObjectPrototypeClean()
   const floors = resolveFloors(options)
   const express = app as unknown as ExpressApplicationShape
   const server = assertBootstrapState(express)
@@ -443,7 +486,9 @@ export async function applyHttpFloors(
     express.use(
       helmetOrRefusal(
         helmet,
-        'hsts' in given ? given : { strictTransportSecurity: false, ...given }
+        'hsts' in given
+          ? given
+          : bare([['strictTransportSecurity', false], ...Object.entries(given)])
       )
     )
   }

@@ -45,6 +45,7 @@ import {
   buildHealthStatusRecorderProvider,
   buildMetricsTimingSinkProvider
 } from './metrics/metrics.providers'
+import { assertObjectPrototypeClean } from './object-prototype'
 import { selectAsyncExceptionFilter } from './passthrough.providers'
 import { readOptions } from './read-options'
 import { BymaxShutdownDeadline } from './shutdown/shutdown-deadline'
@@ -344,6 +345,7 @@ export class BymaxCoreModule extends BymaxCoreModuleBase implements NestModule {
    *   BymaxCoreModule.forRoot({ metrics: { enabled: true } })
    */
   static override forRoot(options: typeof OPTIONS_TYPE = {}): DynamicModule {
+    assertObjectPrototypeClean()
     // Read once, under the guard: the builder below gets the copy, so it never runs a host's code.
     const given = readOptions(options, OPTION_SHAPE)
     const resolved = normalizeCoreOptions(given)

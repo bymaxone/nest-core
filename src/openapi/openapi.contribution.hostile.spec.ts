@@ -355,4 +355,147 @@ describe('collectContributions, a fragment that cannot be read', () => {
       cause: { message: 'SECRET-host' }
     })
   })
+
+  /**
+   * An operations map, or an operation, that is not plain is the contributor's failure, not an operation
+   * with no security: a `Map` has no own entries, a class instance or an object derived from another
+   * keeps its entries elsewhere, and a proxy that lists none says nothing.
+   */
+  describe.each([
+    ['a Map', (): object => new Map([['Items.list', { responses: {} }]])],
+    [
+      'a class instance',
+      (): object =>
+        new (class Held {
+          'Items.list' = {}
+        })()
+    ],
+    ['an object derived from another', (): object => Object.create({ 'Items.list': {} }) as object],
+    ['a proxy that lists no keys', (): object => new Proxy({}, { get: () => ({}) })]
+  ])('operations given as %s', (_kind, make) => {
+    it('is refused as the map and as an entry', () => {
+      const asMap = collectOne({
+        contractVersion: BYMAX_OPENAPI_CONTRACT_VERSION,
+        operations: make()
+      })
+      const asEntry = collectOne({
+        contractVersion: BYMAX_OPENAPI_CONTRACT_VERSION,
+        operations: { 'Items.list': make() }
+      })
+
+      expect(asMap.thrown).toMatchObject({ contributor: 'Odd' })
+      expect(asEntry.thrown).toMatchObject({ contributor: 'Odd' })
+    })
+  })
+
+  it('accepts an empty object shared between a security requirement and an operation, in either order', () => {
+    const shared = {}
+    const first = { 'Items.list': { security: [shared] }, 'Items.get': shared }
+    const second = { 'Items.get': shared, 'Items.list': { security: [shared] } }
+
+    for (const operations of [first, second]) {
+      const Odd = contributorClass('Odd', {
+        contractVersion: BYMAX_OPENAPI_CONTRACT_VERSION,
+        operations
+      } as OpenApiFragment)
+
+      expect(() =>
+        collectContributions(
+          scannerOf([{ metatype: Odd, instance: new Odd() }]),
+          reflector,
+          mapOf({ 'Items.list': 'Items_list', 'Items.get': 'Items_get' })
+        )
+      ).not.toThrow()
+    }
+  })
+
+  it('names why a Map is refused, and accepts a map and an operation made with no prototype', () => {
+    const refused = collectOne({
+      contractVersion: BYMAX_OPENAPI_CONTRACT_VERSION,
+      operations: new Map()
+    })
+    const bare = Object.assign(Object.create(null) as object, { responses: {} })
+    const accepted = collectOne({
+      contractVersion: BYMAX_OPENAPI_CONTRACT_VERSION,
+      operations: Object.assign(Object.create(null) as object, { 'Items.list': bare })
+    })
+
+    expect((refused.thrown?.cause as Error).message).toBe(
+      'An OpenAPI fragment must be a plain object'
+    )
+    expect(accepted.thrown).toBeUndefined()
+  })
+
+  it.each([
+    ['Object.prototype', (): object | null => Object.prototype],
+    ['null', (): object | null => null]
+  ])(
+    'refuses an operation, and a map, that is a proxy answering %s as its prototype',
+    (_name, answer) => {
+      class Op {
+        responses = {}
+        get security(): object[] {
+          return [{ bearer: ['read'] }]
+        }
+      }
+      const asEntry = collectOne({
+        contractVersion: BYMAX_OPENAPI_CONTRACT_VERSION,
+        operations: { 'Items.list': new Proxy(new Op(), { getPrototypeOf: answer }) }
+      })
+      const asMap = collectOne({
+        contractVersion: BYMAX_OPENAPI_CONTRACT_VERSION,
+        operations: new Proxy({ 'Items.list': { responses: {} } }, { ownKeys: () => [] })
+      })
+
+      expect(asEntry.thrown).toMatchObject({ contributor: 'Odd' })
+      expect(asMap.thrown).toMatchObject({ contributor: 'Odd' })
+    }
+  )
+
+  it('refuses an operation, and a map, that is a proxy around a class holding names on its prototype', () => {
+    class Op {
+      responses = {}
+      get security(): object[] {
+        return [{ bearer: ['read'] }]
+      }
+    }
+    class Operations {
+      get 'Items.list'(): object {
+        return { responses: {} }
+      }
+    }
+
+    const asEntry = collectOne({
+      contractVersion: BYMAX_OPENAPI_CONTRACT_VERSION,
+      operations: { 'Items.list': new Proxy(new Op(), {}) }
+    })
+    const asMap = collectOne({
+      contractVersion: BYMAX_OPENAPI_CONTRACT_VERSION,
+      operations: new Proxy(new Operations(), {})
+    })
+
+    expect(asEntry.thrown).toMatchObject({ contributor: 'Odd' })
+    expect(asMap.thrown).toMatchObject({ contributor: 'Odd' })
+  })
+
+  it('refuses a list with a hole in an operation instead of serving a null entry', () => {
+    const holey: unknown[] = new Array<unknown>(2)
+    holey[1] = { name: 'id' }
+
+    const { thrown } = collectOne({
+      contractVersion: BYMAX_OPENAPI_CONTRACT_VERSION,
+      operations: { 'Items.list': { parameters: holey } }
+    })
+
+    expect(thrown).toMatchObject({ contributor: 'Odd', cause: { message: 'A list has a hole' } })
+  })
+
+  it('keeps a plain operations map and a plain operation', () => {
+    const { thrown } = collectOne({
+      contractVersion: BYMAX_OPENAPI_CONTRACT_VERSION,
+      operations: { 'Items.list': { responses: {} } }
+    })
+
+    expect(thrown).toBeUndefined()
+  })
 })

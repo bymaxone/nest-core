@@ -34,6 +34,7 @@ import type * as Swagger from '@nestjs/swagger'
 import type { ResolvedCoreOptions, ResolvedOpenApiOptions } from '../core.options'
 import { BYMAX_CORE_OPTIONS } from '../core.tokens'
 import { escapeUnseen } from '../escape-unseen'
+import { assertObjectPrototypeClean } from '../object-prototype'
 import { isProductionRuntime, runtimeEnvironmentName } from '../runtime.environment'
 import { writeLog } from '../write-log'
 import type { DiscardedComponent } from './openapi.components'
@@ -41,6 +42,8 @@ import { collectContributions, createHandlerIdMap } from './openapi.contribution
 import type { HandlerIdMap, ResolvedContribution } from './openapi.contribution'
 import { augmentDocument, unsecuredOperations } from './openapi.document'
 import { loadSwagger } from './openapi.loader'
+import type { SwaggerModuleSurface } from './openapi.loader'
+import { own } from './openapi.shape'
 
 /** Why the document was not mounted. */
 export type OpenApiSkipReason =
@@ -367,9 +370,57 @@ function buildConfig(
 ): Omit<Swagger.OpenAPIObject, 'paths'> {
   builder.setTitle(options.title).setDescription(options.description).setVersion(options.version)
   for (const server of options.servers) {
-    builder.addServer(server.url, server.description)
+    builder.addServer(server.url, own(server, 'description') as string | undefined)
   }
   return builder.build()
+}
+
+/**
+ * The options handed to `@nestjs/swagger` with no prototype, so a name it reads that this call did not
+ * set (`ui`, `raw`, `yamlDocumentUrl`, `customJs`, ...) is not one that something planted on
+ * `Object.prototype` can answer.
+ */
+function withoutPrototype<T extends object>(given: T): T {
+  return Object.assign(Object.create(null) as T, given)
+}
+
+/**
+ * Scan the application into the document, with the options handed over having no prototype. The map is
+ * filled by the scan, which calls the factory once per operation.
+ */
+function scanApplication(
+  swagger: SwaggerModuleSurface,
+  app: INestApplication,
+  config: Omit<Swagger.OpenAPIObject, 'paths'>,
+  handlers: HandlerIdMap,
+  options: ResolvedOpenApiOptions
+): Swagger.OpenAPIObject {
+  return swagger.SwaggerModule.createDocument(
+    app,
+    config,
+    withoutPrototype({
+      operationIdFactory: recordingOperationIdFactory(
+        handlers,
+        // Left out when the host gave none, so a name planted on `Object.prototype` is not its answer.
+        Object.hasOwn(options, 'operationIdFactory') ? options.operationIdFactory : undefined
+      )
+    })
+  )
+}
+
+/** Mount the document and its UI, handing the peer options with no prototype. */
+function mountDocument(
+  swagger: SwaggerModuleSurface,
+  app: INestApplication,
+  document: Swagger.OpenAPIObject,
+  options: ResolvedOpenApiOptions
+): void {
+  swagger.SwaggerModule.setup(
+    options.path,
+    app,
+    document,
+    withoutPrototype({ jsonDocumentUrl: options.jsonPath })
+  )
 }
 
 /** Log that the document is up, and where: the only feedback a developer gets that it is. */
@@ -439,14 +490,13 @@ export async function applyBymaxOpenApi(app: INestApplication): Promise<OpenApiM
     return { mounted: false, reason: 'disabled' }
   }
 
+  assertObjectPrototypeClean()
   const swagger = await loadSwagger()
   const config = buildConfig(new swagger.DocumentBuilder(), options)
   // The map is filled by the scan below, which calls the factory once per
   // operation, so it is complete before any contributor is asked for fragments.
   const handlers = createHandlerIdMap()
-  const generated = swagger.SwaggerModule.createDocument(app, config, {
-    operationIdFactory: recordingOperationIdFactory(handlers, options.operationIdFactory)
-  })
+  const generated = scanApplication(swagger, app, config, handlers, options)
   // Read once and shared: recognizing this package's own routes needs the same
   // prefixes the merge does, and asking the application twice would let the two
   // answers differ for no reason.
@@ -459,9 +509,7 @@ export async function applyBymaxOpenApi(app: INestApplication): Promise<OpenApiM
   )
   warnUnsecuredOperations(logger, unsecuredOperations(document, resolved, prefixes))
   warnDiscardedComponents(logger, discarded)
-  swagger.SwaggerModule.setup(options.path, app, document, {
-    jsonDocumentUrl: options.jsonPath
-  })
+  mountDocument(swagger, app, document, options)
   logServed(logger, options)
   return { mounted: true, path: options.path, discarded }
 }

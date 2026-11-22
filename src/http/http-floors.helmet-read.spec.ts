@@ -125,4 +125,36 @@ describe('the helmet options read by name', () => {
     })
     expect(headers['content-security-policy']).toMatch(/^default-src 'none'/)
   })
+
+  it('refuses a directive that is a function, naming it, instead of dropping it', async () => {
+    const policy = { useDefaults: false, directives: { defaultSrc: () => ["'none'"] } }
+    let thrown: Error | undefined
+    try {
+      await headersOf({ contentSecurityPolicy: policy })
+    } catch (error) {
+      thrown = error as Error
+    }
+
+    expect(thrown?.message).toBe('the options could not be read')
+    expect(thrown?.cause).toMatchObject({
+      option: 'defaultSrc',
+      message: 'a directive holds a function'
+    })
+  })
+
+  it('keeps a method a class holds on its prototype out of the directives', async () => {
+    class Directives {
+      get defaultSrc(): string[] {
+        return ["'none'"]
+      }
+
+      describe(): string {
+        return 'directives'
+      }
+    }
+    const headers = await headersOf({
+      contentSecurityPolicy: { useDefaults: false, directives: new Directives() }
+    })
+    expect(headers['content-security-policy']).toBe("default-src 'none'")
+  })
 })

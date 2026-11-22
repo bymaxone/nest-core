@@ -217,6 +217,18 @@ options object itself, refuses a key it does not document, so a misspelt option 
 nothing. A block must be a plain object: a `Date`, `Map`, `Set` or `RegExp` is refused. An option, or a whole block, given as `undefined` or `null` reads as unset and takes its
 default; the one exception is an option of `helmet`, where `null` is refused.
 
+**`Object.prototype` must be the standard one.** `BymaxCoreModule.forRoot`, `applyBymaxOpenApi` (only when it goes on to mount the document) and `applyHttpFloors` refuse to boot while `Object.prototype` of the realm holds a string key outside the ones it has by default, or one of those has been replaced: every plain object that `helmet` and `@nestjs/swagger` read a name from would inherit it, and no option can shadow it. A host that extends `Object.prototype` cannot boot this package. The error reports a count only (`count`).
+
+What is handed over is read once, and the limits are fixed. A list an option holds is read by index and is
+refused, never cut short, past `1000` items; a list inside what is copied (an OpenAPI contributor's operation,
+a nested value) is refused past `100000` items, and when its length is not an integer or it has a hole. One
+copy does at most `1000000` units of work (list items and keys), and a map read by name (the `directives` of
+`helmet`'s policy) answers to at most `1000` names. The OpenAPI options `servers`, `securitySchemes`,
+`security` and `operationSecurity` must hold plain data: a class instance, a `Map`, an object with a method, a
+proxy, whatever it lists or answers, are refused at boot: `servers` with
+`openapi.servers must hold only plain data`, the others with `the options could not be read` and the option in the
+`option` property of the `cause`.
+
 ### `environment`
 
 The one top-level option rather than a block, because it describes the
@@ -938,20 +950,21 @@ not on the text. `message` is this package's own text: what code of yours threw 
 
 A boot error about something you declared has a message that is this package's own text, with what you declared as properties of the error. A string property, or each string of a list, is written out and cut, and a list keeps its first ten items and ends with `and <n> more`. Match on those, not on the message; what your contributor threw is its `cause`.
 
-| Property               | On the error about                                                         | Holds                                         |
-| ---------------------- | -------------------------------------------------------------------------- | --------------------------------------------- |
-| `contributor`          | an OpenAPI or metrics contributor that failed or does not fit the contract | its class name                                |
-| `provider`             | a provider marked as a health indicator that does not implement it         | its class name or token                       |
-| `handlerKey`           | two route handlers that answer to one key                                  | the key, `<ControllerClassName>.<methodName>` |
-| `handlerKeys`          | a fragment that addresses handlers the application does not have           | the keys it addressed                         |
-| `knownHandlers`        | the same error                                                             | the keys the application has                  |
-| `duplicates`           | OpenAPI contributors that share a class name                               | the names                                     |
-| `schemes`              | a security requirement that names a scheme the document does not define    | the scheme names                              |
-| `declaredSchemes`      | the same error                                                             | the schemes the document defines              |
-| `operations`           | an `openapi.operationSecurity` key that addresses no documented operation  | the keys                                      |
-| `documentedOperations` | the same error                                                             | the operations the document contains          |
-| `option`               | an option block with a key it does not document                            | the key, cut at 40 characters                 |
-| `label`                | a `metrics.defaultLabels` value that is not a string                       | the label name                                |
+| Property               | On the error about                                                                     | Holds                                         |
+| ---------------------- | -------------------------------------------------------------------------------------- | --------------------------------------------- |
+| `contributor`          | an OpenAPI or metrics contributor that failed or does not fit the contract             | its class name                                |
+| `provider`             | a provider marked as a health indicator that does not implement it                     | its class name or token                       |
+| `handlerKey`           | two route handlers that answer to one key                                              | the key, `<ControllerClassName>.<methodName>` |
+| `handlerKeys`          | a fragment that addresses handlers the application does not have                       | the keys it addressed                         |
+| `knownHandlers`        | the same error                                                                         | the keys the application has                  |
+| `duplicates`           | OpenAPI contributors that share a class name                                           | the names                                     |
+| `schemes`              | a security requirement that names a scheme the document does not define                | the scheme names                              |
+| `declaredSchemes`      | the same error                                                                         | the schemes the document defines              |
+| `operations`           | an `openapi.operationSecurity` key that addresses no documented operation              | the keys                                      |
+| `documentedOperations` | the same error                                                                         | the operations the document contains          |
+| `option`               | an option block with a key it does not document                                        | the key, cut at 40 characters                 |
+| `label`                | a `metrics.defaultLabels` value that is not a string                                   | the label name                                |
+| `count`                | `Object.prototype` holding a name outside the standard ones, or a changed standard one | how many names or changes                     |
 
 | `event`                           | Level | When                                                                                                                                                                                          | Fields                               |
 | --------------------------------- | ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------ |

@@ -24,6 +24,7 @@ import type {
   ResolvedHandlerTimeoutOptions
 } from './handler-timeout/handler-timeout.options'
 import { asHostError } from './host-error'
+import { assertObjectPrototypeClean } from './object-prototype'
 import {
   booleanOption,
   checkedBlock,
@@ -245,9 +246,12 @@ export interface OpenApiOptions {
   description?: string
   /** Document version, independent of the package version. Default: `'1.0.0'`. */
   version?: string
-  /** Servers advertised by the document. Default: `[]`. */
+  /** Servers advertised by the document: plain data, at most 1000 items. Default: `[]`. */
   servers?: readonly OpenApiServerDescriptor[]
-  /** Security schemes added to the document's components. Default: `{}`. */
+  /**
+   * Security schemes added to the document's components. Default: `{}`. Plain data only (no class instance,
+   * method or `toJSON`), read once; a copy does at most 1,000,000 units of work.
+   */
   securitySchemes?: Readonly<Record<string, OpenApiSecurityScheme>>
   /**
    * The requirement every operation carries unless it says otherwise, naming
@@ -257,6 +261,9 @@ export interface OpenApiOptions {
    * Set this when most of the API is authenticated, and mark the exceptions
    * public through {@link OpenApiOptions.operationSecurity}. An operation that
    * already declares its own requirement is never overwritten.
+   *
+   * Plain data only, at most 1000 items, and each requirement an own plain object: a class instance, a
+   * proxy, and a hole are refused at boot.
    *
    * @example [{ cookieAuth: [] }]
    */
@@ -765,6 +772,7 @@ function resolveTelemetry(given: unknown): ResolvedTelemetryOptions {
  * @returns A fully-populated, deep-frozen options snapshot.
  */
 export function normalizeCoreOptions(given?: BymaxCoreModuleOptions): ResolvedCoreOptions {
+  assertObjectPrototypeClean()
   const raw = checkedBlock<BymaxCoreModuleOptions>(
     'options',
     readOptions(given, OPTION_SHAPE),

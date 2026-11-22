@@ -26,7 +26,6 @@
  */
 import { bootError } from '../boot-error'
 import type {
-  OpenApiOperationKey,
   OpenApiSecurityRequirement,
   ResolvedCoreOptions,
   ResolvedOpenApiOptions
@@ -39,7 +38,7 @@ import { indexOwnRoutes, isOwnRoute } from './openapi.routes'
 import type { OwnRouteIndex } from './openapi.routes'
 import { CORE_PARAMETERS, CORE_SCHEMAS } from './openapi.schemas'
 import type { OpenApiObjectMap } from './openapi.schemas'
-import { asRecord, operationKey, operationsOf } from './openapi.shape'
+import { asRecord, operationKey, operationsOf, own } from './openapi.shape'
 import type { OpenApiDocumentLike } from './openapi.shape'
 
 // Re-exported so the public signatures below keep naming a type from the module
@@ -125,11 +124,11 @@ function mergeResponses(
     // response can legally be nothing but a reference, and filling one in would
     // both discard the reference and leave a `$ref` beside sibling keys, which
     // is not a valid response object.
-    if (current['content'] === undefined && current['$ref'] === undefined) {
+    if (own(current, 'content') === undefined && own(current, '$ref') === undefined) {
       const described =
-        current['description'] === undefined || current['description'] === ''
-          ? contributed['description']
-          : current['description']
+        own(current, 'description') === undefined || own(current, 'description') === ''
+          ? own(contributed, 'description')
+          : own(current, 'description')
       merged.set(status, { ...current, ...contributed, description: described })
     }
   }
@@ -204,10 +203,11 @@ function inheritsRequirement(
   document: OpenApiDocumentLike,
   openapi: ResolvedOpenApiOptions
 ): boolean {
-  if (document.security === undefined) {
+  const declared = own(document, 'security')
+  if (declared === undefined) {
     return openapi.security.length > 0
   }
-  return Array.isArray(document.security) && document.security.length > 0
+  return Array.isArray(declared) && declared.length > 0
 }
 
 /**
@@ -377,7 +377,7 @@ function augmentOperation(
   // Whether the *generated* operation declared its own requirement — read
   // before any fragment lands, because a library filling the member in must not
   // be mistaken for the consumer having decorated their handler.
-  const declaredByDocument = operation['security'] !== undefined
+  const declaredByDocument = own(operation, 'security') !== undefined
 
   let result: Record<string, unknown> = { ...operation }
   for (const fragment of fragmentsFor(result['operationId'], contributions)) {
@@ -391,9 +391,9 @@ function augmentOperation(
   // reading "already set" as "leave it alone" would let a dependency overrule
   // the deployment, which inverts the whole precedence.
   if (!declaredByDocument) {
-    const override =
-      options.openapi.operationSecurity[operationKey(method, path) as OpenApiOperationKey]
-    const describedByLibrary = result['security'] !== undefined
+    const override = own(options.openapi.operationSecurity, operationKey(method, path)) as
+      ReadonlyArray<Record<string, readonly string[]>> | undefined
+    const describedByLibrary = own(result, 'security') !== undefined
     const security =
       override ??
       (describedByLibrary ? undefined : ownRouteSecurity(path, method, options, routes, inherits))
@@ -495,17 +495,17 @@ export function unsecuredOperations(
   options: ResolvedCoreOptions,
   pathPrefixes: readonly string[] = ['']
 ): readonly string[] {
-  if (document.security !== undefined) {
+  if (own(document, 'security') !== undefined) {
     return []
   }
 
   const routes = indexOwnRoutes(options, pathPrefixes)
-  const candidates = consumerOperations(asRecord(document.paths), routes)
-  if (!candidates.some(({ operation }) => operation['security'] !== undefined)) {
+  const candidates = consumerOperations(asRecord(own(document, 'paths')), routes)
+  if (!candidates.some(({ operation }) => own(operation, 'security') !== undefined)) {
     return []
   }
   return candidates
-    .filter(({ operation }) => operation['security'] === undefined)
+    .filter(({ operation }) => own(operation, 'security') === undefined)
     .map(({ key }) => key)
 }
 
@@ -574,7 +574,7 @@ function assertScrapeSchemeIsOurs(
   // constant: the reads are safe, but a computed member access is the shape an
   // analyser cannot tell apart from the prototype-pollution bug it resembles.
   const declaredByConsumer = Object.keys(openapi.securitySchemes).includes(METRICS_SCHEME_NAME)
-  const declaredByDocument = Object.keys(asRecord(components['securitySchemes'])).includes(
+  const declaredByDocument = Object.keys(asRecord(own(components, 'securitySchemes'))).includes(
     METRICS_SCHEME_NAME
   )
   if (!declaredByConsumer && !declaredByDocument) {
@@ -704,7 +704,7 @@ export function augmentDocument<T extends OpenApiDocumentLike>(
   contributions: readonly ResolvedContribution[] = []
 ): AugmentResult<T> {
   const { openapi } = options
-  const components = asRecord(document.components)
+  const components = asRecord(own(document, 'components'))
   // Accumulated in a `Map`, converted once at the end. Component member names
   // reach this from contributors, and writing one onto an object is not merely
   // the shape an analyser flags: `Object.assign` invokes the target's
@@ -750,7 +750,7 @@ export function augmentDocument<T extends OpenApiDocumentLike>(
   // `mergeAbsent` gives the existing side the win. Folding the libraries in
   // first would have let a dependency's scheme outrank the deployment's — and
   // let one claim the reserved scrape name behind the check just above.
-  const declaredSchemes = mergeAbsent(asRecord(components['securitySchemes']), {
+  const declaredSchemes = mergeAbsent(asRecord(own(components, 'securitySchemes')), {
     ...openapi.securitySchemes,
     ...scrapeScheme
   })
@@ -766,7 +766,7 @@ export function augmentDocument<T extends OpenApiDocumentLike>(
   assertSchemesDeclared(openapi, asRecord(merged.get('securitySchemes')))
 
   const routes = indexOwnRoutes(options, pathPrefixes)
-  const served = withoutDisabledRoutes(asRecord(document.paths), options, routes)
+  const served = withoutDisabledRoutes(asRecord(own(document, 'paths')), options, routes)
   assertOverridesMatch(served, openapi)
 
   // Spread-in fragments rather than assignment into a loose record: a document
@@ -774,7 +774,7 @@ export function augmentDocument<T extends OpenApiDocumentLike>(
   // requirement is never replaced — both without the cast that writing through
   // an index signature would have needed.
   const paths =
-    document.paths === undefined
+    own(document, 'paths') === undefined
       ? {}
       : {
           paths: augmentPaths(
@@ -786,7 +786,7 @@ export function augmentDocument<T extends OpenApiDocumentLike>(
           )
         }
   const security =
-    openapi.security.length > 0 && document.security === undefined
+    openapi.security.length > 0 && own(document, 'security') === undefined
       ? { security: openapi.security }
       : {}
 

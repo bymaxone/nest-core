@@ -1,0 +1,300 @@
+/**
+ * Unit tests for the refusal to boot beside a changed `Object.prototype`.
+ *
+ * Layer: unit.
+ * Goal: a string key the realm's `Object.prototype` does not hold by default, or a default one replaced,
+ * is refused at every boot entry (the module, the OpenAPI document and the HTTP floors) with a count
+ * and nothing the host wrote; a clean realm boots and serves as before.
+ * Mocks: none; the real `@nestjs/swagger` and `helmet` run, the latter against a fake Express application.
+ */
+import { runInNewContext } from 'node:vm'
+
+import type { INestApplication } from '@nestjs/common'
+import request from 'supertest'
+
+import { BymaxCoreModule } from './core.module'
+import { applyHttpFloors } from './http/http-floors'
+import { assertObjectPrototypeClean } from './object-prototype'
+import { applyBymaxOpenApi } from './openapi/openapi.bootstrap'
+import { bootApp, ExampleController } from './openapi/__tests__/bootstrap.harness'
+
+const MESSAGE = 'Object.prototype holds names or changes this package cannot run beside'
+
+/** The names the peers and the document read that a host could plant, one per family of read. */
+const PLANTED = [
+  'description',
+  'GET /examples',
+  'depth',
+  'chunks',
+  'isWebhook',
+  'type',
+  'responses',
+  'operationId',
+  'explorer',
+  'exposeInternals',
+  'contentSecurityPolicy',
+  'customJs'
+]
+
+/** `value` planted under `name` while `run` executes. */
+async function planted<T>(name: string, value: unknown, run: () => Promise<T> | T): Promise<T> {
+  Object.defineProperty(Object.prototype, name, { value, configurable: true, writable: true })
+  try {
+    return await run()
+  } finally {
+    delete (Object.prototype as Record<string, unknown>)[name]
+  }
+}
+
+/** What `run` throws, or nothing. */
+async function thrown(run: () => unknown): Promise<(Error & { count?: number }) | undefined> {
+  try {
+    await run()
+  } catch (error) {
+    return error as Error & { count?: number }
+  }
+  return undefined
+}
+
+/** A fake Express application the floors accept. */
+function fakeApp(): INestApplication {
+  return {
+    getHttpAdapter: () => ({ getType: () => 'express' }),
+    getHttpServer: () => ({ listening: false }),
+    use: () => undefined,
+    enableCors: () => undefined,
+    useBodyParser: () => undefined
+  } as unknown as INestApplication
+}
+
+describe('a changed Object.prototype', () => {
+  it.each(PLANTED)('is refused at every boot entry when %s is planted', async (name) => {
+    const app = await bootApp({ openapi: { enabled: true } } as never, [ExampleController])
+
+    const found = await planted(name, 'x', async () => ({
+      module: await thrown(() => BymaxCoreModule.forRoot({})),
+      document: await thrown(() => applyBymaxOpenApi(app)),
+      floors: await thrown(() => applyHttpFloors(fakeApp(), {}))
+    }))
+    await app.close()
+
+    for (const error of [found.module, found.document, found.floors]) {
+      expect(error?.message).toBe(MESSAGE)
+      expect(error?.count).toBe(1)
+      expect(JSON.stringify(error)).not.toContain(name)
+    }
+  })
+
+  it('counts every name that is planted, and says nothing else', async () => {
+    Object.defineProperty(Object.prototype, 'one', { value: 1, configurable: true })
+    Object.defineProperty(Object.prototype, 'two', { value: 2, configurable: true })
+    try {
+      expect((await thrown(() => assertObjectPrototypeClean()))?.count).toBe(2)
+    } finally {
+      delete (Object.prototype as Record<string, unknown>)['one']
+      delete (Object.prototype as Record<string, unknown>)['two']
+    }
+  })
+
+  it.each(['hasOwnProperty', 'toString', 'valueOf', 'isPrototypeOf'])(
+    'is refused when the standard %s is replaced',
+    async (name) => {
+      const original = Object.getOwnPropertyDescriptor(Object.prototype, name) as PropertyDescriptor
+      Object.defineProperty(Object.prototype, name, { ...original, value: () => true })
+      try {
+        expect((await thrown(() => assertObjectPrototypeClean()))?.count).toBe(1)
+      } finally {
+        Object.defineProperty(Object.prototype, name, original)
+      }
+    }
+  )
+
+  it('is refused when a standard name was replaced before this package loaded', async () => {
+    const original = Object.getOwnPropertyDescriptor(
+      Object.prototype,
+      'toString'
+    ) as PropertyDescriptor
+    Object.defineProperty(Object.prototype, 'toString', { ...original, value: () => 'changed' })
+    try {
+      let fresh: { assertObjectPrototypeClean: () => void } | undefined
+      jest.isolateModules(() => {
+        fresh = require('./object-prototype') as typeof fresh
+      })
+
+      expect((await thrown(() => fresh?.assertObjectPrototypeClean()))?.count).toBe(1)
+    } finally {
+      Object.defineProperty(Object.prototype, 'toString', original)
+    }
+  })
+
+  it('is refused when a standard name is missing, or becomes enumerable', async () => {
+    const valueOf = Object.getOwnPropertyDescriptor(
+      Object.prototype,
+      'valueOf'
+    ) as PropertyDescriptor
+    const toString = Object.getOwnPropertyDescriptor(
+      Object.prototype,
+      'toString'
+    ) as PropertyDescriptor
+    delete (Object.prototype as unknown as Record<string, unknown>)['valueOf']
+    Object.defineProperty(Object.prototype, 'toString', { ...toString, enumerable: true })
+    try {
+      expect((await thrown(() => assertObjectPrototypeClean()))?.count).toBe(2)
+    } finally {
+      Object.defineProperty(Object.prototype, 'valueOf', valueOf)
+      Object.defineProperty(Object.prototype, 'toString', toString)
+    }
+  })
+
+  it('is refused when a standard accessor is replaced, whatever Function.prototype.toString answers', async () => {
+    const proto = Object.getOwnPropertyDescriptor(
+      Object.prototype,
+      '__proto__'
+    ) as PropertyDescriptor
+    const source = Object.getOwnPropertyDescriptor(
+      Function.prototype,
+      'toString'
+    ) as PropertyDescriptor
+    Object.defineProperty(Object.prototype, '__proto__', { ...proto, get: () => ({}) })
+    Object.defineProperty(Function.prototype, 'toString', {
+      ...source,
+      value: () => 'function get __proto__() { [native code] }'
+    })
+    try {
+      expect((await thrown(() => assertObjectPrototypeClean()))?.count).toBe(1)
+    } finally {
+      Object.defineProperty(Function.prototype, 'toString', source)
+      Object.defineProperty(Object.prototype, '__proto__', proto)
+    }
+  })
+
+  it('is refused when a standard function is swapped for another one of the engine, after loading', async () => {
+    const original = Object.getOwnPropertyDescriptor(
+      Object.prototype,
+      'toString'
+    ) as PropertyDescriptor
+    Object.defineProperty(Object.prototype, 'toString', {
+      ...original,
+      value: Array.prototype.toString
+    })
+    try {
+      expect((await thrown(() => assertObjectPrototypeClean()))?.count).toBe(1)
+    } finally {
+      Object.defineProperty(Object.prototype, 'toString', original)
+    }
+  })
+
+  it("is not refused when a standard name is tighter than the engine's, as in a frozen realm", async () => {
+    const original = Object.getOwnPropertyDescriptor(
+      Object.prototype,
+      'toString'
+    ) as PropertyDescriptor
+    Object.defineProperty(Object.prototype, 'toString', { ...original, writable: false })
+    try {
+      expect(await thrown(() => assertObjectPrototypeClean())).toBeUndefined()
+    } finally {
+      Object.defineProperty(Object.prototype, 'toString', original)
+    }
+  })
+
+  it.each(['get', 'set', 'value', 'writable', 'enumerable', 'configurable'])(
+    'never runs an accessor planted under %s while it compares descriptors',
+    async (name) => {
+      let ran = 0
+      Object.defineProperty(Object.prototype, name, {
+        get: () => {
+          ran += 1
+          throw new Error('HOST')
+        },
+        configurable: true
+      })
+      let error: (Error & { count?: number }) | undefined
+      try {
+        error = await thrown(() => assertObjectPrototypeClean())
+      } finally {
+        delete (Object.prototype as unknown as Record<string, unknown>)[name]
+      }
+
+      expect(error?.message).toBe(MESSAGE)
+      expect(error?.count).toBe(1)
+      expect(ran).toBe(0)
+    }
+  )
+
+  it('is refused when a standard function is replaced by something that is not a function', async () => {
+    const toString = Object.getOwnPropertyDescriptor(
+      Object.prototype,
+      'toString'
+    ) as PropertyDescriptor
+    const valueOf = Object.getOwnPropertyDescriptor(
+      Object.prototype,
+      'valueOf'
+    ) as PropertyDescriptor
+    Object.defineProperty(Object.prototype, 'toString', { ...toString, value: 5 })
+    Object.defineProperty(Object.prototype, 'valueOf', { ...valueOf, value: {} })
+    try {
+      expect((await thrown(() => assertObjectPrototypeClean()))?.count).toBe(2)
+    } finally {
+      Object.defineProperty(Object.prototype, 'toString', toString)
+      Object.defineProperty(Object.prototype, 'valueOf', valueOf)
+    }
+  })
+
+  it('is refused when the __proto__ accessor becomes a data property', async () => {
+    const proto = Object.getOwnPropertyDescriptor(
+      Object.prototype,
+      '__proto__'
+    ) as PropertyDescriptor
+    Object.defineProperty(Object.prototype, '__proto__', {
+      value: 1,
+      writable: true,
+      enumerable: false,
+      configurable: true
+    })
+    try {
+      expect((await thrown(() => assertObjectPrototypeClean()))?.count).toBe(1)
+    } finally {
+      Object.defineProperty(Object.prototype, '__proto__', proto)
+    }
+  })
+
+  it.each(['get', 'set'])(
+    'is refused when the __proto__ %s is the same function of another realm',
+    async (which) => {
+      const proto = Object.getOwnPropertyDescriptor(
+        Object.prototype,
+        '__proto__'
+      ) as PropertyDescriptor
+      const foreign = runInNewContext(
+        `Object.getOwnPropertyDescriptor(Object.prototype, '__proto__').${which}`
+      ) as () => unknown
+      Object.defineProperty(Object.prototype, '__proto__', { ...proto, [which]: foreign })
+      try {
+        expect((await thrown(() => assertObjectPrototypeClean()))?.count).toBe(1)
+      } finally {
+        Object.defineProperty(Object.prototype, '__proto__', proto)
+      }
+    }
+  )
+
+  it('is not refused for a symbol key, which no option or document is read through by name', async () => {
+    const key = Symbol('host')
+    Object.defineProperty(Object.prototype, key, { value: 1, configurable: true })
+    try {
+      expect(await thrown(() => assertObjectPrototypeClean())).toBeUndefined()
+    } finally {
+      delete (Object.prototype as unknown as Record<symbol, unknown>)[key]
+    }
+  })
+
+  it('leaves a clean realm booting, and serving its document', async () => {
+    const app = await bootApp({ openapi: { enabled: true } } as never, [ExampleController])
+    await applyBymaxOpenApi(app)
+    await app.init()
+    const answer = await request(app.getHttpServer()).get('/docs-json')
+    await app.close()
+
+    expect(answer.status).toBe(200)
+    expect(await thrown(() => applyHttpFloors(fakeApp(), {}))).toBeUndefined()
+  })
+})

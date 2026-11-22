@@ -28,6 +28,11 @@ function spend(done: Map<object, unknown>, units: number): void {
 /** The copies that were made of a proxy, so a copy of one is still judged as one. */
 const proxies = new WeakSet<object>()
 
+/** Whether `copy` is the copy of a proxy, which is not a record the host's own keys speak for. */
+export function copiedFromProxy(copy: object): boolean {
+  return proxies.has(copy)
+}
+
 /** The copies made under the refusal, apart from the ones made without it, for each `done`. */
 const strictCaches = new WeakMap<Map<object, unknown>, Map<object, unknown>>()
 
@@ -58,6 +63,8 @@ function copyList(
   const count = length as number
   spend(done, count)
   for (let index = 0; index < count; index += 1) {
+    // A hole is refused, not copied as `undefined`, which a document would serve as `null`.
+    if (!Object.hasOwn(value, index)) throw new RangeError('A list has a hole')
     items.push(ownCopy(Reflect.get(value, index), depth + 1, inside, done, strict))
   }
   return items
@@ -75,7 +82,8 @@ function copyProperties(
   done: Map<object, unknown>,
   strict: boolean
 ): Record<PropertyKey, unknown> {
-  const copy: Record<PropertyKey, unknown> = {}
+  // A strict copy has no prototype, so a name planted on `Object.prototype` is not one of its names.
+  const copy = (strict ? Object.create(null) : {}) as Record<PropertyKey, unknown>
   const keys = Reflect.ownKeys(value)
   spend(done, keys.length)
   for (const key of keys) {
@@ -119,15 +127,11 @@ function reuse(
 }
 
 /**
- * Refuses the copy of a proxy that lists no keys, where the copy is strict: it reads as `{}`, and an empty
- * requirement is anonymous access.
+ * Whether `prototype` is the root of this realm's objects, or none: only by identity, since no check of a
+ * prototype a host made can be trusted (it can be forged, or be a proxy whose traps answer anything).
  */
-function judge(value: object, copy: object, depth: number, strict: boolean): void {
-  const proxied = types.isProxy(value)
-  if (proxied) proxies.add(copy)
-  if (strict && depth > 0 && (proxied || proxies.has(value)) && Object.keys(copy).length === 0) {
-    throw new RangeError('A proxy lists no keys')
-  }
+function isPlain(prototype: unknown): boolean {
+  return prototype === Object.prototype || prototype === null
 }
 
 /**
@@ -139,12 +143,12 @@ function judge(value: object, copy: object, depth: number, strict: boolean): voi
  * @param open - The objects being copied above this one, to tell a cycle from a shared object.
  * @param done - The copies already made in this call, so an object reached twice is copied once
  *   and the copy is shared as the original was.
- * @param strict - Whether a proxy below the root that lists no keys is refused instead of copied as `{}`; it
- *   holds for the items of a `security` list, where an empty requirement is anonymous access.
+ * @param strict - Whether a proxy, an object that is not plain, and a function or symbol below the root are
+ *   refused instead of copied or kept; it holds for the items of a `security` list, where an empty requirement is anonymous access.
  * @returns The copy.
  * @throws RangeError When `value` holds itself, is deeper than {@link MAX_DEPTH}, holds a list that is
- *   too long or more than {@link MAX_WORK} values, or, if `strict`, holds a proxy that lists no keys or
- *   an object that is not plain.
+ *   too long or more than {@link MAX_WORK} values, or, if `strict`, is or holds a proxy or an object that
+ *   is not plain, or holds a function or symbol.
  */
 export function ownCopy(
   value: unknown,
@@ -164,16 +168,19 @@ export function ownCopy(
   if (depth > MAX_DEPTH || open.includes(value)) {
     throw new RangeError('A value holds itself or is nested too deeply')
   }
-  // A proxy is never handed back as itself, whatever prototype it answers: it is copied like a plain
-  // object, so what is judged and kept is the copy and not a value that can answer differently later.
-  if (!types.isProxy(value) && !Array.isArray(value)) {
-    const prototype = Object.getPrototypeOf(value) as unknown
-    if (prototype !== Object.prototype && prototype !== null) {
-      // Where the copy is strict, nothing is kept by reference: an object that is not plain could answer
-      // differently to the check and to the document, whatever its tag says.
-      if (strict) throw new RangeError('A requirement must be a plain object')
-      return value
-    }
+  // Where the copy is strict, a proxy is refused whatever it answers: it cannot be unwrapped or trusted,
+  // and the names it forwards to its target, or holds on a prototype, are not the ones it lists.
+  // A copy a non-strict pass made of a proxy is refused too, which is what a shared object meets when
+  // it is reached first as data and then as a requirement.
+  if (strict && (types.isProxy(value) || proxies.has(value))) {
+    throw new RangeError('A requirement cannot be a proxy')
+  }
+  // The prototype is read inside the guard. Where the copy is strict, nothing is kept by reference: an
+  // object that is not plain could answer differently to the check and to the document, or hold some of
+  // its names on its prototype, whatever its tag says.
+  if (!Array.isArray(value) && !isPlain(Reflect.getPrototypeOf(value))) {
+    if (strict) throw new RangeError('A requirement must be a plain object')
+    if (!types.isProxy(value)) return value
   }
   const reused = reuse(value, depth, open, done, strict)
   if (reused !== undefined) return reused
@@ -185,9 +192,8 @@ export function ownCopy(
     return items
   }
   const copy = copyProperties(value, depth, inside, done, strict)
-  // The copy is judged: a proxy inside an option that lists no keys reads as `{}`, and an empty
-  // requirement is anonymous access.
-  judge(value, copy, depth, strict)
+  // A copy of a proxy is remembered, so a caller can refuse it as the record of a host's own keys.
+  if (types.isProxy(value)) proxies.add(copy)
   cache.set(value, copy)
   return copy
 }

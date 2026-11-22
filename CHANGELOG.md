@@ -40,14 +40,44 @@ value that answers differently on a second read cannot change what is served.
   name it holds no property under, and a copy that would do more work than its limit is refused.
 - The OpenAPI options `servers`, `securitySchemes`, `security` and `operationSecurity` are copied once, and the
   document is built from that copy, so the declaration that was checked is the one that is served. In it, a
-  proxy that lists no keys (read as `{}`, which OpenAPI takes to allow anonymous access), an object that is not
-  plain (a class instance, or an object with a `toJSON`), a method and a symbol are refused. A refusal in
+  proxy (it cannot be unwrapped or trusted, and one that lists no keys reads as `{}`, which OpenAPI takes to
+  allow anonymous access), an object that is not plain (a class instance, or an object with a `toJSON`), a
+  method and a symbol are refused, and so is a plain object made in another realm, since a prototype that is
+  not this realm's `Object.prototype` cannot be told from one a host forged. A refusal in
   `security`, `operationSecurity` or `securitySchemes` fails with `the options could not be read` and names the
   option in the `option` property of its `cause`; one in `servers` fails with
   `openapi.servers must hold only plain data`. The same holds for a `security` list in what a contributor adds.
 - A property that is not enumerable is enumerable in the copy the library takes of what a host hands over.
-- `forRootAsync`: Nest reads the factory's result before the library can guard it. See
-  `docs/forrootasync-factory-result.md`.
+- A directive of the `helmet` policy that is a function is refused at boot, naming the directive, instead of
+  being dropped; a method a class holds on its prototype is still not taken for a directive.
+- A list with a hole, and what stops
+  a security option from being copied (a getter that throws, a revoked proxy, a list that is too long) fail
+  with `the options could not be read`, naming the option in the `option` property of the `cause`. A
+  contributor's operations map, or an operation, that is not plain (a `Map`, a class instance, an object
+  derived from another, a proxy) is the contributor's failure and not an operation with no
+  security.
+- An option the host leaves out keeps its default whatever was planted on `Object.prototype`: a name found only
+  on the null-prototype root of its chain, such as `Object.prototype` of this realm or another (`exposeInternals`, `exposeIndicatorErrors`, `edgeProtected`, `authToken`,
+  `enabled` and the rest, or a whole block) is not an option the host set. A value the host sets, one a class
+  holds on its prototype and one an object from another realm holds itself are still read.
+- A proxy is refused as the list or map of `servers`, `security`, `securitySchemes` and `operationSecurity`
+  before anything is read through it, whatever it answers for its length. A hole in a list is never filled
+  from `Array.prototype`, and what a strict copy holds has no prototype, so a name planted on
+  `Object.prototype` cannot complete a server or a security scheme that left it out.
+- A name planted on `Object.prototype` does not change what `@nestjs/swagger` and `helmet` are handed or
+  serve: the options given to the peer's `createDocument` and `setup` and to `helmet` have no prototype, and
+  an option of `helmet` that takes settings and is on holds its own settings object, so the pages, the
+  routes and the security headers are the ones of a run where nothing was planted. The same holds for the
+  document the merge builds: a `security`, `securitySchemes`, `content`, `$ref` or `description` planted there
+  is not a member of what the peer generated.
+- `BymaxCoreModule.forRoot`, `applyBymaxOpenApi` (only when it goes on to mount the document) and `applyHttpFloors` refuse to boot while `Object.prototype`
+  holds a string key outside the ones it has by default, or one of those has been replaced. The error
+  carries only a count (`count`). A host that extends `Object.prototype` can no longer boot the package; this
+  closes the names the peers read from their own objects, which no option can shadow.
+- The limits on what is copied are in the README.
+- With `forRootAsync`, Nest reads the factory's result before the library receives it, so a hostile value the
+  factory returns (a proxy whose trap throws) fails the boot with the host's own error and not with
+  `the options could not be read`; what the library does receive is copied as under `forRoot`.
 
 ## [1.6.20] - 2026-11-21
 

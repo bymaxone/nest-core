@@ -20,6 +20,9 @@ const MAPS: ReadonlyArray<readonly [string, string, object]> = [
   ['openapi', 'operationSecurity', { 'GET /items': [{ bearer: [] }] }]
 ]
 
+/** The options that hold security, where a proxy is refused whatever it lists. */
+const SECURED = new Set(['securitySchemes', 'operationSecurity'])
+
 /** `value` answered through `get` alone, over an empty target. */
 function getOnly<T extends object>(value: T): T {
   return new Proxy({} as T, { get: (_target, key) => Reflect.get(value, key) })
@@ -45,13 +48,16 @@ describe('an open map of the options held behind a proxy', () => {
       error = thrown as Error
     }
     expect(error?.message).toBe('the options could not be read')
+    // A security option refuses every proxy as it is copied; the other maps refuse one that lists no keys.
     expect(error?.cause).toMatchObject({
-      message: 'an option is held behind a proxy that lists no keys',
+      message: SECURED.has(name)
+        ? 'an option holds what cannot be copied as plain data'
+        : 'an option is held behind a proxy that lists no keys',
       option: name
     })
   })
 
-  it.each(MAPS)(
+  it.each(MAPS.filter(([, name]) => !SECURED.has(name)))(
     'keeps the entries of %s.%s served by a proxy that lists its keys',
     (block, name, map) => {
       const resolved = normalizeCoreOptions(
@@ -70,12 +76,18 @@ describe('an open map of the options held behind a proxy', () => {
 })
 
 describe('a hole in openapi.security', () => {
-  it('is refused as an item that is not an object, never taken as a requirement', () => {
+  it('is refused naming the option, never taken as a requirement', () => {
     const holey: unknown[] = new Array<unknown>(2)
     holey[0] = { bearer: [] }
 
-    expect(() =>
+    let thrown: Error | undefined
+    try {
       BymaxCoreModule.forRoot({ openapi: { enabled: true, security: holey as never } })
-    ).toThrow('openapi.security[1] must be an object, received undefined')
+    } catch (error) {
+      thrown = error as Error
+    }
+
+    expect(thrown?.message).toBe('the options could not be read')
+    expect(thrown?.cause).toMatchObject({ option: 'security' })
   })
 })

@@ -8,6 +8,7 @@
  * Mocks: none.
  */
 import { types } from 'node:util'
+import { runInNewContext } from 'node:vm'
 
 import { ownCopy } from './own-copy'
 
@@ -67,18 +68,39 @@ describe('ownCopy', () => {
   it('refuses a proxy that lists no keys where an operation or a component holds a security list', () => {
     const operation = { security: [new Proxy({}, {})] }
 
-    expect(() => ownCopy({ operation })).toThrow('A proxy lists no keys')
-    expect(() => ownCopy({ components: { x: operation } })).toThrow('A proxy lists no keys')
+    expect(() => ownCopy({ operation })).toThrow('A requirement cannot be a proxy')
+    expect(() => ownCopy({ components: { x: operation } })).toThrow(
+      'A requirement cannot be a proxy'
+    )
   })
 
   it('refuses the proxy however the shared object is reached: first as an extension, then as a requirement', () => {
     const shared = new Proxy({}, { get: () => ['read'] })
 
     expect(() => ownCopy({ operation: { 'x-data': shared, security: [shared] } })).toThrow(
-      'A proxy lists no keys'
+      'A requirement cannot be a proxy'
     )
     expect(() => ownCopy({ a: { extension: shared }, b: { security: [shared] } })).toThrow(
-      'A proxy lists no keys'
+      'A requirement cannot be a proxy'
+    )
+  })
+
+  it('refuses a list holding a proxy however the shared list is reached', () => {
+    const shared = [new Proxy({}, { get: () => ['read'] })]
+
+    expect(() => ownCopy({ 'x-data': shared, security: shared })).toThrow(
+      'A requirement cannot be a proxy'
+    )
+    expect(() => ownCopy({ security: shared, 'x-data': shared })).toThrow(
+      'A requirement cannot be a proxy'
+    )
+  })
+
+  it('refuses a shared object that holds a method when it is reached again as a requirement', () => {
+    const shared = { bearer: [], validate: (): void => undefined }
+
+    expect(() => ownCopy({ a: { extension: shared }, b: { security: [shared] } })).toThrow(
+      'A requirement must be plain data'
     )
   })
 
@@ -90,28 +112,31 @@ describe('ownCopy', () => {
     })
   })
 
-  it('copies an empty proxy in a list that no security key holds, and keeps a requirement proxy that lists keys', () => {
+  it('copies an empty proxy in a list that no security key holds, and refuses a proxy that lists keys in a security list', () => {
     expect(ownCopy({ examples: [new Proxy({}, {})] })).toStrictEqual({ examples: [{}] })
-    expect(ownCopy({ security: [new Proxy({ bearer: [] }, {})] })).toStrictEqual({
-      security: [{ bearer: [] }]
-    })
+    expect(() => ownCopy({ security: [new Proxy({ bearer: [] }, {})] })).toThrow(
+      'A requirement cannot be a proxy'
+    )
   })
 
-  it('copies a proxy whatever prototype it answers, and judges the copy', () => {
+  it('copies a proxy whatever prototype it answers where it is not strict, and refuses it where it is', () => {
     class Foo {}
     const asFoo = (target: object): object =>
       new Proxy(target, { getPrototypeOf: () => Foo.prototype })
 
-    expect(() => ownCopy({ security: [asFoo({})] })).toThrow('A proxy lists no keys')
+    expect(() => ownCopy({ security: [asFoo({})] })).toThrow('A requirement cannot be a proxy')
+    expect(() => ownCopy({ security: [asFoo({ a: [] })] })).toThrow(
+      'A requirement cannot be a proxy'
+    )
     const copied = ownCopy({ extension: asFoo({ a: 1 }) }) as { extension: object }
     expect(types.isProxy(copied.extension)).toBe(false)
     expect(copied.extension).toStrictEqual({ a: 1 })
   })
 
-  it('judges emptiness by the string keys: a proxy that lists only a symbol key is refused', () => {
+  it('refuses a proxy that lists only a symbol key in a security list', () => {
     const symbolic = new Proxy({ [Symbol('hidden')]: [] }, {})
 
-    expect(() => ownCopy({ security: [symbolic] })).toThrow('A proxy lists no keys')
+    expect(() => ownCopy({ security: [symbolic] })).toThrow('A requirement cannot be a proxy')
   })
 
   it('reads the length of a list once, so a length that grows on every read ends', () => {
@@ -125,10 +150,10 @@ describe('ownCopy', () => {
     expect(reads).toBe(1)
   })
 
-  it('reads each item that is there once, by its index, and copies a hole as undefined', () => {
+  it('reads each item that is there once, by its index, and refuses a hole', () => {
     const reads = [0, 0, 0]
     const list: unknown[] = new Array<unknown>(3)
-    for (const index of [0, 2]) {
+    for (const index of [0, 1, 2]) {
       Object.defineProperty(list, index, {
         get: () => {
           reads[index] = (reads[index] ?? 0) + 1
@@ -138,8 +163,13 @@ describe('ownCopy', () => {
       })
     }
 
-    expect(ownCopy({ list })).toStrictEqual({ list: ['item 0', undefined, 'item 2'] })
-    expect(reads).toStrictEqual([1, 0, 1])
+    expect(ownCopy({ list })).toStrictEqual({ list: ['item 0', 'item 1', 'item 2'] })
+    expect(reads).toStrictEqual([1, 1, 1])
+
+    const holey: unknown[] = new Array<unknown>(3)
+    holey[0] = 1
+    holey[2] = 3
+    expect(() => ownCopy({ list: holey })).toThrow('A list has a hole')
   })
 
   it.each([Number.NaN, -1, 1.5, '2', undefined, { valueOf: (): number => 1 }])(
@@ -154,13 +184,13 @@ describe('ownCopy', () => {
     }
   )
 
-  it('refuses a security list a proxy gives out as empty by a length that is not a number', () => {
+  it('refuses a security list that is a proxy, whatever length it answers', () => {
     const security = new Proxy([{ bearer: [] }], {
       get: (target, key, receiver) =>
         key === 'length' ? Number.NaN : Reflect.get(target, key, receiver)
     })
 
-    expect(() => ownCopy({ operation: { security } })).toThrow('A list is too long')
+    expect(() => ownCopy({ operation: { security } })).toThrow('A requirement cannot be a proxy')
   })
 
   it.each([Number.POSITIVE_INFINITY, 2 ** 31, 100_001])(
@@ -195,6 +225,11 @@ describe('ownCopy', () => {
   it('refuses a copy that would do more work than the limit, however it is nested', () => {
     const wide = (levels: number): unknown[] =>
       new Proxy([], {
+        has: () => true,
+        getOwnPropertyDescriptor: (target, key) =>
+          typeof key === 'string' && /^\d+$/.test(key)
+            ? { value: 1, enumerable: true, configurable: true, writable: true }
+            : Reflect.getOwnPropertyDescriptor(target, key),
         get: (target, key, receiver) => {
           if (key === 'length') return 2000
           return typeof key === 'string' && /^\d+$/.test(key)
@@ -232,7 +267,7 @@ describe('ownCopy', () => {
   it('keeps a requirement with no prototype as a plain copy, where it is strict', () => {
     const bare = Object.assign(Object.create(null) as object, { bearer: ['read'] })
 
-    expect(ownCopy({ security: [bare] })).toStrictEqual({ security: [{ bearer: ['read'] }] })
+    expect(ownCopy({ security: [bare] })).toEqual({ security: [{ bearer: ['read'] }] })
   })
 
   it('refuses, where it is strict, an object the checks take for a record but is not plain', () => {
@@ -249,6 +284,75 @@ describe('ownCopy', () => {
     expect((ownCopy({ extension: new Held() }) as { extension: unknown }).extension).toBeInstanceOf(
       Held
     )
+  })
+
+  it.each([
+    ['Object.prototype', (): object | null => Object.prototype],
+    ['null', (): object | null => null]
+  ])(
+    'refuses a security proxy that answers %s as its prototype, whatever it holds',
+    (_name, answer) => {
+      class Mixed {
+        b: string[] = []
+        get o(): string[] {
+          return ['read', 'write']
+        }
+      }
+      const lying = new Proxy(new Mixed(), { getPrototypeOf: answer })
+
+      expect(() => ownCopy({ security: [lying] })).toThrow('A requirement cannot be a proxy')
+    }
+  )
+
+  it('refuses a security proxy whose ownKeys lists only some of its names, and a list that is a proxy', () => {
+    const partial = new Proxy({ b: [], o: ['read'] }, { ownKeys: () => ['b'] })
+    const list = new Proxy([{ b: [] }], {})
+
+    expect(() => ownCopy({ security: [partial] })).toThrow('A requirement cannot be a proxy')
+    expect(() => ownCopy({ security: list })).toThrow('A requirement cannot be a proxy')
+  })
+
+  it('refuses an object derived from a prototype a host made to look like a root, whatever it holds', () => {
+    const forged = Object.create(null) as Record<string, unknown>
+    for (const name of Object.getOwnPropertyNames(Object.prototype)) {
+      Object.defineProperty(forged, name, { value: 1, enumerable: true, configurable: true })
+    }
+    Object.defineProperty(forged, 'constructor', { get: () => [] })
+    const derived = Object.create(forged) as object
+
+    expect(() => ownCopy({ security: [derived] })).toThrow('A requirement must be a plain object')
+    expect(() => ownCopy({ security: [Object.create(Object.create(null)) as object] })).toThrow(
+      'A requirement must be a plain object'
+    )
+  })
+
+  it('refuses an object whose prototype is a proxy that answers the names of a root', () => {
+    const answering = new Proxy(Object.create(null) as object, {
+      ownKeys: () => Object.getOwnPropertyNames(Object.prototype),
+      getOwnPropertyDescriptor: () => ({ value: 1, configurable: true }),
+      get: (_target, key) => (key === 'o' ? ['write'] : undefined)
+    })
+    const derived = Object.create(answering) as object
+
+    expect(() => ownCopy({ security: [derived] })).toThrow('A requirement must be a plain object')
+  })
+
+  it('keeps a plain requirement while the host has added a name to Object.prototype', () => {
+    Object.defineProperty(Object.prototype, 'polyfill', { value: 1, configurable: true })
+    try {
+      expect(ownCopy({ security: [{ bearer: ['read'] }] })).toEqual({
+        security: [{ bearer: ['read'] }]
+      })
+    } finally {
+      delete (Object.prototype as Record<string, unknown>)['polyfill']
+    }
+  })
+
+  it('refuses a plain requirement made in another realm: no check of a foreign root can be trusted', () => {
+    const foreign = runInNewContext('({ bearer: ["read"] })') as object
+
+    expect(() => ownCopy({ security: [foreign] })).toThrow('A requirement must be a plain object')
+    expect(ownCopy({ extension: foreign })).toStrictEqual({ extension: { bearer: ['read'] } })
   })
 
   it('reads a list subclass by its indexes, not by an iterator that disagrees with them', () => {
@@ -280,7 +384,7 @@ describe('ownCopy', () => {
   })
 
   it('keeps a plain empty requirement, which is intended anonymous access', () => {
-    expect(ownCopy({ security: [{}] })).toStrictEqual({ security: [{}] })
+    expect(ownCopy({ security: [{}] })).toEqual({ security: [{}] })
   })
 
   it.each([
@@ -309,7 +413,7 @@ describe('ownCopy', () => {
       >
 
       expect(reads).toBe(1)
-      expect(copy['ItemsController.list']?.['security']).toStrictEqual([{ oauth: ['write'] }])
+      expect(copy['ItemsController.list']?.['security']).toEqual([{ oauth: ['write'] }])
     }
   )
 

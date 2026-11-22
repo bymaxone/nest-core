@@ -254,13 +254,42 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 // 5.41 KiB = 5540 B: measured 5501 B plus 39 B, from 5417 B. `./openapi` budget 9.22 KiB = 9441 B: measured 9405 B plus
 // 36 B, from 9298 B. The growth is the one snapshot a shared object gets for both kinds of copy, so the host is
 // read once whatever order the object is reached in. Code only.
+// Root budget 25.91 KiB = 26531 B: measured 26497 B brotli plus 34 B of headroom, from 26470 B. `./openapi` budget
+// 9.32 KiB = 9543 B: measured 9507 B plus 36 B, from 9441 B. `./http` is unchanged (5529 B measured). The growth is the
+// prototype read through a proxy, the refusal of a hole, the option a refusal names, the function a directive holds
+// and the plain operations a contributor gives. Code only.
+// Root budget 25.95 KiB = 26573 B: measured 26537 B brotli plus 36 B of headroom, from 26531 B. `./http` budget
+// 5.50 KiB = 5632 B: measured 5600 B plus 32 B, from 5540 B. `./openapi` budget 9.40 KiB = 9626 B: measured 9588 B plus
+// 38 B, from 9543 B. The growth is the memory of the copies made of a proxy whose prototype is not plain, which a
+// contributor's operations are refused for, and the read of a security option inside the try that names it. Code only.
+// Root budget 25.98 KiB = 26605 B: measured 26574 B brotli plus 31 B of headroom, from 26573 B. `./http` budget
+// 5.54 KiB = 5673 B: measured 5639 B plus 34 B, from 5632 B. `./openapi` is unchanged (9482 B measured). The growth
+// is the read of an option only where something below the realm root holds it, and the copies made with no
+// prototype, so a name planted on `Object.prototype` cannot fill an omitted option. Code only.
+// `./http` budget 5.72 KiB = 5857 B: measured 5829 B brotli plus 28 B of headroom, from 5673 B. Root (26588 B)
+// and `./openapi` (9606 B, under its 9.40 KiB) are unchanged. The growth is the
+// options `helmet` is handed with no prototype, and the settings object each of its options that is on holds,
+// so a name planted on `Object.prototype` is not one `helmet` reads. Code only.
+// `./openapi` budget 9.52 KiB = 9748 B: measured 9717 B brotli plus 31 B of headroom, from 9626 B. Root
+// (26588 B) and `./http` (5829 B) are unchanged. The growth is the boot refusal of a name planted on
+// `Object.prototype` that the peer reads from its own instances, and the two helpers that hand the peer
+// options with no prototype. Code only.
+// `./openapi` budget 9.59 KiB = 9820 B: measured 9794 B brotli plus 26 B of headroom, from 9748 B. Root (26589 B)
+// and `./http` (5838 B) are unchanged. The growth is the own-property read of every member of the served document
+// the merge tests (`security`, `securitySchemes`, `content`, `$ref`, `description`, `paths`, `components`), and
+// four more names of the peer's own objects in the boot refusal. Code only.
+// Budgets for the refusal of a changed `Object.prototype`, measured + about 30 B: root 26.50 KiB = 27136 B (measured
+// 27126 B), `./http` 6.30 KiB = 6451 B (6414 B), `./openapi` 10.01 KiB = 10250 B (10235 B), from 26603 B, 5857 B and
+// 9820 B. The growth is that one module, which each bundle carries: a fresh realm's `Object.prototype` to compare
+// with, the snapshot taken at load, and the comparison of every name and function, each field of a descriptor
+// read as its own property. Code only.
 const BUDGETS = [
-  { name: '. (root)', path: 'dist/index.mjs', brotli: 25.85 * 1024 },
+  { name: '. (root)', path: 'dist/index.mjs', brotli: 26.5 * 1024 },
   { name: './pagination', path: 'dist/pagination/index.mjs', brotli: 1.5 * 1024 },
   { name: './health', path: 'dist/health/index.mjs', brotli: 0.5 * 1024 },
-  { name: './openapi', path: 'dist/openapi/index.mjs', brotli: 9.22 * 1024 },
+  { name: './openapi', path: 'dist/openapi/index.mjs', brotli: 10.01 * 1024 },
   { name: './metrics', path: 'dist/metrics/index.mjs', brotli: 0.5 * 1024 },
-  { name: './http', path: 'dist/http/index.mjs', brotli: 5.41 * 1024 }
+  { name: './http', path: 'dist/http/index.mjs', brotli: 6.3 * 1024 }
 ]
 
 const fmt = (n) => `${(n / 1024).toFixed(2)} kB`

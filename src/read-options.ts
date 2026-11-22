@@ -35,7 +35,10 @@ function snapshot(list: readonly unknown[]): unknown[] {
     throw bootError('an option is too large', {})
   }
   const items: unknown[] = []
-  for (let index = 0; index < length; index += 1) items.push(Reflect.get(list, index))
+  for (let index = 0; index < length; index += 1) {
+    // What `Array.prototype` holds at the index of a hole is not an item: a hole stays one.
+    items.push(Object.hasOwn(list, index) ? Reflect.get(list, index) : undefined)
+  }
   return items
 }
 
@@ -47,7 +50,8 @@ function namedCopy(value: unknown, done: Map<object, unknown>): unknown {
   const add = (found: readonly PropertyKey[]): void => {
     for (const name of found) if (typeof name === 'string') names.add(name)
   }
-  add(Reflect.ownKeys(value))
+  const own = Reflect.ownKeys(value)
+  add(own)
   let links = 0
   for (
     let up = Reflect.getPrototypeOf(value);
@@ -61,8 +65,12 @@ function namedCopy(value: unknown, done: Map<object, unknown>): unknown {
   if (names.size > MAX_NAMES) throw bootError('an option is too large', {})
   for (const name of names) {
     const held: unknown = Reflect.get(value, name)
-    if (typeof held !== 'function')
-      Object.defineProperty(copy, name, { value: ownCopy(held, 0, [], done), enumerable: true })
+    // A method on a prototype is not a setting; one a directive holds itself is refused, not dropped.
+    if (typeof held === 'function') {
+      if (own.includes(name)) throw bootError('a directive holds a function', { option: name })
+      continue
+    }
+    Object.defineProperty(copy, name, { value: ownCopy(held, 0, [], done), enumerable: true })
   }
   return copy
 }
@@ -88,11 +96,29 @@ function readEntry(
   if (entry === 0) return ownCopy(value, 0, [], done, strict)
   if (Array.isArray(entry)) {
     const shape = entry[0] as Shape
+    if (types.isProxy(value)) throw bootError('an option is held behind a proxy', {})
     return Array.isArray(value)
       ? snapshot(value).map((item) => readBlock(item, shape, done))
       : ownCopy(value, 0, [], done)
   }
   return readBlock(value, entry as Shape, done)
+}
+
+/**
+ * What `given` holds under `key`, unless the first holder of the key is a root: an object with no
+ * prototype that is not `given` itself, of any realm. Whatever a root holds is never read, however it is
+ * held, so a proxy that forwards to it is not asked either. Any other name is asked as it always was,
+ * a proxy included, which may hold it or answer it by itself.
+ */
+function heldBy(given: object, key: string): unknown {
+  let holder: object | null = given
+  for (let links = 0; holder !== null && !Object.hasOwn(holder, key); links += 1) {
+    // A proxy can answer its own prototype for ever.
+    if (links > MAX_NAMES) throw bootError('an option is too large', {})
+    holder = Reflect.getPrototypeOf(holder)
+  }
+  const root = holder !== null && holder !== given && Reflect.getPrototypeOf(holder) === null
+  return root ? undefined : Reflect.get(given, key)
 }
 
 /**
@@ -103,30 +129,42 @@ function readEntry(
  */
 function readBlock(given: unknown, shape: Shape, done: Map<object, unknown>): unknown {
   if (!isBlock(given)) return given
-  const copy: Record<string, unknown> = {}
+  // No prototype: the resolvers cannot inherit a planted name from the copy.
+  const copy = Object.create(null) as Record<string, unknown>
   for (const key of Object.keys(shape)) {
-    let value: unknown = Reflect.get(given, key)
-    if (value !== undefined) {
-      const entry = shape[key] as Shape | readonly [Shape] | 0 | 1
-      const isMap = entry === 0 || entry === 1
+    const entry = shape[key] as Shape | readonly [Shape] | 0 | 1
+    const isMap = entry === 0 || entry === 1
+    const strict = SECURITY.has(key)
+    let value: unknown
+    let made: unknown
+    try {
+      value = heldBy(given, key)
+      if (value === undefined) continue
       // The items are read once, here, so the one checked is the one copied.
-      if (isMap && Array.isArray(value)) value = snapshot(value)
-      const strict = SECURITY.has(key)
-      let made: unknown
-      try {
-        made = readEntry(value, entry, strict, done)
-      } catch (cause) {
-        // A refusal by the strict copy names the option it came from.
-        if (!strict || !(cause instanceof RangeError)) throw cause
-        throw bootError('an option holds what is not plain data', { option: key }, { cause })
+      // A requirement list is read once, by the strict copy itself, which refuses a proxy before any read.
+      if (isMap && Array.isArray(value)) {
+        if (!strict) value = snapshot(value)
+        else if (!types.isProxy(value) && value.length > MAX_NAMES) {
+          throw bootError('an option is too large', {})
+        }
       }
-      // The copy is judged, not the original: a proxy that lists no keys reads as an empty map, and an
-      // empty requirement is anonymous access.
-      if (isMap && types.isProxy(value) && isEmptyMap(made)) {
-        throw bootError('an option is held behind a proxy that lists no keys', { option: key })
-      }
-      copy[key] = made
+      made = readEntry(value, entry, strict, done)
+    } catch (cause) {
+      // Whatever stops a security option from being copied (a getter of its own that throws, a refusal, a
+      // list too long, a revoked proxy) names the option it came from.
+      if (!strict) throw cause
+      throw bootError(
+        'an option holds what cannot be copied as plain data',
+        { option: key },
+        { cause }
+      )
     }
+    // The copy is judged, not the original: a proxy that lists no keys reads as an empty map, and an
+    // empty requirement is anonymous access.
+    if (isMap && types.isProxy(value) && isEmptyMap(made)) {
+      throw bootError('an option is held behind a proxy that lists no keys', { option: key })
+    }
+    copy[key] = made
   }
   for (const key of Object.keys(given)) {
     if (!Object.hasOwn(shape, key)) {
