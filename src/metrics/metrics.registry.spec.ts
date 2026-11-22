@@ -209,12 +209,23 @@ describe('the writes of the default metrics beside a changed Object.prototype', 
     expect(typeof gauge['set']).toBe('function')
   })
 
-  it('keep writing once the name is gone', async () => {
+  it('keep writing on the same metric once the name is gone, the refused write not recorded', async () => {
     const registry = await createMetricsRegistry(
       normalizeCoreOptions({ metrics: { enabled: true, collectDefaultMetrics: true } })
     )
     const histogram = registry.getSingleMetric('nodejs_gc_duration_seconds') as unknown as {
       observe(labels: object, value: number): void
+    }
+    Object.defineProperty(Object.prototype, 'planted', {
+      value: 'x',
+      enumerable: true,
+      configurable: true,
+      writable: true
+    })
+    try {
+      histogram.observe({ kind: 'major' }, 0.01)
+    } finally {
+      delete (Object.prototype as Record<string, unknown>)['planted']
     }
 
     histogram.observe({ kind: 'major' }, 0.01)

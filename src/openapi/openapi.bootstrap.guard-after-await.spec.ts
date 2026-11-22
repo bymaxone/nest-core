@@ -7,6 +7,8 @@
  * last `await`, immediately before the synchronous scan, and nothing planted is served.
  * Mocks: `loadSwagger`, which plants the name while it loads the real peer.
  */
+import request from 'supertest'
+
 import { applyBymaxOpenApi } from './openapi.bootstrap'
 import { bootApp, ExampleController } from './__tests__/bootstrap.harness'
 
@@ -47,6 +49,10 @@ describe('a name planted while the peer loads', () => {
         message: 'Object.prototype holds names or changes this package cannot run beside',
         count: 1
       })
+      await app.init()
+      // Nothing was mounted: the document and its UI are absent.
+      expect((await request(app.getHttpServer()).get('/docs')).status).toBe(404)
+      expect((await request(app.getHttpServer()).get('/docs-json')).status).toBe(404)
       await app.close()
     }
   )
