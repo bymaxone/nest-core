@@ -387,6 +387,18 @@ function buildInternalDetails(exception: unknown): ErrorDetails {
  * outermost `APP_FILTER` when the envelope feature is enabled, so it formats
  * every error that escapes a handler, including those thrown by other filters.
  */
+/** Whether the response was answered already, on Express (the response itself) or on Fastify (its `raw`). */
+function isAnswered(response: unknown): boolean {
+  const held = response as { headersSent?: boolean; writableEnded?: boolean; raw?: object }
+  const raw = (held.raw ?? held) as { headersSent?: boolean; writableEnded?: boolean }
+  return (
+    held.headersSent === true ||
+    held.writableEnded === true ||
+    raw.headersSent === true ||
+    raw.writableEnded === true
+  )
+}
+
 @Catch()
 export class BymaxExceptionFilter implements ExceptionFilter, OnModuleDestroy {
   /** Clock used to stamp the envelope timestamp; overridable in tests via fake timers. */
@@ -491,6 +503,9 @@ export class BymaxExceptionFilter implements ExceptionFilter, OnModuleDestroy {
       ...(traceId !== undefined ? { traceId } : {})
     }
     const envelope = this.buildEnvelope(exception, context, request)
+    // A response that was answered before this ran (a deadline, a handler that wrote) is not replied to
+    // again: a second write raises `ERR_HTTP_HEADERS_SENT` and could append a second body.
+    if (isAnswered(response)) return
     httpAdapter.reply(response, envelope, envelope.statusCode)
   }
 
