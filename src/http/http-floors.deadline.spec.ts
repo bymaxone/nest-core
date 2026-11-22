@@ -13,6 +13,7 @@ import type { INestApplication } from '@nestjs/common'
 import { Test } from '@nestjs/testing'
 import request from 'supertest'
 
+import { BymaxCoreModule } from '../core.module'
 import { BYMAX_GATEWAY_TIMEOUT } from '../envelope/error-codes'
 import { HandlerSignal } from '../handler-timeout/handler-timeout.decorators'
 import { applyHttpFloors } from './http-floors'
@@ -122,6 +123,52 @@ describe('the request deadline', () => {
 
     expect(answer.status).toBe(200)
     expect(seen.aborted).toBeUndefined()
+  })
+})
+
+describe('the request deadline beside the handler timeout', () => {
+  /** A slow handler, with no guard, so only the two bounds are in play. */
+  @Controller()
+  class SlowController {
+    @Get('slow')
+    async slow(): Promise<{ ok: true }> {
+      await sleep(500)
+      return { ok: true }
+    }
+  }
+
+  /** A started application with the module and the floors. */
+  async function both(deadlineMs: number, handlerMs: number): Promise<INestApplication> {
+    const moduleRef = await Test.createTestingModule({
+      imports: [
+        BymaxCoreModule.forRoot({ handlerTimeout: { enabled: true, timeoutMs: handlerMs } })
+      ],
+      controllers: [SlowController]
+    }).compile()
+    const app = moduleRef.createNestApplication()
+    await applyHttpFloors(app, { requestDeadline: { timeoutMs: deadlineMs, excludePaths: [] } })
+    await app.init()
+    return app
+  }
+
+  it.each([
+    ['the deadline is the shorter', 100, 300],
+    ['the handler timeout is the shorter', 300, 100]
+  ])('answers 504 once, in the envelope, when %s', async (_name, deadlineMs, handlerMs) => {
+    const errors = jest.spyOn(Logger.prototype, 'error')
+    const app = await both(deadlineMs, handlerMs)
+
+    const started = Date.now()
+    const answer = await request(app.getHttpServer()).get('/slow')
+    const elapsed = Date.now() - started
+    await sleep(700)
+
+    expect(answer.status).toBe(504)
+    expect(answer.body).toMatchObject({ statusCode: 504, code: BYMAX_GATEWAY_TIMEOUT })
+    expect(elapsed).toBeLessThan(Math.min(deadlineMs, handlerMs) + 150)
+    expect(errors).not.toHaveBeenCalled()
+    errors.mockRestore()
+    await app.close()
   })
 })
 

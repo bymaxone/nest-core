@@ -287,13 +287,18 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 // and `./openapi` (10245 B) are unchanged under their budgets. The growth is the second run of the guard after the
 // last `await`, the scrape's refusal and containment of a failing collection, and the containment of the writes of
 // every write of the default metrics. Code only.
+// Budgets of the 1.6.22 hardening, measured + about 30 B: root 26.82 KiB = 27463 B (measured 27432 B), `./http`
+// 7.35 KiB = 7526 B (7488 B), `./openapi` 10.19 KiB = 10435 B (10399 B), from 27136 B, 6451 B and 10250 B. The growth
+// is the request deadline (the middleware, its options and the signal key, in `./http`), the single decision on the
+// tag of a host's object and the vm-failure refusal of the guard (each bundle carries them), and the own-property
+// reads of the document. Code only.
 const BUDGETS = [
-  { name: '. (root)', path: 'dist/index.mjs', brotli: 26.7 * 1024 },
+  { name: '. (root)', path: 'dist/index.mjs', brotli: 26.82 * 1024 },
   { name: './pagination', path: 'dist/pagination/index.mjs', brotli: 1.5 * 1024 },
   { name: './health', path: 'dist/health/index.mjs', brotli: 0.5 * 1024 },
-  { name: './openapi', path: 'dist/openapi/index.mjs', brotli: 10.01 * 1024 },
+  { name: './openapi', path: 'dist/openapi/index.mjs', brotli: 10.19 * 1024 },
   { name: './metrics', path: 'dist/metrics/index.mjs', brotli: 0.5 * 1024 },
-  { name: './http', path: 'dist/http/index.mjs', brotli: 6.3 * 1024 }
+  { name: './http', path: 'dist/http/index.mjs', brotli: 7.35 * 1024 }
 ]
 
 const fmt = (n) => `${(n / 1024).toFixed(2)} kB`

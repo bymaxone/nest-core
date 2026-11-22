@@ -1563,6 +1563,8 @@ once, and the signal `@HandlerSignal()` returns is aborted by it as well as by t
   response is sent once and nothing is logged for it. A guard that is still running cannot be stopped; give it
   `@HandlerSignal()` to stop on the abort.
 - Keep it above `handlerTimeout.timeoutMs`; if it is shorter, the deadline answers first.
+- The `504` body carries `statusCode`, `code`, `message`, `timestamp` and `path`, and no `correlationId`: the floors
+  are mounted before the module, so no correlation provider exists yet.
 
 ## 🚀 Production Checklist
 
