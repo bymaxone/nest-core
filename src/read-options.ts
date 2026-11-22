@@ -7,6 +7,7 @@ import { types } from 'node:util'
 
 import { bootError } from './boot-error'
 import { ownCopy } from './own-copy'
+import { tagOf } from './tag-of'
 
 /**
  * What an options block documents: each key is an option, `0` for a value copied as it is (a number,
@@ -20,7 +21,7 @@ export interface Shape {
 
 /** Whether `value` is an object that holds settings, as `isPlainRecord` reads it, a class instance included. */
 function isBlock(value: unknown): value is object {
-  return Object.prototype.toString.call(value) === '[object Object]'
+  return tagOf(value) === '[object Object]'
 }
 
 const MAX_NAMES = 1000

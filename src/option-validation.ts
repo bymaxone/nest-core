@@ -5,6 +5,7 @@
  * @layer Configuration
  */
 import { bootError } from './boot-error'
+import { tagOf } from './tag-of'
 
 /** The built-in objects that are named when one is given where a block was expected. */
 const BUILT_IN_OBJECTS = ['Date', 'Map', 'Set', 'RegExp', 'Promise', 'Error']
@@ -14,7 +15,7 @@ const BUILT_IN_OBJECTS = ['Date', 'Map', 'Set', 'RegExp', 'Promise', 'Error']
  * `Date` or a `Map`, which would otherwise pass as an empty set of options.
  */
 export function isPlainRecord(value: unknown): value is Record<string, unknown> {
-  return Object.prototype.toString.call(value) === '[object Object]'
+  return tagOf(value) === '[object Object]'
 }
 
 /** The longest an unknown option's name is shown, so a hostile key cannot fill a log line. */
@@ -32,7 +33,7 @@ export function describeValue(value: unknown): string {
   if (value === null || value === undefined) return String(value)
   if (Array.isArray(value)) return 'an array'
   if (typeof value === 'object') {
-    const tag = Object.prototype.toString.call(value).slice(8, -1)
+    const tag = tagOf(value).slice(8, -1)
     return BUILT_IN_OBJECTS.includes(tag) ? `a ${tag}` : 'an object'
   }
   return `a ${typeof value}`
