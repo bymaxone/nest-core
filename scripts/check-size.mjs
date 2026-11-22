@@ -258,13 +258,17 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 // 9.32 KiB = 9543 B: measured 9507 B plus 36 B, from 9441 B. `./http` is unchanged (5529 B measured). The growth is the
 // prototype read through a proxy, the refusal of a hole, the option a refusal names, the function a directive holds
 // and the plain operations a contributor gives. Code only.
+// Root budget 25.95 KiB = 26573 B: measured 26537 B brotli plus 36 B of headroom, from 26531 B. `./http` budget
+// 5.50 KiB = 5632 B: measured 5600 B plus 32 B, from 5540 B. `./openapi` budget 9.40 KiB = 9626 B: measured 9588 B plus
+// 38 B, from 9543 B. The growth is the memory of the copies made of a proxy whose prototype is not plain, which a
+// contributor's operations are refused for, and the read of a security option inside the try that names it. Code only.
 const BUDGETS = [
-  { name: '. (root)', path: 'dist/index.mjs', brotli: 25.91 * 1024 },
+  { name: '. (root)', path: 'dist/index.mjs', brotli: 25.95 * 1024 },
   { name: './pagination', path: 'dist/pagination/index.mjs', brotli: 1.5 * 1024 },
   { name: './health', path: 'dist/health/index.mjs', brotli: 0.5 * 1024 },
-  { name: './openapi', path: 'dist/openapi/index.mjs', brotli: 9.32 * 1024 },
+  { name: './openapi', path: 'dist/openapi/index.mjs', brotli: 9.4 * 1024 },
   { name: './metrics', path: 'dist/metrics/index.mjs', brotli: 0.5 * 1024 },
-  { name: './http', path: 'dist/http/index.mjs', brotli: 5.41 * 1024 }
+  { name: './http', path: 'dist/http/index.mjs', brotli: 5.5 * 1024 }
 ]
 
 const fmt = (n) => `${(n / 1024).toFixed(2)} kB`
