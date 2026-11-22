@@ -31,10 +31,10 @@ import type { INestApplication, VersioningOptions } from '@nestjs/common'
 import { ApplicationConfig, DiscoveryService, Reflector } from '@nestjs/core'
 import type * as Swagger from '@nestjs/swagger'
 
-import { bootError } from '../boot-error'
 import type { ResolvedCoreOptions, ResolvedOpenApiOptions } from '../core.options'
 import { BYMAX_CORE_OPTIONS } from '../core.tokens'
 import { escapeUnseen } from '../escape-unseen'
+import { assertObjectPrototypeClean } from '../object-prototype'
 import { isProductionRuntime, runtimeEnvironmentName } from '../runtime.environment'
 import { writeLog } from '../write-log'
 import type { DiscardedComponent } from './openapi.components'
@@ -43,6 +43,7 @@ import type { HandlerIdMap, ResolvedContribution } from './openapi.contribution'
 import { augmentDocument, unsecuredOperations } from './openapi.document'
 import { loadSwagger } from './openapi.loader'
 import type { SwaggerModuleSurface } from './openapi.loader'
+import { own } from './openapi.shape'
 
 /** Why the document was not mounted. */
 export type OpenApiSkipReason =
@@ -369,33 +370,9 @@ function buildConfig(
 ): Omit<Swagger.OpenAPIObject, 'paths'> {
   builder.setTitle(options.title).setDescription(options.description).setVersion(options.version)
   for (const server of options.servers) {
-    builder.addServer(server.url, server.description)
+    builder.addServer(server.url, own(server, 'description') as string | undefined)
   }
   return builder.build()
-}
-
-/** The names `@nestjs/swagger` reads from its own instances without having set them. */
-const PEER_INSTANCE_NAMES: readonly string[] = [
-  'explorer',
-  'schemas',
-  'webhookPaths',
-  'root',
-  'properties',
-  'format'
-]
-
-/** Throws when something planted on `Object.prototype` is a name the peer reads from its own instances, where nothing of ours can shadow it. */
-function assertPeerNamesFree(): void {
-  for (const name of PEER_INSTANCE_NAMES) {
-    if (name in Object.prototype) {
-      throw bootError(
-        'Object.prototype holds a name the OpenAPI peer reads from its own instances',
-        {
-          name
-        }
-      )
-    }
-  }
 }
 
 /**
@@ -513,7 +490,7 @@ export async function applyBymaxOpenApi(app: INestApplication): Promise<OpenApiM
     return { mounted: false, reason: 'disabled' }
   }
 
-  assertPeerNamesFree()
+  assertObjectPrototypeClean()
   const swagger = await loadSwagger()
   const config = buildConfig(new swagger.DocumentBuilder(), options)
   // The map is filled by the scan below, which calls the factory once per

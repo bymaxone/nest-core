@@ -24,6 +24,7 @@ import type {
   ResolvedHandlerTimeoutOptions
 } from './handler-timeout/handler-timeout.options'
 import { asHostError } from './host-error'
+import { assertObjectPrototypeClean } from './object-prototype'
 import {
   booleanOption,
   checkedBlock,
@@ -771,6 +772,7 @@ function resolveTelemetry(given: unknown): ResolvedTelemetryOptions {
  * @returns A fully-populated, deep-frozen options snapshot.
  */
 export function normalizeCoreOptions(given?: BymaxCoreModuleOptions): ResolvedCoreOptions {
+  assertObjectPrototypeClean()
   const raw = checkedBlock<BymaxCoreModuleOptions>(
     'options',
     readOptions(given, OPTION_SHAPE),

@@ -15,6 +15,7 @@
 import type { INestApplication } from '@nestjs/common'
 import type { HelmetOptions } from 'helmet'
 
+import { assertObjectPrototypeClean } from '../object-prototype'
 import {
   booleanOption,
   checkedBlock,
@@ -472,6 +473,7 @@ export async function applyHttpFloors(
   app: INestApplication,
   options: HttpFloorsOptions = {}
 ): Promise<void> {
+  assertObjectPrototypeClean()
   const floors = resolveFloors(options)
   const express = app as unknown as ExpressApplicationShape
   const server = assertBootstrapState(express)

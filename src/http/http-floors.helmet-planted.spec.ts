@@ -5,7 +5,7 @@
  * Goal: `helmet` reads names it was not given, from the object it is handed or from one of its own, so
  * the headers an application serves must be the ones of an unplanted run whatever is planted; and the
  * names the installed `helmet` reads are all names this package knows.
- * Mocks: a fake Express application that keeps the middleware it is given; the real `helmet`.
+ * Mocks: the guard that refuses a planted `Object.prototype` at boot, so the reads under it are still exercised; a fake Express application that keeps the middleware it is given; the real `helmet`.
  */
 import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
@@ -13,6 +13,8 @@ import { createRequire } from 'node:module'
 import type { INestApplication } from '@nestjs/common'
 
 import { applyHttpFloors, HELMET_OPTION_NAMES } from './http-floors'
+
+jest.mock('../object-prototype', () => ({ assertObjectPrototypeClean: (): void => undefined }))
 
 /** The names of the settings the options of `helmet` take. */
 const SETTING_NAMES = [

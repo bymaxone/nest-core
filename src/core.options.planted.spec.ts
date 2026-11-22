@@ -4,12 +4,14 @@
  * Layer: unit.
  * Goal: a name planted on the root of all objects is not an option the host set, so an omitted option
  * keeps its default whatever was planted, while a value the host did set always wins.
- * Mocks: none.
+ * Mocks: the guard that refuses a planted `Object.prototype` at boot, so the reads under it are still exercised.
  */
 import { runInNewContext } from 'node:vm'
 
 import { normalizeCoreOptions } from './core.options'
 import { OPTION_SHAPE } from './core.options.shape'
+
+jest.mock('./object-prototype', () => ({ assertObjectPrototypeClean: (): void => undefined }))
 
 const PLANTED: readonly unknown[] = [true, false, 'x', 1, 0, ['a'], { enabled: true }]
 

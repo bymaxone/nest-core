@@ -69,8 +69,11 @@ value that answers differently on a second read cannot change what is served.
   an option of `helmet` that takes settings and is on holds its own settings object, so the pages, the
   routes and the security headers are the ones of a run where nothing was planted. The same holds for the
   document the merge builds: a `security`, `securitySchemes`, `content`, `$ref` or `description` planted there
-  is not a member of what the peer generated. Boot refuses, naming it, when `Object.prototype` holds a name
-  the peer reads from its own objects and no option can shadow.
+  is not a member of what the peer generated.
+- `BymaxCoreModule.forRoot`, `applyBymaxOpenApi` and `applyHttpFloors` refuse to boot while `Object.prototype`
+  holds a string key outside the twelve it has by default, or one of those twelve has been replaced. The error
+  carries only a count (`count`). A host that extends `Object.prototype` can no longer boot the package; this
+  closes the names the peers read from their own objects, which no option can shadow.
 - The limits on what is copied are in the README.
 - With `forRootAsync`, Nest reads the factory's result before the library receives it, so a hostile value the
   factory returns (a proxy whose trap throws) fails the boot with the host's own error and not with

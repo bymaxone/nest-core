@@ -6,11 +6,13 @@
  * Goal: a proxy is refused as the root of each of them before anything is read through it, a hole is
  * never filled from `Array.prototype`, and a name planted on `Object.prototype` is not an answer for a
  * declaration that left it out.
- * Mocks: none.
+ * Mocks: the guard that refuses a planted `Object.prototype` at boot, so the reads under it are still exercised.
  */
 import { BymaxCoreModule } from './core.module'
 import { normalizeCoreOptions } from './core.options'
 import { readOptions } from './read-options'
+
+jest.mock('./object-prototype', () => ({ assertObjectPrototypeClean: (): void => undefined }))
 
 /** The four options a strict copy takes, each with a value that is valid when it is not a proxy. */
 const ROOTS: ReadonlyArray<readonly [string, () => unknown]> = [

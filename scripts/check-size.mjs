@@ -278,13 +278,17 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 // and `./http` (5838 B) are unchanged. The growth is the own-property read of every member of the served document
 // the merge tests (`security`, `securitySchemes`, `content`, `$ref`, `description`, `paths`, `components`), and
 // four more names of the peer's own objects in the boot refusal. Code only.
+// Budgets for the refusal of a changed `Object.prototype`, measured + about 30 B: root 26.30 KiB = 26931 B (measured
+// 26901 B), `./http` 6.03 KiB = 6174 B (6142 B), `./openapi` 9.77 KiB = 10004 B (9968 B), from 26603 B, 5857 B and
+// 9820 B. The growth is that one module, which each bundle carries: a name list, the snapshot of the twelve
+// standard descriptors and the comparison. Code only.
 const BUDGETS = [
-  { name: '. (root)', path: 'dist/index.mjs', brotli: 25.98 * 1024 },
+  { name: '. (root)', path: 'dist/index.mjs', brotli: 26.3 * 1024 },
   { name: './pagination', path: 'dist/pagination/index.mjs', brotli: 1.5 * 1024 },
   { name: './health', path: 'dist/health/index.mjs', brotli: 0.5 * 1024 },
-  { name: './openapi', path: 'dist/openapi/index.mjs', brotli: 9.59 * 1024 },
+  { name: './openapi', path: 'dist/openapi/index.mjs', brotli: 9.77 * 1024 },
   { name: './metrics', path: 'dist/metrics/index.mjs', brotli: 0.5 * 1024 },
-  { name: './http', path: 'dist/http/index.mjs', brotli: 5.72 * 1024 }
+  { name: './http', path: 'dist/http/index.mjs', brotli: 6.03 * 1024 }
 ]
 
 const fmt = (n) => `${(n / 1024).toFixed(2)} kB`

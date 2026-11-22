@@ -26,7 +26,6 @@
  */
 import { bootError } from '../boot-error'
 import type {
-  OpenApiOperationKey,
   OpenApiSecurityRequirement,
   ResolvedCoreOptions,
   ResolvedOpenApiOptions
@@ -392,8 +391,8 @@ function augmentOperation(
   // reading "already set" as "leave it alone" would let a dependency overrule
   // the deployment, which inverts the whole precedence.
   if (!declaredByDocument) {
-    const override =
-      options.openapi.operationSecurity[operationKey(method, path) as OpenApiOperationKey]
+    const override = own(options.openapi.operationSecurity, operationKey(method, path)) as
+      ReadonlyArray<Record<string, readonly string[]>> | undefined
     const describedByLibrary = own(result, 'security') !== undefined
     const security =
       override ??
