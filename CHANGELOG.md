@@ -60,6 +60,10 @@ value that answers differently on a second read cannot change what is served.
   on the null-prototype root of its chain, such as `Object.prototype` of this realm or another (`exposeInternals`, `exposeIndicatorErrors`, `edgeProtected`, `authToken`,
   `enabled` and the rest, or a whole block) is not an option the host set. A value the host sets, one a class
   holds on its prototype and one an object from another realm holds itself are still read.
+- A proxy is refused as the list or map of `servers`, `security`, `securitySchemes` and `operationSecurity`
+  before anything is read through it, whatever it answers for its length. A hole in a list is never filled
+  from `Array.prototype`, and what a strict copy holds has no prototype, so a name planted on
+  `Object.prototype` cannot complete a server or a security scheme that left it out.
 - The limits on what is copied are in the README.
 - With `forRootAsync`, Nest reads the factory's result before the library receives it, so a hostile value the
   factory returns (a proxy whose trap throws) fails the boot with the host's own error and not with

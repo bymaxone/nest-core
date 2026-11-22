@@ -64,7 +64,7 @@ function copyList(
   spend(done, count)
   for (let index = 0; index < count; index += 1) {
     // A hole is refused, not copied as `undefined`, which a document would serve as `null`.
-    if (!Reflect.has(value, index)) throw new RangeError('A list has a hole')
+    if (!Object.hasOwn(value, index)) throw new RangeError('A list has a hole')
     items.push(ownCopy(Reflect.get(value, index), depth + 1, inside, done, strict))
   }
   return items
@@ -82,7 +82,8 @@ function copyProperties(
   done: Map<object, unknown>,
   strict: boolean
 ): Record<PropertyKey, unknown> {
-  const copy: Record<PropertyKey, unknown> = {}
+  // A strict copy has no prototype, so a name planted on `Object.prototype` is not one of its names.
+  const copy = (strict ? Object.create(null) : {}) as Record<PropertyKey, unknown>
   const keys = Reflect.ownKeys(value)
   spend(done, keys.length)
   for (const key of keys) {

@@ -35,7 +35,10 @@ function snapshot(list: readonly unknown[]): unknown[] {
     throw bootError('an option is too large', {})
   }
   const items: unknown[] = []
-  for (let index = 0; index < length; index += 1) items.push(Reflect.get(list, index))
+  for (let index = 0; index < length; index += 1) {
+    // What `Array.prototype` holds at the index of a hole is not an item: a hole stays one.
+    items.push(Object.hasOwn(list, index) ? Reflect.get(list, index) : undefined)
+  }
   return items
 }
 
@@ -93,6 +96,7 @@ function readEntry(
   if (entry === 0) return ownCopy(value, 0, [], done, strict)
   if (Array.isArray(entry)) {
     const shape = entry[0] as Shape
+    if (types.isProxy(value)) throw bootError('an option is held behind a proxy', {})
     return Array.isArray(value)
       ? snapshot(value).map((item) => readBlock(item, shape, done))
       : ownCopy(value, 0, [], done)
@@ -137,7 +141,8 @@ function readBlock(given: unknown, shape: Shape, done: Map<object, unknown>): un
       value = heldBy(given, key)
       if (value === undefined) continue
       // The items are read once, here, so the one checked is the one copied.
-      if (isMap && Array.isArray(value)) value = snapshot(value)
+      // A requirement list is read once, by the strict copy itself, which refuses a proxy before any read.
+      if (isMap && !strict && Array.isArray(value)) value = snapshot(value)
       made = readEntry(value, entry, strict, done)
     } catch (cause) {
       // Whatever stops a security option from being copied (a getter of its own that throws, a refusal, a

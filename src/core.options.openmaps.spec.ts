@@ -76,12 +76,18 @@ describe('an open map of the options held behind a proxy', () => {
 })
 
 describe('a hole in openapi.security', () => {
-  it('is refused as an item that is not an object, never taken as a requirement', () => {
+  it('is refused naming the option, never taken as a requirement', () => {
     const holey: unknown[] = new Array<unknown>(2)
     holey[0] = { bearer: [] }
 
-    expect(() =>
+    let thrown: Error | undefined
+    try {
       BymaxCoreModule.forRoot({ openapi: { enabled: true, security: holey as never } })
-    ).toThrow('openapi.security[1] must be an object, received undefined')
+    } catch (error) {
+      thrown = error as Error
+    }
+
+    expect(thrown?.message).toBe('the options could not be read')
+    expect(thrown?.cause).toMatchObject({ option: 'security' })
   })
 })
