@@ -223,8 +223,7 @@ a nested value) is refused past `100000` items, and when its length is not an in
 copy does at most `1000000` units of work (list items and keys), and a map read by name (the `directives` of
 `helmet`'s policy) answers to at most `1000` names. The OpenAPI options `servers`, `securitySchemes`,
 `security` and `operationSecurity` must hold plain data: a class instance, a `Map`, an object with a method, a
-proxy that lists no keys or whose prototype is not `Object.prototype`, and a directive that is a function are
-refused at boot, naming the option.
+proxy that lists no keys or whose prototype is not `Object.prototype` are refused at boot, naming the option.
 
 ### `environment`
 

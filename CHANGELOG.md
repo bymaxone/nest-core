@@ -54,10 +54,7 @@ value that answers differently on a second read cannot change what is served.
   contributor's operations map, or an operation, that is not plain (a `Map`, a class instance, an object
   derived from another, a proxy that lists no keys) is the contributor's failure and not an operation with no
   security.
-- The limits are in the README: `1000` items for a list an option holds, `100000` for a list inside what is
-  copied, `1000000` units of work for one copy.
-- `forRootAsync`: Nest reads the factory's result before the library can guard it, so a factory that returns a
-  hostile `Proxy` fails the boot with the host's own error, unlabelled.
+- The limits on what is copied are in the README.
 
 ## [1.6.20] - 2026-11-21
 
