@@ -55,6 +55,9 @@ value that answers differently on a second read cannot change what is served.
   derived from another, a proxy that lists no keys) is the contributor's failure and not an operation with no
   security.
 - The limits on what is copied are in the README.
+- With `forRootAsync`, Nest reads the factory's result before the library receives it, so a hostile value the
+  factory returns (a proxy whose trap throws) fails the boot with the host's own error and not with
+  `the options could not be read`; what the library does receive is copied as under `forRoot`.
 
 ## [1.6.20] - 2026-11-21
 
