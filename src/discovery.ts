@@ -86,6 +86,9 @@ function classNameOf(metatype: { readonly name: string }): string {
   }
 }
 
+/** The most providers that may carry one marker: a registry that large is a defect to refuse, not to serve. */
+const MAX_MARKED = 1000
+
 /**
  * Collect every provider in the application carrying `metadataKey`.
  *
@@ -112,6 +115,12 @@ export function findMarkedProviders(
     }
     if (reflector.get<boolean>(metadataKey, metatype) !== true) {
       continue
+    }
+    if (marked.length >= MAX_MARKED) {
+      throw bootError(
+        `[BymaxCoreModule] more than ${MAX_MARKED} providers carry the same marker`,
+        {}
+      )
     }
     marked.push({
       instance: wrapper.instance,

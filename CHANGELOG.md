@@ -18,6 +18,9 @@ heading here.
   refused at boot, as `an option is too large` and naming the option for the security ones, when it has more
   than 1000 keys, before any of it is copied. Lists were already refused past 1000 items; maps were bounded
   only by the 100000-item limit of what is copied. A host that gave more than 1000 keys must split them.
+- More than 1000 providers carrying the same marker (health indicators, metrics contributors, OpenAPI
+  contributors) are refused at boot with `[BymaxCoreModule] more than 1000 providers carry the same marker`;
+  providers that do not carry the marker are not counted.
 
 **Fixed:**
 
