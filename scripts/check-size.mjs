@@ -270,11 +270,15 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 // measured + 30. Root (26588 B) and `./openapi` (9606 B, under its 9.40 KiB) are unchanged. The growth is the
 // options `helmet` is handed with no prototype, and the settings object each of its options that is on holds,
 // so a name planted on `Object.prototype` is not one `helmet` reads. Code only.
+// `./openapi` budget 9.52 KiB = 9748 B: measured 9717 B brotli plus 31 B of headroom, from 9626 B; the PM approved
+// it. Root (26588 B) and `./http` (5829 B) are unchanged. The growth is the boot refusal of a name planted on
+// `Object.prototype` that the peer reads from its own instances, and the two helpers that hand the peer options
+// with no prototype. Code only.
 const BUDGETS = [
   { name: '. (root)', path: 'dist/index.mjs', brotli: 25.98 * 1024 },
   { name: './pagination', path: 'dist/pagination/index.mjs', brotli: 1.5 * 1024 },
   { name: './health', path: 'dist/health/index.mjs', brotli: 0.5 * 1024 },
-  { name: './openapi', path: 'dist/openapi/index.mjs', brotli: 9.4 * 1024 },
+  { name: './openapi', path: 'dist/openapi/index.mjs', brotli: 9.52 * 1024 },
   { name: './metrics', path: 'dist/metrics/index.mjs', brotli: 0.5 * 1024 },
   { name: './http', path: 'dist/http/index.mjs', brotli: 5.72 * 1024 }
 ]
