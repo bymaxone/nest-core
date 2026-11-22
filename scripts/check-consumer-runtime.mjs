@@ -245,6 +245,15 @@ const report =
 const CASES = {
   'before the package loads': (name) =>
     plant(name) + report + 'try { require(' + JSON.stringify(PACKAGE) + '); done(null) } catch (e) { done(e) }',
+  'after ./openapi loaded, at its first call': (name) =>
+    'process.env.NODE_ENV = "development"; require("reflect-metadata");' +
+    'const { NestFactory } = require("@nestjs/core"); const { Module } = require("@nestjs/common");' +
+    'const { BymaxCoreModule } = require(' + JSON.stringify(PACKAGE) + ');' +
+    'const { applyBymaxOpenApi } = require(' + JSON.stringify(PACKAGE + '/openapi') + ');' +
+    'class Probe {} Module({ imports: [BymaxCoreModule.forRoot({ openapi: { enabled: true } })] })(Probe);' +
+    report +
+    'NestFactory.create(Probe, { logger: false, abortOnError: false }).then((app) => {' + plant(name) +
+    ' return applyBymaxOpenApi(app).then(() => done(null), done) }, done)',
   'after ./http loaded, at its first call': (name) =>
     'const { applyHttpFloors } = require(' + JSON.stringify(PACKAGE + '/http') + ');' + plant(name) + report +
     'const app = { getHttpAdapter: () => ({ getType: () => "express" }), getHttpServer: () => ({ listening: false }),' +
