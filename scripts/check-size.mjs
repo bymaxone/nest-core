@@ -254,11 +254,15 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 // 5.41 KiB = 5540 B: measured 5501 B plus 39 B, from 5417 B. `./openapi` budget 9.22 KiB = 9441 B: measured 9405 B plus
 // 36 B, from 9298 B. The growth is the one snapshot a shared object gets for both kinds of copy, so the host is
 // read once whatever order the object is reached in. Code only.
+// Root budget 25.91 KiB = 26531 B: measured 26497 B brotli plus 34 B of headroom, from 26470 B. `./openapi` budget
+// 9.32 KiB = 9543 B: measured 9507 B plus 36 B, from 9441 B. `./http` is unchanged (5529 B measured). The growth is the
+// prototype read through a proxy, the refusal of a hole, the option a refusal names, the function a directive holds
+// and the plain operations a contributor gives. Code only.
 const BUDGETS = [
-  { name: '. (root)', path: 'dist/index.mjs', brotli: 25.85 * 1024 },
+  { name: '. (root)', path: 'dist/index.mjs', brotli: 25.91 * 1024 },
   { name: './pagination', path: 'dist/pagination/index.mjs', brotli: 1.5 * 1024 },
   { name: './health', path: 'dist/health/index.mjs', brotli: 0.5 * 1024 },
-  { name: './openapi', path: 'dist/openapi/index.mjs', brotli: 9.22 * 1024 },
+  { name: './openapi', path: 'dist/openapi/index.mjs', brotli: 9.32 * 1024 },
   { name: './metrics', path: 'dist/metrics/index.mjs', brotli: 0.5 * 1024 },
   { name: './http', path: 'dist/http/index.mjs', brotli: 5.41 * 1024 }
 ]
