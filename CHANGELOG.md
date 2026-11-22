@@ -30,6 +30,14 @@ as plain data`, naming the option), when it has more than 1000 keys, before any 
 
 **Fixed:**
 
+- The options handed to `cors` (a preflight or an actual request from an allowed origin) hold an own value for
+  every name `cors` reads (`methods`, `allowedHeaders` and its alias `headers`, `exposedHeaders`, `maxAge`), so a
+  name planted on `Object.prototype` after boot adds no `Access-Control-Expose-Headers` or other header; `methods`
+  takes the default of `cors` when the host lists none.
+- The metrics scrape checks the bearer token before it refuses beside a changed `Object.prototype`, so a caller
+  without the token gets `401` and learns nothing about the process. Only the default metrics have their writes
+  contained: a metric your own code registers is not wrapped.
+
 - A planted vm option name (`timeout`, `microtaskMode`, ...) on `Object.prototype` no longer makes the guard's
   own realm fail with a `TypeError` that quotes the planted value: the guard refuses with its fixed text and a
   `count`, whether the name was planted before the package loaded or before the first call of `./http` or
