@@ -293,8 +293,10 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 // is the request deadline (the middleware, its options and the signal key, in `./http`), the single decision on the
 // tag of a host's object and the vm-failure refusal of the guard (each bundle carries them), and the own-property
 // reads of the document. Code only.
+// 1.6.22 on top of the rc3 fixes, measured + about 30 B: root 27.03 KiB = 27679 B (measured 27649 B), `./http` 7.35 KiB
+// (7475 B) and `./openapi` 10.19 KiB (10397 B) are unchanged. Code only.
 const BUDGETS = [
-  { name: '. (root)', path: 'dist/index.mjs', brotli: 26.87 * 1024 },
+  { name: '. (root)', path: 'dist/index.mjs', brotli: 27.03 * 1024 },
   { name: './pagination', path: 'dist/pagination/index.mjs', brotli: 1.5 * 1024 },
   { name: './health', path: 'dist/health/index.mjs', brotli: 0.5 * 1024 },
   { name: './openapi', path: 'dist/openapi/index.mjs', brotli: 10.19 * 1024 },

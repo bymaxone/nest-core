@@ -222,4 +222,15 @@ describe('the options of the request deadline', () => {
       resolveRequestDeadline({ timeoutMs: 100, excludePaths: ['/events/', '/', '/a/b/'] })
     ).toEqual({ timeoutMs: 100, excludePaths: ['/events', '/', '/a/b'] })
   })
+
+  it('takes null as no deadline, and names the block and the expected list in its refusals', async () => {
+    expect(resolveRequestDeadline(null)).toBeUndefined()
+    expect(resolveRequestDeadline(undefined)).toBeUndefined()
+    expect((await failure({ timeoutMs: 100, excludePaths: [], extra: 1 }))?.message).toContain(
+      'requestDeadline'
+    )
+    expect((await failure({ timeoutMs: 100, excludePaths: 5 }))?.message).toContain(
+      'a list of path prefixes (it may be empty)'
+    )
+  })
 })

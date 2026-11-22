@@ -131,11 +131,10 @@ function silence(response: DeadlineResponse): void {
 function excluded(request: DeadlineRequest, prefixes: ReadonlySet<string>): boolean {
   const path = (request.originalUrl ?? request.url)?.split('?', 1)[0]
   if (path === undefined) return false
+  if (prefixes.has('/')) return true
   const parts = path.split('/')
-  for (let end = 1; end <= parts.length; end += 1) {
-    const prefix = parts.slice(0, end).join('/')
-    if (prefix !== '' && prefixes.has(prefix)) return true
-    if (prefix === '' && prefixes.has('/')) return true
+  for (let end = 2; end <= parts.length; end += 1) {
+    if (prefixes.has(parts.slice(0, end).join('/'))) return true
   }
   return false
 }

@@ -40,7 +40,17 @@ describe('BymaxExceptionFilter, a response that was already answered', () => {
     ['headers sent on the response', { headersSent: true }],
     ['ended on the response', { writableEnded: true }],
     ['headers sent on the raw response', { raw: { headersSent: true } }],
-    ['ended on the raw response', { raw: { writableEnded: true } }]
+    ['ended on the raw response', { raw: { writableEnded: true } }],
+    ['headers sent on the response beside a clean raw one', { headersSent: true, raw: {} }],
+    ['ended on the response beside a clean raw one', { writableEnded: true, raw: {} }],
+    [
+      'headers sent on the raw response beside a clean one',
+      { raw: { headersSent: true, writableEnded: false }, headersSent: false }
+    ],
+    [
+      'ended on the raw response beside a clean one',
+      { raw: { headersSent: false, writableEnded: true }, writableEnded: false }
+    ]
   ])('does not reply when it is %s', (_name, response) => {
     expect(repliesFor(response)).toBe(0)
   })

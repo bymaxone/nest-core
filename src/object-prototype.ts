@@ -35,7 +35,7 @@ function standard(): Pristine | undefined {
         'sourceOf: (value) => Function.prototype.toString.call(value) })'
     ) as Pristine
   } catch {
-    return undefined
+    // Not built: `pristine` stays unset, and the guard refuses.
   }
   return pristine
 }

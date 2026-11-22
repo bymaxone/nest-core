@@ -70,8 +70,38 @@ describe('the maps an option holds', () => {
       {}
     )
 
-    expect(failure({ metrics: { enabled: true, defaultLabels: labels } })?.message).toBe(
-      'the options could not be read'
-    )
+    const error = failure({ metrics: { enabled: true, defaultLabels: labels } })
+
+    expect(error?.message).toBe('the options could not be read')
+    expect((error?.cause as Error).message).toBe('an option is too large')
+  })
+
+  it('refuses a plain map of 1001 keys before it reads any of them, and names why', () => {
+    let reads = 0
+    const labels: Record<string, string> = {}
+    for (let index = 0; index < 1001; index += 1) {
+      Object.defineProperty(labels, `k${index}`, {
+        enumerable: true,
+        get: () => {
+          reads += 1
+          return 'x'
+        }
+      })
+    }
+
+    const error = failure({ metrics: { enabled: true, defaultLabels: labels } })
+
+    expect(error?.message).toBe('the options could not be read')
+    expect((error?.cause as Error).message).toBe('an option is too large')
+    expect(reads).toBe(0)
+  })
+
+  it('names an unknown key, not the size, when a block has 1001 of them', () => {
+    const stray = Object.fromEntries(Array.from({ length: 1001 }, (_, index) => [`z${index}`, 1]))
+
+    const error = failure({ metrics: { enabled: true, ...stray } })
+
+    expect(error?.message).not.toBe('an option is too large')
+    expect((error?.cause as Error | undefined)?.message).not.toBe('an option is too large')
   })
 })

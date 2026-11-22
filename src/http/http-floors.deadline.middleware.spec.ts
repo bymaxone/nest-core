@@ -6,6 +6,7 @@
  * excluded prefixes by the request's path, and clears its timer when the response ends.
  * Mocks: hand-built request and response objects; jest fake timers.
  */
+import { DEADLINE_SIGNAL } from '../request-deadline-signal'
 import { requestDeadline } from './http-floors.deadline'
 
 /** A response that records what was done to it. */
@@ -114,5 +115,79 @@ describe('the request-deadline middleware', () => {
     jest.advanceTimersByTime(60)
 
     expect(answer.body).toBeUndefined()
+  })
+
+  it('leaves every writer of the answered response a no-op that returns the response', () => {
+    const names = [
+      'send',
+      'json',
+      'jsonp',
+      'sendStatus',
+      'sendFile',
+      'redirect',
+      'render',
+      'status',
+      'set',
+      'header',
+      'type',
+      'append',
+      'cookie',
+      'setHeader',
+      'write',
+      'end'
+    ]
+    const answer = response() as unknown as Record<string, unknown>
+    for (const name of names.filter((writer) => writer !== 'setHeader' && writer !== 'end')) {
+      answer[name] = (): never => {
+        throw new Error('ERR_HTTP_HEADERS_SENT ' + name)
+      }
+    }
+    requestDeadline({ timeoutMs: 50, excludePaths: [] })(
+      { url: '/a' },
+      answer as never,
+      () => undefined
+    )
+
+    jest.advanceTimersByTime(60)
+
+    for (const name of names) {
+      const write = answer[name] as () => unknown
+      expect(write()).toBe(answer)
+      expect(Object.getOwnPropertyDescriptor(answer, name)).toMatchObject({
+        configurable: true,
+        writable: true
+      })
+    }
+  })
+
+  it('leaves the deadline signal on the request, aborted with the reason, and survives a second pass', () => {
+    const answer = response()
+    const request: Record<symbol, unknown> & { url: string } = { url: '/a' }
+    const middleware = requestDeadline({ timeoutMs: 50, excludePaths: [] })
+
+    middleware(request, answer, () => undefined)
+    expect(() => middleware(request, answer, () => undefined)).not.toThrow()
+    jest.advanceTimersByTime(60)
+
+    const signal = request[DEADLINE_SIGNAL] as AbortSignal
+    expect(signal.aborted).toBe(true)
+    expect((signal.reason as Error).message).toBe('Request deadline exceeded')
+    expect(JSON.parse(answer.body as string).message).toBe('The request took too long to answer')
+  })
+
+  it('does not exclude the root of a path that has none of the prefixes, and excludes under the root', () => {
+    const bare = response()
+    requestDeadline({ timeoutMs: 50, excludePaths: ['/a/b'] })({ url: '/a' }, bare, () => undefined)
+    jest.advanceTimersByTime(60)
+    expect(bare.statusCode).toBe(504)
+
+    const deep = response()
+    requestDeadline({ timeoutMs: 50, excludePaths: ['/a/b'] })(
+      { url: '/a/b/c' },
+      deep,
+      () => undefined
+    )
+    jest.advanceTimersByTime(60)
+    expect(deep.body).toBeUndefined()
   })
 })
