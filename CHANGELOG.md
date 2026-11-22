@@ -12,6 +12,11 @@ heading here.
 
 ## [Unreleased]
 
+## [1.6.21] - 2026-11-21
+
+A patch release. The options a host hands over are read once, and what is checked is what is built from, so a
+value that answers differently on a second read cannot change what is served.
+
 **Changed:**
 
 - An indicator you list explicitly whose `name` is empty, is not a string or is missing fails the boot with
@@ -30,12 +35,17 @@ heading here.
   holds. A host that held them that way no longer loses a directive and falls back to the default
   (`default-src 'self'` in place of `'none'`). A proxy that lists only some of the names it answers to
   cannot be told from a map that holds only those, so list every name.
-- A list that an option holds is read once, by index, and is refused past its size limit with a
-  boot error, never cut short. Reading it once means the item that is checked is the item that is copied.
-- A security requirement held behind a proxy that lists no keys fails with
-  `the options could not be read`, as the map options do, and is not read as `{}`, which OpenAPI takes to
-  allow anonymous access. The copy is judged, so a proxy whose `ownKeys` answers differently on a second
-  read cannot pass. A property that is not enumerable is enumerable in the copy the library takes.
+- A list that an option holds is read once, by index, and is refused with a boot error, never cut short, when
+  its length is not an integer within its limit. What is copied is refused the same way when a proxy lists a
+  name it holds no property under, and a copy that would do more work than its limit is refused.
+- The OpenAPI options `servers`, `securitySchemes`, `security` and `operationSecurity` are copied once, and the
+  document is built from that copy, so the declaration that was checked is the one that is served. In it, a
+  proxy that lists no keys (read as `{}`, which OpenAPI takes to allow anonymous access), an object that is not
+  plain (a class instance, or an object with a `toJSON`), a method and a symbol are refused. A refusal in
+  `security`, `operationSecurity` or `securitySchemes` fails with `the options could not be read` and names the
+  option in the `option` property of its `cause`; one in `servers` fails with
+  `openapi.servers must hold only plain data`. The same holds for a `security` list in what a contributor adds.
+- A property that is not enumerable is enumerable in the copy the library takes of what a host hands over.
 - `forRootAsync`: Nest reads the factory's result before the library can guard it. See
   `docs/forrootasync-factory-result.md`.
 
@@ -1838,6 +1848,7 @@ have regressed from. They are kept because the reasoning is worth having.
 [1.6.13]: https://github.com/bymaxone/nest-core/compare/v1.6.10...v1.6.13
 [1.6.14]: https://github.com/bymaxone/nest-core/compare/v1.6.13...v1.6.14
 [1.6.15]: https://github.com/bymaxone/nest-core/compare/v1.6.14...v1.6.15
+[1.6.21]: https://github.com/bymaxone/nest-core/compare/v1.6.20...v1.6.21
 [1.6.20]: https://github.com/bymaxone/nest-core/compare/v1.6.19...v1.6.20
 [1.6.19]: https://github.com/bymaxone/nest-core/compare/v1.6.18...v1.6.19
 [1.6.18]: https://github.com/bymaxone/nest-core/compare/v1.6.17...v1.6.18
