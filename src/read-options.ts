@@ -148,6 +148,9 @@ function readBlock(given: unknown, shape: Shape, done: Map<object, unknown>): un
         else if (!types.isProxy(value) && value.length > MAX_NAMES) {
           throw bootError('an option is too large', {})
         }
+      } else if (entry === 0 && isBlock(value) && !types.isProxy(value)) {
+        // A map is bounded like a list, before any of it is copied; a proxy is refused or bounded by its copy.
+        if (Reflect.ownKeys(value).length > MAX_NAMES) throw bootError('an option is too large', {})
       }
       made = readEntry(value, entry, strict, done)
     } catch (cause) {

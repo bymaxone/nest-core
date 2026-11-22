@@ -220,7 +220,8 @@ default; the one exception is an option of `helmet`, where `null` is refused.
 **`Object.prototype` must be the standard one.** `BymaxCoreModule.forRoot`, `applyBymaxOpenApi` (only when it goes on to mount the document) and `applyHttpFloors` refuse to boot while `Object.prototype` of the realm holds a string key outside the ones it has by default, or one of those has been replaced: every plain object that `helmet` and `@nestjs/swagger` read a name from would inherit it, and no option can shadow it. A host that extends `Object.prototype` cannot boot this package. The error reports a count only (`count`). The guard runs again after the last `await` of `applyBymaxOpenApi` and `applyHttpFloors`, and the metrics scrape answers `503` while it holds. A name planted after boot does not reach the OpenAPI document, even an enumerable one: the guard refuses it before `@nestjs/swagger` scans, and the document is built at boot and served from its own keys.
 
 What is handed over is read once, and the limits are fixed. A list an option holds is read by index and is
-refused, never cut short, past `1000` items; a list inside what is copied (an OpenAPI contributor's operation,
+refused, never cut short, past `1000` items, and so is a map an option holds (`metrics.defaultLabels`,
+`openapi.operationSecurity`, `openapi.securitySchemes`) past `1000` keys; a list inside what is copied (an OpenAPI contributor's operation,
 a nested value) is refused past `100000` items, and when its length is not an integer or it has a hole. One
 copy does at most `1000000` units of work (list items and keys), and a map read by name (the `directives` of
 `helmet`'s policy) answers to at most `1000` names. The OpenAPI options `servers`, `securitySchemes`,
