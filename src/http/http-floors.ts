@@ -28,6 +28,12 @@ import { readOptions } from '../read-options'
 import type { Shape } from '../read-options'
 import { CORS_KEYS, resolveCors } from './http-floors.cors'
 import type { HttpFloorsCorsOptions } from './http-floors.cors'
+import {
+  REQUEST_DEADLINE_KEYS,
+  requestDeadline,
+  resolveRequestDeadline
+} from './http-floors.deadline'
+import type { HttpFloorsRequestDeadline } from './http-floors.deadline'
 import { loadHelmet } from './http.loader'
 import type { HelmetFactory } from './http.loader'
 
@@ -95,6 +101,11 @@ export interface HttpFloorsOptions {
    * parsers, so a preflight and a refusal raised by a parser both carry the CORS headers.
    */
   readonly cors?: HttpFloorsCorsOptions
+  /**
+   * A bound on the whole request, guards included, answered `504` in the error envelope. Off when absent.
+   * Express only; see {@link HttpFloorsRequestDeadline}.
+   */
+  readonly requestDeadline?: HttpFloorsRequestDeadline
 }
 
 /** A body-size limit: bytes, or a size string such as `'100kb'`. */
@@ -180,7 +191,8 @@ const FLOORS_KEYS = {
   connectionsCheckingIntervalMs: 0,
   keepAliveTimeoutMs: 0,
   bodyLimit: 0,
-  cors: 0
+  cors: 0,
+  requestDeadline: 0
 } satisfies Record<keyof HttpFloorsOptions, 0>
 
 /**
@@ -244,7 +256,8 @@ const FLOORS_SHAPE: Shape = {
   ...FLOORS_KEYS,
   helmet: Object.fromEntries(HELMET_OPTION_NAMES.map((name) => [name, HELMET_SETTINGS])),
   bodyLimit: BODY_LIMIT_KEYS,
-  cors: CORS_KEYS
+  cors: CORS_KEYS,
+  requestDeadline: REQUEST_DEADLINE_KEYS
 }
 
 /**
@@ -386,6 +399,7 @@ interface ResolvedFloors {
   readonly jsonLimit: number
   readonly urlencodedLimit: number
   readonly cors: ReturnType<typeof resolveCors> | undefined
+  readonly requestDeadline: ReturnType<typeof resolveRequestDeadline>
   readonly helmet: Record<string, unknown> | false
 }
 
@@ -425,6 +439,7 @@ function resolveFloors(given: unknown): ResolvedFloors {
     options.cors === undefined || options.cors === null ? undefined : resolveCors(options.cors)
   return {
     cors,
+    requestDeadline: resolveRequestDeadline(options.requestDeadline),
     helmet: resolveHelmet(options.helmet),
     headersTimeoutMs,
     requestTimeoutMs,
@@ -497,6 +512,8 @@ export async function applyHttpFloors(
   if (floors.cors !== undefined) {
     express.enableCors(floors.cors)
   }
+  // After helmet and cors, so a `504` carries their headers, and before the parsers and the routing.
+  if (floors.requestDeadline !== undefined) express.use(requestDeadline(floors.requestDeadline))
   // A compressed body is refused with 415 on every route and before routing; the extended form
   // syntax is kept, and each parser has its own explicit size limit.
   express.useBodyParser('json', { inflate: false, limit: floors.jsonLimit })

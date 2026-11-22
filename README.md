@@ -1547,6 +1547,23 @@ peer, loaded only when the helper runs, and a missing one fails with the install
 unusable timeout (zero, fractional, or a header timeout above the request timeout) throws
 rather than leaving a socket limit switched off.
 
+### Request deadline
+
+`handlerTimeout` is armed in an interceptor, and Nest runs guards before interceptors, so a slow guard is
+outside it. `applyHttpFloors(app, { requestDeadline: { timeoutMs, excludePaths } })` (`HttpFloorsRequestDeadline`) bounds the whole request:
+a request that is still unanswered at `timeoutMs` gets `504` in the error envelope (`BYMAX_GATEWAY_TIMEOUT`),
+once, and the signal `@HandlerSignal()` returns is aborted by it as well as by the handler timeout.
+
+- **Off unless asked for**, and Express only, like the rest of the floors.
+- **`excludePaths` is required** (it may be `[]`), up to 1000 path prefixes, each starting with `/` and matched
+  at a segment boundary. The floors are mounted before the module, so nothing is taken from
+  `handlerTimeout.excludePaths`: list an SSE or long-poll path in both. A WebSocket upgrade never goes through
+  the middleware.
+- The `504` is the answer: whatever the guard, the handler or the filter writes afterwards is dropped, so the
+  response is sent once and nothing is logged for it. A guard that is still running cannot be stopped; give it
+  `@HandlerSignal()` to stop on the abort.
+- Keep it above `handlerTimeout.timeoutMs`; if it is shorter, the deadline answers first.
+
 ## 🚀 Production Checklist
 
 What a backend built on this library sets before it takes traffic. Each line links to where it is

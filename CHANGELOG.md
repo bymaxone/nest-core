@@ -12,6 +12,12 @@ heading here.
 
 ## [Unreleased]
 
+**Added:**
+
+- `applyHttpFloors(app, { requestDeadline: { timeoutMs, excludePaths } })` (Express): a bound on the whole
+  request, guards included, answered `504` in the error envelope once; `excludePaths` is required and may be
+  empty. The signal of `@HandlerSignal()` is aborted by the deadline too. Off when the option is absent.
+
 **Changed:**
 
 - A map an option holds (`metrics.defaultLabels`, `openapi.operationSecurity`, `openapi.securitySchemes`) is
