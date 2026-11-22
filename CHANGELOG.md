@@ -42,7 +42,8 @@ value that answers differently on a second read cannot change what is served.
   document is built from that copy, so the declaration that was checked is the one that is served. In it, a
   proxy (it cannot be unwrapped or trusted, and one that lists no keys reads as `{}`, which OpenAPI takes to
   allow anonymous access), an object that is not plain (a class instance, or an object with a `toJSON`), a
-  method and a symbol are refused; a plain object made in another realm is accepted. A refusal in
+  method and a symbol are refused, and so is a plain object made in another realm, since a prototype that is
+  not this realm's `Object.prototype` cannot be told from one a host forged. A refusal in
   `security`, `operationSecurity` or `securitySchemes` fails with `the options could not be read` and names the
   option in the `option` property of its `cause`; one in `servers` fails with
   `openapi.servers must hold only plain data`. The same holds for a `security` list in what a contributor adds.

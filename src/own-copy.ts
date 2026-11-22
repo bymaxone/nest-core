@@ -125,23 +125,12 @@ function reuse(
   return strict ? ownCopy(other, depth, open, done, true) : other
 }
 
-/** The names `Object.prototype` holds: a root of another realm has these and no others (a requirement is named by a string). */
-const ROOT_NAMES = Object.getOwnPropertyNames(Object.prototype)
-
 /**
- * Whether `prototype` is the root of a realm's objects, this one's or another's: it has no prototype and
- * holds exactly the names of `Object.prototype`, so it cannot hold the name of a requirement. A prototype
- * a host makes, with a name of its own, is not a root.
+ * Whether `prototype` is the root of this realm's objects, or none: only by identity, since no check of a
+ * prototype a host made can be trusted (it can be forged, or be a proxy whose traps answer anything).
  */
-function isPlainPrototype(prototype: unknown): boolean {
-  if (prototype === null) return true
-  const root = prototype as object
-  const names = Object.getOwnPropertyNames(root)
-  return (
-    Reflect.getPrototypeOf(root) === null &&
-    names.length === ROOT_NAMES.length &&
-    names.every((name) => ROOT_NAMES.includes(name))
-  )
+function isPlain(prototype: unknown): boolean {
+  return prototype === Object.prototype || prototype === null
 }
 
 /**
@@ -184,7 +173,7 @@ export function ownCopy(
   // The prototype is read inside the guard. Where the copy is strict, nothing is kept by reference: an
   // object that is not plain could answer differently to the check and to the document, or hold some of
   // its names on its prototype, whatever its tag says.
-  if (!Array.isArray(value) && !isPlainPrototype(Reflect.getPrototypeOf(value))) {
+  if (!Array.isArray(value) && !isPlain(Reflect.getPrototypeOf(value))) {
     if (strict) throw new RangeError('A requirement must be a plain object')
     if (!types.isProxy(value)) return value
   }

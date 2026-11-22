@@ -291,64 +291,45 @@ describe('ownCopy', () => {
 
   it('refuses an object derived from a prototype a host made to look like a root, whatever it holds', () => {
     const forged = Object.create(null) as Record<string, unknown>
-    forged['constructor'] = { prototype: forged }
-    Object.defineProperty(forged, 'o', { get: () => ['write'], enumerable: true })
-    const derived = Object.create(forged) as Record<string, unknown>
-    derived['b'] = []
-
-    expect(() => ownCopy({ security: [derived] })).toThrow('A requirement must be a plain object')
-  })
-
-  it('refuses an object derived from a root made to carry a name of a requirement as well as its own', () => {
-    const forged = Object.create(null) as Record<string, unknown>
-    for (const name of Reflect.ownKeys(Object.prototype))
-      forged[name as string] = Object.prototype[name as keyof object]
-    forged['bearer'] = ['read']
+    for (const name of Object.getOwnPropertyNames(Object.prototype)) {
+      Object.defineProperty(forged, name, { value: 1, enumerable: true, configurable: true })
+    }
+    Object.defineProperty(forged, 'constructor', { get: () => [] })
     const derived = Object.create(forged) as object
 
     expect(() => ownCopy({ security: [derived] })).toThrow('A requirement must be a plain object')
+    expect(() => ownCopy({ security: [Object.create(Object.create(null)) as object] })).toThrow(
+      'A requirement must be a plain object'
+    )
   })
 
-  it('refuses an object whose prototype has a prototype of its own, even when it holds the names of a root', () => {
-    const base = Object.create(Object.prototype) as object
-    for (const name of Object.getOwnPropertyNames(Object.prototype)) {
-      Object.defineProperty(base, name, { value: 1, enumerable: true })
-    }
-    const derived = Object.create(base) as object
+  it('refuses an object whose prototype is a proxy that answers the names of a root', () => {
+    const answering = new Proxy(Object.create(null) as object, {
+      ownKeys: () => Object.getOwnPropertyNames(Object.prototype),
+      getOwnPropertyDescriptor: () => ({ value: 1, configurable: true }),
+      get: (_target, key) => (key === 'o' ? ['write'] : undefined)
+    })
+    const derived = Object.create(answering) as object
 
     expect(() => ownCopy({ security: [derived] })).toThrow('A requirement must be a plain object')
   })
 
-  it('refuses an object whose prototype swaps one name of a root for a requirement', () => {
-    const swapped = Object.create(null) as object
-    for (const name of Object.getOwnPropertyNames(Object.prototype)) {
-      Object.defineProperty(swapped, name === 'valueOf' ? 'bearer' : name, {
-        get: () => ['read'],
-        enumerable: true
+  it('keeps a plain requirement while the host has added a name to Object.prototype', () => {
+    Object.defineProperty(Object.prototype, 'polyfill', { value: 1, configurable: true })
+    try {
+      expect(ownCopy({ security: [{ bearer: ['read'] }] })).toStrictEqual({
+        security: [{ bearer: ['read'] }]
       })
+    } finally {
+      delete (Object.prototype as Record<string, unknown>)['polyfill']
     }
-
-    expect(() => ownCopy({ security: [Object.create(swapped) as object] })).toThrow(
-      'A requirement must be a plain object'
-    )
   })
 
-  it('refuses an object whose prototype lacks one of the names of a root', () => {
-    const lacking = Object.create(null) as Record<string, unknown>
-    for (const name of Object.getOwnPropertyNames(Object.prototype)) {
-      if (name !== 'valueOf') lacking[name] = 1
-    }
-
-    expect(() => ownCopy({ security: [Object.create(lacking) as object] })).toThrow(
-      'A requirement must be a plain object'
-    )
-  })
-
-  it('keeps a plain requirement made in another realm, which has its own Object.prototype', () => {
+  it('refuses a plain requirement made in another realm: no check of a foreign root can be trusted', () => {
     const foreign = runInNewContext('({ bearer: ["read"] })') as object
 
-    expect(Object.getPrototypeOf(foreign)).not.toBe(Object.prototype)
-    expect(ownCopy({ security: [foreign] })).toStrictEqual({ security: [{ bearer: ['read'] }] })
+    expect(() => ownCopy({ security: [foreign] })).toThrow('A requirement must be a plain object')
+    expect(ownCopy({ extension: foreign })).toStrictEqual({ extension: { bearer: ['read'] } })
   })
 
   it('reads a list subclass by its indexes, not by an iterator that disagrees with them', () => {
