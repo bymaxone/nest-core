@@ -7,6 +7,8 @@
  * and nothing the host wrote; a clean realm boots and serves as before.
  * Mocks: none; the real `@nestjs/swagger` and `helmet` run, the latter against a fake Express application.
  */
+import { runInNewContext } from 'node:vm'
+
 import type { INestApplication } from '@nestjs/common'
 import request from 'supertest'
 
@@ -216,6 +218,62 @@ describe('a changed Object.prototype', () => {
       expect(error?.message).toBe(MESSAGE)
       expect(error?.count).toBe(1)
       expect(ran).toBe(0)
+    }
+  )
+
+  it('is refused when a standard function is replaced by something that is not a function', async () => {
+    const toString = Object.getOwnPropertyDescriptor(
+      Object.prototype,
+      'toString'
+    ) as PropertyDescriptor
+    const valueOf = Object.getOwnPropertyDescriptor(
+      Object.prototype,
+      'valueOf'
+    ) as PropertyDescriptor
+    Object.defineProperty(Object.prototype, 'toString', { ...toString, value: 5 })
+    Object.defineProperty(Object.prototype, 'valueOf', { ...valueOf, value: {} })
+    try {
+      expect((await thrown(() => assertObjectPrototypeClean()))?.count).toBe(2)
+    } finally {
+      Object.defineProperty(Object.prototype, 'toString', toString)
+      Object.defineProperty(Object.prototype, 'valueOf', valueOf)
+    }
+  })
+
+  it('is refused when the __proto__ accessor becomes a data property', async () => {
+    const proto = Object.getOwnPropertyDescriptor(
+      Object.prototype,
+      '__proto__'
+    ) as PropertyDescriptor
+    Object.defineProperty(Object.prototype, '__proto__', {
+      value: 1,
+      writable: true,
+      enumerable: false,
+      configurable: true
+    })
+    try {
+      expect((await thrown(() => assertObjectPrototypeClean()))?.count).toBe(1)
+    } finally {
+      Object.defineProperty(Object.prototype, '__proto__', proto)
+    }
+  })
+
+  it.each(['get', 'set'])(
+    'is refused when the __proto__ %s is the same function of another realm',
+    async (which) => {
+      const proto = Object.getOwnPropertyDescriptor(
+        Object.prototype,
+        '__proto__'
+      ) as PropertyDescriptor
+      const foreign = runInNewContext(
+        `Object.getOwnPropertyDescriptor(Object.prototype, '__proto__').${which}`
+      ) as () => unknown
+      Object.defineProperty(Object.prototype, '__proto__', { ...proto, [which]: foreign })
+      try {
+        expect((await thrown(() => assertObjectPrototypeClean()))?.count).toBe(1)
+      } finally {
+        Object.defineProperty(Object.prototype, '__proto__', proto)
+      }
     }
   )
 

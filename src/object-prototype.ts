@@ -42,11 +42,13 @@ function field(descriptor: PropertyDescriptor | undefined, key: keyof PropertyDe
   return descriptor !== undefined && Object.hasOwn(descriptor, key) ? descriptor[key] : undefined
 }
 
-/** Whether a value or accessor of `now` is the one of `was`: the same text for a function, else the same value. */
+/**
+ * Whether a function of `now` has the text of the one of `was`. Where `was` holds no function, `now` holds
+ * none either: the other fields of the descriptors, which `enumerable` and the identity check judge,
+ * differ first, since a descriptor is a value or an accessor and not both.
+ */
 function alike(now: unknown, was: unknown, sourceOf: Pristine['sourceOf']): boolean {
-  return typeof was === 'function'
-    ? typeof now === 'function' && sourceOf(now) === sourceOf(was)
-    : now === was
+  return typeof was !== 'function' || (typeof now === 'function' && sourceOf(now) === sourceOf(was))
 }
 
 /**
@@ -72,12 +74,10 @@ export function assertObjectPrototypeClean(): void {
     const have = Object.hasOwn(now, name) ? now[name] : undefined
     const want = Object.hasOwn(descriptors, name) ? descriptors[name] : undefined
     const same =
-      have !== undefined &&
-      want !== undefined &&
+      // A flag may be tighter than the engine's (a frozen realm), and no standard name is looser to
+      // begin with, so only `enumerable`, which every descriptor holds, can differ: a name that is
+      // missing, or that a fresh realm does not have, differs there too.
       field(have, 'enumerable') === field(want, 'enumerable') &&
-      // A flag tighter than the engine's (a frozen realm) is safe; a looser one is not.
-      !(field(have, 'writable') && !field(want, 'writable')) &&
-      !(field(have, 'configurable') && !field(want, 'configurable')) &&
       alike(field(have, 'value'), field(want, 'value'), sourceOf) &&
       alike(field(have, 'get'), field(want, 'get'), sourceOf) &&
       alike(field(have, 'set'), field(want, 'set'), sourceOf) &&
