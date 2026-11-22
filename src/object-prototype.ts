@@ -13,6 +13,12 @@ interface Pristine {
   readonly sourceOf: (value: unknown) => string
 }
 
+/** What this realm's `Object.prototype` held when this module loaded: after that, a name swapped for another function of the same text is caught by identity. */
+const loaded = Object.getOwnPropertyDescriptors(Object.prototype) as Record<
+  string,
+  PropertyDescriptor
+>
+
 let pristine: Pristine | undefined
 
 /**
@@ -60,12 +66,18 @@ export function assertObjectPrototypeClean(): void {
     const same =
       have !== undefined &&
       want !== undefined &&
-      have.writable === want.writable &&
       have.enumerable === want.enumerable &&
-      have.configurable === want.configurable &&
+      // A flag tighter than the engine's (a frozen realm) is safe; a looser one is not.
+      !(have.writable && !want.writable) &&
+      !(have.configurable && !want.configurable) &&
       alike(have.value, want.value, sourceOf) &&
       alike(have.get, want.get, sourceOf) &&
-      alike(have.set, want.set, sourceOf)
+      alike(have.set, want.set, sourceOf) &&
+      // And it is the function this module met, not another native one put in its place.
+      (!Object.hasOwn(loaded, name) ||
+        (have.value === loaded[name]?.value &&
+          have.get === loaded[name]?.get &&
+          have.set === loaded[name]?.set))
     if (!same) found += 1
   }
   if (found > 0) {

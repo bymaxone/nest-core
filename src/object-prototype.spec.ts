@@ -125,7 +125,7 @@ describe('a changed Object.prototype', () => {
     }
   })
 
-  it('is refused when a standard name is missing, or changed in its flags', async () => {
+  it('is refused when a standard name is missing, or becomes enumerable', async () => {
     const valueOf = Object.getOwnPropertyDescriptor(
       Object.prototype,
       'valueOf'
@@ -135,7 +135,7 @@ describe('a changed Object.prototype', () => {
       'toString'
     ) as PropertyDescriptor
     delete (Object.prototype as unknown as Record<string, unknown>)['valueOf']
-    Object.defineProperty(Object.prototype, 'toString', { ...toString, writable: false })
+    Object.defineProperty(Object.prototype, 'toString', { ...toString, enumerable: true })
     try {
       expect((await thrown(() => assertObjectPrototypeClean()))?.count).toBe(2)
     } finally {
@@ -163,6 +163,35 @@ describe('a changed Object.prototype', () => {
     } finally {
       Object.defineProperty(Function.prototype, 'toString', source)
       Object.defineProperty(Object.prototype, '__proto__', proto)
+    }
+  })
+
+  it('is refused when a standard function is swapped for another one of the engine, after loading', async () => {
+    const original = Object.getOwnPropertyDescriptor(
+      Object.prototype,
+      'toString'
+    ) as PropertyDescriptor
+    Object.defineProperty(Object.prototype, 'toString', {
+      ...original,
+      value: Array.prototype.toString
+    })
+    try {
+      expect((await thrown(() => assertObjectPrototypeClean()))?.count).toBe(1)
+    } finally {
+      Object.defineProperty(Object.prototype, 'toString', original)
+    }
+  })
+
+  it("is not refused when a standard name is tighter than the engine's, as in a frozen realm", async () => {
+    const original = Object.getOwnPropertyDescriptor(
+      Object.prototype,
+      'toString'
+    ) as PropertyDescriptor
+    Object.defineProperty(Object.prototype, 'toString', { ...original, writable: false })
+    try {
+      expect(await thrown(() => assertObjectPrototypeClean())).toBeUndefined()
+    } finally {
+      Object.defineProperty(Object.prototype, 'toString', original)
     }
   })
 
