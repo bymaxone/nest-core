@@ -500,9 +500,7 @@ export async function applyBymaxOpenApi(app: INestApplication): Promise<OpenApiM
   // operation, so it is complete before any contributor is asked for fragments.
   const handlers = createHandlerIdMap()
   const generated = scanApplication(swagger, app, config, handlers, options)
-  // A host callback the scan ran (the operation id factory) may have planted a name: what it generated
-  // then reads as unsecured, so nothing is merged or mounted beside it.
-  assertObjectPrototypeClean()
+  assertObjectPrototypeClean() // the operation id factory ran inside the scan and may have planted a name
   // Read once and shared: recognizing this package's own routes needs the same
   // prefixes the merge does, and asking the application twice would let the two
   // answers differ for no reason.
