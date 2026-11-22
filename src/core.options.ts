@@ -245,10 +245,7 @@ export interface OpenApiOptions {
   description?: string
   /** Document version, independent of the package version. Default: `'1.0.0'`. */
   version?: string
-  /**
-   * Servers advertised by the document. Default: `[]`. Plain data only, and at most 1000 items: anything
-   * else is refused at boot.
-   */
+  /** Servers advertised by the document: plain data, at most 1000 items. Default: `[]`. */
   servers?: readonly OpenApiServerDescriptor[]
   /**
    * Security schemes added to the document's components. Default: `{}`. Plain data only (no class instance,
