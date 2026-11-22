@@ -309,6 +309,41 @@ describe('ownCopy', () => {
     expect(() => ownCopy({ security: [derived] })).toThrow('A requirement must be a plain object')
   })
 
+  it('refuses an object whose prototype has a prototype of its own, even when it holds the names of a root', () => {
+    const base = Object.create(Object.prototype) as object
+    for (const name of Object.getOwnPropertyNames(Object.prototype)) {
+      Object.defineProperty(base, name, { value: 1, enumerable: true })
+    }
+    const derived = Object.create(base) as object
+
+    expect(() => ownCopy({ security: [derived] })).toThrow('A requirement must be a plain object')
+  })
+
+  it('refuses an object whose prototype swaps one name of a root for a requirement', () => {
+    const swapped = Object.create(null) as object
+    for (const name of Object.getOwnPropertyNames(Object.prototype)) {
+      Object.defineProperty(swapped, name === 'valueOf' ? 'bearer' : name, {
+        get: () => ['read'],
+        enumerable: true
+      })
+    }
+
+    expect(() => ownCopy({ security: [Object.create(swapped) as object] })).toThrow(
+      'A requirement must be a plain object'
+    )
+  })
+
+  it('refuses an object whose prototype lacks one of the names of a root', () => {
+    const lacking = Object.create(null) as Record<string, unknown>
+    for (const name of Object.getOwnPropertyNames(Object.prototype)) {
+      if (name !== 'valueOf') lacking[name] = 1
+    }
+
+    expect(() => ownCopy({ security: [Object.create(lacking) as object] })).toThrow(
+      'A requirement must be a plain object'
+    )
+  })
+
   it('keeps a plain requirement made in another realm, which has its own Object.prototype', () => {
     const foreign = runInNewContext('({ bearer: ["read"] })') as object
 

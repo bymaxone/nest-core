@@ -134,7 +134,7 @@ const ROOT_NAMES = Object.getOwnPropertyNames(Object.prototype)
  * a host makes, with a name of its own, is not a root.
  */
 function isPlainPrototype(prototype: unknown): boolean {
-  if (prototype === null || prototype === Object.prototype) return true
+  if (prototype === null) return true
   const root = prototype as object
   const names = Object.getOwnPropertyNames(root)
   return (
