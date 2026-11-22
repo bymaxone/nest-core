@@ -169,7 +169,11 @@ export function ownCopy(
   }
   // Where the copy is strict, a proxy is refused whatever it answers: it cannot be unwrapped or trusted,
   // and the names it forwards to its target, or holds on a prototype, are not the ones it lists.
-  if (strict && types.isProxy(value)) throw new RangeError('A requirement cannot be a proxy')
+  // A copy a non-strict pass made of a proxy is refused too, which is what a shared object meets when
+  // it is reached first as data and then as a requirement.
+  if (strict && (types.isProxy(value) || proxies.has(value))) {
+    throw new RangeError('A requirement cannot be a proxy')
+  }
   // The prototype is read inside the guard. Where the copy is strict, nothing is kept by reference: an
   // object that is not plain could answer differently to the check and to the document, or hold some of
   // its names on its prototype, whatever its tag says.

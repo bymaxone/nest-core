@@ -85,6 +85,17 @@ describe('ownCopy', () => {
     )
   })
 
+  it('refuses a list holding a proxy however the shared list is reached', () => {
+    const shared = [new Proxy({}, { get: () => ['read'] })]
+
+    expect(() => ownCopy({ 'x-data': shared, security: shared })).toThrow(
+      'A requirement cannot be a proxy'
+    )
+    expect(() => ownCopy({ security: shared, 'x-data': shared })).toThrow(
+      'A requirement cannot be a proxy'
+    )
+  })
+
   it('refuses a shared object that holds a method when it is reached again as a requirement', () => {
     const shared = { bearer: [], validate: (): void => undefined }
 
