@@ -20,6 +20,9 @@ import { bootApp, ExampleController } from './openapi/__tests__/bootstrap.harnes
 
 const MESSAGE = 'Object.prototype holds names or changes this package cannot run beside'
 
+/** Whether a name is planted so that `for...in` sees it: the rows that plant run both ways. */
+let ENUMERABLE = false
+
 /** The names the peers and the document read that a host could plant, one per family of read. */
 const PLANTED = [
   'description',
@@ -38,7 +41,12 @@ const PLANTED = [
 
 /** `value` planted under `name` while `run` executes. */
 async function planted<T>(name: string, value: unknown, run: () => Promise<T> | T): Promise<T> {
-  Object.defineProperty(Object.prototype, name, { value, configurable: true, writable: true })
+  Object.defineProperty(Object.prototype, name, {
+    value,
+    configurable: true,
+    writable: true,
+    enumerable: ENUMERABLE
+  })
   try {
     return await run()
   } finally {
@@ -67,7 +75,10 @@ function fakeApp(): INestApplication {
   } as unknown as INestApplication
 }
 
-describe('a changed Object.prototype', () => {
+describe.each([false, true])('a changed Object.prototype (enumerable: %s)', (enumerable) => {
+  beforeAll(() => {
+    ENUMERABLE = enumerable
+  })
   it.each(PLANTED)('is refused at every boot entry when %s is planted', async (name) => {
     const app = await bootApp({ openapi: { enabled: true } } as never, [ExampleController])
 
@@ -86,8 +97,16 @@ describe('a changed Object.prototype', () => {
   })
 
   it('counts every name that is planted, and says nothing else', async () => {
-    Object.defineProperty(Object.prototype, 'one', { value: 1, configurable: true })
-    Object.defineProperty(Object.prototype, 'two', { value: 2, configurable: true })
+    Object.defineProperty(Object.prototype, 'one', {
+      value: 1,
+      configurable: true,
+      enumerable: ENUMERABLE
+    })
+    Object.defineProperty(Object.prototype, 'two', {
+      value: 2,
+      configurable: true,
+      enumerable: ENUMERABLE
+    })
     try {
       expect((await thrown(() => assertObjectPrototypeClean()))?.count).toBe(2)
     } finally {
