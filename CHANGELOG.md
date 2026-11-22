@@ -12,6 +12,16 @@ heading here.
 
 ## [Unreleased]
 
+**Fixed:**
+
+- A planted vm option name (`timeout`, `microtaskMode`, ...) on `Object.prototype` no longer makes the guard's
+  own realm fail with a `TypeError` that quotes the planted value: the guard refuses with its fixed text and a
+  `count`, whether the name was planted before the package loaded or before the first call of `./http` or
+  `./openapi`.
+- An enumerable name planted on `Object.prototype` after boot does not reach the OpenAPI document: the boot
+  guard refuses an enumerable plant before `@nestjs/swagger` scans (which merges with `for...in`), and the
+  document is built at boot and served from its own keys.
+
 ## [1.6.21] - 2026-11-21
 
 A patch release. The options a host hands over are read once, and what is checked is what is built from, so a

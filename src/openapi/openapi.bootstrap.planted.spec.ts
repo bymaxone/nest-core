@@ -5,6 +5,10 @@
  * Goal: a name the peer reads that this package did not set (`ui`, `raw`, `yamlDocumentUrl`, `customJs`,
  * ...) is not answered by something planted on the root of all objects, so the served pages and
  * documents are the ones of an unplanted run.
+ * Names are planted non-enumerable only: `@nestjs/swagger` merges with `for...in`, so an enumerable name
+ * shows up as a member of every operation of the document it scans, and nothing handed to it can shadow
+ * that. The boot guard refuses an enumerable plant before swagger scans, and the document is built at
+ * boot and serialized from its own keys, so a plant made afterwards does not reach it.
  * Mocks: the guard that refuses a planted `Object.prototype` at boot, so the reads under it are still
  * exercised; the real `@nestjs/swagger` runs against a real Nest application.
  */
