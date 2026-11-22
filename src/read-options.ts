@@ -142,7 +142,12 @@ function readBlock(given: unknown, shape: Shape, done: Map<object, unknown>): un
       if (value === undefined) continue
       // The items are read once, here, so the one checked is the one copied.
       // A requirement list is read once, by the strict copy itself, which refuses a proxy before any read.
-      if (isMap && !strict && Array.isArray(value)) value = snapshot(value)
+      if (isMap && Array.isArray(value)) {
+        if (!strict) value = snapshot(value)
+        else if (!types.isProxy(value) && value.length > MAX_NAMES) {
+          throw bootError('an option is too large', {})
+        }
+      }
       made = readEntry(value, entry, strict, done)
     } catch (cause) {
       // Whatever stops a security option from being copied (a getter of its own that throws, a refusal, a

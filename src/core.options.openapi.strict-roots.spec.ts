@@ -50,6 +50,16 @@ describe('a proxy as the root of a strict option', () => {
     }
   )
 
+  it('keeps the limit of 1000 items for a security list: 1000 are read, 1001 are refused naming the option', () => {
+    const list = (length: number): unknown[] => Array.from({ length }, () => ({ bearer: [] }))
+
+    expect(failure({ security: list(1000) })).toBeUndefined()
+    expect(failure({ security: list(1001) })?.cause).toMatchObject({
+      option: 'security',
+      cause: { message: 'an option is too large' }
+    })
+  })
+
   it('names a proxy as the reason when the servers list is one', () => {
     expect(
       failure({ servers: new Proxy([{ url: 'https://api.example' }], {}) })?.cause
