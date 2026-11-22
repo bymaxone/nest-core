@@ -70,8 +70,8 @@ value that answers differently on a second read cannot change what is served.
   routes and the security headers are the ones of a run where nothing was planted. The same holds for the
   document the merge builds: a `security`, `securitySchemes`, `content`, `$ref` or `description` planted there
   is not a member of what the peer generated.
-- `BymaxCoreModule.forRoot`, `applyBymaxOpenApi` and `applyHttpFloors` refuse to boot while `Object.prototype`
-  holds a string key outside the twelve it has by default, or one of those twelve has been replaced. The error
+- `BymaxCoreModule.forRoot`, `applyBymaxOpenApi` (only when it goes on to mount the document) and `applyHttpFloors` refuse to boot while `Object.prototype`
+  holds a string key outside the ones it has by default, or one of those has been replaced. The error
   carries only a count (`count`). A host that extends `Object.prototype` can no longer boot the package; this
   closes the names the peers read from their own objects, which no option can shadow.
 - The limits on what is copied are in the README.
