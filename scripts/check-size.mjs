@@ -295,13 +295,15 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 // reads of the document. Code only.
 // 1.6.22 on top of the rc3 fixes, measured + about 30 B: root 27.03 KiB = 27679 B (measured 27649 B), `./http` 7.35 KiB
 // (7475 B) and `./openapi` 10.19 KiB (10397 B) are unchanged. Code only.
+// The guard reading no live built-in, measured + about 30 B: root 27.27 KiB = 27924 B (measured 27890 B), `./openapi`
+// 10.42 KiB = 10670 B (10630 B), `./http` 7.56 KiB = 7741 B (7703 B). Code only; the guard is inlined in each bundle.
 const BUDGETS = [
-  { name: '. (root)', path: 'dist/index.mjs', brotli: 27.03 * 1024 },
+  { name: '. (root)', path: 'dist/index.mjs', brotli: 27.27 * 1024 },
   { name: './pagination', path: 'dist/pagination/index.mjs', brotli: 1.5 * 1024 },
   { name: './health', path: 'dist/health/index.mjs', brotli: 0.5 * 1024 },
-  { name: './openapi', path: 'dist/openapi/index.mjs', brotli: 10.19 * 1024 },
+  { name: './openapi', path: 'dist/openapi/index.mjs', brotli: 10.42 * 1024 },
   { name: './metrics', path: 'dist/metrics/index.mjs', brotli: 0.5 * 1024 },
-  { name: './http', path: 'dist/http/index.mjs', brotli: 7.35 * 1024 }
+  { name: './http', path: 'dist/http/index.mjs', brotli: 7.56 * 1024 }
 ]
 
 const fmt = (n) => `${(n / 1024).toFixed(2)} kB`
