@@ -50,7 +50,7 @@ describe('a proxy as the root of a strict option', () => {
     }
   )
 
-  it('keeps the limit of 1000 items for a security list: 1000 are read, 1001 are refused naming the option', () => {
+  it('keeps the limit of 1000 items for a security list: 1000 are accepted, 1001 are refused naming the option', () => {
     const list = (length: number): unknown[] => Array.from({ length }, () => ({ bearer: [] }))
 
     expect(failure({ security: list(1000) })).toBeUndefined()

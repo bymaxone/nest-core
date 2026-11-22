@@ -375,7 +375,14 @@ function buildConfig(
 }
 
 /** The names `@nestjs/swagger` reads from its own instances without having set them. */
-const PEER_INSTANCE_NAMES: readonly string[] = ['explorer', 'schemas']
+const PEER_INSTANCE_NAMES: readonly string[] = [
+  'explorer',
+  'schemas',
+  'webhookPaths',
+  'root',
+  'properties',
+  'format'
+]
 
 /** Throws when something planted on `Object.prototype` is a name the peer reads from its own instances, where nothing of ours can shadow it. */
 function assertPeerNamesFree(): void {

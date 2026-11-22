@@ -66,6 +66,18 @@ export function asRecord(value: unknown): Readonly<Record<string, unknown>> {
 }
 
 /**
+ * What `record` holds under `key` as its own property. A name something planted on `Object.prototype`
+ * is not a member of the document, so it is never read as one.
+ *
+ * @param record - A document member.
+ * @param key - The member's name.
+ * @returns The own value, or `undefined`.
+ */
+export function own(record: object, key: string): unknown {
+  return Object.hasOwn(record, key) ? (record as Record<string, unknown>)[key] : undefined
+}
+
+/**
  * The operations a path item carries, as `[method, operation]` pairs.
  *
  * Read by filtering the item's own entries rather than by looking each method

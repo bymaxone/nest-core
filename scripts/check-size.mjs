@@ -274,11 +274,15 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 // (26588 B) and `./http` (5829 B) are unchanged. The growth is the boot refusal of a name planted on
 // `Object.prototype` that the peer reads from its own instances, and the two helpers that hand the peer
 // options with no prototype. Code only.
+// `./openapi` budget 9.59 KiB = 9820 B: measured 9794 B brotli plus 26 B of headroom, from 9748 B. Root (26589 B)
+// and `./http` (5838 B) are unchanged. The growth is the own-property read of every member of the served document
+// the merge tests (`security`, `securitySchemes`, `content`, `$ref`, `description`, `paths`, `components`), and
+// four more names of the peer's own objects in the boot refusal. Code only.
 const BUDGETS = [
   { name: '. (root)', path: 'dist/index.mjs', brotli: 25.98 * 1024 },
   { name: './pagination', path: 'dist/pagination/index.mjs', brotli: 1.5 * 1024 },
   { name: './health', path: 'dist/health/index.mjs', brotli: 0.5 * 1024 },
-  { name: './openapi', path: 'dist/openapi/index.mjs', brotli: 9.52 * 1024 },
+  { name: './openapi', path: 'dist/openapi/index.mjs', brotli: 9.59 * 1024 },
   { name: './metrics', path: 'dist/metrics/index.mjs', brotli: 0.5 * 1024 },
   { name: './http', path: 'dist/http/index.mjs', brotli: 5.72 * 1024 }
 ]

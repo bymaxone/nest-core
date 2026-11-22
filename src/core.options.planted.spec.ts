@@ -191,7 +191,7 @@ describe('a name planted on Object.prototype', () => {
     )
   })
 
-  it('reads a name held 999 links up the chain and refuses one held 1000 links up', () => {
+  it('accepts an options chain of 999 links and refuses one of 1000', () => {
     const chained = (links: number): object => {
       let object: object = { exposeInternals: true }
       for (let at = 0; at < links - 1; at += 1) object = Object.create(object) as object

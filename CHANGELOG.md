@@ -67,7 +67,11 @@ value that answers differently on a second read cannot change what is served.
 - A name planted on `Object.prototype` does not change what `@nestjs/swagger` and `helmet` are handed or
   serve: the options given to the peer's `createDocument` and `setup` and to `helmet` have no prototype, and
   an option of `helmet` that takes settings and is on holds its own settings object, so the pages, the
-  routes and the security headers are the ones of a run where nothing was planted.
+  routes and the security headers are the ones of a run where nothing was planted. The same holds for the
+  document the merge builds: a `security`, `securitySchemes`, `content`, `$ref` or `description` planted there
+  is not a member of what the peer generated. Boot refuses, naming it, when `Object.prototype` holds a name
+  the peer reads from its own objects and no option can shadow (`explorer`, `schemas`, `webhookPaths`,
+  `root`, `properties`, `format`).
 - The limits on what is copied are in the README.
 - With `forRootAsync`, Nest reads the factory's result before the library receives it, so a hostile value the
   factory returns (a proxy whose trap throws) fails the boot with the host's own error and not with

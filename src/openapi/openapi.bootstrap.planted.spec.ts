@@ -44,8 +44,8 @@ async function served(): Promise<string> {
 }
 
 /** The generated document, as text. */
-async function document(): Promise<string> {
-  const app = await bootApp({ openapi: { enabled: true } } as never, [ExampleController])
+async function document(options: object = { openapi: { enabled: true } }): Promise<string> {
+  const app = await bootApp(options as never, [ExampleController])
   await applyBymaxOpenApi(app)
   await app.init()
   const answer = await request(app.getHttpServer()).get('/docs-json')
@@ -85,7 +85,7 @@ describe('a name planted on Object.prototype under the options of the swagger pe
     expect(await planted(name, value, served)).toBe(baseline)
   })
 
-  it.each(['explorer', 'schemas'])(
+  it.each(['explorer', 'schemas', 'webhookPaths', 'root', 'properties', 'format'])(
     'refuses to boot when %s, read from the peer instances, is planted',
     async (name) => {
       const app = await bootApp({ openapi: { enabled: true } } as never, [ExampleController])
@@ -123,4 +123,29 @@ describe('a name planted on Object.prototype under the options of the swagger pe
     expect(read.size).toBeGreaterThan(30)
     expect(changed).toEqual([])
   }, 120_000)
+
+  it.each([
+    ['security', []],
+    ['security', [{ planted: [] }]],
+    ['securitySchemes', { planted: { type: 'http', scheme: 'basic' } }],
+    ['securitySchemes', {}],
+    ['content', {}],
+    ['$ref', '#/components/schemas/Planted'],
+    ['description', 'planted description'],
+    ['description', '']
+  ])('serves the document it was configured with when %s is planted as %j', async (name, value) => {
+    const configured = {
+      openapi: {
+        enabled: true,
+        securitySchemes: { bearer: { type: 'http', scheme: 'bearer' } },
+        security: [{ bearer: [] }],
+        operationSecurity: { 'GET /examples': [{ bearer: ['read'] }] }
+      },
+      metrics: { enabled: true, authToken: 'configured' }
+    }
+    const baseline = await document(configured)
+
+    expect(baseline).toContain('"bearer"')
+    expect(await planted(name, value, () => document(configured))).toBe(baseline)
+  })
 })

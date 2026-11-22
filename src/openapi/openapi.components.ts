@@ -10,7 +10,7 @@
  * @layer internal
  */
 import type { ResolvedContribution } from './openapi.contribution'
-import { asRecord } from './openapi.shape'
+import { asRecord, own } from './openapi.shape'
 
 /**
  * One component entry a contributor offered and the document already declared.
@@ -161,7 +161,7 @@ export function placeComponentEntries(
     // A description the document authored survives being filled in: it is the
     // one part of a placeholder a consumer can have written, and the same
     // carve-out the response merge makes for the same reason.
-    const described = held['description']
+    const described = own(held, 'description')
     next.set(
       name,
       described === undefined || described === ''
