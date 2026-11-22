@@ -91,27 +91,34 @@ export async function createMetricsRegistry(
   registry.setDefaultLabels(options.metrics.defaultLabels)
   if (options.metrics.collectDefaultMetrics) {
     promClient.collectDefaultMetrics({ register: registry })
-    containGcObservations(registry)
+    containDefaultWrites(registry)
   }
   return registry
 }
 
+/** The methods of a metric that write a value. */
+const WRITERS = ['set', 'inc', 'observe'] as const
+
 /**
- * The garbage-collection histogram of `prom-client` is written from a `PerformanceObserver` callback, where
- * a throw is an uncaught exception that ends the process. It throws when a name planted on
- * `Object.prototype` is enumerable (it checks the labels with `for...in`), so its writes are contained: the
- * observation is dropped, and the scrape, which refuses beside a changed `Object.prototype`, answers `503`.
+ * Two default collectors of `prom-client` write outside the scrape: the garbage-collection histogram from a
+ * `PerformanceObserver` callback, and the event-loop lag gauge from a `setImmediate` the collection
+ * schedules. A throw there is an uncaught exception that ends the process, and `prom-client` throws when a
+ * name planted on `Object.prototype` is enumerable (it checks the labels with `for...in`). Every write of
+ * the default metrics is contained: the value is dropped, and the scrape, which refuses beside a changed
+ * `Object.prototype`, answers `503`.
  */
-function containGcObservations(registry: MetricsRegistry): void {
-  const histogram = registry.getSingleMetric('nodejs_gc_duration_seconds') as
-    { observe(...args: unknown[]): unknown } | undefined
-  if (histogram === undefined) return
-  const observe = histogram.observe.bind(histogram)
-  histogram.observe = (...args: unknown[]): unknown => {
-    try {
-      return observe(...args)
-    } catch {
-      return undefined
+function containDefaultWrites(registry: MetricsRegistry): void {
+  for (const metric of registry.getMetricsAsArray() as unknown as Array<Record<string, unknown>>) {
+    for (const name of WRITERS) {
+      const write = metric[name]
+      if (typeof write !== 'function') continue
+      metric[name] = (...args: unknown[]): unknown => {
+        try {
+          return (write as (...given: unknown[]) => unknown).apply(metric, args)
+        } catch {
+          return undefined
+        }
+      }
     }
   }
 }

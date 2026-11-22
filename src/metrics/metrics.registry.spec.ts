@@ -158,14 +158,17 @@ describe('loadPromClient, present optional peer', () => {
   })
 })
 
-describe('the garbage-collection histogram beside a changed Object.prototype', () => {
-  it('drops an observation that prom-client refuses, instead of throwing out of its observer', async () => {
+describe('the writes of the default metrics beside a changed Object.prototype', () => {
+  it('are contained for every default metric, so none throws out of an observer or a timer', async () => {
     const registry = await createMetricsRegistry(
       normalizeCoreOptions({ metrics: { enabled: true, collectDefaultMetrics: true } })
     )
-    const histogram = registry.getSingleMetric('nodejs_gc_duration_seconds') as unknown as {
-      observe(labels: object, value: number): void
-    }
+    const metrics = registry.getMetricsAsArray() as unknown as Array<{
+      name: string
+      set?: (labels: object, value: number) => void
+      inc?: (labels: object) => void
+      observe?: (labels: object, value: number) => void
+    }>
     Object.defineProperty(Object.prototype, 'planted', {
       value: 'x',
       enumerable: true,
@@ -173,10 +176,29 @@ describe('the garbage-collection histogram beside a changed Object.prototype', (
       writable: true
     })
     try {
-      expect(() => histogram.observe({ kind: 'major' }, 0.01)).not.toThrow()
+      expect(metrics.map((metric) => metric.name)).toEqual(
+        expect.arrayContaining(['nodejs_gc_duration_seconds', 'nodejs_eventloop_lag_seconds'])
+      )
+      for (const metric of metrics) {
+        expect(() => metric.set?.({}, 1)).not.toThrow()
+        expect(() => metric.inc?.({})).not.toThrow()
+        expect(() => metric.observe?.({ kind: 'major' }, 0.01)).not.toThrow()
+      }
     } finally {
       delete (Object.prototype as Record<string, unknown>)['planted']
     }
-    expect(() => histogram.observe({ kind: 'major' }, 0.01)).not.toThrow()
+  })
+
+  it('keep writing once the name is gone', async () => {
+    const registry = await createMetricsRegistry(
+      normalizeCoreOptions({ metrics: { enabled: true, collectDefaultMetrics: true } })
+    )
+    const histogram = registry.getSingleMetric('nodejs_gc_duration_seconds') as unknown as {
+      observe(labels: object, value: number): void
+    }
+
+    histogram.observe({ kind: 'major' }, 0.01)
+
+    expect(await registry.metrics()).toContain('nodejs_gc_duration_seconds_count{kind="major"} 1')
   })
 })
