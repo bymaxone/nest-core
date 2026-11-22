@@ -189,6 +189,26 @@ describe('the writes of the default metrics beside a changed Object.prototype', 
     }
   })
 
+  it('add no writer to a metric that has none: a counter has no set and a gauge no observe', async () => {
+    const registry = await createMetricsRegistry(
+      normalizeCoreOptions({ metrics: { enabled: true, collectDefaultMetrics: true } })
+    )
+    const counter = registry.getSingleMetric('process_cpu_seconds_total') as unknown as Record<
+      string,
+      unknown
+    >
+    const gauge = registry.getSingleMetric('process_start_time_seconds') as unknown as Record<
+      string,
+      unknown
+    >
+
+    expect(typeof counter['set']).toBe('undefined')
+    expect(typeof counter['observe']).toBe('undefined')
+    expect(typeof gauge['observe']).toBe('undefined')
+    expect(typeof counter['inc']).toBe('function')
+    expect(typeof gauge['set']).toBe('function')
+  })
+
   it('keep writing once the name is gone', async () => {
     const registry = await createMetricsRegistry(
       normalizeCoreOptions({ metrics: { enabled: true, collectDefaultMetrics: true } })

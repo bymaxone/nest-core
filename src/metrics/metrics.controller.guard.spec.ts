@@ -46,7 +46,12 @@ describe('the scrape endpoint', () => {
         writable: true
       })
       try {
-        await expect(scraper.scrape({})).rejects.toBeInstanceOf(ServiceUnavailableException)
+        const error: unknown = await scraper.scrape({}).catch((thrown: unknown) => thrown)
+        expect(error).toBeInstanceOf(ServiceUnavailableException)
+        expect((error as Error).message).toBe('Metrics are unavailable')
+        expect(((error as Error).cause as Error).message).toBe(
+          'Object.prototype holds names or changes this package cannot run beside'
+        )
         expect(asked).not.toHaveBeenCalled()
       } finally {
         delete (Object.prototype as Record<string, unknown>)['planted']
@@ -68,7 +73,11 @@ describe('the scrape endpoint', () => {
   ])('answers 503, and not an unhandled error, when the collection %s', async (_name, collect) => {
     const { scraper } = controllerOver(collect)
 
-    await expect(scraper.scrape({})).rejects.toBeInstanceOf(ServiceUnavailableException)
+    const error: unknown = await scraper.scrape({}).catch((thrown: unknown) => thrown)
+
+    expect(error).toBeInstanceOf(ServiceUnavailableException)
+    expect((error as Error).message).toBe('Metrics collection failed')
+    expect(((error as Error).cause as Error).message).toMatch(/labelset|collector failed/)
   })
 
   it('serves a clean scrape as before', async () => {
