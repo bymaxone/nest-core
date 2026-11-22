@@ -107,6 +107,24 @@ describe('a changed Object.prototype', () => {
     }
   )
 
+  it('is refused when a standard name was replaced before this package loaded', async () => {
+    const original = Object.getOwnPropertyDescriptor(
+      Object.prototype,
+      'toString'
+    ) as PropertyDescriptor
+    Object.defineProperty(Object.prototype, 'toString', { ...original, value: () => 'changed' })
+    try {
+      let fresh: { assertObjectPrototypeClean: () => void } | undefined
+      jest.isolateModules(() => {
+        fresh = require('./object-prototype') as typeof fresh
+      })
+
+      expect((await thrown(() => fresh?.assertObjectPrototypeClean()))?.count).toBe(1)
+    } finally {
+      Object.defineProperty(Object.prototype, 'toString', original)
+    }
+  })
+
   it('is not refused for a symbol key, which no option or document is read through by name', async () => {
     const key = Symbol('host')
     Object.defineProperty(Object.prototype, key, { value: 1, configurable: true })
