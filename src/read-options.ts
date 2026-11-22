@@ -102,7 +102,9 @@ function readEntry(
 
 /**
  * What `given` holds under `key`, unless the first holder of the key is a root: an object with no
- * prototype that is not `given` itself, of any realm. No value of a root is read to tell.
+ * prototype that is not `given` itself, of any realm. Whatever a root holds is never read, however it is
+ * held, so a proxy that forwards to it is not asked either. Only a name held nowhere on the chain is
+ * asked of a proxy, which may answer it by itself.
  */
 function heldBy(given: object, key: string): unknown {
   let holder: object | null = given
@@ -112,13 +114,7 @@ function heldBy(given: object, key: string): unknown {
     holder = Reflect.getPrototypeOf(holder)
   }
   const root = holder !== null && holder !== given && Reflect.getPrototypeOf(holder) === null
-  if (types.isProxy(given)) {
-    // A proxy answers as it always did, except with what a root holds, which it forwarded: an accessor of a root, or its value.
-    const answer: unknown = Reflect.get(given, key)
-    const planted = root ? Object.getOwnPropertyDescriptor(holder, key) : undefined
-    return planted && (!('value' in planted) || planted.value === answer) ? undefined : answer
-  }
-  return holder === null || root ? undefined : Reflect.get(given, key)
+  return root ? undefined : Reflect.get(given, key)
 }
 
 /**

@@ -171,4 +171,15 @@ describe('a name planted on Object.prototype', () => {
       delete (Object.prototype as Record<string, unknown>)['exposeInternals']
     }
   })
+
+  it('reads a name a root holds as omitted even when a proxy answers it, so what a root holds is never asked', () => {
+    const answers = new Proxy(
+      {},
+      { get: (_target, key) => (key === 'exposeInternals' ? true : undefined) }
+    )
+
+    expect(planted('exposeInternals', false, () => resolved({ envelope: answers }))).toContain(
+      '"exposeInternals":false'
+    )
+  })
 })
