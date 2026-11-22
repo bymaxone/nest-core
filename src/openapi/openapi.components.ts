@@ -90,7 +90,7 @@ const IGNORABLE_KEYS = new Set(['type', 'properties', 'description'])
  * @returns Whether it may be replaced by a contributed entry.
  */
 function describesNoShape(entry: Readonly<Record<string, unknown>>): boolean {
-  const type = entry['type']
+  const type = own(entry, 'type')
   if (type !== undefined && type !== 'object') {
     return false
   }

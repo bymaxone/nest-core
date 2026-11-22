@@ -351,7 +351,7 @@ function mergeFragment(
   const { responses, ...members } = fragment
   const merged: Record<string, unknown> = { ...members, ...operation }
   if (responses !== undefined) {
-    merged['responses'] = mergeResponses(asRecord(operation['responses']), asRecord(responses))
+    merged['responses'] = mergeResponses(asRecord(own(operation, 'responses')), asRecord(responses))
   }
   return merged
 }
@@ -380,7 +380,7 @@ function augmentOperation(
   const declaredByDocument = own(operation, 'security') !== undefined
 
   let result: Record<string, unknown> = { ...operation }
-  for (const fragment of fragmentsFor(result['operationId'], contributions)) {
+  for (const fragment of fragmentsFor(own(result, 'operationId'), contributions)) {
     result = { ...mergeFragment(result, fragment) }
   }
 
@@ -404,7 +404,7 @@ function augmentOperation(
 
   if (options.openapi.includeCoreSchemas) {
     result['responses'] = mergeResponses(
-      asRecord(result['responses']),
+      asRecord(own(result, 'responses')),
       coreResponses(path, options, routes)
     )
   }
