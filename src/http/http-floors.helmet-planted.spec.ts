@@ -104,6 +104,61 @@ describe('a name planted on Object.prototype under the options of helmet', () =>
   })
 })
 
+describe('the options of helmet that take settings, left out or given as true', () => {
+  /** The header `name` of one run, or `undefined`. */
+  async function header(helmet: object | undefined, name: string): Promise<string | undefined> {
+    const entries = JSON.parse(await headersOf(helmet)) as Array<[string, string]>
+    return entries.find(([key]) => key === name)?.[1]
+  }
+
+  it('leaves the cross-origin embedder policy and the transport security off unless asked', async () => {
+    expect(await header(undefined, 'cross-origin-embedder-policy')).toBeUndefined()
+    expect(await header({}, 'strict-transport-security')).toBeUndefined()
+  })
+
+  it.each([
+    ['crossOriginEmbedderPolicy', 'cross-origin-embedder-policy', 'require-corp'],
+    ['strictTransportSecurity', 'strict-transport-security', 'max-age=31536000; includeSubDomains'],
+    ['hsts', 'strict-transport-security', 'max-age=31536000; includeSubDomains']
+  ])(
+    'turns %s on with its defaults when it is given as true, planted names or not',
+    async (name, key, value) => {
+      expect(await header({ [name]: true }, key)).toBe(value)
+
+      for (const planted of ['maxAge', 'policy']) {
+        Object.defineProperty(Object.prototype, planted, {
+          value: planted === 'maxAge' ? 5 : 'unsafe-none',
+          configurable: true,
+          writable: true
+        })
+      }
+      try {
+        expect(await header({ [name]: true }, key)).toBe(value)
+      } finally {
+        for (const planted of ['maxAge', 'policy']) {
+          delete (Object.prototype as Record<string, unknown>)[planted]
+        }
+      }
+    }
+  )
+
+  it.each([
+    ['strictTransportSecurity', { maxAge: 100 }, 'max-age=100; includeSubDomains'],
+    ['hsts', { maxAge: 100 }, 'max-age=100; includeSubDomains']
+  ])('reads the settings the host gave %s, planted names or not', async (name, settings, value) => {
+    Object.defineProperty(Object.prototype, 'preload', {
+      value: true,
+      configurable: true,
+      writable: true
+    })
+    try {
+      expect(await header({ [name]: settings }, 'strict-transport-security')).toBe(value)
+    } finally {
+      delete (Object.prototype as Record<string, unknown>)['preload']
+    }
+  })
+})
+
 describe('the names the installed helmet reads', () => {
   it('are all names this package lists', () => {
     const source = readFileSync(
