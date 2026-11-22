@@ -157,4 +157,18 @@ describe('a name planted on Object.prototype', () => {
 
     expect(() => resolved({ envelope: endless })).toThrow('the options could not be read')
   })
+
+  it('ignores a name a root holds as an accessor, also behind a proxy', () => {
+    const baseline = resolved({ envelope: {} })
+    Object.defineProperty(Object.prototype, 'exposeInternals', {
+      configurable: true,
+      get: () => true
+    })
+    try {
+      expect(resolved({ envelope: {} })).toBe(baseline)
+      expect(resolved({ envelope: new Proxy({}, {}) })).toBe(baseline)
+    } finally {
+      delete (Object.prototype as Record<string, unknown>)['exposeInternals']
+    }
+  })
 })
