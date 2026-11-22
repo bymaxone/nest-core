@@ -195,6 +195,30 @@ describe('a changed Object.prototype', () => {
     }
   })
 
+  it.each(['get', 'set', 'value', 'writable', 'enumerable', 'configurable'])(
+    'never runs an accessor planted under %s while it compares descriptors',
+    async (name) => {
+      let ran = 0
+      Object.defineProperty(Object.prototype, name, {
+        get: () => {
+          ran += 1
+          throw new Error('HOST')
+        },
+        configurable: true
+      })
+      let error: (Error & { count?: number }) | undefined
+      try {
+        error = await thrown(() => assertObjectPrototypeClean())
+      } finally {
+        delete (Object.prototype as unknown as Record<string, unknown>)[name]
+      }
+
+      expect(error?.message).toBe(MESSAGE)
+      expect(error?.count).toBe(1)
+      expect(ran).toBe(0)
+    }
+  )
+
   it('is not refused for a symbol key, which no option or document is read through by name', async () => {
     const key = Symbol('host')
     Object.defineProperty(Object.prototype, key, { value: 1, configurable: true })

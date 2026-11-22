@@ -34,6 +34,14 @@ function standard(): Pristine {
   return pristine
 }
 
+/**
+ * A field of a descriptor, as its own property only: a descriptor of this realm inherits from the
+ * `Object.prototype` under test, so a name planted there (an accessor called `get`, say) must never run.
+ */
+function field(descriptor: PropertyDescriptor | undefined, key: keyof PropertyDescriptor): unknown {
+  return descriptor !== undefined && Object.hasOwn(descriptor, key) ? descriptor[key] : undefined
+}
+
 /** Whether a value or accessor of `now` is the one of `was`: the same text for a function, else the same value. */
 function alike(now: unknown, was: unknown, sourceOf: Pristine['sourceOf']): boolean {
   return typeof was === 'function'
@@ -66,18 +74,18 @@ export function assertObjectPrototypeClean(): void {
     const same =
       have !== undefined &&
       want !== undefined &&
-      have.enumerable === want.enumerable &&
+      field(have, 'enumerable') === field(want, 'enumerable') &&
       // A flag tighter than the engine's (a frozen realm) is safe; a looser one is not.
-      !(have.writable && !want.writable) &&
-      !(have.configurable && !want.configurable) &&
-      alike(have.value, want.value, sourceOf) &&
-      alike(have.get, want.get, sourceOf) &&
-      alike(have.set, want.set, sourceOf) &&
+      !(field(have, 'writable') && !field(want, 'writable')) &&
+      !(field(have, 'configurable') && !field(want, 'configurable')) &&
+      alike(field(have, 'value'), field(want, 'value'), sourceOf) &&
+      alike(field(have, 'get'), field(want, 'get'), sourceOf) &&
+      alike(field(have, 'set'), field(want, 'set'), sourceOf) &&
       // And it is the function this module met, not another native one put in its place.
       (!Object.hasOwn(loaded, name) ||
-        (have.value === loaded[name]?.value &&
-          have.get === loaded[name]?.get &&
-          have.set === loaded[name]?.set))
+        (field(have, 'value') === field(loaded[name], 'value') &&
+          field(have, 'get') === field(loaded[name], 'get') &&
+          field(have, 'set') === field(loaded[name], 'set')))
     if (!same) found += 1
   }
   if (found > 0) {
