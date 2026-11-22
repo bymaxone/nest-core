@@ -492,6 +492,9 @@ export async function applyBymaxOpenApi(app: INestApplication): Promise<OpenApiM
 
   assertObjectPrototypeClean()
   const swagger = await loadSwagger()
+  // Again, after the last `await`: a name planted while the peer loaded must not be read by its scan,
+  // which runs below with nothing awaited in between.
+  assertObjectPrototypeClean()
   const config = buildConfig(new swagger.DocumentBuilder(), options)
   // The map is filled by the scan below, which calls the factory once per
   // operation, so it is complete before any contributor is asked for fragments.

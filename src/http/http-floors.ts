@@ -480,6 +480,8 @@ export async function applyHttpFloors(
   const given = floors.helmet
   if (given !== false) {
     const helmet = await loadHelmet()
+    // Again, after the `await`: a name planted while `helmet` loaded must not reach its options.
+    assertObjectPrototypeClean()
     // helmet accepts `hsts` as an alias of `strictTransportSecurity` and throws when both are
     // present, so the default is left out when the caller used the alias. The caller's own
     // `strictTransportSecurity` needs no such care: it overrides the default by position.
