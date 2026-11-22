@@ -79,9 +79,9 @@ value that answers differently on a second read cannot change what is served.
   is refused and not served as a member of every operation of the document or of the headers. The document
   reads the `responses`, `operationId` and `type` it merges as own properties.
 - The metrics scrape answers `503` without asking the registry for anything while `Object.prototype` is not the
-  standard one, and a collection that throws is answered `503` and not left unhandled. The garbage-collection
-  histogram of `prom-client`, which throws out of a `PerformanceObserver` callback (and ends the process) when
-  an enumerable name is planted, has its writes contained.
+  standard one, and a collection that throws is answered `503` and not left unhandled. `prom-client` throws
+  out of a `PerformanceObserver` callback or a `setImmediate` (and ends the process) when an enumerable name
+  is planted, so every write of its default metrics is contained.
 - The limits on what is copied are in the README.
 - With `forRootAsync`, Nest reads the factory's result before the library receives it, so a hostile value the
   factory returns (a proxy whose trap throws) fails the boot with the host's own error and not with
