@@ -167,7 +167,7 @@ describe('a list item behind a proxy that lists no keys', () => {
     const symbolic = new Proxy({ [Symbol('hidden')]: [] }, {})
 
     expect((refusal({ security: [asFoo] }, SECURED).cause as Error).cause).toMatchObject({
-      message: 'A proxy lists no keys'
+      message: 'A requirement must be a plain object'
     })
     expect((refusal({ security: [symbolic] }, SECURED).cause as Error).cause).toMatchObject({
       message: 'A proxy lists no keys'

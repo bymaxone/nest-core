@@ -47,7 +47,8 @@ function namedCopy(value: unknown, done: Map<object, unknown>): unknown {
   const add = (found: readonly PropertyKey[]): void => {
     for (const name of found) if (typeof name === 'string') names.add(name)
   }
-  add(Reflect.ownKeys(value))
+  const own = Reflect.ownKeys(value)
+  add(own)
   let links = 0
   for (
     let up = Reflect.getPrototypeOf(value);
@@ -61,8 +62,12 @@ function namedCopy(value: unknown, done: Map<object, unknown>): unknown {
   if (names.size > MAX_NAMES) throw bootError('an option is too large', {})
   for (const name of names) {
     const held: unknown = Reflect.get(value, name)
-    if (typeof held !== 'function')
-      Object.defineProperty(copy, name, { value: ownCopy(held, 0, [], done), enumerable: true })
+    // A method on a prototype is not a setting; one a directive holds itself is refused, not dropped.
+    if (typeof held === 'function') {
+      if (own.includes(name)) throw bootError('a directive holds a function', { option: name })
+      continue
+    }
+    Object.defineProperty(copy, name, { value: ownCopy(held, 0, [], done), enumerable: true })
   }
   return copy
 }
@@ -109,16 +114,21 @@ function readBlock(given: unknown, shape: Shape, done: Map<object, unknown>): un
     if (value !== undefined) {
       const entry = shape[key] as Shape | readonly [Shape] | 0 | 1
       const isMap = entry === 0 || entry === 1
-      // The items are read once, here, so the one checked is the one copied.
-      if (isMap && Array.isArray(value)) value = snapshot(value)
       const strict = SECURITY.has(key)
       let made: unknown
       try {
+        // The items are read once, here, so the one checked is the one copied.
+        if (isMap && Array.isArray(value)) value = snapshot(value)
         made = readEntry(value, entry, strict, done)
       } catch (cause) {
-        // A refusal by the strict copy names the option it came from.
-        if (!strict || !(cause instanceof RangeError)) throw cause
-        throw bootError('an option holds what is not plain data', { option: key }, { cause })
+        // Whatever stops a security option from being copied (a refusal, a list too long, a getter that
+        // throws, a revoked proxy) names the option it came from.
+        if (!strict) throw cause
+        throw bootError(
+          'an option holds what cannot be copied as plain data',
+          { option: key },
+          { cause }
+        )
       }
       // The copy is judged, not the original: a proxy that lists no keys reads as an empty map, and an
       // empty requirement is anonymous access.

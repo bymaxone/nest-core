@@ -28,6 +28,11 @@ function spend(done: Map<object, unknown>, units: number): void {
 /** The copies that were made of a proxy, so a copy of one is still judged as one. */
 const proxies = new WeakSet<object>()
 
+/** Whether `copy` is the copy of a proxy that listed no key, so what it stands for is not known. */
+export function copiedFromEmptyProxy(copy: object): boolean {
+  return proxies.has(copy) && Object.keys(copy).length === 0
+}
+
 /** The copies made under the refusal, apart from the ones made without it, for each `done`. */
 const strictCaches = new WeakMap<Map<object, unknown>, Map<object, unknown>>()
 
@@ -58,6 +63,8 @@ function copyList(
   const count = length as number
   spend(done, count)
   for (let index = 0; index < count; index += 1) {
+    // A hole is refused, not copied as `undefined`, which a document would serve as `null`.
+    if (!Reflect.has(value, index)) throw new RangeError('A list has a hole')
     items.push(ownCopy(Reflect.get(value, index), depth + 1, inside, done, strict))
   }
   return items
@@ -164,15 +171,17 @@ export function ownCopy(
   if (depth > MAX_DEPTH || open.includes(value)) {
     throw new RangeError('A value holds itself or is nested too deeply')
   }
-  // A proxy is never handed back as itself, whatever prototype it answers: it is copied like a plain
-  // object, so what is judged and kept is the copy and not a value that can answer differently later.
-  if (!types.isProxy(value) && !Array.isArray(value)) {
-    const prototype = Object.getPrototypeOf(value) as unknown
+  // The prototype is read through a proxy too, inside the guard. A proxy is never handed back as itself,
+  // whatever prototype it answers: it is copied like a plain object, so what is judged and kept is the
+  // copy and not a value that can answer differently later.
+  if (!Array.isArray(value)) {
+    const prototype = Reflect.getPrototypeOf(value) as unknown
     if (prototype !== Object.prototype && prototype !== null) {
-      // Where the copy is strict, nothing is kept by reference: an object that is not plain could answer
-      // differently to the check and to the document, whatever its tag says.
+      // Where the copy is strict, nothing is kept by reference and nothing is copied by its own keys
+      // alone: an object that is not plain could answer differently to the check and to the document, or
+      // hold some of its names on the prototype, whatever its tag says.
       if (strict) throw new RangeError('A requirement must be a plain object')
-      return value
+      if (!types.isProxy(value)) return value
     }
   }
   const reused = reuse(value, depth, open, done, strict)

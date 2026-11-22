@@ -21,7 +21,7 @@ import { bootError } from '../boot-error'
 import { findMarkedProviders } from '../discovery'
 import type { ProviderScanner } from '../discovery'
 import { asHostError, describeUnreadable } from '../host-error'
-import { ownCopy } from '../own-copy'
+import { copiedFromEmptyProxy, ownCopy } from '../own-copy'
 import {
   BYMAX_OPENAPI_CONTRACT_VERSION,
   BYMAX_OPENAPI_CONTRIBUTOR_METADATA
@@ -148,6 +148,20 @@ function copySection(section: unknown): Readonly<Record<string, OpenApiFragmentO
     : {}
 }
 
+/** `value` when it is a plain record of what was copied, or a throw: a refusal is the contributor's failure. */
+function plainRecord<T>(value: T): T {
+  const prototype = Object.getPrototypeOf(value) as unknown
+  if (
+    typeof value !== 'object' ||
+    value === null ||
+    (prototype !== Object.prototype && prototype !== null) ||
+    copiedFromEmptyProxy(value)
+  ) {
+    throw new RangeError('An OpenAPI fragment must be a plain object')
+  }
+  return value
+}
+
 /**
  * Ask one contributor for its fragments, failing with its name if it cannot.
  *
@@ -167,8 +181,15 @@ function callContributor(contributor: IOpenApiContributor, label: string): ReadF
     // getter that throws and a proxy that throws or is revoked, anywhere in it, are a contributor's
     // failure like a throw from the method.
     const given = contributor.contributeOpenApi()
-    const operations = ownCopy(given.operations ?? {}) as Record<string, OpenApiFragmentObject>
-    const components = ownCopy(given.components ?? {}) as Record<string, unknown>
+    const copied = ownCopy({
+      operations: given.operations ?? {},
+      components: given.components ?? {}
+    }) as { operations: Record<string, OpenApiFragmentObject>; components: Record<string, unknown> }
+    // A map that is not plain, one a proxy gave out as empty, and an operation like either, would read as
+    // no operation or no security, so they are refused, not served.
+    const operations = plainRecord(copied.operations)
+    Object.values(operations).forEach(plainRecord)
+    const { components } = copied
     return {
       // Left as given: the version is described and never copied, so the error that names a
       // version this package does not speak keeps the declared value as its cause.

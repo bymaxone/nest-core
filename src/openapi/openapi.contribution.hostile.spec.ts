@@ -355,4 +355,57 @@ describe('collectContributions, a fragment that cannot be read', () => {
       cause: { message: 'SECRET-host' }
     })
   })
+
+  /**
+   * An operations map, or an operation, that is not plain is the contributor's failure, not an operation
+   * with no security: a `Map` has no own entries, a class instance or an object derived from another
+   * keeps its entries elsewhere, and a proxy that lists none says nothing.
+   */
+  describe.each([
+    ['a Map', (): object => new Map([['Items.list', { responses: {} }]])],
+    [
+      'a class instance',
+      (): object =>
+        new (class Held {
+          'Items.list' = {}
+        })()
+    ],
+    ['an object derived from another', (): object => Object.create({ 'Items.list': {} }) as object],
+    ['a proxy that lists no keys', (): object => new Proxy({}, { get: () => ({}) })]
+  ])('operations given as %s', (_kind, make) => {
+    it('is refused as the map and as an entry', () => {
+      const asMap = collectOne({
+        contractVersion: BYMAX_OPENAPI_CONTRACT_VERSION,
+        operations: make()
+      })
+      const asEntry = collectOne({
+        contractVersion: BYMAX_OPENAPI_CONTRACT_VERSION,
+        operations: { 'Items.list': make() }
+      })
+
+      expect(asMap.thrown).toMatchObject({ contributor: 'Odd' })
+      expect(asEntry.thrown).toMatchObject({ contributor: 'Odd' })
+    })
+  })
+
+  it('refuses a list with a hole in an operation instead of serving a null entry', () => {
+    const holey: unknown[] = new Array<unknown>(2)
+    holey[1] = { name: 'id' }
+
+    const { thrown } = collectOne({
+      contractVersion: BYMAX_OPENAPI_CONTRACT_VERSION,
+      operations: { 'Items.list': { parameters: holey } }
+    })
+
+    expect(thrown).toMatchObject({ contributor: 'Odd', cause: { message: 'A list has a hole' } })
+  })
+
+  it('keeps a plain operations map and a plain operation', () => {
+    const { thrown } = collectOne({
+      contractVersion: BYMAX_OPENAPI_CONTRACT_VERSION,
+      operations: { 'Items.list': { responses: {} } }
+    })
+
+    expect(thrown).toBeUndefined()
+  })
 })

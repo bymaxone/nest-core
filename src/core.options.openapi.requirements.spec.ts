@@ -163,11 +163,11 @@ describe('a requirement that is not a plain object', () => {
     expect(thrown?.message).toBe('the options could not be read')
     expect(thrown?.cause).toMatchObject({
       option,
-      message: 'an option holds what is not plain data'
+      message: 'an option holds what cannot be copied as plain data'
     })
   })
 
-  it('leaves a host error thrown while the security copy is taken as it was', () => {
+  it('names the option when a host getter throws while the security copy is taken, keeping what it threw', () => {
     const security = [
       {
         get bearer(): string[] {
@@ -183,7 +183,59 @@ describe('a requirement that is not a plain object', () => {
     }
 
     expect(thrown?.message).toBe('the options could not be read')
-    expect((thrown?.cause as Error).message).toBe('host error')
+    expect(thrown?.cause).toMatchObject({ option: 'security' })
+    expect(((thrown?.cause as Error).cause as Error).message).toBe('host error')
+  })
+
+  it.each([
+    [
+      'a proxy with no ownKeys trap around a class instance holding some names on its prototype',
+      'security'
+    ],
+    ['the same, as an operation requirement', 'operationSecurity']
+  ])('refuses %s (%s) instead of serving the requirement without its scopes', (_name, place) => {
+    class Mixed {
+      b: string[] = []
+      get o(): string[] {
+        return ['read', 'write']
+      }
+    }
+    const requirement = new Proxy(new Mixed(), {})
+    const given =
+      place === 'security'
+        ? { security: [requirement] }
+        : { operationSecurity: { 'GET /items': [requirement] } }
+
+    expect(() =>
+      BymaxCoreModule.forRoot({ openapi: { enabled: true, ...given } } as never)
+    ).toThrow('the options could not be read')
+    expect(() => normalizeCoreOptions({ openapi: { enabled: true, ...given } } as never)).toThrow()
+  })
+
+  it.each([
+    [
+      'a list whose length is not a number',
+      (): object =>
+        new Proxy([], { get: (t, k, r) => (k === 'length' ? Number.NaN : Reflect.get(t, k, r)) })
+    ],
+    [
+      'a revoked proxy',
+      (): object => {
+        const { proxy, revoke } = Proxy.revocable({}, {})
+        revoke()
+        return proxy
+      }
+    ]
+  ])('names the option when the security list holds %s', (_name, make) => {
+    let thrown: Error | undefined
+    try {
+      BymaxCoreModule.forRoot({ openapi: { enabled: true, security: [make()] } } as never)
+    } catch (error) {
+      thrown = error as Error
+    }
+
+    expect(thrown?.message).toBe('the options could not be read')
+    expect(thrown?.cause).toMatchObject({ option: 'security' })
   })
 
   it('is refused whatever its tag answers, since plainness is not decided by the tag', () => {

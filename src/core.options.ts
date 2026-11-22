@@ -245,9 +245,15 @@ export interface OpenApiOptions {
   description?: string
   /** Document version, independent of the package version. Default: `'1.0.0'`. */
   version?: string
-  /** Servers advertised by the document. Default: `[]`. */
+  /**
+   * Servers advertised by the document. Default: `[]`. Plain data only, and at most 1000 items: anything
+   * else is refused at boot.
+   */
   servers?: readonly OpenApiServerDescriptor[]
-  /** Security schemes added to the document's components. Default: `{}`. */
+  /**
+   * Security schemes added to the document's components. Default: `{}`. Plain data only (no class instance,
+   * method or `toJSON`), read once; a copy does at most 1,000,000 units of work.
+   */
   securitySchemes?: Readonly<Record<string, OpenApiSecurityScheme>>
   /**
    * The requirement every operation carries unless it says otherwise, naming
@@ -257,6 +263,9 @@ export interface OpenApiOptions {
    * Set this when most of the API is authenticated, and mark the exceptions
    * public through {@link OpenApiOptions.operationSecurity}. An operation that
    * already declares its own requirement is never overwritten.
+   *
+   * Plain data only, at most 1000 items, and each requirement an own plain object: a class instance, a
+   * proxy that lists no keys or whose prototype is not `Object.prototype`, and a hole are refused at boot.
    *
    * @example [{ cookieAuth: [] }]
    */

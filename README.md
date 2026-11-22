@@ -217,6 +217,15 @@ options object itself, refuses a key it does not document, so a misspelt option 
 nothing. A block must be a plain object: a `Date`, `Map`, `Set` or `RegExp` is refused. An option, or a whole block, given as `undefined` or `null` reads as unset and takes its
 default; the one exception is an option of `helmet`, where `null` is refused.
 
+What is handed over is read once, and the limits are fixed. A list an option holds is read by index and is
+refused, never cut short, past `1000` items; a list inside what is copied (an OpenAPI contributor's operation,
+a nested value) is refused past `100000` items, and when its length is not an integer or it has a hole. One
+copy does at most `1000000` units of work (list items and keys), and a map read by name (the `directives` of
+`helmet`'s policy) answers to at most `1000` names. The OpenAPI options `servers`, `securitySchemes`,
+`security` and `operationSecurity` must hold plain data: a class instance, a `Map`, an object with a method, a
+proxy that lists no keys or whose prototype is not `Object.prototype`, and a directive that is a function are
+refused at boot, naming the option.
+
 ### `environment`
 
 The one top-level option rather than a block, because it describes the

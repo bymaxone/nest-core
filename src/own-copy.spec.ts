@@ -102,7 +102,10 @@ describe('ownCopy', () => {
     const asFoo = (target: object): object =>
       new Proxy(target, { getPrototypeOf: () => Foo.prototype })
 
-    expect(() => ownCopy({ security: [asFoo({})] })).toThrow('A proxy lists no keys')
+    expect(() => ownCopy({ security: [asFoo({})] })).toThrow('A requirement must be a plain object')
+    expect(() => ownCopy({ security: [asFoo({ a: [] })] })).toThrow(
+      'A requirement must be a plain object'
+    )
     const copied = ownCopy({ extension: asFoo({ a: 1 }) }) as { extension: object }
     expect(types.isProxy(copied.extension)).toBe(false)
     expect(copied.extension).toStrictEqual({ a: 1 })
@@ -125,10 +128,10 @@ describe('ownCopy', () => {
     expect(reads).toBe(1)
   })
 
-  it('reads each item that is there once, by its index, and copies a hole as undefined', () => {
+  it('reads each item that is there once, by its index, and refuses a hole', () => {
     const reads = [0, 0, 0]
     const list: unknown[] = new Array<unknown>(3)
-    for (const index of [0, 2]) {
+    for (const index of [0, 1, 2]) {
       Object.defineProperty(list, index, {
         get: () => {
           reads[index] = (reads[index] ?? 0) + 1
@@ -138,8 +141,13 @@ describe('ownCopy', () => {
       })
     }
 
-    expect(ownCopy({ list })).toStrictEqual({ list: ['item 0', undefined, 'item 2'] })
-    expect(reads).toStrictEqual([1, 0, 1])
+    expect(ownCopy({ list })).toStrictEqual({ list: ['item 0', 'item 1', 'item 2'] })
+    expect(reads).toStrictEqual([1, 1, 1])
+
+    const holey: unknown[] = new Array<unknown>(3)
+    holey[0] = 1
+    holey[2] = 3
+    expect(() => ownCopy({ list: holey })).toThrow('A list has a hole')
   })
 
   it.each([Number.NaN, -1, 1.5, '2', undefined, { valueOf: (): number => 1 }])(
@@ -195,6 +203,7 @@ describe('ownCopy', () => {
   it('refuses a copy that would do more work than the limit, however it is nested', () => {
     const wide = (levels: number): unknown[] =>
       new Proxy([], {
+        has: () => true,
         get: (target, key, receiver) => {
           if (key === 'length') return 2000
           return typeof key === 'string' && /^\d+$/.test(key)
