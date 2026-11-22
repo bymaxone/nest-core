@@ -153,6 +153,10 @@ function readBlock(given: unknown, shape: Shape, done: Map<object, unknown>): un
         if (Reflect.ownKeys(value).length > MAX_NAMES) throw bootError('an option is too large', {})
       }
       made = readEntry(value, entry, strict, done)
+      // What a proxy listed is bounded by its copy, which is not a proxy and is read no more.
+      if (entry === 0 && isBlock(made) && Reflect.ownKeys(made).length > MAX_NAMES) {
+        throw bootError('an option is too large', {})
+      }
     } catch (cause) {
       // Whatever stops a security option from being copied (a getter of its own that throws, a refusal, a
       // list too long, a revoked proxy) names the option it came from.

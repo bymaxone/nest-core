@@ -63,4 +63,15 @@ describe('the maps an option holds', () => {
       cause: { message: 'an option is too large' }
     })
   })
+
+  it('refuses 1001 keys listed by a proxy, as it does for a plain map', () => {
+    const labels = new Proxy(
+      map(1001, (i) => [`k${i}`, 'x']),
+      {}
+    )
+
+    expect(failure({ metrics: { enabled: true, defaultLabels: labels } })?.message).toBe(
+      'the options could not be read'
+    )
+  })
 })

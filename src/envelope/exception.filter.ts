@@ -382,11 +382,6 @@ function buildInternalDetails(exception: unknown): ErrorDetails {
   }
 }
 
-/**
- * Global exception filter emitting the stable error envelope. Registered as the
- * outermost `APP_FILTER` when the envelope feature is enabled, so it formats
- * every error that escapes a handler, including those thrown by other filters.
- */
 /** Whether the response was answered already, on Express (the response itself) or on Fastify (its `raw`). */
 function isAnswered(response: unknown): boolean {
   const held = response as { headersSent?: boolean; writableEnded?: boolean; raw?: object }
@@ -399,6 +394,11 @@ function isAnswered(response: unknown): boolean {
   )
 }
 
+/**
+ * Global exception filter emitting the stable error envelope. Registered as the
+ * outermost `APP_FILTER` when the envelope feature is enabled, so it formats
+ * every error that escapes a handler, including those thrown by other filters.
+ */
 @Catch()
 export class BymaxExceptionFilter implements ExceptionFilter, OnModuleDestroy {
   /** Clock used to stamp the envelope timestamp; overridable in tests via fake timers. */
