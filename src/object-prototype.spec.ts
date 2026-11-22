@@ -317,3 +317,32 @@ describe.each([false, true])('a changed Object.prototype (enumerable: %s)', (enu
     expect(await thrown(() => applyHttpFloors(fakeApp(), {}))).toBeUndefined()
   })
 })
+
+describe('a realm that cannot be built', () => {
+  it("is refused with the guard's own error, count 1, whatever vm quoted", () => {
+    jest.resetModules()
+    jest.doMock('node:vm', () => ({
+      runInNewContext: () => {
+        throw new TypeError('The property options.timeout must be a number. Received PLANTED-VALUE')
+      }
+    }))
+    try {
+      let fresh: { assertObjectPrototypeClean: () => void } | undefined
+      jest.isolateModules(() => {
+        fresh = require('./object-prototype') as typeof fresh
+      })
+      let error: (Error & { count?: number }) | undefined
+      try {
+        fresh?.assertObjectPrototypeClean()
+      } catch (thrown) {
+        error = thrown as Error & { count?: number }
+      }
+
+      expect(error?.message).toBe(MESSAGE)
+      expect(error?.count).toBe(1)
+      expect(JSON.stringify(error)).not.toContain('PLANTED-VALUE')
+    } finally {
+      jest.dontMock('node:vm')
+    }
+  })
+})

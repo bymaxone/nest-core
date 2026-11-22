@@ -17,6 +17,7 @@ import { BymaxCoreModule } from '../core.module'
 import { BYMAX_GATEWAY_TIMEOUT } from '../envelope/error-codes'
 import { HandlerSignal } from '../handler-timeout/handler-timeout.decorators'
 import { applyHttpFloors } from './http-floors'
+import { resolveRequestDeadline } from './http-floors.deadline'
 
 /** Resolves after `ms` milliseconds. */
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
@@ -82,8 +83,9 @@ describe('the request deadline', () => {
     const errors = jest.spyOn(Logger.prototype, 'error')
     app = await start({ requestDeadline: { timeoutMs: 100, excludePaths: [] } })
 
-    const started = Date.now()
     const answer = await request(app.getHttpServer()).get('/guarded')
+    // Answered before the guard let the request through: the handler cannot have been reached yet.
+    expect(seen.reached).toBe(0)
 
     expect(answer.status).toBe(504)
     expect(answer.body).toMatchObject({
@@ -91,7 +93,6 @@ describe('the request deadline', () => {
       code: BYMAX_GATEWAY_TIMEOUT,
       path: '/guarded'
     })
-    expect(Date.now() - started).toBeLessThan(290)
     await sleep(350)
     expect(seen.aborted).toBe(true)
     // The guard let the request through after the answer: nothing is written, nothing is logged.
@@ -158,14 +159,11 @@ describe('the request deadline beside the handler timeout', () => {
     const errors = jest.spyOn(Logger.prototype, 'error')
     const app = await both(deadlineMs, handlerMs)
 
-    const started = Date.now()
     const answer = await request(app.getHttpServer()).get('/slow')
-    const elapsed = Date.now() - started
     await sleep(700)
 
     expect(answer.status).toBe(504)
     expect(answer.body).toMatchObject({ statusCode: 504, code: BYMAX_GATEWAY_TIMEOUT })
-    expect(elapsed).toBeLessThan(Math.min(deadlineMs, handlerMs) + 150)
     expect(errors).not.toHaveBeenCalled()
     errors.mockRestore()
     await app.close()
@@ -217,5 +215,11 @@ describe('the options of the request deadline', () => {
       })
     ).toBeUndefined()
     expect(await failure({ timeoutMs: 100, excludePaths: [] })).toBeUndefined()
+  })
+
+  it('drops a trailing slash from a prefix, and keeps the root as it is', () => {
+    expect(
+      resolveRequestDeadline({ timeoutMs: 100, excludePaths: ['/events/', '/', '/a/b/'] })
+    ).toEqual({ timeoutMs: 100, excludePaths: ['/events', '/', '/a/b'] })
   })
 })

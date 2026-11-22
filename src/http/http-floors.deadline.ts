@@ -35,9 +35,6 @@ export const REQUEST_DEADLINE_KEYS = { timeoutMs: 0, excludePaths: 0 } satisfies
  */
 const GATEWAY_TIMEOUT_CODE = 'BYMAX_GATEWAY_TIMEOUT'
 
-/** The most paths that may be excluded. */
-const MAX_EXCLUDED = 1000
-
 /** The parts of a request and a response the deadline reads and writes, as Express gives them. */
 interface DeadlineRequest {
   readonly originalUrl?: string
@@ -59,7 +56,7 @@ interface DeadlineResponse {
  * @param given - The block, absent for no deadline.
  * @returns The settings, or `undefined` when no deadline is asked for.
  * @throws Error When the timeout is not a timer-safe integer, or `excludePaths` is missing, is not a list,
- *   holds more than 1000 entries or one that is not a path prefix.
+ *   holds one that is not a path prefix (a list past 1000 entries is refused earlier, when the options are read).
  */
 export function resolveRequestDeadline(
   given: unknown
@@ -82,9 +79,6 @@ export function resolveRequestDeadline(
       'a list of path prefixes (it may be empty)',
       listed
     )
-  }
-  if (listed.length > MAX_EXCLUDED) {
-    throw new Error(`requestDeadline.excludePaths lists more than ${MAX_EXCLUDED} paths`)
   }
   const excludePaths = Array.from(listed as readonly unknown[]).map((path, index) => {
     if (typeof path !== 'string' || !path.startsWith('/') || /[?#\s]/.test(path)) {
@@ -131,11 +125,6 @@ function silence(response: DeadlineResponse): void {
       writable: true
     })
   }
-}
-
-/** Whether `path` is `prefix` or lies under it, at a segment boundary. */
-function isUnder(path: string, prefix: string): boolean {
-  return path === prefix || path.startsWith(`${prefix}/`)
 }
 
 /** Whether the path of `request` is under one of the prefixes. */
