@@ -154,7 +154,7 @@ function plainRecord<T>(value: T): T {
   if (
     typeof value !== 'object' ||
     value === null ||
-    (prototype !== Object.prototype && prototype !== null) ||
+    prototype !== Object.prototype ||
     copiedFromProxy(value)
   ) {
     throw new RangeError('An OpenAPI fragment must be a plain object')

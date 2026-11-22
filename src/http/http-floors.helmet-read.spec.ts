@@ -136,7 +136,10 @@ describe('the helmet options read by name', () => {
     }
 
     expect(thrown?.message).toBe('the options could not be read')
-    expect(thrown?.cause).toMatchObject({ option: 'defaultSrc' })
+    expect(thrown?.cause).toMatchObject({
+      option: 'defaultSrc',
+      message: 'a directive holds a function'
+    })
   })
 
   it('keeps a method a class holds on its prototype out of the directives', async () => {

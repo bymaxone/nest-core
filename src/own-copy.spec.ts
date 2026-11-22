@@ -85,6 +85,14 @@ describe('ownCopy', () => {
     )
   })
 
+  it('refuses a shared object that holds a method when it is reached again as a requirement', () => {
+    const shared = { bearer: [], validate: (): void => undefined }
+
+    expect(() => ownCopy({ a: { extension: shared }, b: { security: [shared] } })).toThrow(
+      'A requirement must be plain data'
+    )
+  })
+
   it('copies an empty proxy under a field that is only named security, not a list of requirements', () => {
     const schema = { properties: { security: new Proxy({}, {}) } }
 

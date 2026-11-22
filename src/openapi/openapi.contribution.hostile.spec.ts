@@ -388,6 +388,23 @@ describe('collectContributions, a fragment that cannot be read', () => {
     })
   })
 
+  it('names why a Map is refused, and accepts a map and an operation made with no prototype', () => {
+    const refused = collectOne({
+      contractVersion: BYMAX_OPENAPI_CONTRACT_VERSION,
+      operations: new Map()
+    })
+    const bare = Object.assign(Object.create(null) as object, { responses: {} })
+    const accepted = collectOne({
+      contractVersion: BYMAX_OPENAPI_CONTRACT_VERSION,
+      operations: Object.assign(Object.create(null) as object, { 'Items.list': bare })
+    })
+
+    expect((refused.thrown?.cause as Error).message).toBe(
+      'An OpenAPI fragment must be a plain object'
+    )
+    expect(accepted.thrown).toBeUndefined()
+  })
+
   it.each([
     ['Object.prototype', (): object | null => Object.prototype],
     ['null', (): object | null => null]
