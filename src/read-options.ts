@@ -100,6 +100,22 @@ function readEntry(
   return readBlock(value, entry as Shape, done)
 }
 
+/** What `given` holds under `key`, unless it is found only on this realm's `Object.prototype`. */
+function heldBy(given: object, key: string): unknown {
+  if (types.isProxy(given)) {
+    const answer: unknown = Reflect.get(given, key)
+    const planted = Object.hasOwn(Object.prototype, key)
+    return planted && !Object.hasOwn(given, key) && answer === Reflect.get(Object.prototype, key)
+      ? undefined
+      : answer
+  }
+  for (let at: object | null = given; at !== null; at = Reflect.getPrototypeOf(at)) {
+    if (at === Object.prototype) return undefined
+    if (Object.hasOwn(at, key)) return Reflect.get(given, key)
+  }
+  return undefined
+}
+
 /**
  * A block with each documented option read by name, wherever the host keeps it: an own property, a
  * getter, a class accessor or a proxy that answers only `get`. A key the shape does not document is
@@ -108,7 +124,8 @@ function readEntry(
  */
 function readBlock(given: unknown, shape: Shape, done: Map<object, unknown>): unknown {
   if (!isBlock(given)) return given
-  const copy: Record<string, unknown> = {}
+  // No prototype: the resolvers cannot inherit a planted name from the copy.
+  const copy = Object.create(null) as Record<string, unknown>
   for (const key of Object.keys(shape)) {
     const entry = shape[key] as Shape | readonly [Shape] | 0 | 1
     const isMap = entry === 0 || entry === 1
@@ -116,7 +133,7 @@ function readBlock(given: unknown, shape: Shape, done: Map<object, unknown>): un
     let value: unknown
     let made: unknown
     try {
-      value = Reflect.get(given, key)
+      value = heldBy(given, key)
       if (value === undefined) continue
       // The items are read once, here, so the one checked is the one copied.
       if (isMap && Array.isArray(value)) value = snapshot(value)
