@@ -532,7 +532,8 @@ function assertSchemesDeclared(
   const required = [...openapi.security, ...Object.values(openapi.operationSecurity).flat()]
   const named = [...new Set(required.flatMap((requirement) => Object.keys(requirement)))]
   const declared = Object.keys(schemes)
-  const missing = named.filter((name) => !declared.includes(name))
+  const defined = new Set(declared)
+  const missing = named.filter((name) => !defined.has(name))
   if (missing.length === 0) {
     return
   }
@@ -621,7 +622,8 @@ function assertOverridesMatch(
 ): void {
   const configured = Object.keys(openapi.operationSecurity)
   const documented = documentedOperationKeys(paths)
-  const unmatched = configured.filter((key) => !documented.includes(key))
+  const known = new Set(documented)
+  const unmatched = configured.filter((key) => !known.has(key))
   if (unmatched.length === 0) {
     return
   }
