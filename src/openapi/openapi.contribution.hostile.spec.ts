@@ -388,6 +388,32 @@ describe('collectContributions, a fragment that cannot be read', () => {
     })
   })
 
+  it.each([
+    ['Object.prototype', (): object | null => Object.prototype],
+    ['null', (): object | null => null]
+  ])(
+    'refuses an operation, and a map, that is a proxy answering %s as its prototype',
+    (_name, answer) => {
+      class Op {
+        responses = {}
+        get security(): object[] {
+          return [{ bearer: ['read'] }]
+        }
+      }
+      const asEntry = collectOne({
+        contractVersion: BYMAX_OPENAPI_CONTRACT_VERSION,
+        operations: { 'Items.list': new Proxy(new Op(), { getPrototypeOf: answer }) }
+      })
+      const asMap = collectOne({
+        contractVersion: BYMAX_OPENAPI_CONTRACT_VERSION,
+        operations: new Proxy({ 'Items.list': { responses: {} } }, { ownKeys: () => [] })
+      })
+
+      expect(asEntry.thrown).toMatchObject({ contributor: 'Odd' })
+      expect(asMap.thrown).toMatchObject({ contributor: 'Odd' })
+    }
+  )
+
   it('refuses an operation, and a map, that is a proxy around a class holding names on its prototype', () => {
     class Op {
       responses = {}

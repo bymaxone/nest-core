@@ -262,7 +262,7 @@ export interface OpenApiOptions {
    * already declares its own requirement is never overwritten.
    *
    * Plain data only, at most 1000 items, and each requirement an own plain object: a class instance, a
-   * proxy that lists no keys or whose prototype is not `Object.prototype`, and a hole are refused at boot.
+   * proxy, and a hole are refused at boot.
    *
    * @example [{ cookieAuth: [] }]
    */

@@ -25,18 +25,12 @@ function spend(done: Map<object, unknown>, units: number): void {
   if (budget.left < 0) throw new RangeError('A value is too large')
 }
 
-/** The copies that were made of a proxy whose prototype is not plain: names held on that prototype are not in them. */
-const oddProxies = new WeakSet<object>()
-
 /** The copies that were made of a proxy, so a copy of one is still judged as one. */
 const proxies = new WeakSet<object>()
 
-/**
- * Whether `copy` stands for less than its proxy held: the copy of a proxy that listed no key, or of one
- * whose prototype is not plain, whose names on that prototype are not in the copy.
- */
-export function copiedFromLessThanItHeld(copy: object): boolean {
-  return oddProxies.has(copy) || (proxies.has(copy) && Object.keys(copy).length === 0)
+/** Whether `copy` is the copy of a proxy, which is not a record the host's own keys speak for. */
+export function copiedFromProxy(copy: object): boolean {
+  return proxies.has(copy)
 }
 
 /** The copies made under the refusal, apart from the ones made without it, for each `done`. */
@@ -131,32 +125,13 @@ function reuse(
   return strict ? ownCopy(other, depth, open, done, true) : other
 }
 
-/**
- * What is done with an object by its prototype, read through a proxy too, inside the guard: `copy` it,
- * `keep` it as given (not a proxy, not plain, not strict), or copy it as `odd` (a proxy whose prototype is
- * not plain, copied by its own keys). Where the copy is strict, nothing is kept by reference and nothing
- * is copied by its own keys alone: an object that is not plain could answer differently to the check and
- * to the document, or hold some of its names on the prototype, whatever its tag says.
- */
-function kindOf(value: object, strict: boolean): 'copy' | 'keep' | 'odd' {
-  if (Array.isArray(value)) return 'copy'
-  const prototype = Reflect.getPrototypeOf(value) as unknown
-  if (prototype === Object.prototype || prototype === null) return 'copy'
-  if (strict) throw new RangeError('A requirement must be a plain object')
-  return types.isProxy(value) ? 'odd' : 'keep'
-}
-
-/**
- * Refuses the copy of a proxy that lists no keys, where the copy is strict: it reads as `{}`, and an empty
- * requirement is anonymous access.
- */
-function judge(value: object, copy: object, depth: number, strict: boolean, odd: boolean): void {
-  const proxied = types.isProxy(value)
-  if (proxied) proxies.add(copy)
-  if (odd) oddProxies.add(copy)
-  if (strict && depth > 0 && (proxied || proxies.has(value)) && Object.keys(copy).length === 0) {
-    throw new RangeError('A proxy lists no keys')
-  }
+/** Whether `prototype` is the root of a realm's objects, this one's or another's: an object that has no further prototype and names itself as its constructor's. */
+function isPlainPrototype(prototype: unknown): boolean {
+  if (prototype === null) return true
+  const root = prototype as object
+  const named = Reflect.getOwnPropertyDescriptor(root, 'constructor')?.value as
+    { prototype?: unknown } | undefined
+  return Reflect.getPrototypeOf(root) === null && named?.prototype === root
 }
 
 /**
@@ -193,8 +168,16 @@ export function ownCopy(
   if (depth > MAX_DEPTH || open.includes(value)) {
     throw new RangeError('A value holds itself or is nested too deeply')
   }
-  const kind = kindOf(value, strict)
-  if (kind === 'keep') return value
+  // Where the copy is strict, a proxy is refused whatever it answers: it cannot be unwrapped or trusted,
+  // and the names it forwards to its target, or holds on a prototype, are not the ones it lists.
+  if (strict && types.isProxy(value)) throw new RangeError('A requirement cannot be a proxy')
+  // The prototype is read inside the guard. Where the copy is strict, nothing is kept by reference: an
+  // object that is not plain could answer differently to the check and to the document, or hold some of
+  // its names on its prototype, whatever its tag says.
+  if (!Array.isArray(value) && !isPlainPrototype(Reflect.getPrototypeOf(value))) {
+    if (strict) throw new RangeError('A requirement must be a plain object')
+    if (!types.isProxy(value)) return value
+  }
   const reused = reuse(value, depth, open, done, strict)
   if (reused !== undefined) return reused
   const cache = strict ? strictCache(done) : done
@@ -205,9 +188,8 @@ export function ownCopy(
     return items
   }
   const copy = copyProperties(value, depth, inside, done, strict)
-  // The copy is judged: a proxy inside an option that lists no keys reads as `{}`, and an empty
-  // requirement is anonymous access.
-  judge(value, copy, depth, strict, kind === 'odd')
+  // A copy of a proxy is remembered, so a caller can refuse it as the record of a host's own keys.
+  if (types.isProxy(value)) proxies.add(copy)
   cache.set(value, copy)
   return copy
 }

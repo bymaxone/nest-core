@@ -40,19 +40,20 @@ value that answers differently on a second read cannot change what is served.
   name it holds no property under, and a copy that would do more work than its limit is refused.
 - The OpenAPI options `servers`, `securitySchemes`, `security` and `operationSecurity` are copied once, and the
   document is built from that copy, so the declaration that was checked is the one that is served. In it, a
-  proxy that lists no keys (read as `{}`, which OpenAPI takes to allow anonymous access), an object that is not
-  plain (a class instance, or an object with a `toJSON`), a method and a symbol are refused. A refusal in
+  proxy (it cannot be unwrapped or trusted, and one that lists no keys reads as `{}`, which OpenAPI takes to
+  allow anonymous access), an object that is not plain (a class instance, or an object with a `toJSON`), a
+  method and a symbol are refused; a plain object made in another realm is accepted. A refusal in
   `security`, `operationSecurity` or `securitySchemes` fails with `the options could not be read` and names the
   option in the `option` property of its `cause`; one in `servers` fails with
   `openapi.servers must hold only plain data`. The same holds for a `security` list in what a contributor adds.
 - A property that is not enumerable is enumerable in the copy the library takes of what a host hands over.
 - A directive of the `helmet` policy that is a function is refused at boot, naming the directive, instead of
   being dropped; a method a class holds on its prototype is still not taken for a directive.
-- A requirement that is a proxy whose prototype is not `Object.prototype`, a list with a hole, and what stops
+- A list with a hole, and what stops
   a security option from being copied (a getter that throws, a revoked proxy, a list that is too long) fail
   with `the options could not be read`, naming the option in the `option` property of the `cause`. A
   contributor's operations map, or an operation, that is not plain (a `Map`, a class instance, an object
-  derived from another, a proxy that lists no keys) is the contributor's failure and not an operation with no
+  derived from another, a proxy) is the contributor's failure and not an operation with no
   security.
 - The limits on what is copied are in the README.
 - With `forRootAsync`, Nest reads the factory's result before the library receives it, so a hostile value the

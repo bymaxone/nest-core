@@ -141,7 +141,7 @@ describe('a list item behind a proxy that lists no keys', () => {
     const item = new Proxy({}, { get: () => ['read'] })
     const error = refusal({ security: [item] }, SECURED)
     expect((error.cause as Error).cause).toMatchObject({
-      message: 'A proxy lists no keys'
+      message: 'A requirement cannot be a proxy'
     })
   })
 
@@ -149,11 +149,11 @@ describe('a list item behind a proxy that lists no keys', () => {
     const item = new Proxy({}, { get: () => ['read'] })
     const deep = refusal({ operationSecurity: { 'A.b': [item] } }, SECURED)
     expect((deep.cause as Error).cause).toMatchObject({
-      message: 'A proxy lists no keys'
+      message: 'A requirement cannot be a proxy'
     })
     const scheme = refusal({ securitySchemes: { bearer: item } }, SECURED)
     expect((scheme.cause as Error).cause).toMatchObject({
-      message: 'A proxy lists no keys'
+      message: 'A requirement cannot be a proxy'
     })
   })
 
@@ -167,10 +167,10 @@ describe('a list item behind a proxy that lists no keys', () => {
     const symbolic = new Proxy({ [Symbol('hidden')]: [] }, {})
 
     expect((refusal({ security: [asFoo] }, SECURED).cause as Error).cause).toMatchObject({
-      message: 'A requirement must be a plain object'
+      message: 'A requirement cannot be a proxy'
     })
     expect((refusal({ security: [symbolic] }, SECURED).cause as Error).cause).toMatchObject({
-      message: 'A proxy lists no keys'
+      message: 'A requirement cannot be a proxy'
     })
     expect(refusal({ other: asFoo }, SECURED).cause).toMatchObject({
       message: 'an option is held behind a proxy that lists no keys'

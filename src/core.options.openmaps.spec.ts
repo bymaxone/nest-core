@@ -20,6 +20,9 @@ const MAPS: ReadonlyArray<readonly [string, string, object]> = [
   ['openapi', 'operationSecurity', { 'GET /items': [{ bearer: [] }] }]
 ]
 
+/** The options that hold security, where a proxy is refused whatever it lists. */
+const SECURED = new Set(['securitySchemes', 'operationSecurity'])
+
 /** `value` answered through `get` alone, over an empty target. */
 function getOnly<T extends object>(value: T): T {
   return new Proxy({} as T, { get: (_target, key) => Reflect.get(value, key) })
@@ -45,13 +48,16 @@ describe('an open map of the options held behind a proxy', () => {
       error = thrown as Error
     }
     expect(error?.message).toBe('the options could not be read')
+    // A security option refuses every proxy as it is copied; the other maps refuse one that lists no keys.
     expect(error?.cause).toMatchObject({
-      message: 'an option is held behind a proxy that lists no keys',
+      message: SECURED.has(name)
+        ? 'an option holds what cannot be copied as plain data'
+        : 'an option is held behind a proxy that lists no keys',
       option: name
     })
   })
 
-  it.each(MAPS)(
+  it.each(MAPS.filter(([, name]) => !SECURED.has(name)))(
     'keeps the entries of %s.%s served by a proxy that lists its keys',
     (block, name, map) => {
       const resolved = normalizeCoreOptions(
