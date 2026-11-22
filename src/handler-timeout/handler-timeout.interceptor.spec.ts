@@ -188,11 +188,11 @@ describe('handler timeout', () => {
    * The answer comes at the timeout, not when the handler finishes, and it is the typed 504.
    */
   it('answers 504 in the envelope at the timeout, not when the handler ends', async () => {
-    const started = Date.now()
     const res = await request(server()).post('/t/slow')
     expect(res.status).toBe(504)
     expect(res.body).toMatchObject({ code: 'BYMAX_GATEWAY_TIMEOUT' })
-    expect(Date.now() - started).toBeLessThan(350)
+    // Answered while the handler is still running: no wall-clock bound, which a loaded machine breaks.
+    expect(seen.finished).toBe(false)
   })
 
   it('leaves a handler that answers in time alone', async () => {
