@@ -156,6 +156,14 @@ describe('a name planted on Object.prototype', () => {
     const endlessTraps: ProxyHandler<object> = { getPrototypeOf: () => new Proxy({}, endlessTraps) }
 
     expect(() => resolved({ envelope: endless })).toThrow('the options could not be read')
+    let thrown: Error | undefined
+    try {
+      resolved({ envelope: endless })
+    } catch (error) {
+      thrown = error as Error
+    }
+
+    expect((thrown?.cause as Error).message).toBe('an option is too large')
   })
 
   it('ignores a name a root holds as an accessor, also behind a proxy', () => {
@@ -181,5 +189,16 @@ describe('a name planted on Object.prototype', () => {
     expect(planted('exposeInternals', false, () => resolved({ envelope: answers }))).toContain(
       '"exposeInternals":false'
     )
+  })
+
+  it('reads a name held 999 links up the chain and refuses one held 1000 links up', () => {
+    const chained = (links: number): object => {
+      let object: object = { exposeInternals: true }
+      for (let at = 0; at < links - 1; at += 1) object = Object.create(object) as object
+      return Object.create(object) as object
+    }
+
+    expect(resolved({ envelope: chained(999) })).toContain('"exposeInternals":true')
+    expect(() => resolved({ envelope: chained(1000) })).toThrow('the options could not be read')
   })
 })
