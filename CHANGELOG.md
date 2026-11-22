@@ -64,6 +64,10 @@ value that answers differently on a second read cannot change what is served.
   before anything is read through it, whatever it answers for its length. A hole in a list is never filled
   from `Array.prototype`, and what a strict copy holds has no prototype, so a name planted on
   `Object.prototype` cannot complete a server or a security scheme that left it out.
+- A name planted on `Object.prototype` does not change what `@nestjs/swagger` and `helmet` are handed or
+  serve: the options given to the peer's `createDocument` and `setup` and to `helmet` have no prototype, and
+  an option of `helmet` that takes settings and is on holds its own settings object, so the pages, the
+  routes and the security headers are the ones of a run where nothing was planted.
 - The limits on what is copied are in the README.
 - With `forRootAsync`, Nest reads the factory's result before the library receives it, so a hostile value the
   factory returns (a proxy whose trap throws) fails the boot with the host's own error and not with

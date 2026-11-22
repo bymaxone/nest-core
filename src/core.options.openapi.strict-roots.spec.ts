@@ -50,6 +50,14 @@ describe('a proxy as the root of a strict option', () => {
     }
   )
 
+  it('names a proxy as the reason when the servers list is one', () => {
+    expect(
+      failure({ servers: new Proxy([{ url: 'https://api.example' }], {}) })?.cause
+    ).toMatchObject({
+      message: 'an option is held behind a proxy'
+    })
+  })
+
   it('is refused for the lists inside operationSecurity and for the map', () => {
     const list = [{ bearer: [] }]
 
