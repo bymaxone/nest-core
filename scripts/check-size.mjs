@@ -299,8 +299,10 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 // (7475 B) and `./openapi` 10.19 KiB (10397 B) are unchanged. Code only.
 // The guard reading no live built-in, measured + about 30 B: root 27.27 KiB = 27924 B (measured 27890 B), `./openapi`
 // 10.42 KiB = 10670 B (10630 B), `./http` 7.56 KiB = 7741 B (7703 B). Code only; the guard is inlined in each bundle.
+// The 1.6.21 fixes joined to the 1.6.22 hardening, measured + about 30 B: root 27.34 KiB (measured 27.31 KiB, from
+// 27.27 KiB); `./openapi` and `./http` are unchanged. The growth is the guard after the scan and the dropped gauge write. Code only.
 const BUDGETS = [
-  { name: '. (root)', path: 'dist/index.mjs', brotli: 27.27 * 1024 },
+  { name: '. (root)', path: 'dist/index.mjs', brotli: 27.34 * 1024 },
   { name: './pagination', path: 'dist/pagination/index.mjs', brotli: 1.5 * 1024 },
   { name: './health', path: 'dist/health/index.mjs', brotli: 0.5 * 1024 },
   { name: './openapi', path: 'dist/openapi/index.mjs', brotli: 10.42 * 1024 },
