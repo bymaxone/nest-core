@@ -21,6 +21,7 @@ import { bootError } from '../boot-error'
 import { findMarkedProviders } from '../discovery'
 import type { ProviderScanner } from '../discovery'
 import { asHostError, describeUnreadable } from '../host-error'
+import { assertObjectPrototypeClean } from '../object-prototype'
 import { copiedFromProxy, ownCopy } from '../own-copy'
 import {
   BYMAX_OPENAPI_CONTRACT_VERSION,
@@ -203,9 +204,22 @@ function callContributor(contributor: IOpenApiContributor, label: string): ReadF
     throw bootError(
       '[BymaxCoreModule] an OpenAPI contributor failed to contribute to the OpenAPI document',
       { contributor: label },
-      { cause: asHostError(cause) }
+      { cause: causeOf(cause) }
     )
   }
+}
+
+/**
+ * What a contributor's failure is reported as: the guard's refusal, a count only, while `Object.prototype`
+ * holds a name the contributor planted, since the error a dependency raises then echoes the planted value.
+ */
+function causeOf(thrown: unknown): Error {
+  try {
+    assertObjectPrototypeClean()
+  } catch (refusal) {
+    return refusal as Error
+  }
+  return asHostError(thrown)
 }
 
 /**
