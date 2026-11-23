@@ -415,6 +415,8 @@ function mountDocument(
   document: Swagger.OpenAPIObject,
   options: ResolvedOpenApiOptions
 ): void {
+  // After every host callback (factory, contributors, logger) and with nothing awaited before the mount.
+  assertObjectPrototypeClean()
   swagger.SwaggerModule.setup(
     options.path,
     app,
