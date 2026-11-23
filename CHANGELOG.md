@@ -48,7 +48,7 @@ as plain data`, naming the option), when it has more than 1000 keys, before any 
 - A built-in that a decision calls and a host replaced after load no longer decides it. A `Set.prototype.has`
   that answers `true` listed every origin in the CORS delegate and excluded every path from the request
   deadline; both now refuse (no origin, the request bounded) while a built-in the guard watches is not the
-  one captured at load, and the guard refuses the same way at the OpenAPI mount. The `504` body is built from a template, so a `toJSON` planted on `Object.prototype`
+  one captured at load. The `504` body is built from a template, so a `toJSON` planted on `Object.prototype`
   cannot rewrite it, and the scrape bearer check uses `createHash` and `timingSafeEqual` as captured at load.
 - The request deadline matched `excludePaths` by slicing every prefix of the path, so a path of 16000 slashes held
   the event loop for about 600 ms before the timer armed; the match now stops at the longest configured prefix.
