@@ -415,6 +415,8 @@ function mountDocument(
   document: Swagger.OpenAPIObject,
   options: ResolvedOpenApiOptions
 ): void {
+  // After every host callback (factory, contributors, logger) and with nothing awaited before the mount.
+  assertObjectPrototypeClean()
   swagger.SwaggerModule.setup(
     options.path,
     app,
@@ -500,6 +502,7 @@ export async function applyBymaxOpenApi(app: INestApplication): Promise<OpenApiM
   // operation, so it is complete before any contributor is asked for fragments.
   const handlers = createHandlerIdMap()
   const generated = scanApplication(swagger, app, config, handlers, options)
+  assertObjectPrototypeClean() // the operation id factory ran inside the scan and may have planted a name
   // Read once and shared: recognizing this package's own routes needs the same
   // prefixes the merge does, and asking the application twice would let the two
   // answers differ for no reason.

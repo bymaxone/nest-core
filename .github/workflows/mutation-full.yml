@@ -35,10 +35,12 @@ jobs:
     with:
       # The ceiling is per shard job. As one job the cold run took 53 minutes for about 3250 mutants
       # (run 44201277024), and 60 minutes were not enough for about 3370 (run 44234797800, cancelled
-      # at 93%). So the work is split into four shards of two workers each, and the ceiling stays at
-      # 60, above any shard. A run the ceiling cancels leaves no score and no baseline for the week, so
-      # re-measure the slowest shard after the next full run and set the ceiling to 1.5 times it.
-      timeout-minutes: 60
+      # at 93%). So the work is split into four shards of two workers each. A run the ceiling cancels
+      # leaves no score and no baseline for the week. Shard 3 of run 45088353486 covers 18 files and
+      # detected 364 static mutants (38% of its total) that take an estimated 93% of its time: each one
+      # reruns the whole suite (1,728 tests, about 32 s), so the shard was cancelled at 60 minutes twice
+      # while shards 1, 2 and 4 finished in 41 to 48. The ceiling is 120, under the 360 GitHub allows.
+      timeout-minutes: 120
       # A unit test the cold run did not run fails the job: it would never be held to killing a
       # mutant, and the score cannot notice. The tooling specs that reach no source are listed in
       # scripts/mutation-inventory.exempt.json.
