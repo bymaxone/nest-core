@@ -217,10 +217,13 @@ options object itself, refuses a key it does not document, so a misspelt option 
 nothing. A block must be a plain object: a `Date`, `Map`, `Set` or `RegExp` is refused. An option, or a whole block, given as `undefined` or `null` reads as unset and takes its
 default; the one exception is an option of `helmet`, where `null` is refused.
 
-**`Object.prototype` must be the standard one.** `BymaxCoreModule.forRoot`, `applyBymaxOpenApi` (only when it goes on to mount the document) and `applyHttpFloors` refuse to boot while `Object.prototype` of the realm holds a string key outside the ones it has by default, or one of those has been replaced: every plain object that `helmet` and `@nestjs/swagger` read a name from would inherit it, and no option can shadow it. A host that extends `Object.prototype` cannot boot this package. The error reports a count only (`count`). The guard runs again after the last `await` of `applyBymaxOpenApi` and `applyHttpFloors`, and the metrics scrape answers `503` while it holds. The guard runs when this package is asked, so it cannot stop a name planted later: a `value` or `writable` planted on `Object.prototype` after boot ends the process inside Node's own `perf_hooks` when the next garbage collection is observed. A bare Node process with only a GC `PerformanceObserver` dies the same way, and no frame of this package or of `prom-client` is on the stack, so this limit is Node's. Freeze `Object.prototype` before anything else runs (`Object.freeze(Object.prototype)`), or set `collectDefaultMetrics: false`.
+**`Object.prototype` must be the standard one.** `BymaxCoreModule.forRoot`, `applyBymaxOpenApi` (only when it goes on to mount the document) and `applyHttpFloors` refuse to boot while `Object.prototype` of the realm holds a string key outside the ones it has by default, or one of those has been replaced: every plain object a dependency reads a name from would inherit it, and no option can shadow it. A host that extends `Object.prototype` cannot boot this package. The error reports a count only (`count`). The guard runs again after the last `await` of `applyBymaxOpenApi` and `applyHttpFloors`, and the metrics scrape answers `503` while the guard refuses (after the bearer check, so a caller without the token learns nothing). Only the default metrics this package creates have their writes contained: a metric your own code registers on the registry is not wrapped, and a write of it that `prom-client` refuses throws where you made it. A name planted after boot does not reach the OpenAPI document, even an enumerable one: the guard refuses it before `@nestjs/swagger` scans, and the document is built at boot and served from its own keys. The guard runs when this package is asked, so it cannot stop a name planted later: a `value` or `writable` planted on `Object.prototype` after boot ends the process inside Node's own `perf_hooks` when the next garbage collection is observed. A bare Node process with only a GC `PerformanceObserver` dies the same way, and no frame of this package or of `prom-client` is on the stack, so this limit is Node's. Freeze `Object.prototype` before anything else runs (`Object.freeze(Object.prototype)`), or set `collectDefaultMetrics: false`; the first also covers a name such as `timeout`, which Node's own `http` module reads from plain objects, so a bare `http.get` throws with it planted and no code of this package involved.
+
+**Replaced built-ins.** The same guard refuses to boot while a built-in that the CORS, deadline and scrape decisions call was replaced after the package loaded (collection, string, regular-expression and iterator methods; the table is in `src/object-prototype.ts`). What it watches is what `src/object-prototype.ts` captures and nothing wider: the reading of the options at boot calls built-ins it does not watch. Where a request reaches such a decision, the answer fails closed and does not follow the replacement: the CORS delegate offers no origin (`origin: false`), the request deadline stays armed and no path is excluded from it, and the scrape endpoint answers `503` once its bearer check has passed. The scrape bearer check (`crypto.hash` and `timingSafeEqual`) and the timestamp of the `504` body (`Date`) use what was captured when the package loaded, so replacing them afterwards decides nothing there. The guard does not watch what a host replaces by design: `Date` (the fake timers of `jest` and `sinon` replace it), `Promise` and its `then`, `catch` and `finally` (APM context managers wrap them), timers, `EventEmitter`, `http` and `fetch`. A test suite with fake timers, or an APM agent, therefore boots and serves without a refusal.
 
 What is handed over is read once, and the limits are fixed. A list an option holds is read by index and is
-refused, never cut short, past `1000` items; a list inside what is copied (an OpenAPI contributor's operation,
+refused, never cut short, past `1000` items, and so is a map an option holds (`metrics.defaultLabels`,
+`openapi.operationSecurity`, `openapi.securitySchemes`) past `1000` keys; a list inside what is copied (an OpenAPI contributor's operation,
 a nested value) is refused past `100000` items, and when its length is not an integer or it has a hole. One
 copy does at most `1000000` units of work (list items and keys), and a map read by name (the `directives` of
 `helmet`'s policy) answers to at most `1000` names. The OpenAPI options `servers`, `securitySchemes`,
@@ -356,7 +359,7 @@ is not. That hold does not keep the process alive, so the log of a late error is
 answered `504` too. A promise handler stops early, and releases what it holds, only if it takes the
 signal and acts on it: `@HandlerSignal()` gives it an `AbortSignal` that is aborted when the bound
 expires and when the client goes away, to pass to a driver, a `fetch` or an `await` that accepts one. The
-signal is `undefined` when the bound is off or does not apply to the route. The bound is the handler's own
+signal is `undefined` when neither the bound nor a request deadline applies to the route. The bound is the handler's own
 promise or observable: a handler that takes the response with `@Res()`, returns, and writes later has
 finished as far as this can see, and one that has already sent its headers when the bound expires has its
 connection cut, because a `504` can no longer be sent.
@@ -1545,6 +1548,25 @@ Express only; on another adapter it throws before applying anything. `helmet` is
 peer, loaded only when the helper runs, and a missing one fails with the install command. An
 unusable timeout (zero, fractional, or a header timeout above the request timeout) throws
 rather than leaving a socket limit switched off.
+
+### Request deadline
+
+`handlerTimeout` is armed in an interceptor, and Nest runs guards before interceptors, so a slow guard is
+outside it. `applyHttpFloors(app, { requestDeadline: { timeoutMs, excludePaths } })` (`HttpFloorsRequestDeadline`) bounds the whole request:
+a request that is still unanswered at `timeoutMs` gets `504` in the error envelope (`BYMAX_GATEWAY_TIMEOUT`),
+once, and the signal `@HandlerSignal()` returns is aborted by it as well as by the handler timeout.
+
+- **Off unless asked for**, and Express only, like the rest of the floors.
+- **`excludePaths` is required** (it may be `[]`), up to 1000 path prefixes, each starting with `/` and matched
+  at a segment boundary. The floors are mounted before the module, so nothing is taken from
+  `handlerTimeout.excludePaths`: list an SSE or long-poll path in both. A WebSocket upgrade never goes through
+  the middleware.
+- The `504` is the answer: whatever the guard, the handler or the filter writes afterwards is dropped, so the
+  response is sent once. A guard that is still running cannot be stopped; give it
+  `@HandlerSignal()` to stop on the abort.
+- Keep it above `handlerTimeout.timeoutMs`; if it is shorter, the deadline answers first.
+- The `504` body carries `statusCode`, `code`, `message`, `timestamp` and `path`, and no `correlationId`: the floors
+  write it themselves, not through the exception filter.
 
 ## 🚀 Production Checklist
 

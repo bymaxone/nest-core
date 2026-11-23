@@ -16,6 +16,9 @@ import { applyHttpFloors, HELMET_OPTION_NAMES } from './http-floors'
 
 jest.mock('../object-prototype', () => ({ assertObjectPrototypeClean: (): void => undefined }))
 
+/** Whether a name is planted so that `for...in` sees it: every row runs both ways. */
+let ENUMERABLE = false
+
 /** The names of the settings the options of `helmet` take. */
 const SETTING_NAMES = [
   'reportOnly',
@@ -83,28 +86,44 @@ const INPUTS: ReadonlyArray<readonly [string, object | undefined]> = [
 
 const PLANTED: readonly unknown[] = [true, false, 'x', 'cross-origin', 1, ['a'], {}]
 
-describe('a name planted on Object.prototype under the options of helmet', () => {
-  it.each(INPUTS)('does not change the headers served for %s', async (_name, input) => {
-    const baseline = await headersOf(input)
+describe.each([false, true])(
+  'a name planted on Object.prototype under the options of helmet (enumerable: %s)',
+  (enumerable) => {
+    beforeAll(() => {
+      ENUMERABLE = enumerable
+    })
+    it.each(INPUTS)('does not change the headers served for %s', async (_name, input) => {
+      const baseline = await headersOf(input)
 
-    for (const name of [...HELMET_OPTION_NAMES, ...SETTING_NAMES, 'maxage', 'includeSubdomains']) {
-      for (const value of PLANTED) {
-        Object.defineProperty(Object.prototype, name, { value, configurable: true, writable: true })
-        let served: string
-        try {
-          served = await headersOf(input)
-        } finally {
-          delete (Object.prototype as Record<string, unknown>)[name]
+      for (const name of [
+        ...HELMET_OPTION_NAMES,
+        ...SETTING_NAMES,
+        'maxage',
+        'includeSubdomains'
+      ]) {
+        for (const value of PLANTED) {
+          Object.defineProperty(Object.prototype, name, {
+            value,
+            configurable: true,
+            writable: true,
+            enumerable: ENUMERABLE
+          })
+          let served: string
+          try {
+            served = await headersOf(input)
+          } finally {
+            delete (Object.prototype as Record<string, unknown>)[name]
+          }
+          expect([name, JSON.stringify(value), served]).toEqual([
+            name,
+            JSON.stringify(value),
+            baseline
+          ])
         }
-        expect([name, JSON.stringify(value), served]).toEqual([
-          name,
-          JSON.stringify(value),
-          baseline
-        ])
       }
-    }
-  })
-})
+    })
+  }
+)
 
 describe('the options of helmet that take settings, left out or given as true', () => {
   /** The header `name` of one run, or `undefined`. */

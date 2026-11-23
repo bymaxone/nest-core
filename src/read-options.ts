@@ -7,6 +7,7 @@ import { types } from 'node:util'
 
 import { bootError } from './boot-error'
 import { ownCopy } from './own-copy'
+import { tagOf } from './tag-of'
 
 /**
  * What an options block documents: each key is an option, `0` for a value copied as it is (a number,
@@ -20,13 +21,18 @@ export interface Shape {
 
 /** Whether `value` is an object that holds settings, as `isPlainRecord` reads it, a class instance included. */
 function isBlock(value: unknown): value is object {
-  return Object.prototype.toString.call(value) === '[object Object]'
+  return tagOf(value) === '[object Object]'
 }
 
 const MAX_NAMES = 1000
 
 /** The options that hold security requirements, whose proxies that list no keys are refused. */
 const SECURITY = new Set(['security', 'operationSecurity', 'securitySchemes'])
+
+/** An enumerable data property whose descriptor inherits nothing, so a `get` or `set` planted on `Object.prototype` is not read. */
+function ownProperty(value: unknown): PropertyDescriptor {
+  return { __proto__: null, value, enumerable: true } as PropertyDescriptor
+}
 
 /** A list read once, by index, and not past the limit: its length first, then each item. */
 function snapshot(list: readonly unknown[]): unknown[] {
@@ -40,6 +46,13 @@ function snapshot(list: readonly unknown[]): unknown[] {
     items.push(Object.hasOwn(list, index) ? Reflect.get(list, index) : undefined)
   }
   return items
+}
+
+/** Throws when a map holds more than `MAX_NAMES` keys. Judged on the copy, so what a proxy listed is bounded too. */
+function assertMapBounded(copy: unknown): void {
+  if (isBlock(copy) && Reflect.ownKeys(copy).length > MAX_NAMES) {
+    throw bootError('an option is too large', {})
+  }
 }
 
 /** A map read by every name it answers to, once. */
@@ -70,7 +83,7 @@ function namedCopy(value: unknown, done: Map<object, unknown>): unknown {
       if (own.includes(name)) throw bootError('a directive holds a function', { option: name })
       continue
     }
-    Object.defineProperty(copy, name, { value: ownCopy(held, 0, [], done), enumerable: true })
+    Object.defineProperty(copy, name, ownProperty(ownCopy(held, 0, [], done)))
   }
   return copy
 }
@@ -147,8 +160,12 @@ function readBlock(given: unknown, shape: Shape, done: Map<object, unknown>): un
         else if (!types.isProxy(value) && value.length > MAX_NAMES) {
           throw bootError('an option is too large', {})
         }
+      } else if (entry === 0 && isBlock(value) && !types.isProxy(value)) {
+        // A map is bounded like a list, before any of it is copied; a proxy is refused or bounded by its copy.
+        if (Reflect.ownKeys(value).length > MAX_NAMES) throw bootError('an option is too large', {})
       }
       made = readEntry(value, entry, strict, done)
+      if (entry === 0) assertMapBounded(made)
     } catch (cause) {
       // Whatever stops a security option from being copied (a getter of its own that throws, a refusal, a
       // list too long, a revoked proxy) names the option it came from.
@@ -168,7 +185,7 @@ function readBlock(given: unknown, shape: Shape, done: Map<object, unknown>): un
   }
   for (const key of Object.keys(given)) {
     if (!Object.hasOwn(shape, key)) {
-      Object.defineProperty(copy, key, { value: undefined, enumerable: true })
+      Object.defineProperty(copy, key, ownProperty(undefined))
     }
   }
   return copy

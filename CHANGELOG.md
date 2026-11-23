@@ -12,6 +12,63 @@ heading here.
 
 ## [Unreleased]
 
+**Added:**
+
+- `applyHttpFloors(app, { requestDeadline: { timeoutMs, excludePaths } })` (Express): a bound on the whole
+  request, guards included, answered `504` in the error envelope once; `excludePaths` is required and may be
+  empty. The signal of `@HandlerSignal()` is aborted by the deadline too. Off when the option is absent.
+
+**Changed:**
+
+- A map an option holds (`metrics.defaultLabels`, `openapi.operationSecurity`, `openapi.securitySchemes`) is
+  refused at boot, as `an option is too large` (for the security ones, as `an option holds what cannot be copied
+as plain data`, naming the option), when it has more than 1000 keys, before any of it is copied. Lists were already refused past 1000 items; maps were bounded
+  only by the 100000-item limit of what is copied. A host that gave more than 1000 keys must split them.
+- More than 1000 providers carrying the same marker (health indicators, metrics contributors, OpenAPI
+  contributors) are refused at boot with `[BymaxCoreModule] more than 1000 providers carry the same marker`;
+  providers that do not carry the marker are not counted.
+
+**Fixed:**
+
+- The options handed to `cors` (a preflight or an actual request from an allowed origin) hold an own value for
+  every name `cors` reads (`methods`, `allowedHeaders` and its alias `headers`, `exposedHeaders`, `maxAge`), so a
+  name planted on `Object.prototype` after boot adds no `Access-Control-Expose-Headers` or other header; `methods`
+  takes the default of `cors` when the host lists none.
+- The metrics scrape checks the bearer token before it refuses beside a changed `Object.prototype`, so a caller
+  without the token gets `401` and learns nothing about the process. Only the default metrics have their writes
+  contained: a metric your own code registers is not wrapped.
+
+- The `504` of the request deadline removes the headers that describe the body a handler had begun
+  before it ends the response, so a client receives the whole envelope instead of a body cut short by a
+  pending `Content-Length`.
+- A built-in replaced after load that makes the `504` envelope fail to build no longer ends the process from
+  the deadline timer: the response is destroyed instead of being left without an answer.
+- A health indicator's result is read only for its `status` when `health.exposeIndicatorErrors` is off, so a
+  diagnostic property that throws no longer turns an indicator that reports up into a down one.
+
+- A planted vm option name (`timeout`, `microtaskMode`, ...) on `Object.prototype` no longer makes the guard's
+  own realm fail with a `TypeError` that quotes the planted value: the guard refuses with its fixed text and a
+  `count`, whether the name was planted before the package loaded or before the first call of `./http` or
+  `./openapi`.
+- An enumerable name planted on `Object.prototype` after boot does not reach the OpenAPI document: the boot
+  guard refuses an enumerable plant before `@nestjs/swagger` scans (which merges with `for...in`), and the
+  document is built at boot and served from its own keys.
+- A built-in that a decision calls and a host replaced after load no longer decides it. A `Set.prototype.has`
+  that answers `true` listed every origin in the CORS delegate and excluded every path from the request
+  deadline; both now refuse (no origin, the request bounded) while a built-in the guard watches is not the
+  one captured at load. The `504` body is built from a template, so a `toJSON` planted on `Object.prototype`
+  cannot rewrite it, and the scrape bearer check digests with the one-shot `hash` and compares with `timingSafeEqual`, both as captured at load, so a replaced `Hash` method decides nothing.
+- The request deadline matched `excludePaths` by slicing every prefix of the path, so a path of 16000 slashes held
+  the event loop for about 600 ms before the timer armed; the match now stops at the longest configured prefix.
+  The deadline signal is also aborted when the client closes before the answer finished, as `@HandlerSignal()`
+  documents.
+- The properties this package defines use descriptors that inherit nothing. A `get`, `set` or `value` planted on
+  `Object.prototype` is no longer read into them: a contributor that plants one ends the build with the guard's
+  refusal and its `count`, not a `TypeError` that quotes the planted value, and a request held past the
+  deadline is still answered `504`.
+- The README says that a name such as `timeout` planted after boot is read by Node's own `http` module, outside
+  this package, and that freezing `Object.prototype` before anything else runs covers it.
+
 ## [1.6.21] - 2026-11-21
 
 A patch release. The options a host hands over are read once, and what is checked is what is built from, so a

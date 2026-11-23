@@ -6,7 +6,7 @@
  * asked for anything, and a collection that throws is answered `503` and not as an unhandled error.
  * Mocks: a hand-built registry stub and `HttpAdapterHost`.
  */
-import { ServiceUnavailableException } from '@nestjs/common'
+import { ServiceUnavailableException, UnauthorizedException } from '@nestjs/common'
 import type { HttpAdapterHost } from '@nestjs/core'
 
 import { normalizeCoreOptions } from '../core.options'
@@ -19,7 +19,10 @@ interface Scraper {
 }
 
 /** A controller over a registry whose `metrics()` is `collect`. */
-function controllerOver(collect: () => Promise<string>): { scraper: Scraper; asked: jest.Mock } {
+function controllerOver(
+  collect: () => Promise<string>,
+  authToken?: string
+): { scraper: Scraper; asked: jest.Mock } {
   const asked = jest.fn(collect)
   const registry = { metrics: asked, contentType: 'text/plain' } as unknown as MetricsRegistry
   const adapterHost = {
@@ -28,7 +31,9 @@ function controllerOver(collect: () => Promise<string>): { scraper: Scraper; ask
   const Controller = createMetricsController('metrics')
   const scraper = new Controller(
     registry,
-    normalizeCoreOptions({ metrics: { enabled: true, path: 'metrics' } }),
+    normalizeCoreOptions({
+      metrics: { enabled: true, path: 'metrics', ...(authToken === undefined ? {} : { authToken }) }
+    }),
     adapterHost
   ) as unknown as Scraper
   return { scraper, asked }
@@ -58,6 +63,30 @@ describe('the scrape endpoint', () => {
       }
     }
   )
+
+  it('answers 401, and not 503, to a caller without the token while a name is planted', async () => {
+    const { scraper, asked } = controllerOver(() => Promise.resolve('up 1\n'), 'secret-token')
+    Object.defineProperty(Object.prototype, 'planted', {
+      value: 1,
+      enumerable: true,
+      configurable: true,
+      writable: true
+    })
+    try {
+      await expect(scraper.scrape({}, { headers: {} })).rejects.toBeInstanceOf(
+        UnauthorizedException
+      )
+      await expect(
+        scraper.scrape({}, { headers: { authorization: 'Bearer wrong' } })
+      ).rejects.toBeInstanceOf(UnauthorizedException)
+      await expect(
+        scraper.scrape({}, { headers: { authorization: 'Bearer secret-token' } })
+      ).rejects.toBeInstanceOf(ServiceUnavailableException)
+      expect(asked).not.toHaveBeenCalled()
+    } finally {
+      delete (Object.prototype as Record<string, unknown>)['planted']
+    }
+  })
 
   it.each([
     [

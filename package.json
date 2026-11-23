@@ -104,7 +104,7 @@
     "prepare": "husky",
     "prepublishOnly": "pnpm clean && pnpm typecheck && pnpm lint && pnpm check:mutants && pnpm test:cov:all && pnpm build && pnpm size && pnpm check:published",
     "release": "npm publish --provenance --access public",
-    "size": "node scripts/check-size.mjs",
+    "size": "node scripts/check-dist-fresh.mjs --also tsup.config.ts --also package.json --also tsconfig.json --also tsconfig.build.json && node scripts/check-size.mjs",
     "test": "jest",
     "test:cov": "jest --coverage",
     "test:cov:all": "node --experimental-vm-modules --disable-warning=ExperimentalWarning node_modules/jest/bin/jest.js --config jest.coverage.config.ts --coverage",

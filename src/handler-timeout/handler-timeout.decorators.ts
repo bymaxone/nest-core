@@ -6,6 +6,8 @@
 import { createParamDecorator, SetMetadata } from '@nestjs/common'
 import type { CustomDecorator, ExecutionContext } from '@nestjs/common'
 
+import { DEADLINE_SIGNAL } from '../request-deadline-signal'
+
 /**
  * The metadata key {@link NoHandlerTimeout} sets and the interceptor reads. A string, never a symbol:
  * this package ships an ESM and a CJS build, and an application that loads both would otherwise hold
@@ -25,7 +27,13 @@ export function bindHandlerSignal(request: object, signal: AbortSignal): void {
 
 /** The signal recorded for `request`, if the handler timeout applies to it. */
 export function handlerSignalOf(request: object): AbortSignal | undefined {
-  return signals.get(request)
+  const deadline = Object.hasOwn(request, DEADLINE_SIGNAL)
+    ? (request as Record<symbol, AbortSignal>)[DEADLINE_SIGNAL]
+    : undefined
+  const handler = signals.get(request)
+  return deadline !== undefined && handler !== undefined
+    ? AbortSignal.any([deadline, handler])
+    : (deadline ?? handler)
 }
 
 /**
@@ -41,7 +49,7 @@ export function NoHandlerTimeout(): CustomDecorator {
 /**
  * The signal of the request's handler, aborted when the handler timeout expires and when the client
  * goes away, so a handler can stop work done for nobody by passing it to a driver or an `await`.
- * `undefined` when the handler timeout is off or does not apply to the route.
+ * `undefined` when neither the handler timeout nor a request deadline applies to the route.
  */
 export const HandlerSignal = createParamDecorator(
   (_data: unknown, context: ExecutionContext): AbortSignal | undefined => {

@@ -14,6 +14,9 @@ import { readOptions } from './read-options'
 
 jest.mock('./object-prototype', () => ({ assertObjectPrototypeClean: (): void => undefined }))
 
+/** Whether a name is planted so that `for...in` sees it: every row runs both ways. */
+let ENUMERABLE = false
+
 /** The four options a strict copy takes, each with a value that is valid when it is not a proxy. */
 const ROOTS: ReadonlyArray<readonly [string, () => unknown]> = [
   ['security', () => [{ bearer: [] }]],
@@ -126,46 +129,57 @@ describe('a hole in a list', () => {
   })
 })
 
-describe('a name planted on Object.prototype under a declaration', () => {
-  /** `value` planted under `name` while `run` executes. */
-  function planted<T>(name: string, value: unknown, run: () => T): T {
-    Object.defineProperty(Object.prototype, name, { value, configurable: true, writable: true })
-    try {
-      return run()
-    } finally {
-      delete (Object.prototype as Record<string, unknown>)[name]
+describe.each([false, true])(
+  'a name planted on Object.prototype under a declaration (enumerable: %s)',
+  (enumerable) => {
+    beforeAll(() => {
+      ENUMERABLE = enumerable
+    })
+    /** `value` planted under `name` while `run` executes. */
+    function planted<T>(name: string, value: unknown, run: () => T): T {
+      Object.defineProperty(Object.prototype, name, {
+        value,
+        configurable: true,
+        writable: true,
+        enumerable: ENUMERABLE
+      })
+      try {
+        return run()
+      } finally {
+        delete (Object.prototype as Record<string, unknown>)[name]
+      }
     }
+
+    it.each([
+      ['url', 'http://evil.example', { servers: [{ description: 'd' }] }],
+      ['scheme', 'bearer', { securitySchemes: { a: { type: 'http' } } }],
+      ['name', 'X-Key', { securitySchemes: { a: { type: 'apiKey', in: 'header' } } }],
+      ['in', 'header', { securitySchemes: { a: { type: 'apiKey', name: 'X-Key' } } }],
+      ['type', 'http', { securitySchemes: { a: { scheme: 'bearer' } } }],
+      [
+        'openIdConnectUrl',
+        'http://evil.example',
+        { securitySchemes: { a: { type: 'openIdConnect' } } }
+      ],
+      ['flows', {}, { securitySchemes: { a: { type: 'oauth2' } } }]
+    ])('does not complete a declaration that left out %s', (name, value, openapi) => {
+      expect(failure(openapi)).toBeDefined()
+      expect(planted(name, value, () => failure(openapi))).toBeDefined()
+    })
+
+    it('does not change a complete declaration', () => {
+      const openapi = {
+        enabled: true,
+        servers: [{ url: 'https://api.example', description: 'd' }],
+        securitySchemes: { a: { type: 'http', scheme: 'bearer' } }
+      }
+      const resolved = (): string =>
+        JSON.stringify(normalizeCoreOptions({ openapi } as never).openapi)
+      const baseline = resolved()
+
+      for (const name of ['url', 'description', 'scheme', 'type', 'name', 'in']) {
+        expect(planted(name, 'planted', resolved)).toBe(baseline)
+      }
+    })
   }
-
-  it.each([
-    ['url', 'http://evil.example', { servers: [{ description: 'd' }] }],
-    ['scheme', 'bearer', { securitySchemes: { a: { type: 'http' } } }],
-    ['name', 'X-Key', { securitySchemes: { a: { type: 'apiKey', in: 'header' } } }],
-    ['in', 'header', { securitySchemes: { a: { type: 'apiKey', name: 'X-Key' } } }],
-    ['type', 'http', { securitySchemes: { a: { scheme: 'bearer' } } }],
-    [
-      'openIdConnectUrl',
-      'http://evil.example',
-      { securitySchemes: { a: { type: 'openIdConnect' } } }
-    ],
-    ['flows', {}, { securitySchemes: { a: { type: 'oauth2' } } }]
-  ])('does not complete a declaration that left out %s', (name, value, openapi) => {
-    expect(failure(openapi)).toBeDefined()
-    expect(planted(name, value, () => failure(openapi))).toBeDefined()
-  })
-
-  it('does not change a complete declaration', () => {
-    const openapi = {
-      enabled: true,
-      servers: [{ url: 'https://api.example', description: 'd' }],
-      securitySchemes: { a: { type: 'http', scheme: 'bearer' } }
-    }
-    const resolved = (): string =>
-      JSON.stringify(normalizeCoreOptions({ openapi } as never).openapi)
-    const baseline = resolved()
-
-    for (const name of ['url', 'description', 'scheme', 'type', 'name', 'in']) {
-      expect(planted(name, 'planted', resolved)).toBe(baseline)
-    }
-  })
-})
+)

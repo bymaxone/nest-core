@@ -15,7 +15,7 @@
  * Express and Fastify behave identically and no metric is ever mutated here.
  * @layer Controller
  */
-import { createHash, timingSafeEqual } from 'node:crypto'
+import { hash as importedHash, timingSafeEqual as importedEqual } from 'node:crypto'
 
 import {
   Controller,
@@ -68,6 +68,11 @@ function assertControllerMatchesOptions(
   }
 }
 
+// Captured at load: a replacement of either after import must not decide the bearer check. The digest is the
+// one-shot `hash`, which reads no method of a `Hash` instance that a host could replace.
+const hash = importedHash
+const timingSafeEqual = importedEqual
+
 /**
  * Whether an `Authorization` header presents the configured scrape bearer.
  *
@@ -95,8 +100,8 @@ function bearerMatches(authorization: unknown, expected: string): boolean {
   if (presented === authorization) {
     return false
   }
-  const presentedDigest = createHash('sha256').update(presented).digest()
-  const expectedDigest = createHash('sha256').update(expected).digest()
+  const presentedDigest = hash('sha256', presented, 'buffer')
+  const expectedDigest = hash('sha256', expected, 'buffer')
   return timingSafeEqual(presentedDigest, expectedDigest)
 }
 
@@ -105,8 +110,19 @@ function bearerMatches(authorization: unknown, expected: string): boolean {
  * `Object.prototype` is the standard one (`503` otherwise, the guard's own error as the cause), since what
  * `prom-client` reads of its labels would answer a name planted there.
  */
-function admit(options: ResolvedCoreOptions, registeredPath: string): void {
+function admit(
+  options: ResolvedCoreOptions,
+  registeredPath: string,
+  request: { readonly headers?: Record<string, unknown> }
+): void {
   assertControllerMatchesOptions(options, registeredPath)
+  // When a token is configured the scrape is credentialed: without it the exposition publishes the route
+  // inventory and process internals to anyone. Unset (the default) leaves the endpoint open, to be protected
+  // at the edge. Checked first, so a caller without the token learns nothing about the process.
+  const { authToken } = options.metrics
+  if (authToken !== undefined && !bearerMatches(request.headers?.['authorization'], authToken)) {
+    throw new UnauthorizedException()
+  }
   try {
     assertObjectPrototypeClean()
   } catch (cause) {
@@ -179,17 +195,7 @@ export function createMetricsController(registeredPath: string): Type<object> {
       @Res() response: unknown,
       @Req() request: { readonly headers?: Record<string, unknown> }
     ): Promise<void> {
-      admit(this.options, registeredPath)
-      // When a token is configured the scrape is credentialed: without it the
-      // exposition publishes the route inventory and process internals to anyone.
-      // Unset (the default) leaves the endpoint open, to be protected at the edge.
-      const { authToken } = this.options.metrics
-      if (
-        authToken !== undefined &&
-        !bearerMatches(request.headers?.['authorization'], authToken)
-      ) {
-        throw new UnauthorizedException()
-      }
+      admit(this.options, registeredPath, request)
       const body = await this.scrapes.run(() => collectOrRefuse(this.registry))
       this.adapterHost.httpAdapter.setHeader(response, 'Content-Type', this.registry.contentType)
       this.adapterHost.httpAdapter.reply(response, body, HttpStatus.OK)

@@ -93,6 +93,7 @@ function copyProperties(
     }
     const held: unknown = Reflect.get(value, key)
     Object.defineProperty(copy, key, {
+      __proto__: null,
       value: ownCopy(
         held,
         depth + 1,
@@ -103,7 +104,7 @@ function copyProperties(
       enumerable: true,
       writable: true,
       configurable: true
-    })
+    } as PropertyDescriptor)
   }
   return copy
 }

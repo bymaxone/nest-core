@@ -9,6 +9,7 @@
  * Mocks: a hand-built registry stub and a hand-built `HttpAdapterHost` capturing
  * the header and reply (family convention, no supertest at this layer).
  */
+import { createHash } from 'node:crypto'
 import { ConsoleLogger, Logger, UnauthorizedException } from '@nestjs/common'
 import type { HttpAdapterHost } from '@nestjs/core'
 
@@ -193,6 +194,32 @@ describe('createMetricsController', () => {
       controller.scrape({}, { headers: { authorization: 'Bearer wrong' } })
     ).rejects.toBeInstanceOf(UnauthorizedException)
   })
+
+  /**
+   * `timingSafeEqual` and `hash` are captured when the package loads, and the digest reads no method of a
+   * `Hash` instance, so a replacement made after import (one that answers every digest as equal) cannot let
+   * a wrong bearer through.
+   */
+  it.each(['timingSafeEqual', 'hash', 'Hash.prototype.digest', 'Hash.prototype.update'])(
+    'refuses a wrong bearer with 401 while %s is replaced after load',
+    async (name) => {
+      const crypto = jest.requireActual<Record<string, unknown>>('node:crypto')
+      const hashes = Object.getPrototypeOf(createHash('sha256')) as Record<string, unknown>
+      const [owner, key] = name.startsWith('Hash.prototype.')
+        ? [hashes, name.slice('Hash.prototype.'.length)]
+        : [crypto, name]
+      const original = owner[key]
+      const { controller } = buildController({ path: 'metrics', options: tokenOptions('s3cret') })
+      owner[key] = key === 'timingSafeEqual' ? () => true : () => Buffer.alloc(32)
+      try {
+        await expect(
+          controller.scrape({}, { headers: { authorization: 'Bearer wrong' } })
+        ).rejects.toBeInstanceOf(UnauthorizedException)
+      } finally {
+        owner[key] = original
+      }
+    }
+  )
 
   /** A non-Bearer scheme is refused with 401 (the scheme-prefix mismatch branch). */
   it('refuses the scrape with 401 when the scheme is not Bearer', async () => {

@@ -764,15 +764,17 @@ function resolveTelemetry(given: unknown): ResolvedTelemetryOptions {
 }
 
 /**
- * Merge consumer options over the documented defaults and deep-freeze the
- * result. Each feature block is resolved independently, so a partial input
- * never drops a sibling feature's defaults.
+ * Merge consumer options over the defaults, deep-frozen, after the guard; `resolveCoreOptions` skips it.
  *
- * @param raw - The consumer options, or `undefined` for all defaults.
+ * @param given - The consumer options, or `undefined` for all defaults.
  * @returns A fully-populated, deep-frozen options snapshot.
  */
 export function normalizeCoreOptions(given?: BymaxCoreModuleOptions): ResolvedCoreOptions {
   assertObjectPrototypeClean()
+  return resolveCoreOptions(given)
+}
+
+function resolveCoreOptions(given?: BymaxCoreModuleOptions): ResolvedCoreOptions {
   const raw = checkedBlock<BymaxCoreModuleOptions>(
     'options',
     readOptions(given, OPTION_SHAPE),
@@ -789,12 +791,10 @@ export function normalizeCoreOptions(given?: BymaxCoreModuleOptions): ResolvedCo
     shutdown: resolveShutdown(raw?.shutdown),
     openapi: resolveOpenApi(raw?.openapi, environment),
     telemetry: resolveTelemetry(raw?.telemetry),
-    // Spread rather than assigned so an application that declared nothing has
-    // no `environment` member at all, matching every other optional member on
-    // this snapshot under `exactOptionalPropertyTypes`.
+    // Spread, so no `environment` member exists when none was declared (`exactOptionalPropertyTypes`).
     ...(environment === undefined ? {} : { environment })
   })
 }
 
-/** The deep-frozen resolution of an empty options input: every documented default. */
-export const DEFAULT_CORE_OPTIONS: ResolvedCoreOptions = normalizeCoreOptions()
+/** Every documented default, deep-frozen. */
+export const DEFAULT_CORE_OPTIONS: ResolvedCoreOptions = resolveCoreOptions()

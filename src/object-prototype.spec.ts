@@ -20,6 +20,9 @@ import { bootApp, ExampleController } from './openapi/__tests__/bootstrap.harnes
 
 const MESSAGE = 'Object.prototype holds names or changes this package cannot run beside'
 
+/** Whether a name is planted so that `for...in` sees it: the rows that plant run both ways. */
+let ENUMERABLE = false
+
 /** The names the peers and the document read that a host could plant, one per family of read. */
 const PLANTED = [
   'description',
@@ -38,7 +41,12 @@ const PLANTED = [
 
 /** `value` planted under `name` while `run` executes. */
 async function planted<T>(name: string, value: unknown, run: () => Promise<T> | T): Promise<T> {
-  Object.defineProperty(Object.prototype, name, { value, configurable: true, writable: true })
+  Object.defineProperty(Object.prototype, name, {
+    value,
+    configurable: true,
+    writable: true,
+    enumerable: ENUMERABLE
+  })
   try {
     return await run()
   } finally {
@@ -67,7 +75,10 @@ function fakeApp(): INestApplication {
   } as unknown as INestApplication
 }
 
-describe('a changed Object.prototype', () => {
+describe.each([false, true])('a changed Object.prototype (enumerable: %s)', (enumerable) => {
+  beforeAll(() => {
+    ENUMERABLE = enumerable
+  })
   it.each(PLANTED)('is refused at every boot entry when %s is planted', async (name) => {
     const app = await bootApp({ openapi: { enabled: true } } as never, [ExampleController])
 
@@ -86,8 +97,16 @@ describe('a changed Object.prototype', () => {
   })
 
   it('counts every name that is planted, and says nothing else', async () => {
-    Object.defineProperty(Object.prototype, 'one', { value: 1, configurable: true })
-    Object.defineProperty(Object.prototype, 'two', { value: 2, configurable: true })
+    Object.defineProperty(Object.prototype, 'one', {
+      value: 1,
+      configurable: true,
+      enumerable: ENUMERABLE
+    })
+    Object.defineProperty(Object.prototype, 'two', {
+      value: 2,
+      configurable: true,
+      enumerable: ENUMERABLE
+    })
     try {
       expect((await thrown(() => assertObjectPrototypeClean()))?.count).toBe(2)
     } finally {
@@ -296,5 +315,201 @@ describe('a changed Object.prototype', () => {
 
     expect(answer.status).toBe(200)
     expect(await thrown(() => applyHttpFloors(fakeApp(), {}))).toBeUndefined()
+  })
+})
+
+describe('a realm that cannot be built', () => {
+  it("is refused with the guard's own error, count 1, whatever vm quoted", () => {
+    jest.resetModules()
+    jest.doMock('node:vm', () => ({
+      runInNewContext: () => {
+        throw new TypeError('The property options.timeout must be a number. Received PLANTED-VALUE')
+      }
+    }))
+    try {
+      let fresh: { assertObjectPrototypeClean: () => void } | undefined
+      jest.isolateModules(() => {
+        fresh = require('./object-prototype') as typeof fresh
+      })
+      let error: (Error & { count?: number }) | undefined
+      try {
+        fresh?.assertObjectPrototypeClean()
+      } catch (thrown) {
+        error = thrown as Error & { count?: number }
+      }
+
+      expect(error?.message).toBe(MESSAGE)
+      expect(error?.count).toBe(1)
+      expect(JSON.stringify(error)).not.toContain('PLANTED-VALUE')
+    } finally {
+      jest.dontMock('node:vm')
+    }
+  })
+})
+
+/** The built-ins the rows below replace, held from before any row does. */
+const define = Object.defineProperty
+const own = Object.getOwnPropertyDescriptor
+const PlainObject = Object
+
+/** What `assertObjectPrototypeClean` throws while `key` of `target` is `replacement`, restored before returning. */
+function whileReplaced(
+  target: object,
+  key: PropertyKey,
+  replacement: unknown,
+  planted: string | undefined
+): (Error & { count?: number }) | undefined {
+  const original = own(target, key) as PropertyDescriptor
+  if (planted !== undefined) {
+    define(PlainObject.prototype, planted, {
+      value: 1,
+      enumerable: true,
+      configurable: true,
+      writable: true
+    })
+  }
+  define(target, key, { ...original, value: replacement })
+  let thrown: (Error & { count?: number }) | undefined
+  try {
+    assertObjectPrototypeClean()
+  } catch (error) {
+    thrown = error as Error & { count?: number }
+  } finally {
+    define(target, key, original)
+    if (planted !== undefined) delete (PlainObject.prototype as Record<string, unknown>)[planted]
+  }
+  return thrown
+}
+
+describe('the guard beside a built-in the host replaced after it loaded', () => {
+  it.each([
+    ['Object.getOwnPropertyNames', Object, 'getOwnPropertyNames', (): string[] => []],
+    ['Object.getOwnPropertyDescriptors', Object, 'getOwnPropertyDescriptors', (): object => ({})],
+    [
+      'Object.getOwnPropertyDescriptor',
+      Object,
+      'getOwnPropertyDescriptor',
+      (): undefined => undefined
+    ],
+    ['Object.hasOwn', Object, 'hasOwn', (): boolean => false],
+    [
+      'Object.defineProperty',
+      Object,
+      'defineProperty',
+      (): never => {
+        throw new Error('HOST')
+      }
+    ],
+    [
+      'Reflect.apply',
+      Reflect,
+      'apply',
+      (): never => {
+        throw new Error('HOST')
+      }
+    ],
+    [
+      'Array.prototype[Symbol.iterator]',
+      Array.prototype,
+      Symbol.iterator,
+      function* (): Generator<never> {
+        // yields nothing
+      }
+    ],
+    ['Array.prototype.push', Array.prototype, 'push', (): number => 0],
+    [
+      'Function.prototype.call',
+      Function.prototype,
+      'call',
+      (): never => {
+        throw new Error('HOST')
+      }
+    ],
+    [
+      'Function.prototype.apply',
+      Function.prototype,
+      'apply',
+      (): never => {
+        throw new Error('HOST')
+      }
+    ],
+    [
+      'Function.prototype.bind',
+      Function.prototype,
+      'bind',
+      (): never => {
+        throw new Error('HOST')
+      }
+    ]
+  ])(
+    'still refuses a planted name, with its own error, when %s is replaced',
+    (_name, target, key, replacement) => {
+      const error = whileReplaced(target, key, replacement, 'planted')
+
+      expect(error?.message).toBe(MESSAGE)
+      expect(typeof error?.count).toBe('number')
+      expect((error?.count as number) >= 1).toBe(true)
+    }
+  )
+
+  it.each(['Object', 'Reflect', 'Array', 'JSON'])(
+    'refuses, with its own error, when the global %s is not the one it met',
+    (name) => {
+      const original = own(globalThis, name) as PropertyDescriptor
+      define(globalThis, name, { ...original, value: {} })
+      let error: (Error & { count?: number }) | undefined
+      try {
+        assertObjectPrototypeClean()
+      } catch (thrown) {
+        error = thrown as Error & { count?: number }
+      } finally {
+        define(globalThis, name, original)
+      }
+
+      expect(error?.message).toBe(MESSAGE)
+      expect(error?.count).toBe(1)
+    }
+  )
+
+  it('builds its error from the captured Error, whichever Error the host swapped in', () => {
+    const original = own(globalThis, 'Error') as PropertyDescriptor
+    define(globalThis, 'Error', { ...original, value: class Fake extends Array {} })
+    let error: (Error & { count?: number }) | undefined
+    define(PlainObject.prototype, 'planted', {
+      value: 1,
+      enumerable: true,
+      configurable: true,
+      writable: true
+    })
+    try {
+      assertObjectPrototypeClean()
+    } catch (thrown) {
+      error = thrown as Error & { count?: number }
+    } finally {
+      delete (PlainObject.prototype as Record<string, unknown>)['planted']
+      define(globalThis, 'Error', original)
+    }
+
+    expect(error).toBeInstanceOf(Error)
+    expect(error?.message).toBe(MESSAGE)
+  })
+})
+
+describe('the guard counting what it relies on, with nothing planted', () => {
+  it.each(['call', 'apply', 'bind'])(
+    'counts Function.prototype.%s replaced by another function as one change',
+    (name) => {
+      const error = whileReplaced(Function.prototype, name, (): void => undefined, undefined)
+
+      expect(error?.message).toBe(MESSAGE)
+      expect(error?.count).toBe(1)
+    }
+  )
+
+  it('counts one name called undefined once, not once more for the end of its own list', () => {
+    const error = whileReplaced(Function.prototype, 'call', Function.prototype.call, 'undefined')
+
+    expect(error?.message).toBe(MESSAGE)
+    expect(error?.count).toBe(1)
   })
 })
