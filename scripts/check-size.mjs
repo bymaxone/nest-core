@@ -287,8 +287,11 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 // and `./openapi` (10245 B) are unchanged under their budgets. The growth is the second run of the guard after the
 // last `await`, the scrape's refusal and containment of a failing collection, and the containment of the writes of
 // every write of the default metrics. Code only.
+// Root budget 26.78 KiB = 27423 B: measured 27387 B brotli plus 36 B of headroom, from 27341 B. The growth is the
+// second run of the guard after the scan and the dropped write of the health gauge. `./openapi` (10243 B) is
+// unchanged under its budget. Code only.
 const BUDGETS = [
-  { name: '. (root)', path: 'dist/index.mjs', brotli: 26.7 * 1024 },
+  { name: '. (root)', path: 'dist/index.mjs', brotli: 26.78 * 1024 },
   { name: './pagination', path: 'dist/pagination/index.mjs', brotli: 1.5 * 1024 },
   { name: './health', path: 'dist/health/index.mjs', brotli: 0.5 * 1024 },
   { name: './openapi', path: 'dist/openapi/index.mjs', brotli: 10.01 * 1024 },

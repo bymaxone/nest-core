@@ -34,9 +34,17 @@ export class HealthStatusGauge implements IHealthStatusRecorder {
     })
   }
 
-  /** Set the check's series to `1` when up and `0` when down. */
+  /**
+   * Set the check's series to `1` when up and `0` when down. A write `prom-client` refuses (it throws on an
+   * enumerable name planted on `Object.prototype`) is dropped: the scrape refuses beside that, and the
+   * readiness answer must not depend on the gauge.
+   */
   record(name: string, isUp: boolean): void {
-    this.gauge.set({ indicator: name }, isUp ? 1 : 0)
+    try {
+      this.gauge.set({ indicator: name }, isUp ? 1 : 0)
+    } catch {
+      // Dropped: nothing a metric does may change what a probe answers.
+    }
   }
 }
 

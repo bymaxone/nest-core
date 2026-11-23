@@ -23,6 +23,17 @@ value that answers differently on a second read cannot change what is served.
   `[BymaxCoreModule] a health indicator name must be a non-empty string`. With `autoDiscover: false`, the default,
   that name was not checked before.
 
+**Fixed:**
+
+- `applyBymaxOpenApi` runs the `Object.prototype` guard again when the scan returns and once more right before
+  the document is mounted, so a name planted by a callback the scan ran (`operationIdFactory`) or by a
+  contributor is refused and nothing is mounted, and no operation is served with `security: []`.
+- `/health/ready` answers as documented while `Object.prototype` holds an enumerable name: the write of the
+  `bymax_core_health_status` gauge, which `prom-client` refuses there, is dropped instead of failing the probe.
+- Known limit, documented in the README: a `value` or `writable` planted on `Object.prototype` after boot ends
+  the process inside Node's `perf_hooks` when a garbage collection is observed; freeze `Object.prototype`
+  early or set `collectDefaultMetrics: false`.
+
 **Apply to your observability:**
 
 - An indicator's `name` is read once, when the readiness set is resolved, and that is the name that is sorted
