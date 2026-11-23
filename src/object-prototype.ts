@@ -2,7 +2,7 @@
  * @fileoverview The refusal to boot beside a realm whose `Object.prototype` holds a name a fresh realm's
  * does not hold, or holds one of them changed.
  * Its own answers come from built-ins captured at load. It also watches the collection, string, regular
- * expression, date and iterator methods the decision paths of this package call (a listed origin, an
+ * expression and iterator methods the decision paths of this package call (a listed origin, an
  * excluded path, a declared scheme); a path that decides on one of them calls `builtinsAltered` first and
  * refuses when it answers `true`. A built-in not in that list is not watched.
  * @layer Utility
@@ -48,10 +48,9 @@ const WATCHED: Watched = ((): Watched => {
     [
       [Set.prototype, ['has', Symbol.iterator]],
       [Map.prototype, ['get', 'has']],
-      [String.prototype, ['split', 'slice', 'replace']],
+      [String.prototype, ['split', 'indexOf', 'slice', 'replace']],
       [Array.prototype, ['join', 'slice', 'filter', 'includes', Symbol.iterator]],
       [RegExp.prototype, [Symbol.replace]],
-      [Date.prototype, ['toISOString']],
       [proto([][Symbol.iterator]()), ['next']],
       [proto(new Set().values()), ['next']]
     ] as ReadonlyArray<readonly [object, readonly PropertyKey[]]>

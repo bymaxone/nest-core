@@ -49,7 +49,7 @@ as plain data`, naming the option), when it has more than 1000 keys, before any 
   that answers `true` listed every origin in the CORS delegate and excluded every path from the request
   deadline; both now refuse (no origin, the request bounded) while a built-in the guard watches is not the
   one captured at load. The `504` body is built from a template, so a `toJSON` planted on `Object.prototype`
-  cannot rewrite it, and the scrape bearer check uses `createHash` and `timingSafeEqual` as captured at load.
+  cannot rewrite it, and the scrape bearer check digests with the one-shot `hash` and compares with `timingSafeEqual`, both as captured at load, so a replaced `Hash` method decides nothing.
 - The request deadline matched `excludePaths` by slicing every prefix of the path, so a path of 16000 slashes held
   the event loop for about 600 ms before the timer armed; the match now stops at the longest configured prefix.
   The deadline signal is also aborted when the client closes before the answer finished, as `@HandlerSignal()`

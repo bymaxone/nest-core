@@ -2,7 +2,7 @@
  * Tests for the built-ins a decision path calls, replaced after this package loaded.
  *
  * Layer: unit.
- * Goal: replacing a collection, string, regular expression, date or iterator method that a decision path
+ * Goal: replacing a collection, string, regular expression or iterator method that a decision path
  * calls makes the guard refuse, and `builtinsAltered` answer `true`; restoring it makes both clean again.
  * Mocks: none; the real built-ins, put back after each row.
  */
@@ -25,7 +25,6 @@ describe('the guard beside a replaced decision-path built-in', () => {
     ['Array.prototype.includes', Array.prototype, 'includes'],
     ['Array.prototype[Symbol.iterator]', Array.prototype, Symbol.iterator],
     ['RegExp.prototype[Symbol.replace]', RegExp.prototype, Symbol.replace],
-    ['Date.prototype.toISOString', Date.prototype, 'toISOString'],
     ['the array iterator next', iteratorOf([][Symbol.iterator]()), 'next'],
     ['the set iterator next', iteratorOf(new Set().values()), 'next']
   ] as const)(
@@ -54,4 +53,24 @@ describe('the guard beside a replaced decision-path built-in', () => {
       expect(() => assertObjectPrototypeClean()).not.toThrow()
     }
   )
+})
+
+describe('the guard beside what a host replaces by design', () => {
+  it('stays clean under fake timers and a wrapped Promise.prototype.then', () => {
+    jest.useFakeTimers()
+    const then = Promise.prototype.then
+    Promise.prototype.then = function wrapped(
+      this: Promise<unknown>,
+      ...args: Parameters<typeof Promise.prototype.then>
+    ) {
+      return then.apply(this, args)
+    } as typeof then
+    try {
+      expect(builtinsAltered()).toBe(false)
+      expect(() => assertObjectPrototypeClean()).not.toThrow()
+    } finally {
+      Promise.prototype.then = then
+      jest.useRealTimers()
+    }
+  })
 })

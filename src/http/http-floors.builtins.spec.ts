@@ -42,6 +42,12 @@ class HeldController {
   held(): { ok: true } {
     return { ok: true }
   }
+
+  @UseGuards(SlowGuard)
+  @Get('healthz-admin')
+  neighbour(): { ok: true } {
+    return { ok: true }
+  }
 }
 
 @Module({ controllers: [HeldController] })
@@ -87,6 +93,21 @@ describe('the request deadline beside a replaced built-in', () => {
     const answer = await withHasAnsweringTrue('/', () => request(app.getHttpServer()).get('/held'))
 
     expect(answer.status).toBe(504)
+  })
+
+  it('still bounds a path beside an excluded prefix when String.prototype.indexOf was replaced', async () => {
+    const original = String.prototype.indexOf
+    String.prototype.indexOf = function (this: string, search: string, from?: number): number {
+      return this.startsWith('/healthz') && search === '/' && from === 1
+        ? '/health'.length
+        : original.call(this, search, from)
+    }
+    try {
+      const answer = await request(app.getHttpServer()).get('/healthz-admin')
+      expect(answer.status).toBe(504)
+    } finally {
+      String.prototype.indexOf = original
+    }
   })
 
   it('answers the 504 envelope unchanged when a toJSON is planted on Object.prototype', async () => {

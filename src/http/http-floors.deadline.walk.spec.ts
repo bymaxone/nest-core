@@ -81,3 +81,32 @@ describe('the deadline signal when the client goes away', () => {
     expect(signal.aborted).toBe(false)
   })
 })
+
+describe('the 504 body under fake timers', () => {
+  it('is answered with the captured clock while the global Date is replaced', () => {
+    jest.useFakeTimers({ now: new Date('2030-01-01T00:00:00.000Z') })
+    try {
+      let body = ''
+      const response = {
+        headersSent: false,
+        writableEnded: false,
+        writableFinished: false,
+        statusCode: 0,
+        setHeader: () => undefined,
+        end: (text: string) => {
+          body = text
+        },
+        once: () => undefined
+      }
+      requestDeadline({ timeoutMs: 5, excludePaths: [] })(
+        { originalUrl: '/held' } as never,
+        response as never,
+        () => undefined
+      )
+      jest.advanceTimersByTime(10)
+      expect(JSON.parse(body)).toMatchObject({ statusCode: 504, path: '/held' })
+    } finally {
+      jest.useRealTimers()
+    }
+  })
+})

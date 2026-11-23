@@ -15,7 +15,7 @@
  * Express and Fastify behave identically and no metric is ever mutated here.
  * @layer Controller
  */
-import { createHash as importedHash, timingSafeEqual as importedEqual } from 'node:crypto'
+import { hash as importedHash, timingSafeEqual as importedEqual } from 'node:crypto'
 
 import {
   Controller,
@@ -68,8 +68,9 @@ function assertControllerMatchesOptions(
   }
 }
 
-// Captured at load: a replacement of either after import must not decide the bearer check.
-const createHash = importedHash
+// Captured at load: a replacement of either after import must not decide the bearer check. The digest is the
+// one-shot `hash`, which reads no method of a `Hash` instance that a host could replace.
+const hash = importedHash
 const timingSafeEqual = importedEqual
 
 /**
@@ -99,8 +100,8 @@ function bearerMatches(authorization: unknown, expected: string): boolean {
   if (presented === authorization) {
     return false
   }
-  const presentedDigest = createHash('sha256').update(presented).digest()
-  const expectedDigest = createHash('sha256').update(expected).digest()
+  const presentedDigest = hash('sha256', presented, 'buffer')
+  const expectedDigest = hash('sha256', expected, 'buffer')
   return timingSafeEqual(presentedDigest, expectedDigest)
 }
 

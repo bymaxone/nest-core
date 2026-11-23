@@ -141,8 +141,10 @@ function excluded(
   longest: number
 ): boolean {
   if (builtinsAltered()) return false
-  const path = (request.originalUrl ?? request.url)?.split('?', 1)[0]
-  if (path === undefined) return false
+  const target = request.originalUrl ?? request.url
+  if (target === undefined) return false
+  const query = target.indexOf('?')
+  const path = query === -1 ? target : target.slice(0, query)
   if (prefixes.has('/')) return true
   for (let at = path.indexOf('/', 1); ; at = path.indexOf('/', at + 1)) {
     const end = at === -1 ? path.length : at
@@ -151,6 +153,10 @@ function excluded(
     if (at === -1) return false
   }
 }
+
+// Captured at load: a test suite's fake timers replace the global `Date`, and that must not refuse a request.
+const NativeDate = Date
+const isoOf = Date.prototype.toISOString
 
 /** The `504` envelope from a template: `JSON.stringify` would call a planted `toJSON` on every value. */
 function timeoutBody(request: DeadlineRequest): string {
@@ -161,7 +167,7 @@ function timeoutBody(request: DeadlineRequest): string {
   )
   return (
     `{"statusCode":504,"code":"${GATEWAY_TIMEOUT_CODE}","message":"The request took too long to answer",` +
-    `"timestamp":"${new Date().toISOString()}","path":"${quoted}"}`
+    `"timestamp":"${isoOf.call(new NativeDate())}","path":"${quoted}"}`
   )
 }
 

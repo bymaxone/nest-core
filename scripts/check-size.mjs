@@ -290,19 +290,20 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 // Root budget 26.78 KiB = 27423 B: measured 27387 B brotli plus 36 B of headroom, from 27341 B. The growth is the
 // second run of the guard after the scan and the dropped write of the health gauge. `./openapi` (10243 B) is
 // unchanged under its budget. Code only.
-// 2026-11-23, PR 246: root 27.64 KiB, `./openapi` 10.70 KiB and `./http` 7.98 KiB, each about 20 B over the measured brotli size. The
-// growth over the previous budgets is code, with no module added to a bundle: the request deadline (middleware,
+// 2026-11-23, PR 246: root 27.64 KiB, `./openapi` 10.70 KiB and `./http` 8.03 KiB, each about 20 B over the measured brotli
+// size, measured on a clean build: root 27.61, `./openapi` 10.66, `./http` 8.01 KiB. The growth over the previous budgets is code, with no module added to a bundle: the request deadline (middleware,
 // options and signal key, in `./http`), the single decision on the tag of a host's object, the guard (its
 // vm-failure refusal and the table of built-ins the CORS and deadline decisions watch, inlined in each bundle), the
 // own-property reads of the document, the template body of the 504 answer, the bounded exclusion match (a path of
-// 16000 slashes held the loop for 622 ms) and the abort of the deadline signal on a client close.
+// 16000 slashes held the loop for 622 ms), the abort of the deadline signal on a client close and the clock the 504 body
+// captures at load.
 const BUDGETS = [
   { name: '. (root)', path: 'dist/index.mjs', brotli: 27.64 * 1024 },
   { name: './pagination', path: 'dist/pagination/index.mjs', brotli: 1.5 * 1024 },
   { name: './health', path: 'dist/health/index.mjs', brotli: 0.5 * 1024 },
   { name: './openapi', path: 'dist/openapi/index.mjs', brotli: 10.7 * 1024 },
   { name: './metrics', path: 'dist/metrics/index.mjs', brotli: 0.5 * 1024 },
-  { name: './http', path: 'dist/http/index.mjs', brotli: 7.98 * 1024 }
+  { name: './http', path: 'dist/http/index.mjs', brotli: 8.03 * 1024 }
 ]
 
 const fmt = (n) => `${(n / 1024).toFixed(2)} kB`
