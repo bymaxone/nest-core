@@ -194,6 +194,30 @@ describe('createMetricsController', () => {
     ).rejects.toBeInstanceOf(UnauthorizedException)
   })
 
+  /**
+   * `timingSafeEqual` and `createHash` are captured when the package loads, so a replacement made after
+   * import (one that answers every digest as equal) cannot let a wrong bearer through.
+   */
+  it.each(['timingSafeEqual', 'createHash'])(
+    'refuses a wrong bearer with 401 while crypto.%s is replaced after load',
+    async (name) => {
+      const crypto = jest.requireActual<Record<string, unknown>>('node:crypto')
+      const original = crypto[name]
+      const { controller } = buildController({ path: 'metrics', options: tokenOptions('s3cret') })
+      crypto[name] =
+        name === 'timingSafeEqual'
+          ? () => true
+          : () => ({ update: () => ({ digest: () => Buffer.alloc(32) }) })
+      try {
+        await expect(
+          controller.scrape({}, { headers: { authorization: 'Bearer wrong' } })
+        ).rejects.toBeInstanceOf(UnauthorizedException)
+      } finally {
+        crypto[name] = original
+      }
+    }
+  )
+
   /** A non-Bearer scheme is refused with 401 (the scheme-prefix mismatch branch). */
   it('refuses the scrape with 401 when the scheme is not Bearer', async () => {
     const { controller } = buildController({ path: 'metrics', options: tokenOptions('s3cret') })

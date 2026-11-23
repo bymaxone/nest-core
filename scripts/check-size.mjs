@@ -301,13 +301,16 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 // 10.42 KiB = 10670 B (10630 B), `./http` 7.56 KiB = 7741 B (7703 B). Code only; the guard is inlined in each bundle.
 // The 1.6.21 fixes joined to the 1.6.22 hardening, measured + about 30 B: root 27.34 KiB (measured 27.31 KiB, from
 // 27.27 KiB); `./openapi` and `./http` are unchanged. The growth is the guard after the scan and the dropped gauge write. Code only.
+// 2026-11-23, PR 246, measured + about 20 B: root 27.64 KiB (27.62), `./openapi` 10.70 KiB (10.68), `./http` 7.93 KiB
+// (7.91). The growth answers a measured bypass of the CORS and deadline decisions through a replaced built-in and a
+// planted `toJSON` in the 504 body: the watched-built-ins table, its check in both decisions, the template body.
 const BUDGETS = [
-  { name: '. (root)', path: 'dist/index.mjs', brotli: 27.34 * 1024 },
+  { name: '. (root)', path: 'dist/index.mjs', brotli: 27.64 * 1024 },
   { name: './pagination', path: 'dist/pagination/index.mjs', brotli: 1.5 * 1024 },
   { name: './health', path: 'dist/health/index.mjs', brotli: 0.5 * 1024 },
-  { name: './openapi', path: 'dist/openapi/index.mjs', brotli: 10.42 * 1024 },
+  { name: './openapi', path: 'dist/openapi/index.mjs', brotli: 10.7 * 1024 },
   { name: './metrics', path: 'dist/metrics/index.mjs', brotli: 0.5 * 1024 },
-  { name: './http', path: 'dist/http/index.mjs', brotli: 7.56 * 1024 }
+  { name: './http', path: 'dist/http/index.mjs', brotli: 7.93 * 1024 }
 ]
 
 const fmt = (n) => `${(n / 1024).toFixed(2)} kB`

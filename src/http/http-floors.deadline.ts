@@ -6,6 +6,7 @@
  */
 import { GatewayTimeoutException } from '@nestjs/common'
 
+import { builtinsAltered } from '../object-prototype'
 import { checkedBlock, refusal } from '../option-validation'
 import { MAX_TIMER_DELAY_MS, positiveSafeInteger } from '../positive-integer'
 import { DEADLINE_SIGNAL } from '../request-deadline-signal'
@@ -128,8 +129,9 @@ function silence(response: DeadlineResponse): void {
   }
 }
 
-/** Whether the path of `request` is under one of the prefixes. */
+/** Whether the path of `request` is under a prefix; never once a built-in the match calls was replaced. */
 function excluded(request: DeadlineRequest, prefixes: ReadonlySet<string>): boolean {
+  if (builtinsAltered()) return false
   const path = (request.originalUrl ?? request.url)?.split('?', 1)[0]
   if (path === undefined) return false
   if (prefixes.has('/')) return true
@@ -138,6 +140,19 @@ function excluded(request: DeadlineRequest, prefixes: ReadonlySet<string>): bool
     if (prefixes.has(parts.slice(0, end).join('/'))) return true
   }
   return false
+}
+
+/** The `504` envelope from a template: `JSON.stringify` would call a planted `toJSON` on every value. */
+function timeoutBody(request: DeadlineRequest): string {
+  const path = (request.originalUrl ?? request.url ?? '').split('?', 1)[0] as string
+  const quoted = path.replace(
+    /["\\]|[^ -\uffff]/g,
+    (c) => `\\u${(c.charCodeAt(0) + 0x10000).toString(16).slice(1)}`
+  )
+  return (
+    `{"statusCode":504,"code":"${GATEWAY_TIMEOUT_CODE}","message":"The request took too long to answer",` +
+    `"timestamp":"${new Date().toISOString()}","path":"${quoted}"}`
+  )
 }
 
 /**
@@ -171,15 +186,7 @@ export function requestDeadline(settings: {
       }
       response.statusCode = 504
       response.setHeader('content-type', 'application/json; charset=utf-8')
-      response.end(
-        JSON.stringify({
-          statusCode: 504,
-          code: GATEWAY_TIMEOUT_CODE,
-          message: 'The request took too long to answer',
-          timestamp: new Date().toISOString(),
-          path: (request.originalUrl ?? request.url ?? '').split('?', 1)[0]
-        })
-      )
+      response.end(timeoutBody(request))
       silence(response)
     }, settings.timeoutMs)
     timer.unref()

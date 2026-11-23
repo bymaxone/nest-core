@@ -8,6 +8,7 @@ import type {
   CorsOptionsDelegate
 } from '@nestjs/common/interfaces/external/cors-options.interface'
 
+import { builtinsAltered } from '../object-prototype'
 import { booleanOption, checkedBlock, refusal } from '../option-validation'
 import { positiveSafeInteger } from '../positive-integer'
 
@@ -178,8 +179,7 @@ export function resolveCors(given: unknown): CorsOptionsDelegate<CorsRequest> {
     throw new Error(`cors.origins "${WILDCARD}" cannot be combined with cors.credentials: true`)
   }
   if (!wildcard) assertOrigins(origins)
-  // Every name `cors` reads is an own property, left `undefined` when the host gave none (`methods` takes
-  // the default of `cors`, which merges over its defaults and would otherwise find none): a name planted on
+  // Every name `cors` reads is an own property, `undefined` when the host gave none, so a name planted on
   // `Object.prototype` afterwards answers none of them. `headers` is the alias `cors` falls back to.
   const offers = {
     credentials,
@@ -191,6 +191,7 @@ export function resolveCors(given: unknown): CorsOptionsDelegate<CorsRequest> {
   } as CorsOptions
   const listed: ReadonlySet<string> = new Set(origins as readonly string[])
   return (request, callback) => {
+    if (builtinsAltered()) return callback(null, { origin: false }) // `listed.has` is not trusted
     if (wildcard) return callback(null, { ...offers, origin: WILDCARD })
     request.res?.vary?.('Origin')
     const origin = request.headers.origin

@@ -15,7 +15,7 @@
  * Express and Fastify behave identically and no metric is ever mutated here.
  * @layer Controller
  */
-import { createHash, timingSafeEqual } from 'node:crypto'
+import { createHash as importedHash, timingSafeEqual as importedEqual } from 'node:crypto'
 
 import {
   Controller,
@@ -67,6 +67,10 @@ function assertControllerMatchesOptions(
     )
   }
 }
+
+// Captured at load: a replacement of either after import must not decide the bearer check.
+const createHash = importedHash
+const timingSafeEqual = importedEqual
 
 /**
  * Whether an `Authorization` header presents the configured scrape bearer.

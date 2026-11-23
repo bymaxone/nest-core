@@ -1,7 +1,10 @@
 /**
  * @fileoverview The refusal to boot beside a realm whose `Object.prototype` holds a name a fresh realm's
  * does not hold, or holds one of them changed.
- * It reads nothing through a live built-in, so replacing one after load changes none of its answers.
+ * Its own answers come from built-ins captured at load. It also watches the collection, string, regular
+ * expression, date and iterator methods the decision paths of this package call (a listed origin, an
+ * excluded path, a declared scheme); a path that decides on one of them calls `builtinsAltered` first and
+ * refuses when it answers `true`. A built-in not in that list is not watched.
  * @layer Utility
  */
 import { runInNewContext } from 'node:vm'
@@ -25,6 +28,7 @@ const defineProperty = Object.defineProperty
 const getOwnPropertyDescriptor = Object.getOwnPropertyDescriptor
 const getOwnPropertyDescriptors = Object.getOwnPropertyDescriptors
 const getOwnPropertyNames = Object.getOwnPropertyNames
+const getPrototypeOf = Object.getPrototypeOf
 const buildRealm = runInNewContext
 
 /** `Function.prototype`'s call, apply and bind, as they were at load. */
@@ -34,6 +38,29 @@ const BIND = getOwnPropertyDescriptor(FunctionPrototype, 'bind')?.value
 
 /** `Object.prototype` as it was at load, so a name swapped for a function of the same text is caught by identity. */
 const loaded = getOwnPropertyDescriptors(ObjectPrototype) as Record<string, PropertyDescriptor>
+
+type Watched = ReadonlyArray<readonly [object, readonly PropertyKey[], unknown[]]>
+
+/** The built-ins the decision paths call, each with the function it was at load: `[owner, names, values]`. */
+const WATCHED: Watched = ((): Watched => {
+  const proto = (iterator: object): object => getPrototypeOf(iterator)
+  return (
+    [
+      [Set.prototype, ['has', Symbol.iterator]],
+      [Map.prototype, ['get', 'has']],
+      [String.prototype, ['split', 'slice', 'replace']],
+      [Array.prototype, ['join', 'slice', 'filter', 'includes', Symbol.iterator]],
+      [RegExp.prototype, [Symbol.replace]],
+      [Date.prototype, ['toISOString']],
+      [proto([][Symbol.iterator]()), ['next']],
+      [proto(new Set().values()), ['next']]
+    ] as ReadonlyArray<readonly [object, readonly PropertyKey[]]>
+  ).map(([owner, names]) => [
+    owner,
+    names,
+    names.map((name) => getOwnPropertyDescriptor(owner, name)?.value)
+  ])
+})()
 
 let pristine: Pristine | undefined
 
@@ -94,7 +121,24 @@ function replacedBindings(): number {
   if (moved('call', CALL)) replaced += 1
   if (moved('apply', APPLY)) replaced += 1
   if (moved('bind', BIND)) replaced += 1
+  for (let index = 0; index < WATCHED.length; index += 1) {
+    const entry = WATCHED[index] as (typeof WATCHED)[number]
+    const owner = entry[0]
+    const names = entry[1]
+    const captured = entry[2]
+    for (let at = 0; at < names.length; at += 1) {
+      const key = names[at] as PropertyKey
+      if (field(getOwnPropertyDescriptor(owner, key), 'value') !== captured[at]) replaced += 1
+    }
+  }
   return replaced
+}
+
+/**
+ * Whether a built-in a decision path of this package calls was replaced since load,. Cheap enough for every request; a caller that answers `true` must refuse.
+ */
+export function builtinsAltered(): boolean {
+  return replacedBindings() > 0
 }
 
 /** Whether `name` of `now` is as a fresh realm holds it, and the function this module met. */
