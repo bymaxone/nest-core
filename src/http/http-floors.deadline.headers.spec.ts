@@ -61,6 +61,7 @@ describe('the 504 envelope after a handler set body headers', () => {
   })
 
   it.each([
+    ['transfer-encoding', 'chunked'],
     ['content-encoding', 'gzip'],
     ['content-range', 'bytes 0-1/2'],
     ['content-md5', 'Q2hlY2sgSW50ZWdyaXR5IQ=='],
