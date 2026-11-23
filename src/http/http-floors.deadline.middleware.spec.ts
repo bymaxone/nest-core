@@ -13,6 +13,7 @@ import { requestDeadline } from './http-floors.deadline'
 function response(state: { headersSent?: boolean; writableEnded?: boolean } = {}): {
   headersSent: boolean
   writableEnded: boolean
+  writableFinished: boolean
   statusCode: number
   body: string | undefined
   destroyed: boolean
@@ -25,6 +26,7 @@ function response(state: { headersSent?: boolean; writableEnded?: boolean } = {}
   const held = {
     headersSent: state.headersSent ?? false,
     writableEnded: state.writableEnded ?? false,
+    writableFinished: false,
     statusCode: 200,
     body: undefined as string | undefined,
     destroyed: false,

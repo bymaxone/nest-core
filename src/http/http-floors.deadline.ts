@@ -44,6 +44,7 @@ interface DeadlineRequest {
 interface DeadlineResponse {
   readonly headersSent: boolean
   readonly writableEnded: boolean
+  readonly writableFinished: boolean
   statusCode: number
   setHeader(name: string, value: string): unknown
   end(body?: string): unknown
@@ -129,17 +130,26 @@ function silence(response: DeadlineResponse): void {
   }
 }
 
-/** Whether the path of `request` is under a prefix; never once a built-in the match calls was replaced. */
-function excluded(request: DeadlineRequest, prefixes: ReadonlySet<string>): boolean {
+/**
+ * Whether the path of `request` is under a prefix, at a segment boundary; never once a built-in the match
+ * calls was replaced. A prefix longer than the longest configured one cannot match, so the walk stops there
+ * and a path of many slashes costs no more than a short one.
+ */
+function excluded(
+  request: DeadlineRequest,
+  prefixes: ReadonlySet<string>,
+  longest: number
+): boolean {
   if (builtinsAltered()) return false
   const path = (request.originalUrl ?? request.url)?.split('?', 1)[0]
   if (path === undefined) return false
   if (prefixes.has('/')) return true
-  const parts = path.split('/')
-  for (let end = 2; end <= parts.length; end += 1) {
-    if (prefixes.has(parts.slice(0, end).join('/'))) return true
+  for (let at = path.indexOf('/', 1); ; at = path.indexOf('/', at + 1)) {
+    const end = at === -1 ? path.length : at
+    if (end > longest) return false
+    if (prefixes.has(path.slice(0, end))) return true
+    if (at === -1) return false
   }
-  return false
 }
 
 /** The `504` envelope from a template: `JSON.stringify` would call a planted `toJSON` on every value. */
@@ -167,8 +177,10 @@ export function requestDeadline(settings: {
   excludePaths: readonly string[]
 }): (request: DeadlineRequest, response: DeadlineResponse, next: () => void) => void {
   const prefixes = new Set(settings.excludePaths)
+  let longest = 0
+  for (const prefix of prefixes) longest = prefix.length > longest ? prefix.length : longest
   return (request, response, next) => {
-    if (excluded(request, prefixes)) {
+    if (excluded(request, prefixes, longest)) {
       next()
       return
     }
@@ -191,7 +203,10 @@ export function requestDeadline(settings: {
     }, settings.timeoutMs)
     timer.unref()
     const clear = (): void => clearTimeout(timer)
-    response.once('close', clear)
+    response.once('close', () => {
+      clear()
+      if (!response.writableFinished) controller.abort()
+    })
     response.once('finish', clear)
     next()
   }

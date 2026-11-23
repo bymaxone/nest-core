@@ -290,27 +290,19 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 // Root budget 26.78 KiB = 27423 B: measured 27387 B brotli plus 36 B of headroom, from 27341 B. The growth is the
 // second run of the guard after the scan and the dropped write of the health gauge. `./openapi` (10243 B) is
 // unchanged under its budget. Code only.
-// Budgets of the 1.6.22 hardening, measured + about 30 B: root 26.87 KiB = 27514 B (measured 27483 B), `./http`
-// 7.35 KiB = 7526 B (7488 B), `./openapi` 10.19 KiB = 10435 B (10399 B), from 27136 B, 6451 B and 10250 B. The growth
-// is the request deadline (the middleware, its options and the signal key, in `./http`), the single decision on the
-// tag of a host's object and the vm-failure refusal of the guard (each bundle carries them), and the own-property
-// reads of the document. Code only.
-// 1.6.22 on top of the rc3 fixes, measured + about 30 B: root 27.03 KiB = 27679 B (measured 27649 B), `./http` 7.35 KiB
-// (7475 B) and `./openapi` 10.19 KiB (10397 B) are unchanged. Code only.
-// The guard reading no live built-in, measured + about 30 B: root 27.27 KiB = 27924 B (measured 27890 B), `./openapi`
-// 10.42 KiB = 10670 B (10630 B), `./http` 7.56 KiB = 7741 B (7703 B). Code only; the guard is inlined in each bundle.
-// The 1.6.21 fixes joined to the 1.6.22 hardening, measured + about 30 B: root 27.34 KiB (measured 27.31 KiB, from
-// 27.27 KiB); `./openapi` and `./http` are unchanged. The growth is the guard after the scan and the dropped gauge write. Code only.
-// 2026-11-23, PR 246, measured + about 20 B: root 27.64 KiB (27.62), `./openapi` 10.70 KiB (10.68), `./http` 7.93 KiB
-// (7.91). The growth answers a measured bypass of the CORS and deadline decisions through a replaced built-in and a
-// planted `toJSON` in the 504 body: the watched-built-ins table, its check in both decisions, the template body.
+// 2026-11-23, PR 246: root 27.64 KiB, `./openapi` 10.70 KiB and `./http` 7.98 KiB, each about 20 B over the measured brotli size. The
+// growth over the previous budgets is code, with no module added to a bundle: the request deadline (middleware,
+// options and signal key, in `./http`), the single decision on the tag of a host's object, the guard (its
+// vm-failure refusal and the table of built-ins the CORS and deadline decisions watch, inlined in each bundle), the
+// own-property reads of the document, the template body of the 504 answer, the bounded exclusion match (a path of
+// 16000 slashes held the loop for 622 ms) and the abort of the deadline signal on a client close.
 const BUDGETS = [
   { name: '. (root)', path: 'dist/index.mjs', brotli: 27.64 * 1024 },
   { name: './pagination', path: 'dist/pagination/index.mjs', brotli: 1.5 * 1024 },
   { name: './health', path: 'dist/health/index.mjs', brotli: 0.5 * 1024 },
   { name: './openapi', path: 'dist/openapi/index.mjs', brotli: 10.7 * 1024 },
   { name: './metrics', path: 'dist/metrics/index.mjs', brotli: 0.5 * 1024 },
-  { name: './http', path: 'dist/http/index.mjs', brotli: 7.93 * 1024 }
+  { name: './http', path: 'dist/http/index.mjs', brotli: 7.98 * 1024 }
 ]
 
 const fmt = (n) => `${(n / 1024).toFixed(2)} kB`
