@@ -1,9 +1,9 @@
 /**
- * Tests for the cause of a contributor's failure while `Object.prototype` holds a planted name.
+ * Tests for the failure of a build whose contributor planted a name while `Object.prototype` holds a planted name.
  *
  * Layer: integration.
- * Goal: a contributor that plants a name a dependency reads as an accessor ends the build, and the
- * cause the host reads reports a count only, never the planted value the dependency's own error echoes.
+ * Goal: a contributor that plants a name a property descriptor reads ends the build with the guard's
+ * refusal, a count only, and never with a `TypeError` that quotes the planted value.
  * Mocks: none; a real application and the real peer, with a contributor that plants.
  */
 import { BymaxOpenApiContributor, BYMAX_OPENAPI_CONTRACT_VERSION } from './openapi.contract'
@@ -41,16 +41,13 @@ describe('a contributor that plants a name a dependency reads as an accessor', (
     const failure = (await applyBymaxOpenApi(app).then(
       () => undefined,
       (error: unknown) => error
-    )) as Error & { cause?: Error & { count?: number } }
+    )) as Error & { count?: number }
     await app.close()
 
-    expect(failure.message).toContain('an OpenAPI contributor failed')
-    expect(failure.cause).toMatchObject({
+    expect(failure).toMatchObject({
       message: 'Object.prototype holds names or changes this package cannot run beside',
       count: 1
     })
-    expect(
-      JSON.stringify([failure.message, failure.cause?.message, failure.cause?.stack])
-    ).not.toContain(PLANTED)
+    expect(JSON.stringify([failure.message, failure.cause, failure.stack])).not.toContain(PLANTED)
   })
 })

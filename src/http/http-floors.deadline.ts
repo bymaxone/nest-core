@@ -120,10 +120,11 @@ function silence(response: DeadlineResponse): void {
   const target = response as unknown as Record<string, unknown>
   for (const name of WRITERS) {
     Object.defineProperty(target, name, {
+      __proto__: null,
       value: () => response,
       configurable: true,
       writable: true
-    })
+    } as PropertyDescriptor)
   }
 }
 
@@ -158,9 +159,10 @@ export function requestDeadline(settings: {
     }
     const controller = new AbortController()
     Object.defineProperty(request, DEADLINE_SIGNAL, {
+      __proto__: null,
       value: controller.signal,
       configurable: true
-    })
+    } as PropertyDescriptor)
     const timer = setTimeout(() => {
       controller.abort(new GatewayTimeoutException('Request deadline exceeded'))
       if (response.headersSent || response.writableEnded) {

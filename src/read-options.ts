@@ -29,6 +29,11 @@ const MAX_NAMES = 1000
 /** The options that hold security requirements, whose proxies that list no keys are refused. */
 const SECURITY = new Set(['security', 'operationSecurity', 'securitySchemes'])
 
+/** An enumerable data property whose descriptor inherits nothing, so a `get` or `set` planted on `Object.prototype` is not read. */
+function ownProperty(value: unknown): PropertyDescriptor {
+  return { __proto__: null, value, enumerable: true } as PropertyDescriptor
+}
+
 /** A list read once, by index, and not past the limit: its length first, then each item. */
 function snapshot(list: readonly unknown[]): unknown[] {
   const length = Reflect.get(list, 'length') as number
@@ -78,7 +83,7 @@ function namedCopy(value: unknown, done: Map<object, unknown>): unknown {
       if (own.includes(name)) throw bootError('a directive holds a function', { option: name })
       continue
     }
-    Object.defineProperty(copy, name, { value: ownCopy(held, 0, [], done), enumerable: true })
+    Object.defineProperty(copy, name, ownProperty(ownCopy(held, 0, [], done)))
   }
   return copy
 }
@@ -180,7 +185,7 @@ function readBlock(given: unknown, shape: Shape, done: Map<object, unknown>): un
   }
   for (const key of Object.keys(given)) {
     if (!Object.hasOwn(shape, key)) {
-      Object.defineProperty(copy, key, { value: undefined, enumerable: true })
+      Object.defineProperty(copy, key, ownProperty(undefined))
     }
   }
   return copy

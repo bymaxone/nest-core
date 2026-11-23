@@ -45,9 +45,11 @@ as plain data`, naming the option), when it has more than 1000 keys, before any 
 - An enumerable name planted on `Object.prototype` after boot does not reach the OpenAPI document: the boot
   guard refuses an enumerable plant before `@nestjs/swagger` scans (which merges with `for...in`), and the
   document is built at boot and served from its own keys.
-- A contributor that plants a name a dependency reads as an accessor (`get`, `set` or `value`) still fails the
-  build, and the cause of that failure is the guard's refusal with its `count`, not the dependency's `TypeError`,
-  which quotes the planted value.
+- The properties this package defines on the options copy, on the request and on the response, and the mark on
+  its wrapper error, use descriptors that inherit nothing. A `get`, `set` or `value` planted on
+  `Object.prototype` is no longer read into them: a contributor that plants one ends the build with the guard's
+  refusal and its `count`, not a `TypeError` that quotes the planted value, and a request held past the
+  deadline is still answered `504`.
 - The README says that a name such as `timeout` planted after boot is read by Node's own `http` module, outside
   this package, and that freezing `Object.prototype` before anything else runs covers it.
 

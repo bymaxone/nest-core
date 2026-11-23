@@ -63,7 +63,7 @@ export class NonErrorThrownError extends Error {
       { cause: thrown }
     )
     this.name = 'NonErrorThrownError'
-    Object.defineProperty(this, BRAND, { value: true })
+    Object.defineProperty(this, BRAND, { __proto__: null, value: true } as PropertyDescriptor)
   }
 }
 
