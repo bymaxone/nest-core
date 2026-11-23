@@ -39,9 +39,8 @@ as plain data`, naming the option), when it has more than 1000 keys, before any 
   contained: a metric your own code registers is not wrapped.
 
 - The `504` of the request deadline removes the headers that describe the body a handler had begun
-  (`Content-Length`, `Transfer-Encoding`, `Content-Encoding`, `Content-Range`, `Content-MD5`,
-  `Content-Language`, `Content-Disposition`, `ETag`) before it ends the response, so a client receives the whole
-  envelope instead of a body cut short by a pending `Content-Length`.
+  before it ends the response, so a client receives the whole envelope instead of a body cut short by a
+  pending `Content-Length`.
 - A health indicator's result is read only for its `status` when `health.exposeIndicatorErrors` is off, so a
   diagnostic property that throws no longer turns an indicator that reports up into a down one.
 
