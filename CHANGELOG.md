@@ -41,6 +41,8 @@ as plain data`, naming the option), when it has more than 1000 keys, before any 
 - The `504` of the request deadline removes the headers that describe the body a handler had begun
   before it ends the response, so a client receives the whole envelope instead of a body cut short by a
   pending `Content-Length`.
+- A built-in replaced after load that makes the `504` envelope fail to build no longer ends the process from
+  the deadline timer: the response is destroyed instead of being left without an answer.
 - A health indicator's result is read only for its `status` when `health.exposeIndicatorErrors` is off, so a
   diagnostic property that throws no longer turns an indicator that reports up into a down one.
 

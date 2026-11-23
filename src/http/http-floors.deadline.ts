@@ -211,17 +211,21 @@ export function requestDeadline(settings: {
     } as PropertyDescriptor)
     const timer = setTimeout(() => {
       controller.abort(new GatewayTimeoutException('Request deadline exceeded'))
-      if (response.headersSent || response.writableEnded) {
+      try {
+        if (response.headersSent || response.writableEnded) {
+          response.destroy()
+          return
+        }
+        for (let index = 0; index < BODY_HEADERS.length; index++) {
+          response.removeHeader(BODY_HEADERS[index] as string)
+        }
+        response.statusCode = 504
+        response.setHeader('content-type', 'application/json; charset=utf-8')
+        response.end(timeoutBody(request))
+        silence(response)
+      } catch {
         response.destroy()
-        return
       }
-      for (let index = 0; index < BODY_HEADERS.length; index++) {
-        response.removeHeader(BODY_HEADERS[index] as string)
-      }
-      response.statusCode = 504
-      response.setHeader('content-type', 'application/json; charset=utf-8')
-      response.end(timeoutBody(request))
-      silence(response)
     }, settings.timeoutMs)
     timer.unref()
     const clear = (): void => clearTimeout(timer)
