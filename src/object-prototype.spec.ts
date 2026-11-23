@@ -494,3 +494,22 @@ describe('the guard beside a built-in the host replaced after it loaded', () => 
     expect(error?.message).toBe(MESSAGE)
   })
 })
+
+describe('the guard counting what it relies on, with nothing planted', () => {
+  it.each(['call', 'apply', 'bind'])(
+    'counts Function.prototype.%s replaced by another function as one change',
+    (name) => {
+      const error = whileReplaced(Function.prototype, name, (): void => undefined, undefined)
+
+      expect(error?.message).toBe(MESSAGE)
+      expect(error?.count).toBe(1)
+    }
+  )
+
+  it('counts one name called undefined once, not once more for the end of its own list', () => {
+    const error = whileReplaced(Function.prototype, 'call', Function.prototype.call, 'undefined')
+
+    expect(error?.message).toBe(MESSAGE)
+    expect(error?.count).toBe(1)
+  })
+})

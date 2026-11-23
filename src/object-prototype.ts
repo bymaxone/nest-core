@@ -28,11 +28,9 @@ const getOwnPropertyNames = Object.getOwnPropertyNames
 const buildRealm = runInNewContext
 
 /** `Function.prototype`'s call, apply and bind, as they were at load. */
-const CALLS = [
-  getOwnPropertyDescriptor(FunctionPrototype, 'call')?.value,
-  getOwnPropertyDescriptor(FunctionPrototype, 'apply')?.value,
-  getOwnPropertyDescriptor(FunctionPrototype, 'bind')?.value
-]
+const CALL = getOwnPropertyDescriptor(FunctionPrototype, 'call')?.value
+const APPLY = getOwnPropertyDescriptor(FunctionPrototype, 'apply')?.value
+const BIND = getOwnPropertyDescriptor(FunctionPrototype, 'bind')?.value
 
 /** `Object.prototype` as it was at load, so a name swapped for a function of the same text is caught by identity. */
 const loaded = getOwnPropertyDescriptors(ObjectPrototype) as Record<string, PropertyDescriptor>
@@ -80,6 +78,11 @@ function alike(now: unknown, was: unknown, sourceOf: Pristine['sourceOf']): bool
   return typeof was !== 'function' || (typeof now === 'function' && sourceOf(now) === sourceOf(was))
 }
 
+/** Whether `Function.prototype[name]` is no longer the function captured at load. */
+function moved(name: string, captured: unknown): boolean {
+  return field(getOwnPropertyDescriptor(FunctionPrototype, name), 'value') !== captured
+}
+
 /** How many of the bindings and functions this module relies on are not the ones it captured. */
 function replacedBindings(): number {
   const global = globalThis as unknown as Record<string, unknown>
@@ -88,13 +91,9 @@ function replacedBindings(): number {
   if (global['Reflect'] !== ReflectBinding) replaced += 1
   if (global['Array'] !== ArrayBinding) replaced += 1
   if (global['JSON'] !== JsonBinding) replaced += 1
-  const names = ['call', 'apply', 'bind']
-  for (let index = 0; index < 3; index += 1) {
-    const name = names[index] as string
-    if (field(getOwnPropertyDescriptor(FunctionPrototype, name), 'value') !== CALLS[index]) {
-      replaced += 1
-    }
-  }
+  if (moved('call', CALL)) replaced += 1
+  if (moved('apply', APPLY)) replaced += 1
+  if (moved('bind', BIND)) replaced += 1
   return replaced
 }
 
