@@ -197,6 +197,7 @@ export function requestDeadline(settings: {
 }): (request: DeadlineRequest, response: DeadlineResponse, next: () => void) => void {
   const prefixes = new Set(settings.excludePaths)
   let longest = 0
+  // Stryker disable next-line EqualityOperator: equivalent, equal lengths pick the same value
   for (const prefix of prefixes) longest = prefix.length > longest ? prefix.length : longest
   return (request, response, next) => {
     if (excluded(request, prefixes, longest)) {
