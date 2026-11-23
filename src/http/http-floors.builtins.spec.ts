@@ -135,6 +135,7 @@ describe('the 504 body for a path that holds a quote, a backslash or a control c
       writableEnded: false,
       statusCode: 0,
       setHeader: () => undefined,
+      removeHeader: () => undefined,
       end: (text: string) => {
         body = text
       },

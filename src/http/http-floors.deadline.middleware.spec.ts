@@ -19,6 +19,7 @@ function response(state: { headersSent?: boolean; writableEnded?: boolean } = {}
   destroyed: boolean
   listeners: Record<string, () => void>
   setHeader: () => void
+  removeHeader: () => void
   end: (body?: string) => void
   destroy: () => void
   once: (event: string, listener: () => void) => void
@@ -32,6 +33,7 @@ function response(state: { headersSent?: boolean; writableEnded?: boolean } = {}
     destroyed: false,
     listeners: {} as Record<string, () => void>,
     setHeader: (): void => undefined,
+    removeHeader: (): void => undefined,
     end: (body?: string): void => {
       held.body = body
     },

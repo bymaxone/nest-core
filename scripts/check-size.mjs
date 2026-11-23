@@ -297,13 +297,16 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 // own-property reads of the document, the template body of the 504 answer, the bounded exclusion match (a path of
 // 16000 slashes held the loop for 622 ms), the abort of the deadline signal on a client close and the clock the 504 body
 // captures at load.
+// 2026-11-23, PR 246 (second entry): `./http` 8.09 KiB, measured 8.08 KiB on a clean build. The growth is code, with no
+// module added: the loop that removes the headers describing the body a handler began, and their names, before the 504
+// envelope. Trimming the list from eight names to five measured 8.07 KiB, so the loop is the cost.
 const BUDGETS = [
   { name: '. (root)', path: 'dist/index.mjs', brotli: 27.64 * 1024 },
   { name: './pagination', path: 'dist/pagination/index.mjs', brotli: 1.5 * 1024 },
   { name: './health', path: 'dist/health/index.mjs', brotli: 0.5 * 1024 },
   { name: './openapi', path: 'dist/openapi/index.mjs', brotli: 10.7 * 1024 },
   { name: './metrics', path: 'dist/metrics/index.mjs', brotli: 0.5 * 1024 },
-  { name: './http', path: 'dist/http/index.mjs', brotli: 8.03 * 1024 }
+  { name: './http', path: 'dist/http/index.mjs', brotli: 8.09 * 1024 }
 ]
 
 const fmt = (n) => `${(n / 1024).toFixed(2)} kB`

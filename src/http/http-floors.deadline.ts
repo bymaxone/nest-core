@@ -47,6 +47,7 @@ interface DeadlineResponse {
   readonly writableFinished: boolean
   statusCode: number
   setHeader(name: string, value: string): unknown
+  removeHeader(name: string): unknown
   end(body?: string): unknown
   destroy(): unknown
   once(event: 'close' | 'finish', listener: () => void): unknown
@@ -111,6 +112,18 @@ const WRITERS = [
   'setHeader',
   'write',
   'end'
+]
+
+/** Headers that describe the body a handler began; left in place they frame or label the `504` envelope wrongly. */
+const BODY_HEADERS = [
+  'content-length',
+  'transfer-encoding',
+  'content-encoding',
+  'content-range',
+  'content-md5',
+  'content-language',
+  'content-disposition',
+  'etag'
 ]
 
 /**
@@ -201,6 +214,9 @@ export function requestDeadline(settings: {
       if (response.headersSent || response.writableEnded) {
         response.destroy()
         return
+      }
+      for (let index = 0; index < BODY_HEADERS.length; index++) {
+        response.removeHeader(BODY_HEADERS[index] as string)
       }
       response.statusCode = 504
       response.setHeader('content-type', 'application/json; charset=utf-8')

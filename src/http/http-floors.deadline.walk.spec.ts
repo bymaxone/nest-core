@@ -93,6 +93,7 @@ describe('the 504 body under fake timers', () => {
         writableFinished: false,
         statusCode: 0,
         setHeader: () => undefined,
+        removeHeader: () => undefined,
         end: (text: string) => {
           body = text
         },

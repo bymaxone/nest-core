@@ -166,7 +166,8 @@ async function runIndicator(
     .then((result): IndicatorOutcome => {
       // The details are whatever the indicator chose to return, and the response is usually
       // reachable without credentials, so they are served only with the diagnostics switch on.
-      const { status, ...rest } = result
+      // Switch off: only `status` is read, so an unreadable diagnostic cannot turn an up indicator down.
+      const { status, ...rest } = exposeErrors ? result : { status: result.status }
       const entry = exposeErrors ? { status, ...rest, name } : { name, status }
       // Anything that is not `up` counts as down, matching how the aggregate
       // status below reads the same field, so a misbehaving indicator cannot
