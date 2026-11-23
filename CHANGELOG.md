@@ -45,8 +45,7 @@ as plain data`, naming the option), when it has more than 1000 keys, before any 
 - An enumerable name planted on `Object.prototype` after boot does not reach the OpenAPI document: the boot
   guard refuses an enumerable plant before `@nestjs/swagger` scans (which merges with `for...in`), and the
   document is built at boot and served from its own keys.
-- The properties this package defines on the options copy, on the request and on the response, and the mark on
-  its wrapper error, use descriptors that inherit nothing. A `get`, `set` or `value` planted on
+- The properties this package defines use descriptors that inherit nothing. A `get`, `set` or `value` planted on
   `Object.prototype` is no longer read into them: a contributor that plants one ends the build with the guard's
   refusal and its `count`, not a `TypeError` that quotes the planted value, and a request held past the
   deadline is still answered `504`.
