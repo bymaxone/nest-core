@@ -197,7 +197,7 @@ export function promiseAltered(): boolean {
  */
 export function ownIntrinsicConstructor<T>(promise: T): T {
   if (pinned(promise)) return promise
-  hear(promise as PromiseLike<unknown>)
+  afterSettled(promise as PromiseLike<unknown>)
   throw refusal(1)
 }
 
@@ -227,29 +227,30 @@ export function pinned(promise: unknown): boolean {
   }
 }
 
-/** Mark `promise` handled through the intrinsic `then`; the handlers must not throw. */
+/** Mark `promise` handled through the intrinsic `then`; `onFailure` must not throw. */
 export function hear(
   promise: PromiseLike<unknown>,
-  onFailure: (reason: unknown) => void = noop,
-  onSuccess?: (value: unknown) => void
-): boolean {
+  onFailure: (reason: unknown) => void = noop
+): void {
   try {
-    apply(IntrinsicThen, promise, [onSuccess, onFailure])
-    return true
+    apply(IntrinsicThen, promise, [undefined, onFailure])
   } catch {
-    return false
+    // Not a promise the intrinsic `then` accepts.
   }
 }
 
-/** Resolves once `promise` settled, read through the intrinsic `then`, so its own slots cannot answer. */
-export function afterSettled(promise: PromiseLike<unknown>): Promise<unknown> {
-  return new IntrinsicPromise<unknown>((done) => {
-    if (!hear(promise, done, done)) done(undefined)
+/** Resolves with nothing once `promise` settled, read through the intrinsic `then`, so no own slot answers. */
+export function afterSettled(promise: PromiseLike<unknown>): Promise<void> {
+  return new IntrinsicPromise<void>((done) => {
+    const finish = (): void => done()
+    pinned(promise)
+    try {
+      apply(IntrinsicThen, promise, [finish, finish])
+    } catch {
+      finish()
+    }
   })
 }
-
-/** Does nothing. */
-function noop(): void {}
 
 /**
  * Freeze a value this package hands to more than one reader, through the `Object.freeze` captured at load.
@@ -333,3 +334,5 @@ export function assertObjectPrototypeClean(): void {
   }
   if (found > 0) throw refusal(found)
 }
+
+function noop(): void {}

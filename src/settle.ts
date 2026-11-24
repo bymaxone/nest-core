@@ -41,9 +41,8 @@ export function settleFirst<T>(work: () => T | PromiseLike<T>, arm: Arm<T>): Pro
         assertPromiseIntact()
         ownIntrinsicConstructor(pending)
       } catch (refusal) {
-        ignoreRejection(pending as PromiseLike<unknown>)
         lose(refusal)
-        await ownIntrinsicConstructor(afterSettled(pending as PromiseLike<unknown>))
+        await afterSettled(pending as PromiseLike<unknown>)
         return
       }
       win(await ownIntrinsicConstructor(pending))

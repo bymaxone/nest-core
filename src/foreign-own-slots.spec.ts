@@ -222,4 +222,16 @@ describe('a native promise with an own constructor and an own then', () => {
   it('resolves afterSettled for a value the intrinsic then does not accept', async () => {
     await expect(afterSettled({} as PromiseLike<unknown>)).resolves.toBeUndefined()
   })
+
+  it('resolves afterSettled for a rejection whose reason never settles as a thenable', async () => {
+    const reason = { then: () => undefined }
+    const rejected = Promise.reject(reason)
+
+    const seen = await Promise.race([
+      afterSettled(rejected).then(() => 'settled'),
+      new Promise((resolve) => setTimeout(() => resolve('assimilated'), 50))
+    ])
+
+    expect(seen).toBe('settled')
+  })
 })
