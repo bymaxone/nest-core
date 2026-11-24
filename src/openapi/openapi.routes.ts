@@ -108,9 +108,8 @@ export interface OwnRouteIndex {
  * the square of the API's size for an answer that never changes.
  *
  * @param options - The resolved options.
- * @param prefixes - Every path prefix the application can serve these routes
- *   under: its global prefix combined with each URI version segment, or a
- *   single empty string when it uses neither.
+ * @param prefixes - Every path prefix the application serves these routes
+ *   under: its global prefix, or a single empty string when it has none.
  * @returns The recognizer for this document.
  */
 export function indexOwnRoutes(

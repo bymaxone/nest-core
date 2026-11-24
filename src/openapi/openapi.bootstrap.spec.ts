@@ -297,47 +297,25 @@ describe('applyBymaxOpenApi', () => {
   })
 
   /**
-   * Every URI-versioning shape maps to the segments the peer documents.
+   * The scrape route is recognised, and removed when disabled, under every versioning shape.
    *
-   * Measured against the real scan before being encoded here: a plain default
-   * version documents `/v1/…`, a custom `prefix` replaces the `v`, `prefix:
-   * false` drops it, an array documents the route once per version, and
-   * `VERSION_NEUTRAL` — like every non-URI type — inserts nothing. Asserted
-   * through the served document rather than on a private helper, so the mapping
-   * is pinned to what a consumer actually gets.
+   * The package's controllers are `VERSION_NEUTRAL`, so the peer documents the route at
+   * `/metrics` whatever the application's versioning: no URI version segment is inserted.
+   * Asserted through the served document rather than on a private helper, so it is pinned to what a
+   * consumer actually gets.
    */
   it.each([
-    ['a default version', { type: VersioningType.URI, defaultVersion: '1' }, ['/v1/metrics']],
-    [
-      'a custom version prefix',
-      { type: VersioningType.URI, defaultVersion: '2', prefix: 'rev' },
-      ['/rev2/metrics']
-    ],
-    [
-      'no version prefix',
-      { type: VersioningType.URI, defaultVersion: '3', prefix: false },
-      ['/3/metrics']
-    ],
-    [
-      'several default versions',
-      { type: VersioningType.URI, defaultVersion: ['1', '2'] },
-      ['/v1/metrics', '/v2/metrics']
-    ],
-    [
-      'a neutral default version',
-      { type: VersioningType.URI, defaultVersion: VERSION_NEUTRAL },
-      ['/metrics']
-    ],
+    ['a default version', { type: VersioningType.URI, defaultVersion: '1' }],
+    ['a custom version prefix', { type: VersioningType.URI, defaultVersion: '2', prefix: 'rev' }],
+    ['no version prefix', { type: VersioningType.URI, defaultVersion: '3', prefix: false }],
+    ['several default versions', { type: VersioningType.URI, defaultVersion: ['1', '2'] }],
+    ['a neutral default version', { type: VersioningType.URI, defaultVersion: VERSION_NEUTRAL }],
     [
       'header versioning',
-      { type: VersioningType.HEADER, header: 'X-Version', defaultVersion: '1' },
-      ['/metrics']
+      { type: VersioningType.HEADER, header: 'X-Version', defaultVersion: '1' }
     ],
-    // URI versioning with no default documents the routes unsegmented, which
-    // was measured rather than assumed — a segment invented here would leave
-    // the disabled route advertised.
-    ['URI versioning with no default', { type: VersioningType.URI }, ['/metrics']]
-  ])('removes the disabled scrape route under %s', async (_label, versioning, documented) => {
+    ['URI versioning with no default', { type: VersioningType.URI }]
+  ])('removes the disabled scrape route under %s', async (_label, versioning) => {
     process.env['NODE_ENV'] = 'test'
     const moduleRef = await Test.createTestingModule({
       imports: [
@@ -356,18 +334,15 @@ describe('applyBymaxOpenApi', () => {
       unknown
     >
 
-    for (const route of documented) {
-      expect(paths).not.toHaveProperty(route)
-    }
+    expect(paths).not.toHaveProperty('/metrics')
   })
 
   /**
-   * The prefix and the version segment compose, in that order.
+   * The global prefix is part of the path the package's own routes are recognised by.
    *
-   * Measured against the real scan: the version follows the global prefix, so
-   * the scrape endpoint is documented as `/api/v1/metrics`. Joining the two the
-   * wrong way — or not joining them at all — leaves the disabled route
-   * advertised, which is the failure this recognition exists to prevent.
+   * The package's controllers are `VERSION_NEUTRAL`, so under a prefix and a URI default version
+   * the scrape endpoint is documented as `/api/metrics`, with no version segment. A recognition
+   * that ignored the prefix would leave the disabled route advertised.
    */
   it('removes the disabled scrape route under a prefix and a version together', async () => {
     process.env['NODE_ENV'] = 'test'
@@ -389,7 +364,37 @@ describe('applyBymaxOpenApi', () => {
       unknown
     >
 
+    expect(paths).not.toHaveProperty('/api/metrics')
     expect(paths).not.toHaveProperty('/api/v1/metrics')
+  })
+
+  /**
+   * The package's own health route keeps its schema under a global prefix.
+   *
+   * Recognition composes the prefix with the route's own path, so a recognition that lost the prefix
+   * would document `/api/health/live` as a consumer's route with no contributed schema.
+   */
+  it('documents the health route at its prefixed path with the package schema', async () => {
+    process.env['NODE_ENV'] = 'test'
+    const moduleRef = await Test.createTestingModule({
+      imports: [BymaxCoreModule.forRoot({ openapi: { enabled: true } })]
+    }).compile()
+    app = moduleRef.createNestApplication()
+    app.setGlobalPrefix('api')
+    app.enableVersioning({ type: VersioningType.URI, defaultVersion: '1' })
+    await applyBymaxOpenApi(app)
+    await app.init()
+
+    const paths = (await request(app.getHttpServer()).get('/docs-json')).body['paths'] as Record<
+      string,
+      { get: { responses: { 200: { content: Record<string, { schema: { $ref: string } }> } } } }
+    >
+
+    expect(
+      paths['/api/health/live']?.get.responses[200].content['application/json']?.schema
+    ).toEqual({
+      $ref: '#/components/schemas/BymaxHealthResponse'
+    })
   })
 
   /**

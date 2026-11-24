@@ -148,7 +148,7 @@ function readAppConfig(app: INestApplication): ApplicationConfig | undefined {
  */
 function readPathPrefixes(app: INestApplication): readonly string[] {
   const config = readAppConfig(app)
-  return [config === undefined ? '' : `${config.getGlobalPrefix()}/`]
+  return [config === undefined ? '' : config.getGlobalPrefix()]
 }
 
 /**
