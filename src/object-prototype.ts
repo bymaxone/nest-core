@@ -241,7 +241,7 @@ export function hear(
 
 /** Resolves with nothing once `promise` settled, read through the intrinsic `then`, so no own slot answers. */
 export function afterSettled(promise: PromiseLike<unknown>): Promise<void> {
-  return new IntrinsicPromise<void>((done) => {
+  const settled = new IntrinsicPromise<void>((done) => {
     const finish = (): void => done()
     pinned(promise)
     try {
@@ -250,6 +250,8 @@ export function afterSettled(promise: PromiseLike<unknown>): Promise<void> {
       finish()
     }
   })
+  pinned(settled)
+  return settled
 }
 
 /**

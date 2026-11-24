@@ -496,6 +496,19 @@ describe('a refusal and the rejection it leaves behind', () => {
     expect(output).toBe('unhandled=0')
   })
 
+  it('keeps settleFirst in flight while refused work is pending and reading constructor throws', () => {
+    const output = lastLineFromChild(`
+      ${PLANT}
+      const { settleFirst } = require('./src/settle')
+      let ended = 0
+      settleFirst(() => { plant(); return new Promise((resolve) => setTimeout(resolve, 150)) }, () => () => { ended += 1 })
+        .then(() => undefined, () => undefined)
+      setTimeout(() => console.log('ended=' + ended), 60)
+    `)
+
+    expect(output).toBe('ended=0')
+  })
+
   it('leaves none when a scrape past its deadline is refused and reading constructor throws', () => {
     const output = lastLineFromChild(`
       ${PLANT}

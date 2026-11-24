@@ -327,11 +327,10 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 // 2026-11-24, the refusal of a native promise with an own `constructor` or `then`: root 28.99 KiB (measured 28.97, 29661 B). The
 // growth is code, with no module added to a bundle: the check of the own slots after the pin, and the hearing of the
 // rejection through the `then` captured at load.
-// 2026-11-24, a refused own-slot promise keeps its run in flight and aborts its indicator signal: root 29.02 KiB (measured 29692 B).
-// The growth is code, with no module added to a bundle: `afterSettled` and the two call-site guards, in `settleFirst` and in
-// the indicator check.
+// 2026-11-24, a refused own-slot promise keeps its run in flight and aborts its indicator signal: root 29.07 KiB (measured
+// 29739 B). The growth is code, with no module added to a bundle: `afterSettled` and the pin of the promise it returns.
 const BUDGETS = [
-  { name: '. (root)', path: 'dist/index.mjs', brotli: 29.02 * 1024 },
+  { name: '. (root)', path: 'dist/index.mjs', brotli: 29.07 * 1024 },
   { name: './pagination', path: 'dist/pagination/index.mjs', brotli: 1.5 * 1024 },
   { name: './health', path: 'dist/health/index.mjs', brotli: 0.5 * 1024 },
   { name: './openapi', path: 'dist/openapi/index.mjs', brotli: 10.87 * 1024 },
