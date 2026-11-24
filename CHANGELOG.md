@@ -74,6 +74,11 @@ as plain data`, naming the option), when it has more than 1000 keys, before any 
 - The README says that a name such as `timeout` planted after boot is read by Node's own `http` module, outside
   this package, and that freezing `Object.prototype` before anything else runs covers it.
 
+**Known limits:**
+
+- The response guard does not yet cover the native writers `writeHead`, `removeHeader`, `writeContinue` and
+  `writeEarlyHints`; they are scheduled for 1.6.23.
+
 ## [1.6.21] - 2026-11-21
 
 A patch release. The options a host hands over are read once, and what is checked is what is built from, so a
