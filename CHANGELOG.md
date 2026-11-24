@@ -106,9 +106,7 @@ as plain data`, naming the option), when it has more than 1000 keys, before any 
 **Known limits:**
 
 - A native promise that keeps a foreign, non-configurable `constructor` whose `Symbol.species` throws cannot
-  be listened to. The run it belongs to stays in flight and is never reported settled, so a scrape
-  collection that never settles holds the shared scrape run until the process restarts; its own rejection
-  cannot be heard.
+  be listened to: it is never reported settled, and its own rejection cannot be heard.
 - The rule that a verdict path reads no `Promise` static and attaches no `.then`, `.catch` or `.finally` is
   held by `src/promise-statics.scan.spec.ts`.
 - The scrape body is still produced by `prom-client`, whose `registry.metrics()` awaits `Promise.all` and
