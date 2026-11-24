@@ -71,7 +71,7 @@ as plain data`, naming the option), when it has more than 1000 keys, before any 
   `Object.prototype` is no longer read into them: a contributor that plants one ends the build with the guard's
   refusal and its `count`, not a `TypeError` that quotes the planted value, and a request held past the
   deadline is still answered `504`.
-- Known limit, with the threat model in `SECURITY.md`: the guards watch the built-ins and prototypes listed in `src/object-prototype.ts`; code that runs after your own code (OpenAPI contributors and the document merge, `forRootAsync` factories, the options read of `applyHttpFloors`, metrics contributors) still calls live array and collection built-ins, so code that replaced one of them can change what those steps produce.
+- Known limit, with the threat model in `SECURITY.md`: the guards watch the built-ins and prototypes listed in `src/object-prototype.ts`; code that runs after your own code still calls live array and collection built-ins, so code that replaced one of them can change what those steps produce.
 - The README says that a name such as `timeout` planted after boot is read by Node's own `http` module, outside
   this package, and that freezing `Object.prototype` before anything else runs covers it.
 - A `Promise` static replaced after load, or a foreign `Promise` bound to the global before load, no longer
