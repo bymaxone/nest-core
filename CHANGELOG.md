@@ -73,7 +73,7 @@ as plain data`, naming the option), when it has more than 1000 keys, before any 
   deadline is still answered `504`.
 - The README says that a name such as `timeout` planted after boot is read by Node's own `http` module, outside
   this package, and that freezing `Object.prototype` before anything else runs covers it.
-- A `Promise` static replaced after load (`race`, `all`, `allSettled`, `any`, `resolve`, `reject`) no longer
+- A `Promise` static replaced after load no longer
   decides a readiness verdict or a scrape: a failing indicator stays down, a slow one stays timed out and
   logs `CORE_HEALTH_DOWN`, and a collection past its deadline stays `503`. A replaced
   `Promise.prototype.constructor`, which `await` reads, is answered as not ready (a `runtime` check down) by
@@ -81,9 +81,7 @@ as plain data`, naming the option), when it has more than 1000 keys, before any 
 
 **Known limits:**
 
-- No `Promise` static is read on a verdict path. The one remaining call, in the containment of a rejection a
-  sink returns, attaches a handler and reads no result from it.
-
+- No `Promise` static is read on a verdict path; `src/promise-statics.scan.spec.ts` holds it.
 - The response guard does not yet cover the native writers `writeHead`, `removeHeader`, `writeContinue` and
   `writeEarlyHints`; they are scheduled for 1.6.23.
 
