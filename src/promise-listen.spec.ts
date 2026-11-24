@@ -10,13 +10,45 @@
 import { lastLineFromChild } from './__tests__/promise-forgery.harness'
 import { afterSettled, hear } from './object-prototype'
 
-describe('a value whose prototype cannot be read', () => {
-  it('is reported settled by afterSettled and heard by hear without throwing', async () => {
+describe('a value a listener is handed that is not a native promise', () => {
+  /** A proxy whose prototype read answers once and throws afterwards. */
+  function proxyThatThrowsAfterOneRead(): object {
+    let reads = 0
+    return new Proxy(
+      {},
+      {
+        getPrototypeOf() {
+          reads += 1
+          if (reads > 1) throw new Error('second read')
+          return Object.prototype
+        }
+      }
+    )
+  }
+
+  const revoked = (): object => {
     const { proxy, revoke } = Proxy.revocable({}, {})
     revoke()
+    return proxy
+  }
 
-    await expect(afterSettled(proxy as never)).resolves.toBeUndefined()
-    expect(() => hear(proxy as never)).not.toThrow()
+  it.each([
+    ['a revoked proxy', revoked],
+    ['a proxy whose prototype read throws on the second read', proxyThatThrowsAfterOneRead],
+    ['null', () => null],
+    ['a number', () => 1],
+    ['a plain object', () => ({})],
+    ['a thenable', () => ({ then: (): void => undefined })]
+  ])('%s is reported settled by afterSettled', async (_name, make) => {
+    await expect(afterSettled(make() as never)).resolves.toBeUndefined()
+  })
+
+  it.each([
+    ['a revoked proxy', revoked],
+    ['a proxy whose prototype read throws on the second read', proxyThatThrowsAfterOneRead],
+    ['null', () => null]
+  ])('%s is heard by hear without throwing', (_name, make) => {
+    expect(() => hear(make() as never)).not.toThrow()
   })
 })
 
