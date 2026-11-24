@@ -95,7 +95,7 @@ const WATCHED: Watched = ((): Watched => {
     [String.prototype, ['split', 'indexOf', 'slice', 'replace']],
     [Array.prototype, ['join', 'slice', 'filter', 'includes', Symbol.iterator]],
     [RegExp.prototype, [Symbol.replace]],
-    [proto([][Symbol.iterator]()), ['next']],
+    [proto(ArrayBinding.prototype.values.call(ArrayBinding.prototype)), ['next']],
     [proto(new Set().values()), ['next']]
   ]).concat(PROMISE_WATCHED)
 })()
@@ -367,7 +367,8 @@ export function assertObjectPrototypeClean(): void {
     if (!same(mine[index] as string, now, descriptors, sourceOf)) found += 1
   }
   const theirs = getOwnPropertyNames(descriptors)
-  for (let index = 0; index < theirs.length; index += 1) {
+  const total = theirs.length
+  for (let index = 0; index !== total; index += 1) {
     const name = theirs[index] as string
     if (!hasOwn(now, name) && !same(name, now, descriptors, sourceOf)) found += 1
   }

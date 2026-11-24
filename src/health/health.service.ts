@@ -652,7 +652,12 @@ export class HealthService implements OnApplicationBootstrap, BeforeApplicationS
     )
     // Every check is marked handled before the first `await`: one that rejects while an earlier one is
     // awaited would otherwise be an unhandled rejection.
-    for (let at = 0; at < started.length; at += 1) ignoreRejection(started[at] as Promise<unknown>)
+    const total = started.length
+    let marked = 0
+    while (marked !== total) {
+      ignoreRejection(started[marked] as Promise<unknown>)
+      marked += 1
+    }
     // Index reads and writes only: an indicator has run by now, and a `push`, `map` or `every` it replaced
     // would otherwise decide the answer.
     const outcomes: IndicatorOutcome[] = []

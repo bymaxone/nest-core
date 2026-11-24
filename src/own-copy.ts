@@ -138,15 +138,25 @@ function isPlain(prototype: unknown): boolean {
 
 /** Whether `value` is one of `open`, read by index so a replaced `includes` is not asked. */
 function isOpen(open: readonly object[], value: object): boolean {
-  for (let at = 0; at < open.length; at += 1) if (open[at] === value) return true
+  const count = open.length
+  let at = 0
+  while (at !== count) {
+    if (open[at] === value) return true
+    at += 1
+  }
   return false
 }
 
 /** `open` with `value` after it, built by index so a replaced iterator or `concat` is not asked. */
 function withLast(open: readonly object[], value: object): object[] {
   const longer: object[] = []
-  for (let at = 0; at < open.length; at += 1) longer[at] = open[at] as object
-  longer[open.length] = value
+  const count = open.length
+  let at = 0
+  while (at !== count) {
+    longer[at] = open[at] as object
+    at += 1
+  }
+  longer[count] = value
   return longer
 }
 

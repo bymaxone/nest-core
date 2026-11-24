@@ -334,13 +334,17 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 // `./http` 8.54 KiB (measured 8718 B). The growth is code, with no module added to a bundle: the `Promise[Symbol.species]`
 // entry and its load-time check, and the option copy and the readiness collection rewritten as index loops, which every
 // subpath that copies options inlines.
+// 2026-11-24, loops without a `<=` bound: root 29.46 KiB (measured 30126 B, was 30054 B) and `./http` 8.60 KiB (measured
+// 8774 B, was 8719 B). The growth is code, with no module added to a bundle: the length read once into a local, and the
+// `!==` comparison it ends the loop on, in the cycle check, the list copy, the option reads and the readiness collection.
+// `./openapi` measured 11276 B against its unchanged 11.02 KiB.
 const BUDGETS = [
-  { name: '. (root)', path: 'dist/index.mjs', brotli: 29.37 * 1024 },
+  { name: '. (root)', path: 'dist/index.mjs', brotli: 29.46 * 1024 },
   { name: './pagination', path: 'dist/pagination/index.mjs', brotli: 1.5 * 1024 },
   { name: './health', path: 'dist/health/index.mjs', brotli: 0.5 * 1024 },
   { name: './openapi', path: 'dist/openapi/index.mjs', brotli: 11.02 * 1024 },
   { name: './metrics', path: 'dist/metrics/index.mjs', brotli: 0.5 * 1024 },
-  { name: './http', path: 'dist/http/index.mjs', brotli: 8.54 * 1024 }
+  { name: './http', path: 'dist/http/index.mjs', brotli: 8.6 * 1024 }
 ]
 
 const fmt = (n) => `${(n / 1024).toFixed(2)} kB`

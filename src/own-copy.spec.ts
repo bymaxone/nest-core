@@ -513,6 +513,30 @@ describe('ownCopy', () => {
     )
   })
 
+  it.each([1, 2, 3])(
+    'stops at the first return to an object it is inside, reading each of %i objects once',
+    (size) => {
+      const reads: number[] = new Array<number>(size).fill(0)
+      const ring: Record<string, unknown>[] = []
+      for (let at = 0; at < size; at += 1) {
+        const held = {}
+        Object.defineProperty(held, 'next', {
+          enumerable: true,
+          get: () => {
+            reads[at] = (reads[at] as number) + 1
+            return ring[(at + 1) % size]
+          }
+        })
+        ring[at] = held
+      }
+
+      expect(() => ownCopy(ring[0])).toThrow(
+        new RangeError('A value holds itself or is nested too deeply')
+      )
+      expect(reads).toEqual(new Array<number>(size).fill(1))
+    }
+  )
+
   it('refuses a proxy whose trap throws, before anything reads the copy', () => {
     const hostile = new Proxy(
       {},
