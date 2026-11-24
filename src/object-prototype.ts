@@ -31,6 +31,8 @@ export const IntrinsicPromise = ((): PromiseConstructor => {
     throw new ErrorConstructor('Promise.prototype.constructor is not intrinsic')
   return candidate
 })()
+const IntrinsicThen = PromisePrototype.then
+const apply = Reflect.apply
 const ObjectPrototype = Object.prototype
 const hasOwn = Object.hasOwn
 const defineProperty = Object.defineProperty
@@ -186,34 +188,59 @@ export function promiseAltered(): boolean {
 }
 
 /**
- * Give a native promise its own `constructor`, the intrinsic one, so an `await` of it never reads the
- * prototype's, which may be a getter that throws or a replacement that builds the answer. The property is
- * neither writable nor configurable, so whoever else holds the promise cannot turn it into a getter that
- * throws. Anything else
- * (a thenable, a subclass, a frozen promise, a value that is not an object) is left as it is.
+ * Give a native promise its own intrinsic `constructor`, so an `await` never reads the prototype's. A
+ * native promise that keeps another `constructor` or carries its own `then` is heard, then refused.
  *
  * @param promise - The value about to be awaited.
- * @returns `promise`, so the call can sit inside the `await`: nothing replaceable runs between them.
+ * @returns `promise`, so the call can sit inside the `await`.
+ * @throws Error With a count, when the promise is not one it can await.
  */
 export function ownIntrinsicConstructor<T>(promise: T): T {
+  if (pinned(promise)) return promise
+  hear(promise as PromiseLike<unknown>)
+  throw refusal(1)
+}
+
+/** Whether `promise` is safe to await once pinned: no foreign own `constructor`, no own `then`. */
+export function pinned(promise: unknown): boolean {
   try {
     if (
-      typeof promise === 'object' &&
-      promise !== null &&
-      getPrototypeOf(promise) === PromisePrototype
-    ) {
+      typeof promise !== 'object' ||
+      promise === null ||
+      getPrototypeOf(promise) !== PromisePrototype
+    )
+      return true
+    try {
       defineProperty(promise, 'constructor', {
         __proto__: null,
         value: IntrinsicPromise,
         writable: false,
         configurable: false
       } as PropertyDescriptor)
+    } catch {
+      // A frozen promise keeps its constructor.
     }
+    const own = getOwnPropertyDescriptor(promise, 'constructor')
+    return (own === undefined || own.value === IntrinsicPromise) && !hasOwn(promise, 'then')
   } catch {
-    // A frozen promise, or a proxy that refuses, keeps the constructor it has.
+    return false
   }
-  return promise
 }
+
+/** Mark `promise` handled through the intrinsic `then`; `onFailure` must not throw. */
+export function hear(
+  promise: PromiseLike<unknown>,
+  onFailure: (reason: unknown) => void = noop
+): void {
+  try {
+    apply(IntrinsicThen, promise, [undefined, onFailure])
+  } catch {
+    // Not a promise the intrinsic `then` accepts.
+  }
+}
+
+/** Does nothing. */
+function noop(): void {}
 
 /**
  * Freeze a value this package hands to more than one reader, through the `Object.freeze` captured at load.

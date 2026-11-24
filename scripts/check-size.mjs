@@ -324,8 +324,11 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 // (measured 10.85, 11111 B) and `./http` 8.30 KiB (measured 8.28, 8474 B). The growth is code, with no module added to a
 // bundle: the comparison of the constructor's `prototype` with the prototype of an async function's promise, and the throw
 // that refuses the import, inlined in every subpath.
+// 2026-11-24, the refusal of a native promise with an own `constructor` or `then`: root 28.99 KiB (measured 28.97, 29661 B). The
+// growth is code, with no module added to a bundle: the check of the own slots after the pin, and the hearing of the
+// rejection through the `then` captured at load.
 const BUDGETS = [
-  { name: '. (root)', path: 'dist/index.mjs', brotli: 28.82 * 1024 },
+  { name: '. (root)', path: 'dist/index.mjs', brotli: 28.99 * 1024 },
   { name: './pagination', path: 'dist/pagination/index.mjs', brotli: 1.5 * 1024 },
   { name: './health', path: 'dist/health/index.mjs', brotli: 0.5 * 1024 },
   { name: './openapi', path: 'dist/openapi/index.mjs', brotli: 10.87 * 1024 },
