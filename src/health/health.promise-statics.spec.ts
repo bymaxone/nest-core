@@ -129,4 +129,26 @@ describe('the readiness verdict beside a replaced Promise', () => {
       checks: [{ name: 'runtime', status: 'down' }]
     })
   })
+
+  it('aborts the signal of an indicator whose pending work the guard refused', async () => {
+    let signal: AbortSignal | undefined
+    const stuck: IHealthIndicator = {
+      name: 'db',
+      check: (given?: AbortSignal) => {
+        signal = given
+        replaceConstructor()
+        return new Promise<never>(() => {})
+      }
+    }
+    const service = new HealthService(
+      [stuck],
+      normalizeCoreOptions({ health: { indicatorTimeoutMs: 5_000 } })
+    )
+
+    const verdict = await service.checkReadiness()
+    restorePromise()
+
+    expect(verdict.status).toBe('error')
+    expect(signal?.aborted).toBe(true)
+  })
 })

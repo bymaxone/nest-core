@@ -567,7 +567,7 @@ describe('the promises this package awaits and the objects it shares', () => {
     await expect(promise).resolves.toBe(7)
   })
 
-  it('answers a response that no caller can change, ready or refused', async () => {
+  it('answers a frozen response with a frozen checks array, ready or refused', async () => {
     const options = normalizeCoreOptions({ health: { readinessCacheMs: 0 } })
     const up: IHealthIndicator = { name: 'db', check: async () => ({ status: 'up' }) }
     const answered = await new HealthService([up], options).checkReadiness()

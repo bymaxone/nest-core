@@ -126,21 +126,22 @@ function outcomeOf<T extends object>(value: T): T {
  * result are all `down`: the conversion never rejects, so it cannot hide another indicator's result.
  *
  * @param named - The indicator to run, with the name it was read under.
- * @param signal - Aborted when the timeout is up.
+ * @param controller - Its signal is aborted when the timeout is up, or when the guard refuses the run.
  * @param exposeErrors - Whether the details and the rejection's message are served.
  * @returns The outcome, with the cause behind it.
  */
 async function checkIndicator(
   { name, indicator }: NamedIndicator,
-  signal: AbortSignal,
+  controller: AbortController,
   exposeErrors: boolean
 ): Promise<IndicatorOutcome> {
   try {
-    const returned = indicator.check(signal)
+    const returned = indicator.check(controller.signal)
     try {
       assertPromiseIntact()
     } catch (refusal) {
       ignoreRejection(returned)
+      controller.abort()
       throw refusal
     }
     const result = await ownIntrinsicConstructor(returned)
@@ -192,7 +193,7 @@ function runIndicator(
   const controller = new AbortController()
   const { name } = named
   return settleFirst<IndicatorOutcome>(
-    () => checkIndicator(named, controller.signal, exposeErrors),
+    () => checkIndicator(named, controller, exposeErrors),
     (win) => {
       const timer = setTimeout(() => {
         controller.abort()
