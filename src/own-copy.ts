@@ -65,7 +65,7 @@ function copyList(
   for (let index = 0; index < count; index += 1) {
     // A hole is refused, not copied as `undefined`, which a document would serve as `null`.
     if (!Object.hasOwn(value, index)) throw new RangeError('A list has a hole')
-    items.push(ownCopy(Reflect.get(value, index), depth + 1, inside, done, strict))
+    items[index] = ownCopy(Reflect.get(value, index), depth + 1, inside, done, strict)
   }
   return items
 }
@@ -86,7 +86,8 @@ function copyProperties(
   const copy = (strict ? Object.create(null) : {}) as Record<PropertyKey, unknown>
   const keys = Reflect.ownKeys(value)
   spend(done, keys.length)
-  for (const key of keys) {
+  for (let at = 0; at < keys.length; at += 1) {
+    const key = keys[at] as PropertyKey
     // A name a proxy lists but holds no property under is refused, not dropped.
     if (Reflect.getOwnPropertyDescriptor(value, key) === undefined) {
       throw new RangeError('A proxy lists a name it holds no property under')
@@ -135,6 +136,20 @@ function isPlain(prototype: unknown): boolean {
   return prototype === Object.prototype || prototype === null
 }
 
+/** Whether `value` is one of `open`, read by index so a replaced `includes` is not asked. */
+function isOpen(open: readonly object[], value: object): boolean {
+  for (let at = 0; at < open.length; at += 1) if (open[at] === value) return true
+  return false
+}
+
+/** `open` with `value` after it, built by index so a replaced iterator or `concat` is not asked. */
+function withLast(open: readonly object[], value: object): object[] {
+  const longer: object[] = []
+  for (let at = 0; at < open.length; at += 1) longer[at] = open[at] as object
+  longer[open.length] = value
+  return longer
+}
+
 /**
  * An own copy of the plain objects and lists in `value`, at every depth, with every own property of an object (a non-enumerable one included, made enumerable), so nothing read from the
  * copy runs host code. Anything else (a number, a string, a `Date`, a function) is kept as it is.
@@ -166,7 +181,7 @@ export function ownCopy(
     }
     return value
   }
-  if (depth > MAX_DEPTH || open.includes(value)) {
+  if (depth > MAX_DEPTH || isOpen(open, value)) {
     throw new RangeError('A value holds itself or is nested too deeply')
   }
   // Where the copy is strict, a proxy is refused whatever it answers: it cannot be unwrapped or trusted,
@@ -186,7 +201,7 @@ export function ownCopy(
   const reused = reuse(value, depth, open, done, strict)
   if (reused !== undefined) return reused
   const cache = strict ? strictCache(done) : done
-  const inside = [...open, value]
+  const inside = withLast(open, value)
   if (Array.isArray(value)) {
     const items = copyList(value, depth, inside, done, strict)
     cache.set(value, items)

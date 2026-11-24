@@ -71,11 +71,57 @@ as plain data`, naming the option), when it has more than 1000 keys, before any 
   `Object.prototype` is no longer read into them: a contributor that plants one ends the build with the guard's
   refusal and its `count`, not a `TypeError` that quotes the planted value, and a request held past the
   deadline is still answered `504`.
+- Known limit, with the threat model in `SECURITY.md`: the guards watch the built-ins and prototypes listed in `src/object-prototype.ts`; code that runs after your own code still calls live array and collection built-ins, so code that replaced one of them can change what those steps produce.
 - The README says that a name such as `timeout` planted after boot is read by Node's own `http` module, outside
   this package, and that freezing `Object.prototype` before anything else runs covers it.
+- A `Promise` static replaced after load, or a foreign `Promise` bound to the global before load, no longer
+  decides a readiness verdict or a scrape of this package's own code: a failing indicator stays down, a slow
+  one stays timed out and logs `CORE_HEALTH_DOWN`, and a collection past its deadline stays `503`. The
+  promises behind a verdict come from the engine's intrinsic constructor and settle through objects that
+  inherit nothing, so a `then` planted on `Object.prototype` cannot answer for them.
+- While `Promise.prototype.constructor` is replaced, or a `then` sits on `Object.prototype`,
+  `Array.prototype` or `Function.prototype`, readiness answers not ready with a `runtime` check down and
+  writes one `CORE_HEALTH_RUNTIME_ALTERED` warning, the scrape answers
+  `503`, the CORS decision lists no origin, and the request deadline treats no path as excluded. The check
+  runs again right before each verdict is awaited and before the answer is cached, so a constructor swapped
+  and restored during a probe is caught too.
+- A readiness check that rejects while an earlier one is still awaited no longer ends the process as an
+  unhandled rejection, and neither does a promise this package abandons when it refuses: it is given its own
+  intrinsic `constructor` before it is awaited, so a `constructor` getter that throws does not leave its
+  rejection unhandled (a promise frozen by its owner keeps the constructor it has; see Known limits).
+- A native promise that keeps a `constructor` other than the intrinsic one, or carries an own `then`, is not
+  awaited as a verdict: its rejection is heard through the intrinsic `then`, then an indicator is down, a
+  readiness run is not ready and a scrape is `503`, so the `then` cannot answer up for it.
+- The check is made again after a scrape or a probe starts, right before the `await` of this package's own
+  promise, and the readiness controller and the scrape's collection await promises that carry their own
+  intrinsic `constructor`. A scrape refused after its collection started is answered `503`, not `500`.
+  A scrape refused for a replaced built-in writes one `CORE_METRICS_RUNTIME_ALTERED` warning until a scrape
+  passes again.
+- The `constructor` a promise is given before this package awaits it is neither writable nor configurable, so
+  whoever else holds the promise cannot turn it into a getter that throws. The readiness response and its
+  `checks` array are frozen: they are shared by every caller of a run, and a caller that changed one changed
+  the answer of the next.
+- A readiness run that fails because the guard refused answers not ready even when what was altered has been
+  put back by then, instead of rethrowing the refusal.
 
 **Known limits:**
 
+- A native promise that keeps a foreign, non-configurable `constructor` whose `Symbol.species` throws cannot
+  be listened to: it is never reported settled, and its own rejection cannot be heard.
+- The rule that a verdict path reads no `Promise` static and attaches no `.then`, `.catch` or `.finally` is
+  held by `src/promise-statics.scan.spec.ts`.
+- The scrape body is still produced by `prom-client`, whose `registry.metrics()` awaits `Promise.all` and
+  makes awaits of its own. Code that replaces `Promise.all`, or plants a `constructor` or `then` while those
+  awaits are pending, targets that dependency and is outside what this package can answer for; the scrape's
+  deadline and refusal are this package's own code.
+- A native promise frozen by whoever created it, such as one an indicator returns, cannot be given its own
+  `constructor`, and none of `then`, `catch` or resolving with it can attach a handler without reading the
+  `constructor` of its prototype. When that property is a getter that throws, installed after load, and the
+  frozen promise rejects, the rejection stays unhandled; the readiness verdict is still not ready.
+- Replacements made before this package loads, and a `then` planted after the check on an indicator's own
+  promise, are outside what the guard can see. One of them is refused: importing the package throws when
+  the `prototype` of `Promise.prototype.constructor` is not `Promise.prototype`, so a slot set to
+  another constructor never builds the verdict promises. A replacement that passes that check is not detected.
 - The response guard does not yet cover the native writers `writeHead`, `removeHeader`, `writeContinue` and
   `writeEarlyHints`; they are scheduled for 1.6.23.
 

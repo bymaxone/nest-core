@@ -23,6 +23,7 @@ import { HttpAdapterHost } from '@nestjs/core'
 import type { ResolvedCoreOptions } from '../core.options'
 import { DEFAULT_HEALTH_PATH } from '../core.options'
 import { BYMAX_CORE_OPTIONS } from '../core.tokens'
+import { ownIntrinsicConstructor } from '../object-prototype'
 import { assertAsyncFeatureEnabled } from '../passthrough.providers'
 import type { HealthResponse } from './health.interfaces'
 import { HealthService } from './health.service'
@@ -102,7 +103,7 @@ export function createHealthController(registeredPath: string): Type<object> {
     @Get('ready')
     async ready(@Res() response: unknown): Promise<void> {
       assertControllerMatchesOptions(this.options, registeredPath)
-      const result = await this.healthService.checkReadiness()
+      const result = await ownIntrinsicConstructor(this.healthService.checkReadiness())
       const status = result.status === 'ok' ? HttpStatus.OK : HttpStatus.SERVICE_UNAVAILABLE
       this.adapterHost.httpAdapter.reply(response, result, status)
     }

@@ -27,6 +27,14 @@ import {
 } from '../core.tokens'
 import type { ProviderScanner } from '../discovery'
 import { asHostError } from '../host-error'
+import {
+  assertPromiseIntact,
+  frozen,
+  isGuardRefusal,
+  ownIntrinsicConstructor,
+  promiseAltered
+} from '../object-prototype'
+import { ignoreRejection, settleFirst } from '../settle'
 import { writeLog } from '../write-log'
 import { discoverIndicators, mergeIndicators, nameIndicators } from './health.discovery'
 import type { NamedIndicator } from './health.discovery'
@@ -103,38 +111,69 @@ type IndicatorOutcome =
     }
 
 /**
- * Start the per-indicator timeout. Its promise resolves to the `down` outcome when the time is up,
- * and by then the signal handed to the indicator is already aborted, so a check that can cancel its
- * query is told to stop.
+ * An object with no prototype, as a promise is resolved with it: resolving reads `then` along the
+ * object's chain, so one planted on `Object.prototype` would otherwise decide the verdict.
  *
- * @param name - The name of the indicator the timeout belongs to.
- * @param timeoutMs - The per-indicator timeout, in milliseconds.
- * @returns The signal to pass to `check()`, the timeout outcome, and the call that clears the timer.
+ * @param value - The fields of the object.
+ * @returns The same fields on an object that inherits nothing.
  */
-function startTimeout(
-  name: string,
-  timeoutMs: number
-): { signal: AbortSignal; timedOut: Promise<IndicatorOutcome>; clear: () => void } {
-  const controller = new AbortController()
-  let timer: ReturnType<typeof setTimeout> | undefined
-  const timedOut = new Promise<IndicatorOutcome>((resolve) => {
-    timer = setTimeout(() => {
-      controller.abort()
-      resolve({
-        entry: { name, status: 'down', details: { timedOutAfterMs: timeoutMs } },
-        isUp: false,
-        cause: { kind: 'timed-out', timeoutMs }
-      })
-    }, timeoutMs)
-  })
-  return { signal: controller.signal, timedOut, clear: () => clearTimeout(timer) }
+function outcomeOf<T extends object>(value: T): T {
+  return frozen({ __proto__: null, ...value } as T)
 }
 
 /**
- * Run one indicator racing a per-indicator timeout. A rejection or a timeout
- * both resolve (never reject) to a `down` entry, and the timeout's timer is
- * always cleared once the race settles, whichever side wins, so no timer
- * ever outlives this call.
+ * Read one indicator's result as an outcome. A rejection, a synchronous throw and an unreadable
+ * result are all `down`: the conversion never rejects, so it cannot hide another indicator's result.
+ *
+ * @param named - The indicator to run, with the name it was read under.
+ * @param controller - Its signal is aborted when the timeout is up, or when the guard refuses the run.
+ * @param exposeErrors - Whether the details and the rejection's message are served.
+ * @returns The outcome, with the cause behind it.
+ */
+async function checkIndicator(
+  { name, indicator }: NamedIndicator,
+  controller: AbortController,
+  exposeErrors: boolean
+): Promise<IndicatorOutcome> {
+  try {
+    const returned = indicator.check(controller.signal)
+    try {
+      assertPromiseIntact()
+      ownIntrinsicConstructor(returned)
+    } catch (refusal) {
+      ignoreRejection(returned)
+      controller.abort()
+      throw refusal
+    }
+    const result = await ownIntrinsicConstructor(returned)
+    // The details are whatever the indicator chose to return, and the response is usually
+    // reachable without credentials, so they are served only with the diagnostics switch on.
+    // Switch off: only `status` is read, so an unreadable diagnostic cannot turn an up indicator down.
+    const { status, ...rest } = exposeErrors ? result : { status: result.status }
+    // The name is set last, so an indicator that returns its own `name` cannot spoof the declared one.
+    const entry = exposeErrors ? { status, ...rest, name } : { name, status }
+    // Anything that is not `up` counts as down, matching how the aggregate status reads the same
+    // field, so a misbehaving indicator cannot be down in the response and up in the log.
+    return status === 'up'
+      ? outcomeOf({ entry, isUp: true })
+      : outcomeOf({ entry, isUp: false, cause: { kind: 'reported-down' } })
+  } catch (reason) {
+    const message = summarizeRejection(reason)
+    return outcomeOf({
+      entry: exposeErrors
+        ? { name, status: 'down', details: { error: message } }
+        : { name, status: 'down' },
+      isUp: false,
+      cause: { kind: 'rejected', message }
+    })
+  }
+}
+
+/**
+ * Run one indicator against a per-indicator timeout. A rejection or a timeout both resolve (never
+ * reject) to a `down` entry, and the timer is cleared once the check ends. By the time the timeout
+ * answers, the signal handed to the indicator is aborted, so a check that can cancel its query is
+ * told to stop. The two are settled by `settleFirst`, never by a `Promise` static.
  *
  * Nothing is logged here. Every down path returns its cause instead, and the
  * caller decides what is worth a line.
@@ -147,50 +186,29 @@ function startTimeout(
  *   entry describing the timeout or the summarized rejection reason — and the
  *   cause behind it.
  */
-async function runIndicator(
-  { name, indicator }: NamedIndicator,
+function runIndicator(
+  named: NamedIndicator,
   timeoutMs: number,
   exposeErrors: boolean
 ): Promise<IndicatorOutcome> {
-  const { signal, timedOut, clear } = startTimeout(name, timeoutMs)
-  // `Promise.resolve().then(...)` defers the actual `indicator.check()` call
-  // into a `.then()` callback, so a misbehaving indicator that throws
-  // synchronously (instead of returning a rejected promise) is caught by the
-  // `.catch()` below just like a normal rejection, instead of escaping this
-  // function and rejecting the outer `Promise.all` in `checkReadiness`, which
-  // would hide every other indicator's result.
-  const checked = Promise.resolve()
-    .then(() => indicator.check(signal))
-    // Spread the result first, then set the name, so a misbehaving indicator
-    // that returns its own `name` cannot spoof the declared check name.
-    .then((result): IndicatorOutcome => {
-      // The details are whatever the indicator chose to return, and the response is usually
-      // reachable without credentials, so they are served only with the diagnostics switch on.
-      // Switch off: only `status` is read, so an unreadable diagnostic cannot turn an up indicator down.
-      const { status, ...rest } = exposeErrors ? result : { status: result.status }
-      const entry = exposeErrors ? { status, ...rest, name } : { name, status }
-      // Anything that is not `up` counts as down, matching how the aggregate
-      // status below reads the same field, so a misbehaving indicator cannot
-      // be down in the response and up in the log.
-      return status === 'up'
-        ? { entry, isUp: true }
-        : { entry, isUp: false, cause: { kind: 'reported-down' } }
-    })
-    .catch((reason: unknown): IndicatorOutcome => {
-      const message = summarizeRejection(reason)
-      return {
-        entry: exposeErrors
-          ? { name, status: 'down', details: { error: message } }
-          : { name, status: 'down' },
-        isUp: false,
-        cause: { kind: 'rejected', message }
-      }
-    })
-  try {
-    return await Promise.race([checked, timedOut])
-  } finally {
-    clear()
-  }
+  const controller = new AbortController()
+  const { name } = named
+  return settleFirst<IndicatorOutcome>(
+    () => checkIndicator(named, controller, exposeErrors),
+    (win) => {
+      const timer = setTimeout(() => {
+        controller.abort()
+        win(
+          outcomeOf({
+            entry: { name, status: 'down', details: { timedOutAfterMs: timeoutMs } },
+            isUp: false,
+            cause: { kind: 'timed-out', timeoutMs }
+          })
+        )
+      }, timeoutMs)
+      return () => clearTimeout(timer)
+    }
+  )
 }
 
 /**
@@ -270,6 +288,9 @@ export class HealthService implements OnApplicationBootstrap, BeforeApplicationS
 
   /** The readiness run in progress, shared by every probe that arrives while it lasts. */
   private inflight: Promise<HealthResponse> | undefined
+
+  /** Whether the line for a refused runtime was written and no probe has answered since. */
+  private refusing = false
 
   /**
    * The last finished readiness answer and when it finished, reused for `readinessCacheMs`. The time is
@@ -552,47 +573,110 @@ export class HealthService implements OnApplicationBootstrap, BeforeApplicationS
    *
    * @returns The aggregated health response.
    */
-  checkReadiness(): Promise<HealthResponse> {
+  async checkReadiness(): Promise<HealthResponse> {
     if (this.draining) {
-      return Promise.resolve({ status: 'error', checks: [{ name: 'shutdown', status: 'down' }] })
+      return outcomeOf({ status: 'error', checks: frozen([{ name: 'shutdown', status: 'down' }]) })
     }
+    // The clock is read first, so no built-in a host can replace runs between the checks and the `await`.
+    const now = performance.now()
+    if (promiseAltered()) return this.refused()
     const cached = this.cached
-    if (
-      cached !== undefined &&
-      performance.now() - cached.at < this.options.health.readinessCacheMs
-    ) {
-      return Promise.resolve(cached.response)
+    if (cached !== undefined && now - cached.at < this.options.health.readinessCacheMs) {
+      this.refusing = false
+      return cached.response
     }
-    this.inflight ??= this.runReadiness().finally(() => {
-      this.inflight = undefined
-    })
-    return this.inflight
+    const run = (this.inflight ??= this.runReadiness())
+    // Starting a run calls indicator code: the check is made again after it, right before the `await`.
+    if (promiseAltered()) {
+      ignoreRejection(run)
+      return this.refused()
+    }
+    return await ownIntrinsicConstructor(run)
   }
 
   /**
-   * Run every indicator once and record the answer.
+   * The answer while what a promise's settling reads is not as at load: not ready, and one line the
+   * first time, since a verdict awaited through a replaced constructor could be forged.
+   *
+   * @returns The not-ready response, on an object that inherits nothing.
+   */
+  private refused(): HealthResponse {
+    if (!this.refusing) {
+      this.refusing = true
+      this.writeLine(
+        {
+          event: 'CORE_HEALTH_RUNTIME_ALTERED',
+          message: 'A promise built-in was replaced: readiness answers not ready',
+          check: 'runtime'
+        },
+        true
+      )
+    }
+    return outcomeOf({ status: 'error', checks: frozen([{ name: 'runtime', status: 'down' }]) })
+  }
+
+  /**
+   * Run every indicator once and record the answer; the run every concurrent probe awaits, forgotten once
+   * it ends.
    *
    * @returns The aggregated health response.
    */
   private async runReadiness(): Promise<HealthResponse> {
+    try {
+      const collecting = this.collect()
+      // Its own constructor, so the `await` reads none from the prototype: a swapped one would answer
+      // for the run and leave a refusal of `collect` unhandled.
+      ownIntrinsicConstructor(collecting)
+      return await collecting
+    } catch (cause) {
+      if (!isGuardRefusal(cause) && !promiseAltered()) throw cause
+      return this.refused()
+    } finally {
+      this.inflight = undefined
+    }
+  }
+
+  /**
+   * Start every indicator and read each outcome in turn, then record the answer.
+   *
+   * @returns The aggregated health response.
+   */
+  private async collect(): Promise<HealthResponse> {
     const timeoutMs = this.options.health.indicatorTimeoutMs
     const exposeErrors = this.options.health.exposeIndicatorErrors
     // Taken before the probes run, so an outcome is ordered by when its probe
     // started rather than by when it happened to finish.
     const seq = ++this.probeSequence
-    const outcomes = await Promise.all(
-      this.resolveIndicators().map((entry) => runIndicator(entry, timeoutMs, exposeErrors))
+    const started = this.resolveIndicators().map((entry) =>
+      runIndicator(entry, timeoutMs, exposeErrors)
     )
+    // Every check is marked handled before the first `await`: one that rejects while an earlier one is
+    // awaited would otherwise be an unhandled rejection.
+    for (let at = 0; at < started.length; at += 1) ignoreRejection(started[at] as Promise<unknown>)
+    // Index reads and writes only: an indicator has run by now, and a `push`, `map` or `every` it replaced
+    // would otherwise decide the answer.
+    const outcomes: IndicatorOutcome[] = []
+    for (let at = 0; at < started.length; at += 1) {
+      assertPromiseIntact()
+      outcomes[at] = await (started[at] as Promise<IndicatorOutcome>)
+    }
+    assertPromiseIntact()
     // After every indicator has settled, not as each one does, so the lines
     // follow the declared indicator order rather than which dependency answered
     // first — otherwise two readings of one outage order their logs differently.
-    for (const outcome of outcomes) {
+    const entries: HealthCheckEntry[] = []
+    let allUp = true
+    for (let at = 0; at < outcomes.length; at += 1) {
+      const outcome = outcomes[at] as IndicatorOutcome
       this.reportTransition(outcome, seq)
+      entries[at] = outcome.entry
+      if (outcome.entry.status !== 'up') allUp = false
     }
-    const checks = outcomes.map((outcome) => outcome.entry)
-    const status = checks.every((check) => check.status === 'up') ? 'ok' : 'error'
-    const response: HealthResponse = { status, checks }
+    const checks = frozen(entries)
+    const status = allUp ? 'ok' : 'error'
+    const response = outcomeOf<HealthResponse>({ status, checks })
     this.cached = { at: performance.now(), response }
+    this.refusing = false
     return response
   }
 }

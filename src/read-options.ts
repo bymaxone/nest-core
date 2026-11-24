@@ -43,7 +43,7 @@ function snapshot(list: readonly unknown[]): unknown[] {
   const items: unknown[] = []
   for (let index = 0; index < length; index += 1) {
     // What `Array.prototype` holds at the index of a hole is not an item: a hole stays one.
-    items.push(Object.hasOwn(list, index) ? Reflect.get(list, index) : undefined)
+    items[index] = Object.hasOwn(list, index) ? Reflect.get(list, index) : undefined
   }
   return items
 }
@@ -55,16 +55,25 @@ function assertMapBounded(copy: unknown): void {
   }
 }
 
-/** A map read by every name it answers to, once. */
+/** A map read by every name it answers to, once. Lists and sets are walked by index, with no live iterator. */
 function namedCopy(value: unknown, done: Map<object, unknown>): unknown {
   if (!isBlock(value)) return ownCopy(value, 0, [], done)
   const copy: Record<string, unknown> = {}
-  const names = new Set<string>()
-  const add = (found: readonly PropertyKey[]): void => {
-    for (const name of found) if (typeof name === 'string') names.add(name)
+  const names: string[] = []
+  const seen = Object.create(null) as Record<string, true>
+  const owns = Object.create(null) as Record<string, true>
+  const add = (found: readonly PropertyKey[], own: boolean): void => {
+    for (let at = 0; at < found.length; at += 1) {
+      const name = found[at]
+      if (typeof name !== 'string') continue
+      if (own) owns[name] = true
+      if (seen[name] === undefined) {
+        seen[name] = true
+        names[names.length] = name
+      }
+    }
   }
-  const own = Reflect.ownKeys(value)
-  add(own)
+  add(Reflect.ownKeys(value), true)
   let links = 0
   for (
     let up = Reflect.getPrototypeOf(value);
@@ -73,14 +82,16 @@ function namedCopy(value: unknown, done: Map<object, unknown>): unknown {
   ) {
     // A proxy can answer its own prototype for ever.
     if (++links > MAX_NAMES) throw bootError('an option is too large', {})
-    add(Reflect.ownKeys(up))
+    add(Reflect.ownKeys(up), false)
   }
-  if (names.size > MAX_NAMES) throw bootError('an option is too large', {})
-  for (const name of names) {
+  if (names.length > MAX_NAMES) throw bootError('an option is too large', {})
+  for (let at = 0; at < names.length; at += 1) {
+    const name = names[at] as string
     const held: unknown = Reflect.get(value, name)
     // A method on a prototype is not a setting; one a directive holds itself is refused, not dropped.
     if (typeof held === 'function') {
-      if (own.includes(name)) throw bootError('a directive holds a function', { option: name })
+      if (owns[name] !== undefined)
+        throw bootError('a directive holds a function', { option: name })
       continue
     }
     Object.defineProperty(copy, name, ownProperty(ownCopy(held, 0, [], done)))
@@ -98,6 +109,13 @@ function isEmptyMap(value: unknown): boolean {
   )
 }
 
+/** Each item of `items` read as a block of `shape`, by index so a replaced `map` is not asked. */
+function readItems(items: readonly unknown[], shape: Shape, done: Map<object, unknown>): unknown[] {
+  const read: unknown[] = []
+  for (let at = 0; at < items.length; at += 1) read[at] = readBlock(items[at], shape, done)
+  return read
+}
+
 /** One value of a block, read as its entry in the shape says. */
 function readEntry(
   value: unknown,
@@ -111,7 +129,7 @@ function readEntry(
     const shape = entry[0] as Shape
     if (types.isProxy(value)) throw bootError('an option is held behind a proxy', {})
     return Array.isArray(value)
-      ? snapshot(value).map((item) => readBlock(item, shape, done))
+      ? readItems(snapshot(value), shape, done)
       : ownCopy(value, 0, [], done)
   }
   return readBlock(value, entry as Shape, done)
@@ -144,7 +162,9 @@ function readBlock(given: unknown, shape: Shape, done: Map<object, unknown>): un
   if (!isBlock(given)) return given
   // No prototype: the resolvers cannot inherit a planted name from the copy.
   const copy = Object.create(null) as Record<string, unknown>
-  for (const key of Object.keys(shape)) {
+  const documented = Object.keys(shape)
+  for (let at = 0; at < documented.length; at += 1) {
+    const key = documented[at] as string
     const entry = shape[key] as Shape | readonly [Shape] | 0 | 1
     const isMap = entry === 0 || entry === 1
     const strict = SECURITY.has(key)
@@ -183,12 +203,17 @@ function readBlock(given: unknown, shape: Shape, done: Map<object, unknown>): un
     }
     copy[key] = made
   }
-  for (const key of Object.keys(given)) {
-    if (!Object.hasOwn(shape, key)) {
-      Object.defineProperty(copy, key, ownProperty(undefined))
-    }
-  }
+  markUndocumented(copy, given, shape)
   return copy
+}
+
+/** Give `copy` an own `undefined` for every name `given` holds that `shape` does not document. */
+function markUndocumented(copy: object, given: object, shape: Shape): void {
+  const supplied = Object.keys(given)
+  for (let at = 0; at < supplied.length; at += 1) {
+    const key = supplied[at] as string
+    if (!Object.hasOwn(shape, key)) Object.defineProperty(copy, key, ownProperty(undefined))
+  }
 }
 
 /**

@@ -4,6 +4,8 @@
  */
 import { ServiceUnavailableException } from '@nestjs/common'
 
+import { ignoreRejection, settleFirst } from '../settle'
+
 function unavailable(): ServiceUnavailableException {
   return new ServiceUnavailableException('Metrics collection timed out')
 }
@@ -26,23 +28,19 @@ export class ScrapeRun {
   }
 
   private start(collect: () => Promise<string>): Promise<string> {
-    const settled = Promise.resolve().then(collect)
-    let timer: ReturnType<typeof setTimeout> | undefined
-    const expiry = new Promise<never>((_resolve, reject) => {
-      timer = setTimeout(() => {
+    const outcome = settleFirst<string>(collect, (_win, lose) => {
+      const timer = setTimeout(() => {
         this.onExpired()
-        reject(unavailable())
+        lose(unavailable())
       }, this.deadlineMs)
       timer.unref()
+      return (): void => {
+        clearTimeout(timer)
+        this.current = undefined
+      }
     })
-    const outcome = Promise.race([settled, expiry])
     // A rejection nobody is awaiting is not an unhandled one.
-    outcome.catch(() => undefined)
-    const end = (): void => {
-      clearTimeout(timer)
-      this.current = undefined
-    }
-    settled.then(end, end)
+    ignoreRejection(outcome)
     this.current = outcome
     return outcome
   }

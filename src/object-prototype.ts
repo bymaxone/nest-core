@@ -22,14 +22,28 @@ const ArrayBinding = Array
 const JsonBinding = JSON
 const ErrorConstructor = Error
 const FunctionPrototype = Function.prototype
+/** The prototype an `async` function's promise inherits from, whatever the global `Promise` was bound to at load. */
+const PromisePrototype = Object.getPrototypeOf((async (): Promise<void> => {})()) as Promise<void>
+/** The intrinsic `Promise` constructor, read from that prototype at load, never from the global. */
+export const IntrinsicPromise = ((): PromiseConstructor => {
+  const candidate = PromisePrototype.constructor as PromiseConstructor
+  if (candidate?.prototype !== PromisePrototype)
+    throw new ErrorConstructor('Promise.prototype.constructor is not intrinsic')
+  return candidate
+})()
+const IntrinsicThen = PromisePrototype.then
+const apply = Reflect.apply
 const ObjectPrototype = Object.prototype
 const hasOwn = Object.hasOwn
 const defineProperty = Object.defineProperty
+const freeze = Object.freeze
 const getOwnPropertyDescriptor = Object.getOwnPropertyDescriptor
 const getOwnPropertyDescriptors = Object.getOwnPropertyDescriptors
 const getOwnPropertyNames = Object.getOwnPropertyNames
 const getPrototypeOf = Object.getPrototypeOf
 const buildRealm = runInNewContext
+if (typeof getOwnPropertyDescriptor(IntrinsicPromise, Symbol.species)?.get !== 'function')
+  throw new ErrorConstructor('Promise[Symbol.species] is not an intrinsic accessor')
 
 /** `Function.prototype`'s call, apply and bind, as they were at load. */
 const CALL = getOwnPropertyDescriptor(FunctionPrototype, 'call')?.value
@@ -39,26 +53,51 @@ const BIND = getOwnPropertyDescriptor(FunctionPrototype, 'bind')?.value
 /** `Object.prototype` as it was at load, so a name swapped for a function of the same text is caught by identity. */
 const loaded = getOwnPropertyDescriptors(ObjectPrototype) as Record<string, PropertyDescriptor>
 
-type Watched = ReadonlyArray<readonly [object, readonly PropertyKey[], unknown[]]>
+type Watched = ReadonlyArray<readonly [object, readonly PropertyKey[], Slot[]]>
+
+/** What a name held at load: its value, getter and setter, so an accessor is as visible as a data property. */
+type Slot = readonly [unknown, unknown, unknown]
+
+/** The value, getter and setter a descriptor carries, `undefined` for each it lacks. */
+function slotOf(descriptor: PropertyDescriptor | undefined): Slot {
+  return [field(descriptor, 'value'), field(descriptor, 'get'), field(descriptor, 'set')]
+}
+
+/** Each `[owner, names]` with the `[value, get, set]` slot of every name at load: `[owner, names, slots]`. */
+function capture(list: ReadonlyArray<readonly [object, readonly PropertyKey[]]>): Watched {
+  return list.map(([owner, names]) => [
+    owner,
+    names,
+    names.map((name) => slotOf(getOwnPropertyDescriptor(owner, name)))
+  ])
+}
+
+/**
+ * What a promise's settling reads: `await` reads the `constructor` of a native promise, and resolving
+ * with an object reads its `then` along the object's chain. The public `then` of `Promise.prototype` is
+ * not watched, as an instrumented host replaces it: while `constructor` is the intrinsic, `await` does
+ * not call it, and once `constructor` is replaced the `await` has already read what it is not safe to read.
+ */
+const PROMISE_WATCHED: Watched = capture([
+  [PromisePrototype, ['constructor']],
+  [IntrinsicPromise, [Symbol.species]],
+  [ObjectPrototype, ['then']],
+  [Array.prototype, ['then']],
+  [FunctionPrototype, ['then']]
+])
 
 /** The built-ins the decision paths call, each with the function it was at load: `[owner, names, values]`. */
 const WATCHED: Watched = ((): Watched => {
   const proto = (iterator: object): object => getPrototypeOf(iterator)
-  return (
-    [
-      [Set.prototype, ['has', Symbol.iterator]],
-      [Map.prototype, ['get', 'has']],
-      [String.prototype, ['split', 'indexOf', 'slice', 'replace']],
-      [Array.prototype, ['join', 'slice', 'filter', 'includes', Symbol.iterator]],
-      [RegExp.prototype, [Symbol.replace]],
-      [proto([][Symbol.iterator]()), ['next']],
-      [proto(new Set().values()), ['next']]
-    ] as ReadonlyArray<readonly [object, readonly PropertyKey[]]>
-  ).map(([owner, names]) => [
-    owner,
-    names,
-    names.map((name) => getOwnPropertyDescriptor(owner, name)?.value)
-  ])
+  return capture([
+    [Set.prototype, ['has', Symbol.iterator]],
+    [Map.prototype, ['get', 'has']],
+    [String.prototype, ['split', 'indexOf', 'slice', 'replace']],
+    [Array.prototype, ['join', 'slice', 'filter', 'includes', Symbol.iterator]],
+    [RegExp.prototype, [Symbol.replace]],
+    [proto([][Symbol.iterator]()), ['next']],
+    [proto(new Set().values()), ['next']]
+  ]).concat(PROMISE_WATCHED)
 })()
 
 let pristine: Pristine | undefined
@@ -109,6 +148,22 @@ function moved(name: string, captured: unknown): boolean {
   return field(getOwnPropertyDescriptor(FunctionPrototype, name), 'value') !== captured
 }
 
+/** How many names of `table` do not hold the value captured at load. */
+function changed(table: Watched): number {
+  let count = 0
+  for (let index = 0; index < table.length; index += 1) {
+    const entry = table[index] as Watched[number]
+    const names = entry[1]
+    for (let at = 0; at < names.length; at += 1) {
+      const key = names[at] as PropertyKey
+      const now = slotOf(getOwnPropertyDescriptor(entry[0], key))
+      const was = entry[2][at] as Slot
+      if (now[0] !== was[0] || now[1] !== was[1] || now[2] !== was[2]) count += 1
+    }
+  }
+  return count
+}
+
 /** How many of the bindings and functions this module relies on are not the ones it captured. */
 function replacedBindings(): number {
   const global = globalThis as unknown as Record<string, unknown>
@@ -120,17 +175,7 @@ function replacedBindings(): number {
   if (moved('call', CALL)) replaced += 1
   if (moved('apply', APPLY)) replaced += 1
   if (moved('bind', BIND)) replaced += 1
-  for (let index = 0; index < WATCHED.length; index += 1) {
-    const entry = WATCHED[index] as (typeof WATCHED)[number]
-    const owner = entry[0]
-    const names = entry[1]
-    const captured = entry[2]
-    for (let at = 0; at < names.length; at += 1) {
-      const key = names[at] as PropertyKey
-      if (field(getOwnPropertyDescriptor(owner, key), 'value') !== captured[at]) replaced += 1
-    }
-  }
-  return replaced
+  return replaced + changed(WATCHED)
 }
 
 /**
@@ -138,6 +183,148 @@ function replacedBindings(): number {
  */
 export function builtinsAltered(): boolean {
   return replacedBindings() > 0
+}
+
+/** Whether what a promise's settling reads is not as at load; a verdict that is about to await must refuse. */
+export function promiseAltered(): boolean {
+  return changed(PROMISE_WATCHED) > 0
+}
+
+/**
+ * Give a native promise its own intrinsic `constructor`, so an `await` never reads the prototype's. A
+ * native promise that keeps another `constructor` or carries its own `then` is heard, then refused.
+ *
+ * @param promise - The value about to be awaited.
+ * @returns `promise`, so the call can sit inside the `await`.
+ * @throws Error With a count, when the promise is not one it can await.
+ */
+export function ownIntrinsicConstructor<T>(promise: T): T {
+  if (pinned(promise)) return promise
+  afterSettled(promise as PromiseLike<unknown>)
+  throw refusal(1)
+}
+
+/** Whether `promise` is safe to await once pinned: no foreign own `constructor`, no own `then`. */
+export function pinned(promise: unknown): boolean {
+  try {
+    if (
+      typeof promise !== 'object' ||
+      promise === null ||
+      getPrototypeOf(promise) !== PromisePrototype
+    )
+      return true
+    try {
+      defineProperty(promise, 'constructor', {
+        __proto__: null,
+        value: IntrinsicPromise,
+        writable: false,
+        configurable: false
+      } as PropertyDescriptor)
+    } catch {
+      // A frozen promise keeps its constructor.
+    }
+    const own = getOwnPropertyDescriptor(promise, 'constructor')
+    return (
+      (own === undefined || field(own, 'value') === IntrinsicPromise) && !hasOwn(promise, 'then')
+    )
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Run `onValue` or `onFailure` once `promise` settles, never reading what its settling would read live. A
+ * native promise whose own `constructor` is the intrinsic one is awaited, which reads neither `then` nor
+ * `Symbol.species`; any other is heard through the intrinsic `then`. A native promise no listener could be
+ * attached to has not been seen to settle, so neither callback runs for it.
+ */
+function listen(
+  promise: PromiseLike<unknown>,
+  onValue: () => void,
+  onFailure: (r: unknown) => void
+): void {
+  const isNative = native(promise)
+  try {
+    pinned(promise)
+    if (
+      isNative &&
+      field(getOwnPropertyDescriptor(promise, 'constructor'), 'value') === IntrinsicPromise
+    ) {
+      void (async (): Promise<void> => {
+        try {
+          await promise
+        } catch (reason) {
+          return onFailure(reason)
+        }
+        onValue()
+      })()
+    } else apply(IntrinsicThen, promise, [onValue, onFailure])
+  } catch {
+    if (!isNative) onValue()
+  }
+}
+
+/** Whether `promise` is a native promise; a value whose prototype cannot be read is not. Never throws. */
+function native(promise: PromiseLike<unknown>): boolean {
+  try {
+    return getPrototypeOf(promise) === PromisePrototype
+  } catch {
+    return false
+  }
+}
+
+/** Mark `promise` handled; `onFailure` must not throw. */
+export function hear(
+  promise: PromiseLike<unknown>,
+  onFailure: (reason: unknown) => void = noop
+): void {
+  listen(promise, noop, onFailure)
+}
+
+/** Resolves with nothing once `promise` settled, so no own slot of it answers. */
+export function afterSettled(promise: PromiseLike<unknown>): Promise<void> {
+  const settled = new IntrinsicPromise<void>((done) => {
+    const finish = (): void => done()
+    listen(promise, finish, finish)
+  })
+  pinned(settled)
+  return settled
+}
+
+/**
+ * Freeze a value this package hands to more than one reader, through the `Object.freeze` captured at load.
+ *
+ * @param value - The shared object or array.
+ * @returns `value`, frozen.
+ */
+export function frozen<T extends object>(value: T): T {
+  return freeze(value) as T
+}
+
+/** Whether `error` is what `assertPromiseIntact` or `assertObjectPrototypeClean` throws. */
+export function isGuardRefusal(error: unknown): boolean {
+  try {
+    return (
+      typeof error === 'object' &&
+      error !== null &&
+      getPrototypeOf(error) === ErrorConstructor.prototype &&
+      hasOwn(error, 'count')
+    )
+  } catch {
+    // A revoked proxy cannot be inspected, so it is not the guard's error.
+    return false
+  }
+}
+
+/**
+ * Throws while what a promise's settling reads is not as at load; called right before an `await` on a
+ * verdict path, so the read the `await` makes is the one checked.
+ *
+ * @throws Error With a count, and nothing the host wrote.
+ */
+export function assertPromiseIntact(): void {
+  const count = changed(PROMISE_WATCHED)
+  if (count > 0) throw refusal(count)
 }
 
 /** Whether `name` of `now` is as a fresh realm holds it, and the function this module met. */
@@ -186,3 +373,5 @@ export function assertObjectPrototypeClean(): void {
   }
   if (found > 0) throw refusal(found)
 }
+
+function noop(): void {}

@@ -33,7 +33,14 @@ import { HttpAdapterHost } from '@nestjs/core'
 
 import type { ResolvedCoreOptions } from '../core.options'
 import { BYMAX_CORE_OPTIONS, BYMAX_METRICS_REGISTRY } from '../core.tokens'
-import { assertObjectPrototypeClean } from '../object-prototype'
+import {
+  afterSettled,
+  assertObjectPrototypeClean,
+  assertPromiseIntact,
+  isGuardRefusal,
+  ownIntrinsicConstructor,
+  pinned
+} from '../object-prototype'
 import { assertAsyncFeatureEnabled } from '../passthrough.providers'
 import type { MetricsRegistry } from './metrics.registry'
 import { ScrapeRun } from './scrape-run'
@@ -123,8 +130,13 @@ function admit(
   if (authToken !== undefined && !bearerMatches(request.headers?.['authorization'], authToken)) {
     throw new UnauthorizedException()
   }
+  assertRuntimeClean(assertObjectPrototypeClean)
+}
+
+/** `503` with the guard's own error as the cause when `check` refuses what a host replaced after load. */
+function assertRuntimeClean(check: () => void): void {
   try {
-    assertObjectPrototypeClean()
+    check()
   } catch (cause) {
     throw new ServiceUnavailableException('Metrics are unavailable', { cause })
   }
@@ -133,10 +145,69 @@ function admit(
 /** The registry's text, with any failure of a collector answered `503` and never left unhandled. */
 async function collectOrRefuse(registry: MetricsRegistry): Promise<string> {
   try {
-    return await registry.metrics()
+    const collecting = registry.metrics()
+    // A promise that cannot be awaited keeps the run in flight until it settles, then is refused.
+    if (!pinned(collecting)) await afterSettled(collecting)
+    return await ownIntrinsicConstructor(collecting)
   } catch (cause) {
     throw new ServiceUnavailableException('Metrics collection failed', { cause })
   }
+}
+
+/** One warning the first time a scrape is refused for what a host replaced, until one passes again. */
+class RefusalNote {
+  private refusing = false
+
+  /**
+   * What a scrape that failed with `error` throws: the guard's bare refusal, which the run raises after it
+   * started, becomes the `503` the first check answers. The first refusal since a scrape passed is warned.
+   */
+  translate(error: unknown): unknown {
+    const refusal = isGuardRefusal(error)
+      ? new ServiceUnavailableException('Metrics are unavailable', { cause: error })
+      : error
+    if (
+      !this.refusing &&
+      refusal instanceof ServiceUnavailableException &&
+      isGuardRefusal(refusal.cause)
+    ) {
+      this.refusing = true
+      writeLog(new Logger('MetricsController'), 'warn', {
+        event: 'CORE_METRICS_RUNTIME_ALTERED',
+        message: 'A built-in was replaced after load: scrapes answer 503 until it is put back'
+      })
+    }
+    return refusal
+  }
+
+  /** A scrape passed: the next refusal is written again. */
+  clear(): void {
+    this.refusing = false
+  }
+}
+
+/** What one scrape works through. */
+interface ScrapeParts {
+  readonly scrapes: ScrapeRun
+  readonly registry: MetricsRegistry
+  readonly refusals: RefusalNote
+}
+
+/**
+ * Admit the scrape and start (or join) the shared collection. Not async, so the caller's `await` of the
+ * returned promise follows the last check with nothing a host can replace in between.
+ */
+function startScrape(
+  options: ResolvedCoreOptions,
+  path: string,
+  request: { readonly headers?: Record<string, unknown> },
+  parts: ScrapeParts
+): Promise<string> {
+  admit(options, path, request)
+  const run = parts.scrapes.run(() => collectOrRefuse(parts.registry))
+  // Arming the timer called `setTimeout`, which a host can replace: the check is made again, last.
+  assertRuntimeClean(assertPromiseIntact)
+  return run
 }
 
 /**
@@ -166,7 +237,7 @@ function newScrapeRun(scrapeTimeoutMs: number): ScrapeRun {
 export function createMetricsController(registeredPath: string): Type<object> {
   @Controller(registeredPath)
   class MetricsController {
-    private readonly scrapes: ScrapeRun
+    private readonly parts: ScrapeParts
 
     /**
      * @param registry - The dedicated `prom-client` registry to scrape.
@@ -178,7 +249,11 @@ export function createMetricsController(registeredPath: string): Type<object> {
       @Inject(BYMAX_CORE_OPTIONS) private readonly options: ResolvedCoreOptions,
       @Inject(HttpAdapterHost) private readonly adapterHost: HttpAdapterHost
     ) {
-      this.scrapes = newScrapeRun(options.metrics.scrapeTimeoutMs)
+      this.parts = {
+        scrapes: newScrapeRun(options.metrics.scrapeTimeoutMs),
+        registry,
+        refusals: new RefusalNote()
+      }
     }
 
     /**
@@ -195,8 +270,13 @@ export function createMetricsController(registeredPath: string): Type<object> {
       @Res() response: unknown,
       @Req() request: { readonly headers?: Record<string, unknown> }
     ): Promise<void> {
-      admit(this.options, registeredPath, request)
-      const body = await this.scrapes.run(() => collectOrRefuse(this.registry))
+      let body: string
+      try {
+        body = await startScrape(this.options, registeredPath, request, this.parts)
+      } catch (error) {
+        throw this.parts.refusals.translate(error)
+      }
+      this.parts.refusals.clear()
       this.adapterHost.httpAdapter.setHeader(response, 'Content-Type', this.registry.contentType)
       this.adapterHost.httpAdapter.reply(response, body, HttpStatus.OK)
     }

@@ -300,13 +300,47 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 // 2026-11-23, PR 246 (second entry): `./http` 8.09 KiB, measured 8.08 KiB on a clean build. The growth is code, with no
 // module added: the loop that removes the headers describing the body a handler began, and their names, before the 504
 // envelope. Trimming the list from eight names to five measured 8.07 KiB, so the loop is the cost.
+// 2026-11-23, no verdict reads a `Promise` static: root 27.80 KiB (measured 27.77) and `./http` 8.11 KiB (measured 8.10).
+// The growth is code, with no module added to a bundle: the helper that settles a check or a collection against its
+// timer from the constructor captured at load, the check split into its own function, the shared run, and the
+// `Promise.prototype.constructor` entry of the table of built-ins the guard watches (inlined in `./http`).
+// 2026-11-24, the guard's watched table and refusal paths: root 28.20 KiB (measured 28.16), `./openapi` 10.76 KiB (measured 10.75)
+// and `./http` 8.19 KiB (measured 8.18). The growth is code, with no module added to a bundle: the intrinsic constructor
+// capture, the absent-`then` entries of the table the guard watches, the check before each verdict is awaited and before
+// it is cached, the objects that inherit nothing, the `runtime` refusal with its log line, and the handled-before-awaited
+// mark on every started check.
+// 2026-11-24, accessor slots in the watched table: root 28.28 KiB (measured 28.27), `./openapi` 10.82 KiB (measured 10.81)
+// and `./http` 8.25 KiB (measured 8.24). The growth is code, with no module added to a bundle: the getter and setter held
+// beside the value of every watched name, so an accessor `then` is as visible as a data property, and the try/catch that
+// marks a refused check handled before the refusal is thrown.
+// 2026-11-24, own constructor on awaited promises and the second check: root 28.65 KiB (measured 28.63, 29317 B). The growth is code, with no
+// module added to a bundle: the own intrinsic `constructor` given to a promise before it is awaited, the guard-refusal
+// test, the second check after a scrape or a probe starts, and the scrape's `runtime` refusal with its log line.
+// 2026-11-24, the awaits of this package's own promises: root 28.76 KiB (measured 28.73, 29421 B). The growth is code,
+// with no module added to a bundle: `ownIntrinsicConstructor` returning its argument and ignoring what is not a native
+// promise, its use inside the readiness controller's and the collection's `await`, and the refusal translated to `503`
+// when it is raised after a collection started.
+// 2026-11-24, the load-time check of the intrinsic constructor: root 28.82 KiB (measured 28.79, 29482 B), `./openapi` 10.87 KiB
+// (measured 10.85, 11111 B) and `./http` 8.30 KiB (measured 8.28, 8474 B). The growth is code, with no module added to a
+// bundle: the comparison of the constructor's `prototype` with the prototype of an async function's promise, and the throw
+// that refuses the import, inlined in every subpath.
+// 2026-11-24, the refusal of a native promise with an own `constructor` or `then`: root 28.99 KiB (measured 28.97, 29661 B). The
+// growth is code, with no module added to a bundle: the check of the own slots after the pin, and the hearing of the
+// rejection through the `then` captured at load.
+// 2026-11-24, a refused own-slot promise keeps its run in flight and aborts its indicator signal: root 29.12 KiB (measured
+// 29791 B). The growth is code, with no module added to a bundle: `afterSettled`, the pin of the promise it returns, `listen`
+// and the own-data reads of a constructor descriptor.
+// 2026-11-24, PM grant (core 16b.17(g)): root 29.37 KiB (measured 30041 B), `./openapi` 11.02 KiB (measured 11253 B) and
+// `./http` 8.54 KiB (measured 8718 B). The growth is code, with no module added to a bundle: the `Promise[Symbol.species]`
+// entry and its load-time check, and the option copy and the readiness collection rewritten as index loops, which every
+// subpath that copies options inlines.
 const BUDGETS = [
-  { name: '. (root)', path: 'dist/index.mjs', brotli: 27.64 * 1024 },
+  { name: '. (root)', path: 'dist/index.mjs', brotli: 29.37 * 1024 },
   { name: './pagination', path: 'dist/pagination/index.mjs', brotli: 1.5 * 1024 },
   { name: './health', path: 'dist/health/index.mjs', brotli: 0.5 * 1024 },
-  { name: './openapi', path: 'dist/openapi/index.mjs', brotli: 10.7 * 1024 },
+  { name: './openapi', path: 'dist/openapi/index.mjs', brotli: 11.02 * 1024 },
   { name: './metrics', path: 'dist/metrics/index.mjs', brotli: 0.5 * 1024 },
-  { name: './http', path: 'dist/http/index.mjs', brotli: 8.09 * 1024 }
+  { name: './http', path: 'dist/http/index.mjs', brotli: 8.54 * 1024 }
 ]
 
 const fmt = (n) => `${(n / 1024).toFixed(2)} kB`
