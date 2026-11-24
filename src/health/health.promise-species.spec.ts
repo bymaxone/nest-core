@@ -4,7 +4,7 @@
  * Layer: integration.
  * Goal: an indicator that replaces the species accessor of `Promise`, or an `Array.prototype` method the
  * verdict is read through, never turns its own `down` into an `ok` answer.
- * Mocks: none; each case replaces a built-in for good, so it runs in a child process.
+ * Mocks: none; the first case replaces nothing, and every other case replaces a built-in for good, so it runs in a child process.
  */
 import { resolve } from 'node:path'
 
