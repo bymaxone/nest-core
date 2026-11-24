@@ -88,7 +88,7 @@ as plain data`, naming the option), when it has more than 1000 keys, before any 
   unhandled rejection, and neither does a promise this package abandons when it refuses: it is given its own
   intrinsic `constructor` before it is awaited, so a `constructor` getter that throws does not leave its
   rejection unhandled (a promise frozen by its owner keeps the constructor it has; see Known limits).
-- A native promise that a host gave a `constructor` other than the intrinsic one, or an own `then`, is not
+- A native promise that keeps a `constructor` other than the intrinsic one, or carries an own `then`, is not
   awaited as a verdict: its rejection is heard through the intrinsic `then`, then an indicator is down, a
   readiness run is not ready and a scrape is `503`, so the `then` cannot answer up for it.
 - The check is made again after a scrape or a probe starts, right before the `await` of this package's own
