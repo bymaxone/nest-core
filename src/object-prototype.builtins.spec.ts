@@ -4,6 +4,7 @@
  * Layer: unit.
  * Goal: replacing a collection, string, regular expression or iterator method that a decision path
  * calls makes the guard refuse, and `builtinsAltered` answer `true`; restoring it makes both clean again.
+ * A name the guard does not read, added to a watched owner, changes neither answer.
  * Mocks: none; the real built-ins, put back after each row.
  */
 import { assertObjectPrototypeClean, builtinsAltered } from './object-prototype'
@@ -53,6 +54,26 @@ describe('the guard beside a replaced decision-path built-in', () => {
       expect(() => assertObjectPrototypeClean()).not.toThrow()
     }
   )
+})
+
+describe('the guard beside a name it never reads on a watched owner', () => {
+  it.each([
+    ['Set.prototype', Set.prototype],
+    ['Map.prototype', Map.prototype],
+    ['String.prototype', String.prototype],
+    ['Array.prototype', Array.prototype],
+    ['RegExp.prototype', RegExp.prototype],
+    ['the array iterator prototype', iteratorOf([][Symbol.iterator]())],
+    ['the set iterator prototype', iteratorOf(new Set().values())]
+  ] as const)('does not count an own "undefined" on %s as a replaced built-in', (_name, owner) => {
+    Object.defineProperty(owner, 'undefined', { value: () => 0, configurable: true })
+    try {
+      expect(builtinsAltered()).toBe(false)
+      expect(() => assertObjectPrototypeClean()).not.toThrow()
+    } finally {
+      delete (owner as Record<string, unknown>)['undefined']
+    }
+  })
 })
 
 describe('the guard beside what a host replaces by design', () => {
