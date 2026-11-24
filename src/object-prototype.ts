@@ -254,7 +254,16 @@ function listen(
       })()
     } else apply(IntrinsicThen, promise, [onValue, onFailure])
   } catch {
-    if (getPrototypeOf(promise) !== PromisePrototype) onValue()
+    if (!native(promise)) onValue()
+  }
+}
+
+/** Whether `promise` is a native promise; a value whose prototype cannot be read is not. */
+function native(promise: PromiseLike<unknown>): boolean {
+  try {
+    return getPrototypeOf(promise) === PromisePrototype
+  } catch {
+    return false
   }
 }
 
