@@ -30,7 +30,12 @@ export function settleFirst<T>(work: () => T | PromiseLike<T>, arm: Arm<T>): Pro
     try {
       await undefined
       const pending = work()
-      assertPromiseIntact()
+      try {
+        assertPromiseIntact()
+      } catch (refusal) {
+        ignoreRejection(pending as PromiseLike<unknown>)
+        throw refusal
+      }
       win(await pending)
     } catch (reason) {
       lose(reason)

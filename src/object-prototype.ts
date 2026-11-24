@@ -42,14 +42,22 @@ const BIND = getOwnPropertyDescriptor(FunctionPrototype, 'bind')?.value
 /** `Object.prototype` as it was at load, so a name swapped for a function of the same text is caught by identity. */
 const loaded = getOwnPropertyDescriptors(ObjectPrototype) as Record<string, PropertyDescriptor>
 
-type Watched = ReadonlyArray<readonly [object, readonly PropertyKey[], unknown[]]>
+type Watched = ReadonlyArray<readonly [object, readonly PropertyKey[], Slot[]]>
+
+/** What a name held at load: its value, getter and setter, so an accessor is as visible as a data property. */
+type Slot = readonly [unknown, unknown, unknown]
+
+/** The value, getter and setter a descriptor carries, `undefined` for each it lacks. */
+function slotOf(descriptor: PropertyDescriptor | undefined): Slot {
+  return [field(descriptor, 'value'), field(descriptor, 'get'), field(descriptor, 'set')]
+}
 
 /** Each `[owner, names]` with the value of every name at load: `[owner, names, values]`. */
 function capture(list: ReadonlyArray<readonly [object, readonly PropertyKey[]]>): Watched {
   return list.map(([owner, names]) => [
     owner,
     names,
-    names.map((name) => getOwnPropertyDescriptor(owner, name)?.value)
+    names.map((name) => slotOf(getOwnPropertyDescriptor(owner, name)))
   ])
 }
 
@@ -135,7 +143,9 @@ function changed(table: Watched): number {
     const names = entry[1]
     for (let at = 0; at < names.length; at += 1) {
       const key = names[at] as PropertyKey
-      if (field(getOwnPropertyDescriptor(entry[0], key), 'value') !== entry[2][at]) count += 1
+      const now = slotOf(getOwnPropertyDescriptor(entry[0], key))
+      const was = entry[2][at] as Slot
+      if (now[0] !== was[0] || now[1] !== was[1] || now[2] !== was[2]) count += 1
     }
   }
   return count

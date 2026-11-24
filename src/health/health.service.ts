@@ -131,7 +131,12 @@ async function checkIndicator(
 ): Promise<IndicatorOutcome> {
   try {
     const returned = indicator.check(signal)
-    assertPromiseIntact()
+    try {
+      assertPromiseIntact()
+    } catch (refusal) {
+      ignoreRejection(returned)
+      throw refusal
+    }
     const result = await returned
     // The details are whatever the indicator chose to return, and the response is usually
     // reachable without credentials, so they are served only with the diagnostics switch on.

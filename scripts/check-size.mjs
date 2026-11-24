@@ -309,13 +309,17 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 // capture, the absent-`then` entries of the table the guard watches, the check before each verdict is awaited and before
 // it is cached, the objects that inherit nothing, the `runtime` refusal with its log line, and the handled-before-awaited
 // mark on every started check.
+// 2026-11-24, second correction of the 16b batch: root 28.28 KiB (measured 28.27), `./openapi` 10.82 KiB (measured 10.81)
+// and `./http` 8.25 KiB (measured 8.24). The growth is code, with no module added to a bundle: the getter and setter held
+// beside the value of every watched name, so an accessor `then` is as visible as a data property, and the try/catch that
+// marks a refused check handled before the refusal is thrown.
 const BUDGETS = [
-  { name: '. (root)', path: 'dist/index.mjs', brotli: 28.2 * 1024 },
+  { name: '. (root)', path: 'dist/index.mjs', brotli: 28.28 * 1024 },
   { name: './pagination', path: 'dist/pagination/index.mjs', brotli: 1.5 * 1024 },
   { name: './health', path: 'dist/health/index.mjs', brotli: 0.5 * 1024 },
-  { name: './openapi', path: 'dist/openapi/index.mjs', brotli: 10.76 * 1024 },
+  { name: './openapi', path: 'dist/openapi/index.mjs', brotli: 10.82 * 1024 },
   { name: './metrics', path: 'dist/metrics/index.mjs', brotli: 0.5 * 1024 },
-  { name: './http', path: 'dist/http/index.mjs', brotli: 8.19 * 1024 }
+  { name: './http', path: 'dist/http/index.mjs', brotli: 8.25 * 1024 }
 ]
 
 const fmt = (n) => `${(n / 1024).toFixed(2)} kB`

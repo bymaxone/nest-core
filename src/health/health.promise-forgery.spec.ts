@@ -77,6 +77,26 @@ describe('the readiness verdict beside forged promise machinery', () => {
     ])
   })
 
+  it.each([
+    ['Object.prototype', Object.prototype],
+    ['Array.prototype', Array.prototype],
+    ['Function.prototype', Function.prototype]
+  ])('answers runtime down while a then is planted as an accessor on %s', async (_, owner) => {
+    const service = new HealthService(
+      [down],
+      normalizeCoreOptions({ health: { readinessCacheMs: 0 } })
+    )
+    Object.defineProperty(owner, 'then', {
+      get: () => (resolve: (value: unknown) => void) => resolve(FORGED_OK),
+      configurable: true
+    })
+
+    const answer = await service.checkReadiness()
+    removeThen(owner)
+
+    expect(answer).toEqual(RUNTIME_DOWN)
+  })
+
   it('reads a timed-out check as down under a foreign global Promise', async () => {
     const forged = { entry: { name: 'slow', status: 'up' }, isUp: true }
     const Service = loadUnderForeignPromise(forged, () => {
@@ -172,5 +192,37 @@ describe('the readiness verdict beside forged promise machinery', () => {
     })
 
     expect(output.trim()).toBe('unhandled=0')
+  })
+
+  it('leaves no unhandled rejection when a check that was refused rejects afterwards', () => {
+    const script = `
+      const ts = require('typescript')
+      require.extensions['.ts'] = (module, file) => {
+        const { outputText } = ts.transpileModule(require('node:fs').readFileSync(file, 'utf8'), {
+          compilerOptions: { module: 1, target: 9, experimentalDecorators: true, emitDecoratorMetadata: true }
+        })
+        module._compile(outputText, file)
+      }
+      const { HealthService } = require(${JSON.stringify(resolve(__dirname, 'health.service'))})
+      const { normalizeCoreOptions } = require(${JSON.stringify(resolve(__dirname, '../core.options'))})
+      let seen = 0
+      process.on('unhandledRejection', () => { seen += 1 })
+      const options = normalizeCoreOptions()
+      const late = {
+        name: 'late',
+        check: () => {
+          Object.defineProperty(Object.prototype, 'then', { value: 1, configurable: true, writable: true })
+          return new Promise((_, reject) => setTimeout(() => reject(new Error('late')), 5))
+        }
+      }
+      new HealthService([late], options).checkReadiness()
+        .then(() => setTimeout(() => { console.log('unhandled=' + seen) }, 30))
+    `
+    const output = execFileSync(process.execPath, ['-e', script], {
+      cwd: resolve(__dirname, '../..'),
+      encoding: 'utf8'
+    })
+
+    expect(output.trim().split('\n').pop()).toBe('unhandled=0')
   })
 })
