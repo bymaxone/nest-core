@@ -114,8 +114,8 @@ as plain data`, naming the option), when it has more than 1000 keys, before any 
   frozen promise rejects, the rejection stays unhandled; the readiness verdict is still not ready.
 - Replacements made before this package loads, and a `then` planted after the check on an indicator's own
   promise, are outside what the guard can see. One of them is refused: importing the package throws when
-  `Promise.prototype.constructor` is not a function whose `prototype` is `Promise.prototype`, so a slot set to
-  another constructor never builds the verdict promises. A function that passes that check is not detected.
+  the `prototype` of `Promise.prototype.constructor` is not `Promise.prototype`, so a slot set to
+  another constructor never builds the verdict promises. A replacement that passes that check is not detected.
 - The response guard does not yet cover the native writers `writeHead`, `removeHeader`, `writeContinue` and
   `writeEarlyHints`; they are scheduled for 1.6.23.
 
