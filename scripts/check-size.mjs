@@ -313,8 +313,11 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 // and `./http` 8.25 KiB (measured 8.24). The growth is code, with no module added to a bundle: the getter and setter held
 // beside the value of every watched name, so an accessor `then` is as visible as a data property, and the try/catch that
 // marks a refused check handled before the refusal is thrown.
+// 2026-11-24, third correction of the 16b batch: root 28.65 KiB (measured 28.63, 29317 B). The growth is code, with no
+// module added to a bundle: the own intrinsic `constructor` given to a promise before it is awaited, the guard-refusal
+// test, the second check after a scrape or a probe starts, and the scrape's `runtime` refusal with its log line.
 const BUDGETS = [
-  { name: '. (root)', path: 'dist/index.mjs', brotli: 28.28 * 1024 },
+  { name: '. (root)', path: 'dist/index.mjs', brotli: 28.65 * 1024 },
   { name: './pagination', path: 'dist/pagination/index.mjs', brotli: 1.5 * 1024 },
   { name: './health', path: 'dist/health/index.mjs', brotli: 0.5 * 1024 },
   { name: './openapi', path: 'dist/openapi/index.mjs', brotli: 10.82 * 1024 },

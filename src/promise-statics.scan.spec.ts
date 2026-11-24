@@ -3,7 +3,7 @@
  *
  * Layer: unit.
  * Goal: no non-spec file under `src` reaches a `Promise` static (by dot, bracket, alias, destructuring,
- * `globalThis` or `.call`) or attaches `.then`, `.catch` or `.finally`, except at the sites listed here
+ * `globalThis` or `.call`) builds one with `new Promise`, or attaches `.then`, `.catch` or `.finally`, except at the sites listed here
  * with the reason each may. A verdict that reads one can be answered by a function a host planted after load.
  * Mocks: none; reads the tracked source files.
  */
@@ -19,7 +19,8 @@ const REACH = new RegExp(
     String.raw`[=(,]\s*Promise\b(?!\s*[<(.\[])`,
     String.raw`\bglobalThis\b[^\n]*\bPromise\b`,
     String.raw`\.\s*(?:then|catch|finally)\s*\(`,
-    String.raw`\bthen\s*\.\s*(?:call|apply|bind)\b`
+    String.raw`\bthen\s*\.\s*(?:call|apply|bind)\b`,
+    String.raw`\bnew\s+Promise\b`
   ].join('|')
 )
 
@@ -97,7 +98,10 @@ describe('Promise statics in src', () => {
     'work().catch(a)',
     'work().finally(a)',
     'then.call(x, a, b)',
-    'const r = race.call(Promise, [x])'
+    'const r = race.call(Promise, [x])',
+    'const p = new Promise(() => {})',
+    'return new Promise<string>((r) => r(x))',
+    'await new Promise(() => {})'
   ])('matches %s', (line) => {
     expect(REACH.test(code(line))).toBe(true)
   })

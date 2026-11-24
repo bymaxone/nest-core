@@ -3,6 +3,8 @@
  * this package loaded, and puts them back.
  * @layer tests
  */
+import { execFileSync } from 'node:child_process'
+import { resolve } from 'node:path'
 
 /** The statics a verdict must never read. */
 export const STATICS = ['race', 'all', 'allSettled', 'any', 'resolve', 'reject'] as const
@@ -86,4 +88,29 @@ export function loadUnderForeignPromise<T>(forged: unknown, load: () => T): T {
   } finally {
     globalThis.Promise = NativePromise
   }
+}
+
+/**
+ * Run `body` in a fresh Node process that can `require` this package's TypeScript, and return its last
+ * line of output: jest observes no unhandled rejection of its own, so those rows count them in a child.
+ *
+ * @param body - A script; `require` resolves from the repository root.
+ * @returns The last line the script printed.
+ */
+export function lastLineFromChild(body: string): string {
+  const script = `
+    const ts = require('typescript')
+    require.extensions['.ts'] = (module, file) => {
+      const { outputText } = ts.transpileModule(require('node:fs').readFileSync(file, 'utf8'), {
+        compilerOptions: { module: 1, target: 9, experimentalDecorators: true, emitDecoratorMetadata: true }
+      })
+      module._compile(outputText, file)
+    }
+    ${body}
+  `
+  const output = execFileSync(process.execPath, ['-e', script], {
+    cwd: resolve(__dirname, '../..'),
+    encoding: 'utf8'
+  })
+  return output.trim().split('\n').pop() as string
 }

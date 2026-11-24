@@ -52,7 +52,7 @@ function slotOf(descriptor: PropertyDescriptor | undefined): Slot {
   return [field(descriptor, 'value'), field(descriptor, 'get'), field(descriptor, 'set')]
 }
 
-/** Each `[owner, names]` with the value of every name at load: `[owner, names, values]`. */
+/** Each `[owner, names]` with the `[value, get, set]` slot of every name at load: `[owner, names, slots]`. */
 function capture(list: ReadonlyArray<readonly [object, readonly PropertyKey[]]>): Watched {
   return list.map(([owner, names]) => [
     owner,
@@ -64,7 +64,8 @@ function capture(list: ReadonlyArray<readonly [object, readonly PropertyKey[]]>)
 /**
  * What a promise's settling reads: `await` reads the `constructor` of a native promise, and resolving
  * with an object reads its `then` along the object's chain. The public `then` of `Promise.prototype` is
- * left alone, as an instrumented host replaces it and `await` never calls it.
+ * not watched, as an instrumented host replaces it: while `constructor` is the intrinsic, `await` does
+ * not call it, and once `constructor` is replaced the `await` has already read what it is not safe to read.
  */
 const PROMISE_WATCHED: Watched = capture([
   [PromisePrototype, ['constructor']],
@@ -175,6 +176,37 @@ export function builtinsAltered(): boolean {
 /** Whether what a promise's settling reads is not as at load; a verdict that is about to await must refuse. */
 export function promiseAltered(): boolean {
   return changed(PROMISE_WATCHED) > 0
+}
+
+/**
+ * Give a native promise its own `constructor`, the intrinsic one, so an `await` of it never reads the
+ * prototype's, which may be a getter that throws or a replacement that builds the answer. A promise from
+ * another source (a thenable, a subclass) is left as it is.
+ *
+ * @param promise - The promise about to be awaited.
+ */
+export function ownIntrinsicConstructor(promise: object): void {
+  if (getPrototypeOf(promise) !== PromisePrototype) return
+  try {
+    defineProperty(promise, 'constructor', {
+      __proto__: null,
+      value: IntrinsicPromise,
+      writable: true,
+      configurable: true
+    } as PropertyDescriptor)
+  } catch {
+    // A frozen promise keeps the constructor it has.
+  }
+}
+
+/** Whether `error` is what `assertPromiseIntact` or `assertObjectPrototypeClean` throws. */
+export function isGuardRefusal(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    getPrototypeOf(error) === ErrorConstructor.prototype &&
+    hasOwn(error, 'count')
+  )
 }
 
 /**

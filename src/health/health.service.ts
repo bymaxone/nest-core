@@ -27,7 +27,12 @@ import {
 } from '../core.tokens'
 import type { ProviderScanner } from '../discovery'
 import { asHostError } from '../host-error'
-import { assertPromiseIntact, promiseAltered } from '../object-prototype'
+import {
+  assertPromiseIntact,
+  isGuardRefusal,
+  ownIntrinsicConstructor,
+  promiseAltered
+} from '../object-prototype'
 import { ignoreRejection, settleFirst } from '../settle'
 import { writeLog } from '../write-log'
 import { discoverIndicators, mergeIndicators, nameIndicators } from './health.discovery'
@@ -569,17 +574,20 @@ export class HealthService implements OnApplicationBootstrap, BeforeApplicationS
     if (this.draining) {
       return outcomeOf({ status: 'error', checks: [{ name: 'shutdown', status: 'down' }] })
     }
-    // No user code runs between this and the `await` below, so the read the `await` makes is checked.
+    // The clock is read first, so no built-in a host can replace runs between the checks and the `await`.
+    const now = performance.now()
     if (promiseAltered()) return this.refused()
     const cached = this.cached
-    if (
-      cached !== undefined &&
-      performance.now() - cached.at < this.options.health.readinessCacheMs
-    ) {
+    if (cached !== undefined && now - cached.at < this.options.health.readinessCacheMs) {
       return cached.response
     }
-    this.inflight ??= this.runReadiness()
-    return await this.inflight
+    const run = (this.inflight ??= this.runReadiness())
+    // Starting a run calls indicator code: the check is made again after it, right before the `await`.
+    if (promiseAltered()) {
+      ignoreRejection(run)
+      return this.refused()
+    }
+    return await run
   }
 
   /**
@@ -611,9 +619,13 @@ export class HealthService implements OnApplicationBootstrap, BeforeApplicationS
    */
   private async runReadiness(): Promise<HealthResponse> {
     try {
-      return await this.collect()
+      const collecting = this.collect()
+      // Its own constructor, so the `await` reads none from the prototype: a swapped one would answer
+      // for the run and leave a refusal of `collect` unhandled.
+      ownIntrinsicConstructor(collecting)
+      return await collecting
     } catch (cause) {
-      if (!promiseAltered()) throw cause
+      if (!isGuardRefusal(cause) && !promiseAltered()) throw cause
       return this.refused()
     } finally {
       this.inflight = undefined

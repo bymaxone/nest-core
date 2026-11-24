@@ -4,7 +4,7 @@
  * replace. `await` reads only `Promise.prototype.constructor`, which `object-prototype` watches.
  * @layer Utility
  */
-import { IntrinsicPromise, assertPromiseIntact } from './object-prototype'
+import { IntrinsicPromise, assertPromiseIntact, ownIntrinsicConstructor } from './object-prototype'
 
 const NativePromise = IntrinsicPromise
 
@@ -56,6 +56,9 @@ export function ignoreRejection(
   promise: PromiseLike<unknown>,
   onFailure?: (reason: unknown) => void
 ): void {
+  // Its own constructor first: the `await` below must not read the prototype's, which is altered
+  // exactly when a refusal calls this.
+  ownIntrinsicConstructor(promise)
   void (async (): Promise<void> => {
     try {
       await promise
