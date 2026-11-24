@@ -63,6 +63,34 @@ describe('InMemoryIdempotencyStore', () => {
     })
   })
 
+  it('refuses a second complete and keeps the first answer', async () => {
+    const { store } = storeWithClock()
+    const claim = await store.begin('k', 'fp', 60)
+    if (!claim.claimed) throw new Error('expected a claim')
+    await store.complete('k', claim.token, RESPONSE, 3600)
+
+    const other = { status: 200, headers: {}, body: '{"other":true}' }
+    await expect(store.complete('k', claim.token, other, 3600)).resolves.toBe(false)
+
+    await expect(store.begin('k', 'fp', 60)).resolves.toMatchObject({
+      record: { response: RESPONSE }
+    })
+  })
+
+  it('refuses a release after complete and keeps the completed record', async () => {
+    const { store } = storeWithClock()
+    const claim = await store.begin('k', 'fp', 60)
+    if (!claim.claimed) throw new Error('expected a claim')
+    await store.complete('k', claim.token, RESPONSE, 3600)
+
+    await expect(store.release('k', claim.token)).resolves.toBe(false)
+
+    await expect(store.begin('k', 'fp', 60)).resolves.toMatchObject({
+      claimed: false,
+      record: { state: 'completed', response: RESPONSE }
+    })
+  })
+
   it('frees the key on release so a retry can claim it', async () => {
     const { store } = storeWithClock()
     const claim = await store.begin('k', 'fp', 60)

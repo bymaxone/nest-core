@@ -64,7 +64,9 @@ export class InMemoryIdempotencyStore implements IIdempotencyStore {
     ttlSeconds: number
   ): Promise<boolean> {
     const held = this.live(key)
-    if (held === undefined || held.token !== token) return false
+    if (held === undefined || held.token !== token || held.record.state !== 'in_progress') {
+      return false
+    }
     held.record = { state: 'completed', fingerprint: held.record.fingerprint, response }
     held.expiresAt = this.now() + ttlSeconds * 1000
     return true
@@ -73,7 +75,9 @@ export class InMemoryIdempotencyStore implements IIdempotencyStore {
   /** @inheritdoc */
   async release(key: string, token: string): Promise<boolean> {
     const held = this.live(key)
-    if (held === undefined || held.token !== token) return false
+    if (held === undefined || held.token !== token || held.record.state !== 'in_progress') {
+      return false
+    }
     this.entries.delete(key)
     return true
   }

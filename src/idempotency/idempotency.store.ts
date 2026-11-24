@@ -64,10 +64,37 @@ export type IdempotencyBeginResult =
 /**
  * The store of idempotency claims and answers.
  *
- * Every method is addressed by an already-hashed key: the raw `Idempotency-Key` header never reaches
- * a store. A store shared by several processes must make `begin` one atomic set-if-absent carrying
- * the lease as its expiry, and `complete` and `release` one compare-and-set on the token: without
- * that, two callers can both claim a key, or a late caller can overwrite a newer holder's record.
+ * **Keys.** Every method is addressed by an already-hashed key: lower-case hexadecimal, 64
+ * characters (SHA-256). The raw `Idempotency-Key` header never reaches a store, so a store may use
+ * the key verbatim as a storage key.
+ *
+ * **Atomicity.** A store shared by several processes must make `begin` one atomic set-if-absent
+ * carrying the lease as its expiry, and `complete` and `release` one compare-and-set on the token:
+ * without that, two callers can both claim a key, or a late caller can overwrite a newer holder's
+ * record.
+ *
+ * **Durations.** `leaseSeconds` and `ttlSeconds` are positive integers (a Redis `EX` argument
+ * needs one); the interceptor validates them at boot, so a store may rely on it.
+ *
+ * **Failure.** A store that cannot answer REJECTS. It never returns `claimed: true` or an invented
+ * record for a key it could not check. The interceptor maps a rejection to
+ * `503 BYMAX_IDEMPOTENCY_STORE_UNAVAILABLE`, or runs the handler unprotected when the route opted
+ * into `fail-open`. A store that refuses a new key because it is full is the same case, and
+ * rejects.
+ *
+ * **Bounds.** The interceptor owns the size bounds and checks them before it calls `complete`: the
+ * stored body is at most `maxBodyBytes` (default 64 KiB) and the serialised headers at most 65,536
+ * bytes. A response over either bound is stored without its body and headers, so the record reads as
+ * completed but not replayable, and a store never receives an oversized value. A store may still
+ * enforce its own limit; its `complete` then rejects.
+ *
+ * **A rejected `complete`.** The claim is not released: it stays until its lease ends, so the key
+ * never runs twice at once, and the client receives the handler's own response. The interceptor
+ * logs a warning. A retry in that window is told the request is in progress.
+ *
+ * **Lease.** A claim whose holder never answers, or whose answer was lost after the handler
+ * succeeded, stays `in_progress` until its lease ends: a retry in that window is told the request
+ * is in progress. Choose the lease with that wait in mind.
  */
 export interface IIdempotencyStore {
   /**
@@ -81,13 +108,15 @@ export interface IIdempotencyStore {
   begin(key: string, fingerprint: string, leaseSeconds: number): Promise<IdempotencyBeginResult>
 
   /**
-   * Turn the claim into a completed record, only while `token` still holds the key.
+   * Turn the claim into a completed record, only while `token` still holds the key and the record
+   * is still `in_progress`.
    *
    * @param key - The hashed storage key.
    * @param token - The token `begin` returned.
    * @param response - The answer to store.
    * @param ttlSeconds - How long the completed record lives.
-   * @returns `true` when the record was written, `false` when the claim was no longer the caller's.
+   * @returns `true` when the record was written. `false` when nothing was written: the claim
+   *   expired, another holder took the key over, or the record is already completed.
    */
   complete(
     key: string,
@@ -97,11 +126,14 @@ export interface IIdempotencyStore {
   ): Promise<boolean>
 
   /**
-   * Drop the claim so the request can be retried, only while `token` still holds the key.
+   * Drop the claim so the request can be retried, only while `token` still holds the key and the
+   * record is still `in_progress`. A completed record is never dropped, so a late release on an
+   * error path cannot make finished work run twice.
    *
    * @param key - The hashed storage key.
    * @param token - The token `begin` returned.
-   * @returns `true` when the claim was dropped, `false` when it was no longer the caller's.
+   * @returns `true` when the claim was dropped. `false` when nothing was dropped: the claim
+   *   expired, another holder took the key over, or the record is already completed.
    */
   release(key: string, token: string): Promise<boolean>
 }
