@@ -457,7 +457,7 @@ describe('applyBymaxOpenApi', () => {
    */
   it('keeps the version in the published operation id', async () => {
     process.env['NODE_ENV'] = 'test'
-    app = await bootApp({ openapi: { enabled: true } })
+    app = await bootApp({ openapi: { enabled: true } }, [ExampleController])
     app.enableVersioning({ type: VersioningType.URI, defaultVersion: '2' })
     const swagger = await import('@nestjs/swagger')
     const config = new swagger.DocumentBuilder().setTitle('t').setVersion('1').build()
@@ -467,8 +467,11 @@ describe('applyBymaxOpenApi', () => {
     await app.init()
     const ourIds = operationIdsOf((await request(app.getHttpServer()).get('/docs-json')).body)
 
-    expect(ourIds).not.toEqual([])
-    expect(ourIds.every((id) => id.endsWith('_v2'))).toBe(true)
+    const neutral = ourIds.filter((id) => /^(Health|Metrics)Controller_/.test(id))
+    const versioned = ourIds.filter((id) => !neutral.includes(id))
+    expect(versioned).not.toEqual([])
+    expect(versioned.every((id) => id.endsWith('_v2'))).toBe(true)
+    expect(neutral.some((id) => id.endsWith('_v2'))).toBe(false)
     expect(ourIds).toEqual(peerIds)
   })
 

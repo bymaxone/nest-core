@@ -12,6 +12,18 @@ heading here.
 
 ## [Unreleased]
 
+**Fixed:**
+
+- The health and metrics routes are `VERSION_NEUTRAL`: they answer at the path `health.path` and
+  `metrics.path` name whatever versioning the host enables. With `enableVersioning({ type: URI,
+defaultVersion: '1' })` they were served at `/v1/health/*` and `/v1/metrics`, so a probe or scraper configured
+  with the option path got `404`; with header or media-type versioning they answered only when the request
+  carried the default version. The OpenAPI document lists them at the configured path.
+
+**Apply to a derived backend:** a host that enabled URI versioning with a default version and points a probe
+or scraper at `/v1/health/...` or `/v1/metrics` must move it to `/health/...` and `/metrics` (or whatever
+`health.path` and `metrics.path` say).
+
 ## [1.6.22] - 2026-11-24
 
 A patch release. A request can be bounded as a whole, guards included, and the `Object.prototype` guard reads

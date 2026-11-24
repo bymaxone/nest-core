@@ -26,8 +26,8 @@
  * decide the answer, because there is nothing else to decide it with.
  * @layer Bootstrap
  */
-import { Logger, VERSION_NEUTRAL, VersioningType } from '@nestjs/common'
-import type { INestApplication, VersioningOptions } from '@nestjs/common'
+import { Logger } from '@nestjs/common'
+import type { INestApplication } from '@nestjs/common'
 import { ApplicationConfig, DiscoveryService, Reflector } from '@nestjs/core'
 import type * as Swagger from '@nestjs/swagger'
 
@@ -117,8 +117,8 @@ function resolveCoreOptions(app: INestApplication): ResolvedCoreOptions {
  *
  * `ApplicationConfig` is framework-internal rather than a documented contract,
  * so a future Nest release could stop providing it under that token. Failing to
- * mount a document over that would be a poor trade: an application with neither
- * a prefix nor URI versioning — the majority — is unaffected, and the rest
+ * mount a document over that would be a poor trade: an application with no
+ * global prefix — the majority — is unaffected, and the rest
  * merely stop having this package's own routes recognized.
  *
  * @param app - The initialized Nest application.
@@ -133,61 +133,22 @@ function readAppConfig(app: INestApplication): ApplicationConfig | undefined {
 }
 
 /**
- * The URI segments versioning inserts into a documented path, or `['']` when it
- * inserts none.
- *
- * Only `VersioningType.URI` rewrites paths — header, media-type and custom
- * versioning leave them alone, which is why the type is checked rather than the
- * mere presence of a configuration. Measured against the real scan rather than
- * assumed: `defaultVersion: '1'` documents `/v1/health/live`, `prefix: 'rev'`
- * with version `'2'` documents `/rev2/health/live`, an array documents the
- * route once per version, and `VERSION_NEUTRAL` documents no segment at all.
- *
- * The controllers this package registers declare no version of their own, so
- * they take the default — which is the only case this needs to reproduce.
- *
- * @param versioning - The application's versioning options, if any.
- * @returns The candidate segments, `['']` when the paths carry none.
- */
-function versionSegments(versioning: VersioningOptions | undefined): readonly string[] {
-  if (versioning === undefined || versioning.type !== VersioningType.URI) {
-    return ['']
-  }
-  const prefix = versioning.prefix === false ? '' : (versioning.prefix ?? 'v')
-  const declared = versioning.defaultVersion
-  if (declared === undefined) {
-    return ['']
-  }
-  const versions = Array.isArray(declared) ? declared : [declared]
-  return versions.map((version) =>
-    version === VERSION_NEUTRAL ? '' : `${prefix}${String(version)}`
-  )
-}
-
-/**
  * Every path prefix this package's own routes can appear under.
  *
  * `@nestjs/swagger` documents paths as the application serves them, so a route
- * this package registered as `health/live` is documented as
- * `/api/v1/health/live` under a global prefix of `api` and URI version `1` —
- * the version segment following the prefix, measured, not assumed. Recognizing
- * its own routes means reproducing that composition; guessing it from the
- * document instead would mistake a consumer's shared controller prefix for the
- * application's own.
+ * this package registered as `health/live` is documented as `/api/health/live`
+ * under a global prefix of `api`. The controllers this package registers are
+ * `VERSION_NEUTRAL`, so no URI version segment is ever part of their path.
+ * Recognizing its own routes means reproducing that composition; guessing it
+ * from the document instead would mistake a consumer's shared controller prefix
+ * for the application's own.
  *
  * @param app - The initialized Nest application.
  * @returns The prefixes to try, each without surrounding slashes.
  */
 function readPathPrefixes(app: INestApplication): readonly string[] {
   const config = readAppConfig(app)
-  if (config === undefined) {
-    return ['']
-  }
-  const globalPrefix = config.getGlobalPrefix()
-  // Joined unconditionally: either part may be empty, and the empty segments
-  // that produces are dropped when the prefix is normalized on the way in. A
-  // filter here would be a second place to keep that rule.
-  return versionSegments(config.getVersioning()).map((segment) => `${globalPrefix}/${segment}`)
+  return [config === undefined ? '' : `${config.getGlobalPrefix()}/`]
 }
 
 /**

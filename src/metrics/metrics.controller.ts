@@ -26,7 +26,8 @@ import {
   Req,
   Res,
   ServiceUnavailableException,
-  UnauthorizedException
+  UnauthorizedException,
+  VERSION_NEUTRAL
 } from '@nestjs/common'
 import type { Type } from '@nestjs/common'
 import { HttpAdapterHost } from '@nestjs/core'
@@ -234,7 +235,7 @@ function newScrapeRun(scrapeTimeoutMs: number): ScrapeRun {
  * @returns A controller class ready to be added to a module's `controllers` array.
  */
 export function createMetricsController(registeredPath: string): Type<object> {
-  @Controller(registeredPath)
+  @Controller({ path: registeredPath, version: VERSION_NEUTRAL })
   class MetricsController {
     private readonly parts: ScrapeParts
 
