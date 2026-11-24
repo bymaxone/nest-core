@@ -320,13 +320,17 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 // with no module added to a bundle: `ownIntrinsicConstructor` returning its argument and ignoring what is not a native
 // promise, its use inside the readiness controller's and the collection's `await`, and the refusal translated to `503`
 // when it is raised after a collection started.
+// 2026-11-24, the load-time check of the intrinsic constructor: root 28.82 KiB (measured 28.79, 29482 B), `./openapi` 10.87 KiB
+// (measured 10.85, 11111 B) and `./http` 8.30 KiB (measured 8.28, 8474 B). The growth is code, with no module added to a
+// bundle: the comparison of the constructor's `prototype` with the prototype of an async function's promise, and the throw
+// that refuses the import, inlined in every subpath.
 const BUDGETS = [
-  { name: '. (root)', path: 'dist/index.mjs', brotli: 28.76 * 1024 },
+  { name: '. (root)', path: 'dist/index.mjs', brotli: 28.82 * 1024 },
   { name: './pagination', path: 'dist/pagination/index.mjs', brotli: 1.5 * 1024 },
   { name: './health', path: 'dist/health/index.mjs', brotli: 0.5 * 1024 },
-  { name: './openapi', path: 'dist/openapi/index.mjs', brotli: 10.82 * 1024 },
+  { name: './openapi', path: 'dist/openapi/index.mjs', brotli: 10.87 * 1024 },
   { name: './metrics', path: 'dist/metrics/index.mjs', brotli: 0.5 * 1024 },
-  { name: './http', path: 'dist/http/index.mjs', brotli: 8.25 * 1024 }
+  { name: './http', path: 'dist/http/index.mjs', brotli: 8.3 * 1024 }
 ]
 
 const fmt = (n) => `${(n / 1024).toFixed(2)} kB`

@@ -522,7 +522,7 @@ describe('the intrinsic Promise this package builds its verdict promises with', 
     try {
       jest.isolateModules(() => {
         expect(() => jest.requireActual('./object-prototype')).toThrow(
-          'Promise.prototype.constructor is not the intrinsic Promise at load'
+          'Promise.prototype.constructor is not intrinsic'
         )
       })
     } finally {
