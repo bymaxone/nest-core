@@ -344,7 +344,8 @@ const BUDGETS = [
   { name: './health', path: 'dist/health/index.mjs', brotli: 0.5 * 1024 },
   { name: './openapi', path: 'dist/openapi/index.mjs', brotli: 11.02 * 1024 },
   { name: './metrics', path: 'dist/metrics/index.mjs', brotli: 0.5 * 1024 },
-  { name: './http', path: 'dist/http/index.mjs', brotli: 8.6 * 1024 }
+  { name: './http', path: 'dist/http/index.mjs', brotli: 8.6 * 1024 },
+  { name: './idempotency', path: 'dist/idempotency/index.mjs', brotli: 1 * 1024 }
 ]
 
 const fmt = (n) => `${(n / 1024).toFixed(2)} kB`

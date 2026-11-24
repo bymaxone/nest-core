@@ -9,7 +9,8 @@ export default defineConfig({
     'health/index': 'src/health/index.ts',
     'openapi/index': 'src/openapi/index.ts',
     'metrics/index': 'src/metrics/index.ts',
-    'http/index': 'src/http/index.ts'
+    'http/index': 'src/http/index.ts',
+    'idempotency/index': 'src/idempotency/index.ts'
   },
   format: ['esm', 'cjs'],
   dts: true,

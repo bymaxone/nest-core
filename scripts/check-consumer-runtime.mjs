@@ -95,6 +95,7 @@ const SUBPATHS = {
   ],
   './openapi': ['applyBymaxOpenApi'],
   './http': ['applyHttpFloors'],
+  './idempotency': ['BYMAX_IDEMPOTENCY_STORE', 'InMemoryIdempotencyStore'],
   './metrics': ['BymaxMetricsContributor', 'BYMAX_METRICS_CONTRIBUTOR_METADATA']
 }
 
