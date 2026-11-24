@@ -15,7 +15,13 @@ import type { IHealthIndicator } from './health/health.interfaces'
 import { HealthService } from './health/health.service'
 import { createMetricsController } from './metrics/metrics.controller'
 import type { MetricsRegistry } from './metrics/metrics.registry'
-import { hear, isGuardRefusal, ownIntrinsicConstructor, pinned } from './object-prototype'
+import {
+  afterSettled,
+  hear,
+  isGuardRefusal,
+  ownIntrinsicConstructor,
+  pinned
+} from './object-prototype'
 import { ignoreRejection, settleFirst } from './settle'
 
 /** A rejected native promise that a host pinned a foreign `constructor` on and gave a `then` that answers up. */
@@ -128,5 +134,92 @@ describe('a native promise with an own constructor and an own then', () => {
 
   it('is heard without throwing when the intrinsic then does not accept the value', () => {
     expect(() => hear({} as PromiseLike<unknown>)).not.toThrow()
+  })
+
+  /** A pending native promise with a foreign own `constructor` and an own `then`, and the way to settle it. */
+  function pendingForged(): { promise: Promise<never>; finish: () => void } {
+    let finish: () => void = () => undefined
+    const promise = new Promise<never>((resolve) => {
+      finish = () => resolve(undefined as never)
+    })
+    Object.defineProperty(promise, 'constructor', {
+      value: function Forged() {},
+      writable: false,
+      configurable: false
+    })
+    Object.defineProperty(promise, 'then', {
+      value: (ok: (value: unknown) => void) => ok({ status: 'up' }),
+      configurable: true
+    })
+    return { promise, finish }
+  }
+
+  it('aborts the signal of an indicator whose pending work carries own slots', async () => {
+    let signal: AbortSignal | undefined
+    const stuck: IHealthIndicator = {
+      name: 'db',
+      check: (given?: AbortSignal) => {
+        signal = given
+        return pendingForged().promise as never
+      }
+    }
+    const service = new HealthService(
+      [stuck],
+      normalizeCoreOptions({ health: { indicatorTimeoutMs: 5_000 } })
+    )
+
+    const verdict = await service.checkReadiness()
+
+    expect(verdict.status).toBe('error')
+    expect(signal?.aborted).toBe(true)
+  })
+
+  it('keeps the run in flight until a refused pending collection settles', async () => {
+    const { promise, finish } = pendingForged()
+    let ended = 0
+    const refused = await settleFirst(
+      () => promise,
+      () => () => void (ended += 1)
+    ).then(
+      () => undefined,
+      (error: unknown) => error
+    )
+    await settled()
+
+    expect(isGuardRefusal(refused)).toBe(true)
+    expect(ended).toBe(0)
+
+    finish()
+    await settled()
+
+    expect(ended).toBe(1)
+  })
+
+  it('starts no second collection while a refused scrape collection is pending', async () => {
+    const { promise, finish } = pendingForged()
+    const metrics = jest.fn(() => promise)
+    const registry = { metrics, contentType: 'text/plain' } as unknown as MetricsRegistry
+    const adapterHost = {
+      httpAdapter: { setHeader: () => undefined, reply: () => undefined }
+    } as unknown as HttpAdapterHost
+    const Controller = createMetricsController('metrics')
+    const instance = new Controller(
+      registry,
+      normalizeCoreOptions({ metrics: { enabled: true, path: 'metrics' } }),
+      adapterHost
+    ) as unknown as { scrape(response: unknown, request: object): Promise<void> }
+
+    const first = instance.scrape({}, {}).catch((thrown: unknown) => thrown)
+    await settled()
+    const second = instance.scrape({}, {}).catch((thrown: unknown) => thrown)
+    finish()
+    const answers = await Promise.all([first, second])
+
+    expect(metrics).toHaveBeenCalledTimes(1)
+    expect(answers.every((answer) => answer instanceof ServiceUnavailableException)).toBe(true)
+  })
+
+  it('resolves afterSettled for a value the intrinsic then does not accept', async () => {
+    await expect(afterSettled({} as PromiseLike<unknown>)).resolves.toBeUndefined()
   })
 })

@@ -139,6 +139,7 @@ async function checkIndicator(
     const returned = indicator.check(controller.signal)
     try {
       assertPromiseIntact()
+      ownIntrinsicConstructor(returned)
     } catch (refusal) {
       ignoreRejection(returned)
       controller.abort()

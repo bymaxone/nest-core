@@ -6,6 +6,7 @@
  */
 import {
   IntrinsicPromise,
+  afterSettled,
   assertPromiseIntact,
   hear,
   ownIntrinsicConstructor,
@@ -38,10 +39,11 @@ export function settleFirst<T>(work: () => T | PromiseLike<T>, arm: Arm<T>): Pro
       const pending = work()
       try {
         assertPromiseIntact()
+        ownIntrinsicConstructor(pending)
       } catch (refusal) {
         ignoreRejection(pending as PromiseLike<unknown>)
         lose(refusal)
-        await pending
+        await ownIntrinsicConstructor(afterSettled(pending as PromiseLike<unknown>))
         return
       }
       win(await ownIntrinsicConstructor(pending))
@@ -66,7 +68,10 @@ export function ignoreRejection(
 ): void {
   // Its own constructor first: the `await` below must not read the prototype's, which is altered
   // exactly when a refusal calls this. A promise that cannot be pinned is heard through the intrinsic `then`.
-  if (!pinned(promise)) return hear(promise, onFailure)
+  if (!pinned(promise)) {
+    hear(promise, onFailure)
+    return
+  }
   void (async (): Promise<void> => {
     try {
       await promise

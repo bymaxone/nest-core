@@ -34,10 +34,12 @@ import { HttpAdapterHost } from '@nestjs/core'
 import type { ResolvedCoreOptions } from '../core.options'
 import { BYMAX_CORE_OPTIONS, BYMAX_METRICS_REGISTRY } from '../core.tokens'
 import {
+  afterSettled,
   assertObjectPrototypeClean,
   assertPromiseIntact,
   isGuardRefusal,
-  ownIntrinsicConstructor
+  ownIntrinsicConstructor,
+  pinned
 } from '../object-prototype'
 import { assertAsyncFeatureEnabled } from '../passthrough.providers'
 import type { MetricsRegistry } from './metrics.registry'
@@ -143,7 +145,10 @@ function assertRuntimeClean(check: () => void): void {
 /** The registry's text, with any failure of a collector answered `503` and never left unhandled. */
 async function collectOrRefuse(registry: MetricsRegistry): Promise<string> {
   try {
-    return await ownIntrinsicConstructor(registry.metrics())
+    const collecting = registry.metrics()
+    // A promise that cannot be awaited keeps the run in flight until it settles, then is refused.
+    if (!pinned(collecting)) await ownIntrinsicConstructor(afterSettled(collecting))
+    return await ownIntrinsicConstructor(collecting)
   } catch (cause) {
     throw new ServiceUnavailableException('Metrics collection failed', { cause })
   }

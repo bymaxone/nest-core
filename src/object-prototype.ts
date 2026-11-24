@@ -227,16 +227,25 @@ export function pinned(promise: unknown): boolean {
   }
 }
 
-/** Mark `promise` handled through the intrinsic `then`; `onFailure` must not throw. */
+/** Mark `promise` handled through the intrinsic `then`; the handlers must not throw. */
 export function hear(
   promise: PromiseLike<unknown>,
-  onFailure: (reason: unknown) => void = noop
-): void {
+  onFailure: (reason: unknown) => void = noop,
+  onSuccess?: (value: unknown) => void
+): boolean {
   try {
-    apply(IntrinsicThen, promise, [undefined, onFailure])
+    apply(IntrinsicThen, promise, [onSuccess, onFailure])
+    return true
   } catch {
-    // Not a promise the intrinsic `then` accepts.
+    return false
   }
+}
+
+/** Resolves once `promise` settled, read through the intrinsic `then`, so its own slots cannot answer. */
+export function afterSettled(promise: PromiseLike<unknown>): Promise<unknown> {
+  return new IntrinsicPromise<unknown>((done) => {
+    if (!hear(promise, done, done)) done(undefined)
+  })
 }
 
 /** Does nothing. */
