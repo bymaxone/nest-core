@@ -297,25 +297,43 @@ describe('applyBymaxOpenApi', () => {
   })
 
   /**
-   * The scrape route is recognised, and removed when disabled, under every versioning shape.
-   *
-   * The package's controllers are `VERSION_NEUTRAL`, so the peer documents the route at
-   * `/metrics` whatever the application's versioning: no URI version segment is inserted.
-   * Asserted through the served document rather than on a private helper, so it is pinned to what a
-   * consumer actually gets.
+   * The scrape route is removed when disabled under every versioning shape, and is documented
+   * nowhere under a version segment: the controllers are `VERSION_NEUTRAL`, so each row names the
+   * path a versioned controller would have produced beside `/metrics`.
    */
   it.each([
-    ['a default version', { type: VersioningType.URI, defaultVersion: '1' }],
-    ['a custom version prefix', { type: VersioningType.URI, defaultVersion: '2', prefix: 'rev' }],
-    ['no version prefix', { type: VersioningType.URI, defaultVersion: '3', prefix: false }],
-    ['several default versions', { type: VersioningType.URI, defaultVersion: ['1', '2'] }],
-    ['a neutral default version', { type: VersioningType.URI, defaultVersion: VERSION_NEUTRAL }],
+    [
+      'a default version',
+      { type: VersioningType.URI, defaultVersion: '1' },
+      ['/metrics', '/v1/metrics']
+    ],
+    [
+      'a custom version prefix',
+      { type: VersioningType.URI, defaultVersion: '2', prefix: 'rev' },
+      ['/metrics', '/rev2/metrics']
+    ],
+    [
+      'no version prefix',
+      { type: VersioningType.URI, defaultVersion: '3', prefix: false },
+      ['/metrics', '/3/metrics']
+    ],
+    [
+      'several default versions',
+      { type: VersioningType.URI, defaultVersion: ['1', '2'] },
+      ['/metrics', '/v1/metrics', '/v2/metrics']
+    ],
+    [
+      'a neutral default version',
+      { type: VersioningType.URI, defaultVersion: VERSION_NEUTRAL },
+      ['/metrics']
+    ],
     [
       'header versioning',
-      { type: VersioningType.HEADER, header: 'X-Version', defaultVersion: '1' }
+      { type: VersioningType.HEADER, header: 'X-Version', defaultVersion: '1' },
+      ['/metrics']
     ],
-    ['URI versioning with no default', { type: VersioningType.URI }]
-  ])('removes the disabled scrape route under %s', async (_label, versioning) => {
+    ['URI versioning with no default', { type: VersioningType.URI }, ['/metrics']]
+  ])('removes the disabled scrape route under %s', async (_label, versioning, documented) => {
     process.env['NODE_ENV'] = 'test'
     const moduleRef = await Test.createTestingModule({
       imports: [
@@ -334,15 +352,14 @@ describe('applyBymaxOpenApi', () => {
       unknown
     >
 
-    expect(paths).not.toHaveProperty('/metrics')
+    for (const route of documented) {
+      expect(paths).not.toHaveProperty(route)
+    }
   })
 
   /**
-   * The global prefix is part of the path the package's own routes are recognised by.
-   *
-   * The package's controllers are `VERSION_NEUTRAL`, so under a prefix and a URI default version
-   * the scrape endpoint is documented as `/api/metrics`, with no version segment. A recognition
-   * that ignored the prefix would leave the disabled route advertised.
+   * The global prefix is part of the path the package's own routes are recognised by: under a
+   * prefix and a URI default version the scrape endpoint is `/api/metrics`, with no version segment.
    */
   it('removes the disabled scrape route under a prefix and a version together', async () => {
     process.env['NODE_ENV'] = 'test'
@@ -368,12 +385,7 @@ describe('applyBymaxOpenApi', () => {
     expect(paths).not.toHaveProperty('/api/v1/metrics')
   })
 
-  /**
-   * The package's own health route keeps its schema under a global prefix.
-   *
-   * Recognition composes the prefix with the route's own path, so a recognition that lost the prefix
-   * would document `/api/health/live` as a consumer's route with no contributed schema.
-   */
+  /** The own health route keeps the package schema at its prefixed path. */
   it('documents the health route at its prefixed path with the package schema', async () => {
     process.env['NODE_ENV'] = 'test'
     const moduleRef = await Test.createTestingModule({
