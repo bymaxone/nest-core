@@ -24,6 +24,10 @@
     "reason": "Runs scripts/mutate-const-tables.mjs as a child process against throwaway projects and imports nothing from src, so it executes no mutated source."
   },
   {
+    "file": "src/promise-statics.scan.spec.ts",
+    "reason": "Lists the tracked files under src with `git ls-files` and reads each as text with `readFileSync`; its only imports are node:child_process, node:fs and node:path, so it loads nothing from src/ at run time and executes no mutated source. It checks the source text against a rule, as readme.observability.spec.ts does."
+  },
+  {
     "file": "src/readme.exports.spec.ts",
     "reason": "Reads the README and the export lists of the barrels through the TypeScript compiler API and imports nothing from src/ at run time, so it executes no mutated source; it checks the documentation against the public surface."
   },
