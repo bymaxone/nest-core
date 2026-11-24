@@ -521,6 +521,82 @@ describe('a refusal and the rejection it leaves behind', () => {
   })
 })
 
+describe('a refusal while Promise[Symbol.species] throws and the promise carries an own then', () => {
+  /** Plants a throwing species getter inside the work, and gives a promise its own `then`. */
+  const SPECIES = `
+    let seen = 0
+    process.on('unhandledRejection', () => { seen += 1 })
+    const species = () => Object.defineProperty(Promise, Symbol.species, { configurable: true, get() { throw new Error('species') } })
+    const own = (promise) => Object.defineProperty(promise, 'then', { value: Promise.prototype.then, configurable: true })
+    const later = (ms, fail) => own(new Promise((resolve, reject) => setTimeout(() => (fail ? reject(new Error('late')) : resolve()), ms)))
+    const report = () => setTimeout(() => console.log('unhandled=' + seen), 60)
+  `
+
+  it('leaves none when a refused indicator rejects afterwards', () => {
+    const output = lastLineFromChild(`
+      ${SPECIES}
+      const { HealthService } = require('./src/health/health.service')
+      const { normalizeCoreOptions } = require('./src/core.options')
+      const late = { name: 'late', check: () => { species(); return later(22, true) } }
+      new HealthService([late], normalizeCoreOptions()).checkReadiness().then(report, report)
+    `)
+
+    expect(output).toBe('unhandled=0')
+  })
+
+  it('leaves none when settleFirst refuses work that rejects afterwards', () => {
+    const output = lastLineFromChild(`
+      ${SPECIES}
+      const { settleFirst } = require('./src/settle')
+      settleFirst(() => { species(); return later(22, true) }, () => () => undefined).then(report, report)
+    `)
+
+    expect(output).toBe('unhandled=0')
+  })
+
+  it('leaves none when a refused scrape collection rejects afterwards', () => {
+    const output = lastLineFromChild(`
+      ${SPECIES}
+      const { createMetricsController } = require('./src/metrics/metrics.controller')
+      const { normalizeCoreOptions } = require('./src/core.options')
+      const registry = { contentType: 'text/plain', metrics: () => { species(); return later(22, true) } }
+      const host = { httpAdapter: { setHeader() {}, reply() {} } }
+      const Controller = createMetricsController('metrics')
+      new Controller(registry, normalizeCoreOptions({ metrics: { enabled: true, path: 'metrics' } }), host)
+        .scrape({}, {}).then(report, report)
+    `)
+
+    expect(output).toBe('unhandled=0')
+  })
+
+  it('keeps a refused run in flight until the work settles', () => {
+    const output = lastLineFromChild(`
+      ${SPECIES}
+      const { settleFirst } = require('./src/settle')
+      let ended = 0
+      settleFirst(() => { species(); return later(150, false) }, () => () => { ended += 1 })
+        .then(() => undefined, () => undefined)
+      setTimeout(() => console.log('ended=' + ended), 60)
+    `)
+
+    expect(output).toBe('ended=0')
+  })
+
+  it('does not resolve afterSettled before its promise settles', () => {
+    const output = lastLineFromChild(`
+      ${SPECIES}
+      const { afterSettled } = require('./src/object-prototype')
+      let done = 0
+      const host = later(40, true)
+      species()
+      void (async () => { await afterSettled(host); done += 1 })()
+      setTimeout(() => console.log('done=' + done), 10)
+    `)
+
+    expect(output).toBe('done=0')
+  })
+})
+
 describe('the intrinsic Promise this package builds its verdict promises with', () => {
   it.each([
     ['a function that is not Promise', Object],

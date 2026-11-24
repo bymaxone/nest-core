@@ -227,28 +227,47 @@ export function pinned(promise: unknown): boolean {
   }
 }
 
-/** Mark `promise` handled through the intrinsic `then`; `onFailure` must not throw. */
+/**
+ * Run `onValue` or `onFailure` once `promise` settles, never reading what its settling would read live. A
+ * native promise whose own `constructor` is the intrinsic one is awaited, which reads neither `then` nor
+ * `Symbol.species`; any other is heard through the intrinsic `then`.
+ */
+function listen(
+  promise: PromiseLike<unknown>,
+  onValue: () => void,
+  onFailure: (r: unknown) => void
+): void {
+  try {
+    pinned(promise)
+    const own = getOwnPropertyDescriptor(promise, 'constructor')
+    if (getPrototypeOf(promise) === PromisePrototype && own?.value === IntrinsicPromise) {
+      void (async (): Promise<void> => {
+        try {
+          await promise
+        } catch (reason) {
+          return onFailure(reason)
+        }
+        onValue()
+      })()
+    } else apply(IntrinsicThen, promise, [onValue, onFailure])
+  } catch {
+    onValue()
+  }
+}
+
+/** Mark `promise` handled; `onFailure` must not throw. */
 export function hear(
   promise: PromiseLike<unknown>,
   onFailure: (reason: unknown) => void = noop
 ): void {
-  try {
-    apply(IntrinsicThen, promise, [undefined, onFailure])
-  } catch {
-    // Not a promise the intrinsic `then` accepts.
-  }
+  listen(promise, noop, onFailure)
 }
 
-/** Resolves with nothing once `promise` settled, read through the intrinsic `then`, so no own slot answers. */
+/** Resolves with nothing once `promise` settled, so no own slot of it answers. */
 export function afterSettled(promise: PromiseLike<unknown>): Promise<void> {
   const settled = new IntrinsicPromise<void>((done) => {
     const finish = (): void => done()
-    pinned(promise)
-    try {
-      apply(IntrinsicThen, promise, [finish, finish])
-    } catch {
-      finish()
-    }
+    listen(promise, finish, finish)
   })
   pinned(settled)
   return settled
