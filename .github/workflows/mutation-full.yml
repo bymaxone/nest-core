@@ -33,19 +33,19 @@ jobs:
   full:
     uses: bymaxone/.github/.github/workflows/mutation-full.yml@v1
     with:
-      # The ceiling is per shard job. As one job the cold run took 53 minutes for about 3250 mutants
-      # (run 44201277024), and 60 minutes were not enough for about 3370 (run 44234797800, cancelled
-      # at 93%). So the work is split into four shards of two workers each. A run the ceiling cancels
-      # leaves no score and no baseline for the week. Shard 3 of run 45088353486 covers 18 files and
-      # detected 364 static mutants (38% of its total) that take an estimated 93% of its time: each one
-      # reruns the whole suite (1,728 tests, about 32 s), so the shard was cancelled at 60 minutes twice
-      # while shards 1, 2 and 4 finished in 41 to 48. The ceiling is 120, under the 360 GitHub allows.
-      timeout-minutes: 120
+      # The ceiling is per shard job, under the 360 minutes GitHub allows. A run the ceiling cancels
+      # leaves no score and no baseline for the week. The suite has 1,728 tests of about 32 s, and each
+      # static mutant reruns all of them, so a shard's time follows how many static mutants it holds, not
+      # how many files. Measured on four shards at two workers each (run 45386671311): shards 1, 3 and 4
+      # took 80, 78 and 72 minutes, and shard 2 was cancelled at the 120-minute ceiling with its mutants
+      # unfinished. The ceiling is 1.5 times those 120 minutes, and the shard count is doubled so that
+      # each shard holds fewer mutants.
+      timeout-minutes: 180
       # A unit test the cold run did not run fails the job: it would never be held to killing a
       # mutant, and the score cannot notice. The tooling specs that reach no source are listed in
       # scripts/mutation-inventory.exempt.json.
       inventory: enforce
-      # Four shards of two workers each. The count and the concurrency are passed here, not written
+      # Eight shards of two workers each. The count and the concurrency are passed here, not written
       # into stryker.config.json, which the per-push incremental job and local runs share.
-      shards: 4
+      shards: 8
       concurrency: 2
