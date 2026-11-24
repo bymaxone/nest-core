@@ -29,6 +29,7 @@ import type { ProviderScanner } from '../discovery'
 import { asHostError } from '../host-error'
 import {
   assertPromiseIntact,
+  frozen,
   isGuardRefusal,
   ownIntrinsicConstructor,
   promiseAltered
@@ -117,7 +118,7 @@ type IndicatorOutcome =
  * @returns The same fields on an object that inherits nothing.
  */
 function outcomeOf<T extends object>(value: T): T {
-  return { __proto__: null, ...value } as T
+  return frozen({ __proto__: null, ...value } as T)
 }
 
 /**
@@ -142,7 +143,7 @@ async function checkIndicator(
       ignoreRejection(returned)
       throw refusal
     }
-    const result = await returned
+    const result = await ownIntrinsicConstructor(returned)
     // The details are whatever the indicator chose to return, and the response is usually
     // reachable without credentials, so they are served only with the diagnostics switch on.
     // Switch off: only `status` is read, so an unreadable diagnostic cannot turn an up indicator down.
@@ -572,7 +573,7 @@ export class HealthService implements OnApplicationBootstrap, BeforeApplicationS
    */
   async checkReadiness(): Promise<HealthResponse> {
     if (this.draining) {
-      return outcomeOf({ status: 'error', checks: [{ name: 'shutdown', status: 'down' }] })
+      return outcomeOf({ status: 'error', checks: frozen([{ name: 'shutdown', status: 'down' }]) })
     }
     // The clock is read first, so no built-in a host can replace runs between the checks and the `await`.
     const now = performance.now()
@@ -587,7 +588,7 @@ export class HealthService implements OnApplicationBootstrap, BeforeApplicationS
       ignoreRejection(run)
       return this.refused()
     }
-    return await run
+    return await ownIntrinsicConstructor(run)
   }
 
   /**
@@ -608,7 +609,7 @@ export class HealthService implements OnApplicationBootstrap, BeforeApplicationS
         true
       )
     }
-    return outcomeOf({ status: 'error', checks: [{ name: 'runtime', status: 'down' }] })
+    return outcomeOf({ status: 'error', checks: frozen([{ name: 'runtime', status: 'down' }]) })
   }
 
   /**
@@ -661,7 +662,7 @@ export class HealthService implements OnApplicationBootstrap, BeforeApplicationS
     for (const outcome of outcomes) {
       this.reportTransition(outcome, seq)
     }
-    const checks = outcomes.map((outcome) => outcome.entry)
+    const checks = frozen(outcomes.map((outcome) => outcome.entry))
     const status = checks.every((check) => check.status === 'up') ? 'ok' : 'error'
     const response = outcomeOf<HealthResponse>({ status, checks })
     this.cached = { at: performance.now(), response }

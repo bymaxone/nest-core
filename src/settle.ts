@@ -36,7 +36,7 @@ export function settleFirst<T>(work: () => T | PromiseLike<T>, arm: Arm<T>): Pro
         ignoreRejection(pending as PromiseLike<unknown>)
         throw refusal
       }
-      win(await pending)
+      win(await ownIntrinsicConstructor(pending))
     } catch (reason) {
       lose(reason)
     } finally {

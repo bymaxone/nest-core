@@ -28,6 +28,7 @@ export const IntrinsicPromise = PromisePrototype.constructor as PromiseConstruct
 const ObjectPrototype = Object.prototype
 const hasOwn = Object.hasOwn
 const defineProperty = Object.defineProperty
+const freeze = Object.freeze
 const getOwnPropertyDescriptor = Object.getOwnPropertyDescriptor
 const getOwnPropertyDescriptors = Object.getOwnPropertyDescriptors
 const getOwnPropertyNames = Object.getOwnPropertyNames
@@ -180,7 +181,9 @@ export function promiseAltered(): boolean {
 
 /**
  * Give a native promise its own `constructor`, the intrinsic one, so an `await` of it never reads the
- * prototype's, which may be a getter that throws or a replacement that builds the answer. Anything else
+ * prototype's, which may be a getter that throws or a replacement that builds the answer. The property is
+ * neither writable nor configurable, so whoever else holds the promise cannot turn it into a getter that
+ * throws. Anything else
  * (a thenable, a subclass, a frozen promise, a value that is not an object) is left as it is.
  *
  * @param promise - The value about to be awaited.
@@ -196,14 +199,24 @@ export function ownIntrinsicConstructor<T>(promise: T): T {
       defineProperty(promise, 'constructor', {
         __proto__: null,
         value: IntrinsicPromise,
-        writable: true,
-        configurable: true
+        writable: false,
+        configurable: false
       } as PropertyDescriptor)
     }
   } catch {
     // A frozen promise, or a proxy that refuses, keeps the constructor it has.
   }
   return promise
+}
+
+/**
+ * Freeze a value this package hands to more than one reader, through the `Object.freeze` captured at load.
+ *
+ * @param value - The shared object or array.
+ * @returns `value`, frozen.
+ */
+export function frozen<T extends object>(value: T): T {
+  return freeze(value) as T
 }
 
 /** Whether `error` is what `assertPromiseIntact` or `assertObjectPrototypeClean` throws. */

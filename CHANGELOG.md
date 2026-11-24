@@ -93,6 +93,10 @@ as plain data`, naming the option), when it has more than 1000 keys, before any 
   intrinsic `constructor`. A scrape refused after its collection started is answered `503`, not `500`.
   A scrape refused for a replaced built-in writes one `CORE_METRICS_RUNTIME_ALTERED` warning until a scrape
   passes again.
+- The `constructor` a promise is given before this package awaits it is neither writable nor configurable, so
+  whoever else holds the promise cannot turn it into a getter that throws. The readiness response and its
+  `checks` array are frozen: they are shared by every caller of a run, and a caller that changed one changed
+  the answer of the next.
 - A readiness run that fails because the guard refused answers not ready even when what was altered has been
   put back by then, instead of rethrowing the refusal.
 

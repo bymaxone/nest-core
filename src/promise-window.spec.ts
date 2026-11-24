@@ -507,3 +507,67 @@ describe('a refusal and the rejection it leaves behind', () => {
     expect(output).toBe('unhandled=0')
   })
 })
+
+describe('the promises this package awaits and the objects it shares', () => {
+  const DOWN = `{ name: 'db', check: () => Promise.resolve({ status: 'down' }) }`
+  const SERVICE = `
+    const { HealthService } = require('./src/health/health.service')
+    const { normalizeCoreOptions } = require('./src/core.options')
+    const service = new HealthService([${DOWN}], normalizeCoreOptions({ health: { readinessCacheMs: 0 } }))
+    process.on('unhandledRejection', () => { seen += 1 })
+    let seen = 0
+    const done = (verdict) => setTimeout(() => console.log(JSON.stringify({ status: verdict.status, unhandled: seen })), 60)
+  `
+
+  it('pins the constructor so a holder of the promise cannot turn it into a getter that throws', async () => {
+    const promise = ownIntrinsicConstructor(Promise.resolve(7))
+
+    expect(() =>
+      Object.defineProperty(promise, 'constructor', {
+        get() {
+          throw new Error('boom')
+        }
+      })
+    ).toThrow(TypeError)
+    expect(Object.getOwnPropertyDescriptor(promise, 'constructor')).toMatchObject({
+      writable: false,
+      configurable: false
+    })
+    await expect(promise).resolves.toBe(7)
+  })
+
+  it('answers a response that no caller can change, ready or refused', async () => {
+    const options = normalizeCoreOptions({ health: { readinessCacheMs: 0 } })
+    const up: IHealthIndicator = { name: 'db', check: async () => ({ status: 'up' }) }
+    const answered = await new HealthService([up], options).checkReadiness()
+    const draining = new HealthService([up], options)
+    await draining.beforeApplicationShutdown()
+    const refused = await draining.checkReadiness()
+
+    for (const response of [answered, refused]) {
+      expect(Object.isFrozen(response)).toBe(true)
+      expect(Object.isFrozen(response.checks)).toBe(true)
+    }
+  })
+
+  it('answers not ready, with nothing unhandled, when Promise[Symbol.species] throws', () => {
+    const output = lastLineFromChild(`
+      ${SERVICE}
+      Object.defineProperty(Promise, Symbol.species, { get() { throw new Error('species') }, configurable: true })
+      ;(async () => done(await service.checkReadiness()))()
+    `)
+
+    expect(JSON.parse(output)).toEqual({ status: 'error', unhandled: 0 })
+  })
+
+  it('answers not ready when a then that forges ok is installed before the call', () => {
+    const output = lastLineFromChild(`
+      ${SERVICE}
+      const real = Promise.prototype.then
+      Promise.prototype.then = function then(ok) { return real.call(this, () => ok({ status: 'ok' })) }
+      ;(async () => done(await service.checkReadiness()))()
+    `)
+
+    expect(JSON.parse(output)).toEqual({ status: 'error', unhandled: 0 })
+  })
+})
