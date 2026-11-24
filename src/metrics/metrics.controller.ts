@@ -38,8 +38,7 @@ import {
   assertObjectPrototypeClean,
   assertPromiseIntact,
   isGuardRefusal,
-  ownIntrinsicConstructor,
-  pinned
+  ownIntrinsicConstructor
 } from '../object-prototype'
 import { assertAsyncFeatureEnabled } from '../passthrough.providers'
 import type { MetricsRegistry } from './metrics.registry'
@@ -146,8 +145,8 @@ function assertRuntimeClean(check: () => void): void {
 async function collectOrRefuse(registry: MetricsRegistry): Promise<string> {
   try {
     const collecting = registry.metrics()
-    // A promise that cannot be awaited keeps the run in flight until it settles, then is refused.
-    if (!pinned(collecting)) await afterSettled(collecting)
+    // Settled first, so a promise that cannot be awaited keeps the run in flight until it settles, then is refused.
+    await afterSettled(collecting)
     return await ownIntrinsicConstructor(collecting)
   } catch (cause) {
     throw new ServiceUnavailableException('Metrics collection failed', { cause })

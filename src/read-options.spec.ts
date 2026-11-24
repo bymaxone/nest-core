@@ -39,6 +39,13 @@ describe('readOptions', () => {
     expect(copy.items[0]).not.toBe(given.items[0])
   })
 
+  it('reads a list of blocks that holds none as a list that holds none', () => {
+    const copy = readOptions({ items: [] } as object, SHAPE) as { items: unknown[] }
+
+    expect(copy.items).toEqual([])
+    expect(copy.items).toHaveLength(0)
+  })
+
   it('leaves out an option the host left undefined', () => {
     const copy = readOptions({ name: undefined, inner: { token: 't' } } as object, SHAPE)
 

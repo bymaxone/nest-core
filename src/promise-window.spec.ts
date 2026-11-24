@@ -25,6 +25,8 @@ import type { MetricsRegistry } from './metrics/metrics.registry'
 import { ownIntrinsicConstructor } from './object-prototype'
 
 const realTimeout = globalThis.setTimeout
+/** A `done` for a row that reports through a promise instead. */
+const NO_DONE = Object.assign(() => undefined, { fail: () => undefined }) as jest.DoneCallback
 const FORGED = 'FORGED_METRICS'
 const PROTOTYPE = Object.getPrototypeOf((async (): Promise<void> => {})()) as object
 const REAL_CONSTRUCTOR = Object.getOwnPropertyDescriptor(
@@ -46,13 +48,18 @@ function after<T>(
   )
 }
 
-/** Swap the constructor and plant a `then` that answers `forged`, then puts both back when it is called. */
-function swapAndPlant(forged: unknown): void {
+/** Put a foreign `constructor` on the promise prototype, for the row to take back. */
+function plantForgedConstructor(): void {
   Object.defineProperty(PROTOTYPE, 'constructor', {
     value: function Forged() {},
     writable: true,
     configurable: true
   })
+}
+
+/** Swap the constructor and plant a `then` that answers `forged`, then puts both back when it is called. */
+function swapAndPlant(forged: unknown): void {
+  plantForgedConstructor()
   Object.defineProperty(PROTOTYPE, 'then', {
     value: (resolve: (value: unknown) => void) => {
       Object.defineProperty(PROTOTYPE, 'constructor', REAL_CONSTRUCTOR)
@@ -182,13 +189,7 @@ describe('the scrape beside a built-in replaced between the check and the await'
 
   it('answers 503 and warns once when the guard refuses after the collection started', (done) => {
     const { scrape } = scraper()
-    plantWhenTimerArmed(() =>
-      Object.defineProperty(PROTOTYPE, 'constructor', {
-        value: function Forged() {},
-        writable: true,
-        configurable: true
-      })
-    )
+    plantWhenTimerArmed(() => plantForgedConstructor())
 
     settled(done, scrape, ({ error }) => {
       expect(error).toBeInstanceOf(ServiceUnavailableException)
@@ -197,6 +198,43 @@ describe('the scrape beside a built-in replaced between the check and the await'
         'CORE_METRICS_RUNTIME_ALTERED'
       ])
     })
+  })
+
+  it('names its 503, and writes the line under the controller, with what was replaced', (done) => {
+    const { scrape } = scraper()
+    plantWhenTimerArmed(() => plantForgedConstructor())
+
+    settled(done, scrape, ({ error }) => {
+      expect((error as ServiceUnavailableException).message).toBe('Metrics are unavailable')
+      expect(warn).toHaveBeenCalledTimes(1)
+      expect(warn.mock.calls[0]?.[0]).toEqual({
+        event: 'CORE_METRICS_RUNTIME_ALTERED',
+        message: 'A built-in was replaced after load: scrapes answer 503 until it is put back'
+      })
+      expect((warn.mock.instances[0] as { context?: string }).context).toBe('MetricsController')
+    })
+  })
+
+  it('writes the line again for a refusal that follows a scrape which passed', async () => {
+    const { scrape } = scraper()
+    const refuseOnce = (): Promise<unknown> =>
+      new Promise((resolve) => {
+        plantWhenTimerArmed(() => plantForgedConstructor())
+        settled(NO_DONE, scrape, ({ error }) => resolve(error))
+      })
+    const passOnce = (): Promise<unknown> =>
+      new Promise((resolve) => settled(NO_DONE, scrape, ({ error }) => resolve(error)))
+
+    const first = await refuseOnce()
+    const passed = await passOnce()
+    const second = await refuseOnce()
+
+    expect([first, second].map((error) => error instanceof ServiceUnavailableException)).toEqual([
+      true,
+      true
+    ])
+    expect(passed).toBeUndefined()
+    expect(warn).toHaveBeenCalledTimes(2)
   })
 
   it('writes one CORE_METRICS_RUNTIME_ALTERED line, however many scrapes are refused', (done) => {
@@ -660,7 +698,9 @@ describe('a rejecting promise whose constructor is an accessor while Object.prot
 describe('the intrinsic Promise this package builds its verdict promises with', () => {
   it.each([
     ['a function that is not Promise', Object],
-    ['a value that is not a function', 42]
+    ['a value that is not a function', 42],
+    ['undefined', undefined],
+    ['null', null]
   ])('refuses to load when the constructor slot holds %s', (_, planted) => {
     const original = Object.getOwnPropertyDescriptor(
       Promise.prototype,

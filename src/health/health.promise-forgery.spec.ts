@@ -77,6 +77,24 @@ describe('the readiness verdict beside forged promise machinery', () => {
     ])
   })
 
+  it('names the event, the check and what was replaced in that one line', async () => {
+    const service = new HealthService(
+      [down],
+      normalizeCoreOptions({ health: { readinessCacheMs: 0 } })
+    )
+    plantThen(Object.prototype)
+
+    await service.checkReadiness()
+    removeThen(Object.prototype)
+
+    expect(warn).toHaveBeenCalledTimes(1)
+    expect(warn.mock.calls[0]?.[0]).toMatchObject({
+      event: 'CORE_HEALTH_RUNTIME_ALTERED',
+      message: 'A promise built-in was replaced: readiness answers not ready',
+      check: 'runtime'
+    })
+  })
+
   it('says so again for a second alteration after a probe was answered from the cache', async () => {
     const up: IHealthIndicator = { name: 'db', check: async () => ({ status: 'up' }) }
     const service = new HealthService(

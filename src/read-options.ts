@@ -63,7 +63,8 @@ function namedCopy(value: unknown, done: Map<object, unknown>): unknown {
   const seen = Object.create(null) as Record<string, true>
   const owns = Object.create(null) as Record<string, true>
   const add = (found: readonly PropertyKey[], own: boolean): void => {
-    for (let at = 0; at < found.length; at += 1) {
+    const total = found.length
+    for (let at = 0; at !== total; at += 1) {
       const name = found[at]
       if (typeof name !== 'string') continue
       if (own) owns[name] = true
@@ -163,7 +164,8 @@ function readBlock(given: unknown, shape: Shape, done: Map<object, unknown>): un
   // No prototype: the resolvers cannot inherit a planted name from the copy.
   const copy = Object.create(null) as Record<string, unknown>
   const documented = Object.keys(shape)
-  for (let at = 0; at < documented.length; at += 1) {
+  const total = documented.length
+  for (let at = 0; at !== total; at += 1) {
     const key = documented[at] as string
     const entry = shape[key] as Shape | readonly [Shape] | 0 | 1
     const isMap = entry === 0 || entry === 1
