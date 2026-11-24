@@ -227,12 +227,17 @@ export function frozen<T extends object>(value: T): T {
 
 /** Whether `error` is what `assertPromiseIntact` or `assertObjectPrototypeClean` throws. */
 export function isGuardRefusal(error: unknown): boolean {
-  return (
-    typeof error === 'object' &&
-    error !== null &&
-    getPrototypeOf(error) === ErrorConstructor.prototype &&
-    hasOwn(error, 'count')
-  )
+  try {
+    return (
+      typeof error === 'object' &&
+      error !== null &&
+      getPrototypeOf(error) === ErrorConstructor.prototype &&
+      hasOwn(error, 'count')
+    )
+  } catch {
+    // A revoked proxy cannot be inspected, so it is not the guard's error.
+    return false
+  }
 }
 
 /**
