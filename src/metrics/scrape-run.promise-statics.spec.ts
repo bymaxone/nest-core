@@ -96,6 +96,30 @@ describe('the scrape run beside a replaced Promise', () => {
     expect(asked).not.toHaveBeenCalled()
   })
 
+  it('keeps a refused collection in flight until it settles and starts no second one', async () => {
+    let finish: (text: string) => void = () => undefined
+    const collect = jest.fn(() => {
+      replaceConstructor()
+      return new Promise<string>((resolve) => {
+        finish = resolve
+      })
+    })
+    const run = new ScrapeRun(1_000, () => undefined)
+    const first = run.run(collect)
+
+    const refusal: unknown = await first.catch((thrown: unknown) => thrown)
+    restorePromise()
+
+    expect(refusal).toBeInstanceOf(Error)
+    expect(run.run(collect)).toBe(first)
+    expect(collect).toHaveBeenCalledTimes(1)
+
+    finish('late 1\n')
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect(await outcome(run, async () => 'next 1\n')).toBe('text:next 1\n')
+  })
+
   it('answers 503 for a collection past its deadline under a foreign global Promise', async () => {
     const Run = loadUnderForeignPromise(FORGED, () => {
       let loaded!: typeof ScrapeRun

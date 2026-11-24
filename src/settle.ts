@@ -34,7 +34,9 @@ export function settleFirst<T>(work: () => T | PromiseLike<T>, arm: Arm<T>): Pro
         assertPromiseIntact()
       } catch (refusal) {
         ignoreRejection(pending as PromiseLike<unknown>)
-        throw refusal
+        lose(refusal)
+        await pending
+        return
       }
       win(await ownIntrinsicConstructor(pending))
     } catch (reason) {
