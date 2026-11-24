@@ -70,6 +70,16 @@ The following classes are explicitly in scope:
 - **Bundle supply-chain integrity** - compromised dependency, malicious typosquat, tampered release artifact
 - **CodeQL `security-extended` alerts** - anything the automated scan surfaces in the Security tab
 
+## Threat model: same-process code
+
+Code that runs in the host process is trusted, as it is in Node itself: it can already read the
+environment, the file system and every object the process holds. The in-process guards of this package
+(the `Object.prototype` guard, the watched built-ins, the checks around awaited promises) are best-effort
+defences against accidents and pollution by a dependency, not a security boundary against code that
+chooses to subvert the process. A report whose attacker must first run code in the host process, to
+replace a built-in or plant a name on a prototype, is therefore not a vulnerability in this package.
+Known limit: the guards watch the built-ins and prototypes listed in `src/object-prototype.ts`; code that runs after your own code (OpenAPI contributors and the document merge, `forRootAsync` factories, the options read of `applyHttpFloors`, metrics contributors) still calls live array and collection built-ins, so code that replaced one of them can change what those steps produce.
+
 ## Out of scope
 
 These are not vulnerabilities in `@bymax-one/nest-core` itself:
