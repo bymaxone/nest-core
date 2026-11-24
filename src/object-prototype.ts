@@ -22,8 +22,9 @@ const ArrayBinding = Array
 const JsonBinding = JSON
 const ErrorConstructor = Error
 const FunctionPrototype = Function.prototype
-/** The intrinsic `Promise` an `async` function builds on, whatever the global `Promise` was bound to at load. */
+/** The prototype an `async` function's promise inherits from, whatever the global `Promise` was bound to at load. */
 const PromisePrototype = Object.getPrototypeOf((async (): Promise<void> => {})()) as Promise<void>
+/** The intrinsic `Promise` constructor, read from that prototype at load, never from the global. */
 export const IntrinsicPromise = PromisePrototype.constructor as PromiseConstructor
 const ObjectPrototype = Object.prototype
 const hasOwn = Object.hasOwn
