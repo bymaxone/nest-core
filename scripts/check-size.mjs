@@ -304,16 +304,16 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 // The growth is code, with no module added to a bundle: the helper that settles a check or a collection against its
 // timer from the constructor captured at load, the check split into its own function, the shared run, and the
 // `Promise.prototype.constructor` entry of the table of built-ins the guard watches (inlined in `./http`).
-// 2026-11-24, the 16b correction of that change: root 28.20 KiB (measured 28.16), `./openapi` 10.76 KiB (measured 10.75)
+// 2026-11-24, the guard's watched table and refusal paths: root 28.20 KiB (measured 28.16), `./openapi` 10.76 KiB (measured 10.75)
 // and `./http` 8.19 KiB (measured 8.18). The growth is code, with no module added to a bundle: the intrinsic constructor
 // capture, the absent-`then` entries of the table the guard watches, the check before each verdict is awaited and before
 // it is cached, the objects that inherit nothing, the `runtime` refusal with its log line, and the handled-before-awaited
 // mark on every started check.
-// 2026-11-24, second correction of the 16b batch: root 28.28 KiB (measured 28.27), `./openapi` 10.82 KiB (measured 10.81)
+// 2026-11-24, accessor slots in the watched table: root 28.28 KiB (measured 28.27), `./openapi` 10.82 KiB (measured 10.81)
 // and `./http` 8.25 KiB (measured 8.24). The growth is code, with no module added to a bundle: the getter and setter held
 // beside the value of every watched name, so an accessor `then` is as visible as a data property, and the try/catch that
 // marks a refused check handled before the refusal is thrown.
-// 2026-11-24, third correction of the 16b batch: root 28.65 KiB (measured 28.63, 29317 B). The growth is code, with no
+// 2026-11-24, own constructor on awaited promises and the second check: root 28.65 KiB (measured 28.63, 29317 B). The growth is code, with no
 // module added to a bundle: the own intrinsic `constructor` given to a promise before it is awaited, the guard-refusal
 // test, the second check after a scrape or a probe starts, and the scrape's `runtime` refusal with its log line.
 const BUDGETS = [
