@@ -597,6 +597,66 @@ describe('a refusal while Promise[Symbol.species] throws and the promise carries
   })
 })
 
+describe('a rejecting promise whose constructor is an accessor while Object.prototype carries a value', () => {
+  /** A promise whose non-configurable constructor getter forges an up outcome, and a `value` planted for the descriptor read. */
+  const FORGE = `
+    let seen = 0
+    process.on('unhandledRejection', () => { seen += 1 })
+    const real = Promise.prototype.then
+    const forge = () => {
+      const promise = new Promise((_, reject) => setTimeout(() => reject(new Error('down')), 10))
+      Object.defineProperty(promise, 'constructor', { configurable: false, get() {
+        delete Object.prototype.value
+        Object.defineProperty(Promise.prototype, 'then', { configurable: true, writable: true, value(ok) {
+          Object.defineProperty(Promise.prototype, 'then', { configurable: true, writable: true, value: real })
+          ok({ status: 'up' })
+        } })
+        return Object
+      } })
+      Object.prototype.value = Promise
+      return promise
+    }
+    const report = (label) => () => setTimeout(() => console.log(label + ' unhandled=' + seen), 60)
+  `
+
+  it('is not answered up by a health check, and leaves no rejection unheard', () => {
+    const output = lastLineFromChild(`
+      ${FORGE}
+      const { HealthService } = require('./src/health/health.service')
+      const { normalizeCoreOptions } = require('./src/core.options')
+      const db = { name: 'db', check: () => forge() }
+      new HealthService([db], normalizeCoreOptions()).checkReadiness().then((v) => report(v.status)(), () => report('refused')())
+    `)
+
+    expect(output).toBe('error unhandled=0')
+  })
+
+  it('is refused by settleFirst, and leaves no rejection unheard', () => {
+    const output = lastLineFromChild(`
+      ${FORGE}
+      const { settleFirst } = require('./src/settle')
+      settleFirst(() => forge(), () => () => undefined).then(() => report('up')(), () => report('refused')())
+    `)
+
+    expect(output).toBe('refused unhandled=0')
+  })
+
+  it('is refused by a scrape, and leaves no rejection unheard', () => {
+    const output = lastLineFromChild(`
+      ${FORGE}
+      const { createMetricsController } = require('./src/metrics/metrics.controller')
+      const { normalizeCoreOptions } = require('./src/core.options')
+      const registry = { contentType: 'text/plain', metrics: () => forge() }
+      const host = { httpAdapter: { setHeader() {}, reply() {} } }
+      const Controller = createMetricsController('metrics')
+      new Controller(registry, normalizeCoreOptions({ metrics: { enabled: true, path: 'metrics' } }), host)
+        .scrape({}, {}).then(() => report('served')(), () => report('refused')())
+    `)
+
+    expect(output).toBe('refused unhandled=0')
+  })
+})
+
 describe('the intrinsic Promise this package builds its verdict promises with', () => {
   it.each([
     ['a function that is not Promise', Object],

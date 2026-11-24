@@ -221,7 +221,9 @@ export function pinned(promise: unknown): boolean {
       // A frozen promise keeps its constructor.
     }
     const own = getOwnPropertyDescriptor(promise, 'constructor')
-    return (own === undefined || own.value === IntrinsicPromise) && !hasOwn(promise, 'then')
+    return (
+      (own === undefined || field(own, 'value') === IntrinsicPromise) && !hasOwn(promise, 'then')
+    )
   } catch {
     return false
   }
@@ -240,7 +242,7 @@ function listen(
   try {
     pinned(promise)
     const own = getOwnPropertyDescriptor(promise, 'constructor')
-    if (getPrototypeOf(promise) === PromisePrototype && own?.value === IntrinsicPromise) {
+    if (getPrototypeOf(promise) === PromisePrototype && field(own, 'value') === IntrinsicPromise) {
       void (async (): Promise<void> => {
         try {
           await promise
