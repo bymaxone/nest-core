@@ -508,6 +508,37 @@ describe('a refusal and the rejection it leaves behind', () => {
   })
 })
 
+describe('the intrinsic Promise this package builds its verdict promises with', () => {
+  it.each([
+    ['a function that is not Promise', Object],
+    ['a value that is not a function', 42]
+  ])('refuses to load when the constructor slot holds %s', (_, planted) => {
+    const original = Object.getOwnPropertyDescriptor(
+      Promise.prototype,
+      'constructor'
+    ) as PropertyDescriptor
+    Object.defineProperty(Promise.prototype, 'constructor', { ...original, value: planted })
+
+    try {
+      jest.isolateModules(() => {
+        expect(() => jest.requireActual('./object-prototype')).toThrow(
+          'Promise.prototype.constructor is not the intrinsic Promise at load'
+        )
+      })
+    } finally {
+      Object.defineProperty(Promise.prototype, 'constructor', original)
+    }
+  })
+
+  it('loads with the intrinsic constructor and exposes it', () => {
+    jest.isolateModules(() => {
+      const loaded = jest.requireActual('./object-prototype') as { IntrinsicPromise: unknown }
+
+      expect(loaded.IntrinsicPromise).toBe(Promise.prototype.constructor)
+    })
+  })
+})
+
 describe('the promises this package awaits and the objects it shares', () => {
   const DOWN = `{ name: 'db', check: () => Promise.resolve({ status: 'down' }) }`
   const SERVICE = `

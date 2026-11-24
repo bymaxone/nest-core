@@ -25,7 +25,14 @@ const FunctionPrototype = Function.prototype
 /** The prototype an `async` function's promise inherits from, whatever the global `Promise` was bound to at load. */
 const PromisePrototype = Object.getPrototypeOf((async (): Promise<void> => {})()) as Promise<void>
 /** The intrinsic `Promise` constructor, read from that prototype at load, never from the global. */
-export const IntrinsicPromise = PromisePrototype.constructor as PromiseConstructor
+export const IntrinsicPromise = ((): PromiseConstructor => {
+  const candidate = PromisePrototype.constructor as PromiseConstructor
+  // A slot set to anything else would build every verdict promise with it, silently.
+  if (typeof candidate !== 'function' || candidate.prototype !== PromisePrototype) {
+    throw new ErrorConstructor('Promise.prototype.constructor is not the intrinsic Promise at load')
+  }
+  return candidate
+})()
 const ObjectPrototype = Object.prototype
 const hasOwn = Object.hasOwn
 const defineProperty = Object.defineProperty
