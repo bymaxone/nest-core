@@ -36,7 +36,8 @@ import { BYMAX_CORE_OPTIONS, BYMAX_METRICS_REGISTRY } from '../core.tokens'
 import {
   assertObjectPrototypeClean,
   assertPromiseIntact,
-  isGuardRefusal
+  isGuardRefusal,
+  ownIntrinsicConstructor
 } from '../object-prototype'
 import { assertAsyncFeatureEnabled } from '../passthrough.providers'
 import type { MetricsRegistry } from './metrics.registry'
@@ -142,7 +143,7 @@ function assertRuntimeClean(check: () => void): void {
 /** The registry's text, with any failure of a collector answered `503` and never left unhandled. */
 async function collectOrRefuse(registry: MetricsRegistry): Promise<string> {
   try {
-    return await registry.metrics()
+    return await ownIntrinsicConstructor(registry.metrics())
   } catch (cause) {
     throw new ServiceUnavailableException('Metrics collection failed', { cause })
   }
@@ -152,20 +153,26 @@ async function collectOrRefuse(registry: MetricsRegistry): Promise<string> {
 class RefusalNote {
   private refusing = false
 
-  /** Warn when `error` is the guard's refusal and none has been noted since a scrape last passed. */
-  note(error: unknown): void {
+  /**
+   * What a scrape that failed with `error` throws: the guard's bare refusal, which the run raises after it
+   * started, becomes the `503` the first check answers. The first refusal since a scrape passed is warned.
+   */
+  translate(error: unknown): unknown {
+    const refusal = isGuardRefusal(error)
+      ? new ServiceUnavailableException('Metrics are unavailable', { cause: error })
+      : error
     if (
-      this.refusing ||
-      !(error instanceof ServiceUnavailableException) ||
-      !isGuardRefusal(error.cause)
+      !this.refusing &&
+      refusal instanceof ServiceUnavailableException &&
+      isGuardRefusal(refusal.cause)
     ) {
-      return
+      this.refusing = true
+      writeLog(new Logger('MetricsController'), 'warn', {
+        event: 'CORE_METRICS_RUNTIME_ALTERED',
+        message: 'A built-in was replaced after load: scrapes answer 503 until it is put back'
+      })
     }
-    this.refusing = true
-    writeLog(new Logger('MetricsController'), 'warn', {
-      event: 'CORE_METRICS_RUNTIME_ALTERED',
-      message: 'A built-in was replaced after load: scrapes answer 503 until it is put back'
-    })
+    return refusal
   }
 
   /** A scrape passed: the next refusal is written again. */
@@ -183,8 +190,7 @@ interface ScrapeParts {
 
 /**
  * Admit the scrape and start (or join) the shared collection. Not async, so the caller's `await` of the
- * returned promise follows the last check with nothing a host can replace in between; a refusal is
- * noted once when a host's replacement caused it.
+ * returned promise follows the last check with nothing a host can replace in between.
  */
 function startScrape(
   options: ResolvedCoreOptions,
@@ -192,16 +198,11 @@ function startScrape(
   request: { readonly headers?: Record<string, unknown> },
   parts: ScrapeParts
 ): Promise<string> {
-  try {
-    admit(options, path, request)
-    const run = parts.scrapes.run(() => collectOrRefuse(parts.registry))
-    // Arming the timer called `setTimeout`, which a host can replace: the check is made again, last.
-    assertRuntimeClean(assertPromiseIntact)
-    return run
-  } catch (error) {
-    parts.refusals.note(error)
-    throw error
-  }
+  admit(options, path, request)
+  const run = parts.scrapes.run(() => collectOrRefuse(parts.registry))
+  // Arming the timer called `setTimeout`, which a host can replace: the check is made again, last.
+  assertRuntimeClean(assertPromiseIntact)
+  return run
 }
 
 /**
@@ -264,7 +265,12 @@ export function createMetricsController(registeredPath: string): Type<object> {
       @Res() response: unknown,
       @Req() request: { readonly headers?: Record<string, unknown> }
     ): Promise<void> {
-      const body = await startScrape(this.options, registeredPath, request, this.parts)
+      let body: string
+      try {
+        body = await startScrape(this.options, registeredPath, request, this.parts)
+      } catch (error) {
+        throw this.parts.refusals.translate(error)
+      }
       this.parts.refusals.clear()
       this.adapterHost.httpAdapter.setHeader(response, 'Content-Type', this.registry.contentType)
       this.adapterHost.httpAdapter.reply(response, body, HttpStatus.OK)

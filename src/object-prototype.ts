@@ -180,23 +180,30 @@ export function promiseAltered(): boolean {
 
 /**
  * Give a native promise its own `constructor`, the intrinsic one, so an `await` of it never reads the
- * prototype's, which may be a getter that throws or a replacement that builds the answer. A promise from
- * another source (a thenable, a subclass) is left as it is.
+ * prototype's, which may be a getter that throws or a replacement that builds the answer. Anything else
+ * (a thenable, a subclass, a frozen promise, a value that is not an object) is left as it is.
  *
- * @param promise - The promise about to be awaited.
+ * @param promise - The value about to be awaited.
+ * @returns `promise`, so the call can sit inside the `await`: nothing replaceable runs between them.
  */
-export function ownIntrinsicConstructor(promise: object): void {
-  if (getPrototypeOf(promise) !== PromisePrototype) return
+export function ownIntrinsicConstructor<T>(promise: T): T {
   try {
-    defineProperty(promise, 'constructor', {
-      __proto__: null,
-      value: IntrinsicPromise,
-      writable: true,
-      configurable: true
-    } as PropertyDescriptor)
+    if (
+      typeof promise === 'object' &&
+      promise !== null &&
+      getPrototypeOf(promise) === PromisePrototype
+    ) {
+      defineProperty(promise, 'constructor', {
+        __proto__: null,
+        value: IntrinsicPromise,
+        writable: true,
+        configurable: true
+      } as PropertyDescriptor)
+    }
   } catch {
-    // A frozen promise keeps the constructor it has.
+    // A frozen promise, or a proxy that refuses, keeps the constructor it has.
   }
+  return promise
 }
 
 /** Whether `error` is what `assertPromiseIntact` or `assertObjectPrototypeClean` throws. */

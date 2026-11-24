@@ -316,8 +316,12 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 // 2026-11-24, own constructor on awaited promises and the second check: root 28.65 KiB (measured 28.63, 29317 B). The growth is code, with no
 // module added to a bundle: the own intrinsic `constructor` given to a promise before it is awaited, the guard-refusal
 // test, the second check after a scrape or a probe starts, and the scrape's `runtime` refusal with its log line.
+// 2026-11-24, the awaits of this package's own promises: root 28.76 KiB (measured 28.73, 29421 B). The growth is code,
+// with no module added to a bundle: `ownIntrinsicConstructor` returning its argument and ignoring what is not a native
+// promise, its use inside the readiness controller's and the collection's `await`, and the refusal translated to `503`
+// when it is raised after a collection started.
 const BUDGETS = [
-  { name: '. (root)', path: 'dist/index.mjs', brotli: 28.65 * 1024 },
+  { name: '. (root)', path: 'dist/index.mjs', brotli: 28.76 * 1024 },
   { name: './pagination', path: 'dist/pagination/index.mjs', brotli: 1.5 * 1024 },
   { name: './health', path: 'dist/health/index.mjs', brotli: 0.5 * 1024 },
   { name: './openapi', path: 'dist/openapi/index.mjs', brotli: 10.82 * 1024 },

@@ -3,10 +3,11 @@
  * refusal leaves behind.
  *
  * Layer: integration.
- * Goal: no replaceable built-in runs between the check and the decision `await` (a replaced
- * `setTimeout` or `performance.now` that swaps `Promise.prototype.constructor` cannot forge a scrape
- * body or a readiness verdict), a refused scrape is logged once, and a refusal leaves no unhandled
- * rejection even when reading `constructor` throws.
+ * Goal: no replaceable built-in runs between a check and the `await` it guards in this package's own
+ * code, and the promises it awaits there (the service's, the collection's) carry their own
+ * `constructor`, so a replaced `setTimeout` or `performance.now` that swaps `Promise.prototype.constructor`
+ * decides neither a readiness reply nor a scrape reply; a refused scrape is answered `503` and logged
+ * once, and a refusal leaves no unhandled rejection even when reading `constructor` throws.
  * Mocks: a hand-built registry and `HttpAdapterHost`; Nest's `Logger.warn` is spied; unhandled
  * rejections are counted in a child process.
  */
@@ -17,9 +18,11 @@ import type { HttpAdapterHost } from '@nestjs/core'
 import { lastLineFromChild, restorePromise } from './__tests__/promise-forgery.harness'
 import { normalizeCoreOptions } from './core.options'
 import type { IHealthIndicator } from './health/health.interfaces'
+import { createHealthController } from './health/health.controller'
 import { HealthService } from './health/health.service'
 import { createMetricsController } from './metrics/metrics.controller'
 import type { MetricsRegistry } from './metrics/metrics.registry'
+import { ownIntrinsicConstructor } from './object-prototype'
 
 const realTimeout = globalThis.setTimeout
 const FORGED = 'FORGED_METRICS'
@@ -136,6 +139,63 @@ describe('the scrape beside a built-in replaced between the check and the await'
     settled(done, scrape, ({ error }) => {
       expect(error).toBeInstanceOf(ServiceUnavailableException)
       expect(replied).not.toHaveBeenCalled()
+    })
+  })
+
+  /** Arms a microtask, queued as the timer is armed, that runs `plant` once. */
+  function plantWhenTimerArmed(plant: () => void): void {
+    let armed = true
+    globalThis.setTimeout = ((...args: Parameters<typeof setTimeout>) => {
+      if (armed) {
+        armed = false
+        queueMicrotask(plant)
+      }
+      return realTimeout(...args)
+    }) as typeof setTimeout
+  }
+
+  it('answers 503, not the forged body, when the collection itself awaits a constructor planted as the timer is armed', (done) => {
+    const { scrape, replied } = scraper()
+    plantWhenTimerArmed(() => {
+      Object.defineProperty(PROTOTYPE, 'constructor', {
+        configurable: true,
+        get() {
+          Object.defineProperty(PROTOTYPE, 'constructor', REAL_CONSTRUCTOR)
+          Object.defineProperty(PROTOTYPE, 'then', {
+            configurable: true,
+            writable: true,
+            value(resolve: (value: unknown) => void) {
+              Object.defineProperty(PROTOTYPE, 'then', REAL_THEN)
+              resolve(FORGED)
+            }
+          })
+          return function Forged() {}
+        }
+      })
+    })
+
+    settled(done, scrape, ({ error }) => {
+      expect(error).toBeInstanceOf(ServiceUnavailableException)
+      expect(replied).not.toHaveBeenCalled()
+    })
+  })
+
+  it('answers 503 and warns once when the guard refuses after the collection started', (done) => {
+    const { scrape } = scraper()
+    plantWhenTimerArmed(() =>
+      Object.defineProperty(PROTOTYPE, 'constructor', {
+        value: function Forged() {},
+        writable: true,
+        configurable: true
+      })
+    )
+
+    settled(done, scrape, ({ error }) => {
+      expect(error).toBeInstanceOf(ServiceUnavailableException)
+      expect((error as ServiceUnavailableException).getStatus()).toBe(503)
+      expect(warn.mock.calls.map(([entry]) => (entry as { event: string }).event)).toEqual([
+        'CORE_METRICS_RUNTIME_ALTERED'
+      ])
     })
   })
 
@@ -311,6 +371,95 @@ describe('the readiness verdict beside a built-in replaced between the check and
     )
 
     expect(outcome).toEqual({ status: 'error', checks: [{ name: 'runtime', status: 'down' }] })
+  })
+})
+
+describe('the readiness controller beside a built-in replaced while it awaits the service', () => {
+  let warn: jest.SpyInstance
+
+  beforeEach(() => {
+    warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined)
+  })
+
+  afterEach(() => {
+    globalThis.setTimeout = realTimeout
+    Object.defineProperty(PROTOTYPE, 'constructor', REAL_CONSTRUCTOR)
+    Object.defineProperty(PROTOTYPE, 'then', REAL_THEN)
+    warn.mockRestore()
+  })
+
+  /** A controller over one indicator that is really down, and what it replied. */
+  function prober(): { ready: () => Promise<void>; replied: jest.Mock } {
+    const down: IHealthIndicator = {
+      name: 'db',
+      check: () => new Promise((resolve) => realTimeout(() => resolve({ status: 'down' }), 5))
+    }
+    const options = normalizeCoreOptions({ health: { readinessCacheMs: 0 } })
+    const replied = jest.fn()
+    const Controller = createHealthController('health')
+    const instance = new Controller(new HealthService([down], options), options, {
+      httpAdapter: { reply: replied }
+    } as unknown as HttpAdapterHost) as unknown as { ready(response: unknown): Promise<void> }
+    return { ready: () => instance.ready({}), replied }
+  }
+
+  const FORGED_OK = { status: 'ok', checks: [{ name: 'db', status: 'up' }] }
+
+  it('replies 503 for a down indicator when setTimeout swaps the constructor during the run', (done) => {
+    const { ready, replied } = prober()
+    let armed = true
+    globalThis.setTimeout = ((...args: Parameters<typeof setTimeout>) => {
+      if (armed) {
+        armed = false
+        swapAndPlant(FORGED_OK)
+      }
+      return realTimeout(...args)
+    }) as typeof setTimeout
+
+    settled(done, ready, () => {
+      expect(replied).toHaveBeenCalledTimes(1)
+      expect(replied.mock.calls[0]?.slice(1)).toEqual([
+        { status: 'error', checks: [{ name: 'runtime', status: 'down' }] },
+        503
+      ])
+    })
+  })
+
+  it('replies 503 for a down indicator when the constructor was already swapped before the probe', (done) => {
+    const { ready, replied } = prober()
+    swapAndPlant(FORGED_OK)
+
+    settled(done, ready, () => {
+      expect(replied.mock.calls[0]?.slice(1)).toEqual([
+        { status: 'error', checks: [{ name: 'runtime', status: 'down' }] },
+        503
+      ])
+    })
+  })
+})
+
+describe('ownIntrinsicConstructor', () => {
+  it('returns what it was given and tags only a native promise', () => {
+    const native = (async (): Promise<number> => 1)()
+    const thenable = { then: () => undefined }
+
+    expect(ownIntrinsicConstructor(native)).toBe(native)
+    expect(Object.hasOwn(native, 'constructor')).toBe(true)
+    expect(ownIntrinsicConstructor(thenable)).toBe(thenable)
+    expect(Object.hasOwn(thenable, 'constructor')).toBe(false)
+    expect([undefined, null, 'text', 7].map((value) => ownIntrinsicConstructor(value))).toEqual([
+      undefined,
+      null,
+      'text',
+      7
+    ])
+  })
+
+  it('leaves a frozen promise as it is without throwing', () => {
+    const frozen = Object.freeze((async (): Promise<number> => 1)())
+
+    expect(ownIntrinsicConstructor(frozen)).toBe(frozen)
+    expect(Object.hasOwn(frozen, 'constructor')).toBe(false)
   })
 })
 
