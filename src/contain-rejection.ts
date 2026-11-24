@@ -22,6 +22,7 @@
  * exactly as much as its least careful copy.
  * @layer Utility
  */
+import { ignoreRejection } from './settle'
 
 /**
  * Attach a failure handler to whatever a sink returned, when it can fail.
@@ -49,6 +50,6 @@ export function containRejection(returned: unknown, onFailure: (error: unknown) 
   //
   // Stryker disable next-line ConditionalExpression: equivalent in the `true` arm — assimilating a value that cannot reject resolves inertly, changing allocation and nothing observable; the `false` arm is a real regression, killed by the async, thenable and cross-realm sink tests.
   if (typeof (returned as PromiseLike<unknown> | undefined)?.then === 'function') {
-    Promise.resolve(returned).catch(onFailure)
+    ignoreRejection(returned as PromiseLike<unknown>, onFailure)
   }
 }

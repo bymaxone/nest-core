@@ -304,13 +304,18 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 // The growth is code, with no module added to a bundle: the helper that settles a check or a collection against its
 // timer from the constructor captured at load, the check split into its own function, the shared run, and the
 // `Promise.prototype.constructor` entry of the table of built-ins the guard watches (inlined in `./http`).
+// 2026-11-24, the 16b correction of that change: root 28.20 KiB (measured 28.16), `./openapi` 10.76 KiB (measured 10.75)
+// and `./http` 8.19 KiB (measured 8.18). The growth is code, with no module added to a bundle: the intrinsic constructor
+// capture, the absent-`then` entries of the table the guard watches, the check before each verdict is awaited and before
+// it is cached, the objects that inherit nothing, the `runtime` refusal with its log line, and the handled-before-awaited
+// mark on every started check.
 const BUDGETS = [
-  { name: '. (root)', path: 'dist/index.mjs', brotli: 27.8 * 1024 },
+  { name: '. (root)', path: 'dist/index.mjs', brotli: 28.2 * 1024 },
   { name: './pagination', path: 'dist/pagination/index.mjs', brotli: 1.5 * 1024 },
   { name: './health', path: 'dist/health/index.mjs', brotli: 0.5 * 1024 },
-  { name: './openapi', path: 'dist/openapi/index.mjs', brotli: 10.7 * 1024 },
+  { name: './openapi', path: 'dist/openapi/index.mjs', brotli: 10.76 * 1024 },
   { name: './metrics', path: 'dist/metrics/index.mjs', brotli: 0.5 * 1024 },
-  { name: './http', path: 'dist/http/index.mjs', brotli: 8.11 * 1024 }
+  { name: './http', path: 'dist/http/index.mjs', brotli: 8.19 * 1024 }
 ]
 
 const fmt = (n) => `${(n / 1024).toFixed(2)} kB`

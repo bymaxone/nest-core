@@ -14,6 +14,7 @@ import type { HttpAdapterHost } from '@nestjs/core'
 import {
   delegateThen,
   forgeStatic,
+  loadUnderForeignPromise,
   replaceConstructor,
   restorePromise,
   STATICS
@@ -93,5 +94,19 @@ describe('the scrape run beside a replaced Promise', () => {
 
     expect(error).toBeInstanceOf(ServiceUnavailableException)
     expect(asked).not.toHaveBeenCalled()
+  })
+
+  it('answers 503 for a collection past its deadline under a foreign global Promise', async () => {
+    const Run = loadUnderForeignPromise(FORGED, () => {
+      let loaded!: typeof ScrapeRun
+      jest.isolateModules(() => {
+        loaded = (require('./scrape-run') as { ScrapeRun: typeof ScrapeRun }).ScrapeRun
+      })
+      return loaded
+    })
+
+    expect(await outcome(new Run(20, () => undefined), () => new Promise<string>(() => {}))).toBe(
+      'refused:Metrics collection timed out'
+    )
   })
 })

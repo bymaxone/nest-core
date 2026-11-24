@@ -63,3 +63,27 @@ export function restorePromise(): void {
   }
   originals.clear()
 }
+
+/**
+ * Load modules while `globalThis.Promise` is a subclass whose `then` answers `forged`, as a host that
+ * set `Promise = Bluebird` before this package loaded, then put the global back.
+ *
+ * @param forged - What the subclass's `then` hands to every fulfilment callback.
+ * @param load - Requires the modules under test.
+ * @returns What `load` returned.
+ */
+export function loadUnderForeignPromise<T>(forged: unknown, load: () => T): T {
+  const NativePromise = globalThis.Promise
+  class Foreign<V> extends NativePromise<V> {
+    override then(onFulfilled?: ((value: V) => unknown) | null): never {
+      onFulfilled?.(forged as V)
+      return undefined as never
+    }
+  }
+  globalThis.Promise = Foreign as unknown as PromiseConstructor
+  try {
+    return load()
+  } finally {
+    globalThis.Promise = NativePromise
+  }
+}

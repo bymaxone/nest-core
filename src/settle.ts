@@ -1,11 +1,12 @@
 /**
- * @fileoverview One promise settled by the work or a timer, whichever is first, from the constructor
- * captured at load: a verdict never reads a `Promise` static a host can replace. `await` reads only
- * `Promise.prototype.constructor`, which `object-prototype` watches.
+ * @fileoverview One promise settled by the work or a timer, whichever is first, from the intrinsic
+ * `Promise` captured at load: a verdict never reads a `Promise` static, or the global binding, a host can
+ * replace. `await` reads only `Promise.prototype.constructor`, which `object-prototype` watches.
  * @layer Utility
  */
+import { IntrinsicPromise, assertPromiseIntact } from './object-prototype'
 
-const NativePromise = Promise
+const NativePromise = IntrinsicPromise
 
 /** Arms the timer with `win` (fulfil) and `lose` (reject); returns what runs when the work ends. */
 export type Arm<T> = (win: (value: T) => void, lose: (reason: unknown) => void) => () => void
@@ -28,7 +29,9 @@ export function settleFirst<T>(work: () => T | PromiseLike<T>, arm: Arm<T>): Pro
   void (async (): Promise<void> => {
     try {
       await undefined
-      win(await work())
+      const pending = work()
+      assertPromiseIntact()
+      win(await pending)
     } catch (reason) {
       lose(reason)
     } finally {
@@ -42,13 +45,17 @@ export function settleFirst<T>(work: () => T | PromiseLike<T>, arm: Arm<T>): Pro
  * Mark a promise handled, so a rejection nobody awaits is not an unhandled one.
  *
  * @param promise - The promise to mark.
+ * @param onFailure - Receives the rejection, when given. It must not throw.
  */
-export function ignoreRejection(promise: PromiseLike<unknown>): void {
+export function ignoreRejection(
+  promise: PromiseLike<unknown>,
+  onFailure?: (reason: unknown) => void
+): void {
   void (async (): Promise<void> => {
     try {
       await promise
-    } catch {
-      // Handled by being awaited.
+    } catch (reason) {
+      onFailure?.(reason)
     }
   })()
 }

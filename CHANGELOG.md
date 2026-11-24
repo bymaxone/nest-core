@@ -73,15 +73,28 @@ as plain data`, naming the option), when it has more than 1000 keys, before any 
   deadline is still answered `504`.
 - The README says that a name such as `timeout` planted after boot is read by Node's own `http` module, outside
   this package, and that freezing `Object.prototype` before anything else runs covers it.
-- A `Promise` static replaced after load no longer
-  decides a readiness verdict or a scrape: a failing indicator stays down, a slow one stays timed out and
-  logs `CORE_HEALTH_DOWN`, and a collection past its deadline stays `503`. A replaced
-  `Promise.prototype.constructor`, which `await` reads, is answered as not ready (a `runtime` check down) by
-  readiness and `503` by the scrape.
+- A `Promise` static replaced after load, or a foreign `Promise` bound to the global before load, no longer
+  decides a readiness verdict or a scrape of this package's own code: a failing indicator stays down, a slow
+  one stays timed out and logs `CORE_HEALTH_DOWN`, and a collection past its deadline stays `503`. The
+  promises behind a verdict come from the engine's intrinsic constructor and settle through objects that
+  inherit nothing, so a `then` planted on `Object.prototype` cannot answer for them.
+- While `Promise.prototype.constructor` is replaced, or a `then` sits on `Object.prototype`,
+  `Array.prototype` or `Function.prototype`, readiness answers not ready with a `runtime` check down and
+  writes one `CORE_HEALTH_RUNTIME_ALTERED` warning (the level of `CORE_HEALTH_DOWN`), the scrape answers
+  `503`, the CORS decision lists no origin, and the request deadline treats no path as excluded. The check
+  runs again right before each verdict is awaited and before the answer is cached, so a constructor swapped
+  and restored during a probe is caught too.
+- A readiness check that rejects while an earlier one is still awaited no longer ends the process as an
+  unhandled rejection.
 
 **Known limits:**
 
-- No `Promise` static is read on a verdict path; `src/promise-statics.scan.spec.ts` holds it.
+- No `Promise` static is read on a verdict path, and no `.then`, `.catch` or `.finally` is attached to one;
+  `src/promise-statics.scan.spec.ts` holds it per site.
+- The scrape body is still produced by `prom-client`, whose `registry.metrics()` awaits `Promise.all`
+  (15.1.3, `registry.js`). Code that replaces `Promise.all` targets that dependency and is outside what this
+  package can answer for; the scrape's deadline and
+  refusal are this package's own code.
 - The response guard does not yet cover the native writers `writeHead`, `removeHeader`, `writeContinue` and
   `writeEarlyHints`; they are scheduled for 1.6.23.
 

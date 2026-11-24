@@ -22,8 +22,9 @@ const ArrayBinding = Array
 const JsonBinding = JSON
 const ErrorConstructor = Error
 const FunctionPrototype = Function.prototype
-const PromisePrototype = Promise.prototype
-const PromiseConstructor = Promise.prototype.constructor
+/** The intrinsic `Promise` an `async` function builds on, whatever the global `Promise` was bound to at load. */
+const PromisePrototype = Object.getPrototypeOf((async (): Promise<void> => {})()) as Promise<void>
+export const IntrinsicPromise = PromisePrototype.constructor as PromiseConstructor
 const ObjectPrototype = Object.prototype
 const hasOwn = Object.hasOwn
 const defineProperty = Object.defineProperty
@@ -43,25 +44,39 @@ const loaded = getOwnPropertyDescriptors(ObjectPrototype) as Record<string, Prop
 
 type Watched = ReadonlyArray<readonly [object, readonly PropertyKey[], unknown[]]>
 
-/** The built-ins the decision paths call, each with the function it was at load: `[owner, names, values]`. */
-const WATCHED: Watched = ((): Watched => {
-  const proto = (iterator: object): object => getPrototypeOf(iterator)
-  return (
-    [
-      [Set.prototype, ['has', Symbol.iterator]],
-      [Map.prototype, ['get', 'has']],
-      [String.prototype, ['split', 'indexOf', 'slice', 'replace']],
-      [Array.prototype, ['join', 'slice', 'filter', 'includes', Symbol.iterator]],
-      [RegExp.prototype, [Symbol.replace]],
-      [proto([][Symbol.iterator]()), ['next']],
-      [proto(new Set().values()), ['next']],
-      [Promise.prototype, ['constructor']]
-    ] as ReadonlyArray<readonly [object, readonly PropertyKey[]]>
-  ).map(([owner, names]) => [
+/** Each `[owner, names]` with the value of every name at load: `[owner, names, values]`. */
+function capture(list: ReadonlyArray<readonly [object, readonly PropertyKey[]]>): Watched {
+  return list.map(([owner, names]) => [
     owner,
     names,
     names.map((name) => getOwnPropertyDescriptor(owner, name)?.value)
   ])
+}
+
+/**
+ * What a promise's settling reads: `await` reads the `constructor` of a native promise, and resolving
+ * with an object reads its `then` along the object's chain. The public `then` of `Promise.prototype` is
+ * left alone, as an instrumented host replaces it and `await` never calls it.
+ */
+const PROMISE_WATCHED: Watched = capture([
+  [PromisePrototype, ['constructor']],
+  [ObjectPrototype, ['then']],
+  [Array.prototype, ['then']],
+  [FunctionPrototype, ['then']]
+])
+
+/** The built-ins the decision paths call, each with the function it was at load: `[owner, names, values]`. */
+const WATCHED: Watched = ((): Watched => {
+  const proto = (iterator: object): object => getPrototypeOf(iterator)
+  return capture([
+    [Set.prototype, ['has', Symbol.iterator]],
+    [Map.prototype, ['get', 'has']],
+    [String.prototype, ['split', 'indexOf', 'slice', 'replace']],
+    [Array.prototype, ['join', 'slice', 'filter', 'includes', Symbol.iterator]],
+    [RegExp.prototype, [Symbol.replace]],
+    [proto([][Symbol.iterator]()), ['next']],
+    [proto(new Set().values()), ['next']]
+  ]).concat(PROMISE_WATCHED)
 })()
 
 let pristine: Pristine | undefined
@@ -112,6 +127,20 @@ function moved(name: string, captured: unknown): boolean {
   return field(getOwnPropertyDescriptor(FunctionPrototype, name), 'value') !== captured
 }
 
+/** How many names of `table` do not hold the value captured at load. */
+function changed(table: Watched): number {
+  let count = 0
+  for (let index = 0; index < table.length; index += 1) {
+    const entry = table[index] as Watched[number]
+    const names = entry[1]
+    for (let at = 0; at < names.length; at += 1) {
+      const key = names[at] as PropertyKey
+      if (field(getOwnPropertyDescriptor(entry[0], key), 'value') !== entry[2][at]) count += 1
+    }
+  }
+  return count
+}
+
 /** How many of the bindings and functions this module relies on are not the ones it captured. */
 function replacedBindings(): number {
   const global = globalThis as unknown as Record<string, unknown>
@@ -123,17 +152,7 @@ function replacedBindings(): number {
   if (moved('call', CALL)) replaced += 1
   if (moved('apply', APPLY)) replaced += 1
   if (moved('bind', BIND)) replaced += 1
-  for (let index = 0; index < WATCHED.length; index += 1) {
-    const entry = WATCHED[index] as (typeof WATCHED)[number]
-    const owner = entry[0]
-    const names = entry[1]
-    const captured = entry[2]
-    for (let at = 0; at < names.length; at += 1) {
-      const key = names[at] as PropertyKey
-      if (field(getOwnPropertyDescriptor(owner, key), 'value') !== captured[at]) replaced += 1
-    }
-  }
-  return replaced
+  return replaced + changed(WATCHED)
 }
 
 /**
@@ -143,11 +162,20 @@ export function builtinsAltered(): boolean {
   return replacedBindings() > 0
 }
 
-/** Whether `Promise.prototype.constructor` is not the one captured at load; `await` reads it. */
+/** Whether what a promise's settling reads is not as at load; a verdict that is about to await must refuse. */
 export function promiseAltered(): boolean {
-  return (
-    field(getOwnPropertyDescriptor(PromisePrototype, 'constructor'), 'value') !== PromiseConstructor
-  )
+  return changed(PROMISE_WATCHED) > 0
+}
+
+/**
+ * Throws while what a promise's settling reads is not as at load; called right before an `await` on a
+ * verdict path, so the read the `await` makes is the one checked.
+ *
+ * @throws Error With a count, and nothing the host wrote.
+ */
+export function assertPromiseIntact(): void {
+  const count = changed(PROMISE_WATCHED)
+  if (count > 0) throw refusal(count)
 }
 
 /** Whether `name` of `now` is as a fresh realm holds it, and the function this module met. */

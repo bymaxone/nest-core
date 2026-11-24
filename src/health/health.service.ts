@@ -27,8 +27,8 @@ import {
 } from '../core.tokens'
 import type { ProviderScanner } from '../discovery'
 import { asHostError } from '../host-error'
-import { promiseAltered } from '../object-prototype'
-import { settleFirst } from '../settle'
+import { assertPromiseIntact, promiseAltered } from '../object-prototype'
+import { ignoreRejection, settleFirst } from '../settle'
 import { writeLog } from '../write-log'
 import { discoverIndicators, mergeIndicators, nameIndicators } from './health.discovery'
 import type { NamedIndicator } from './health.discovery'
@@ -105,6 +105,17 @@ type IndicatorOutcome =
     }
 
 /**
+ * An object with no prototype, as a promise is resolved with it: resolving reads `then` along the
+ * object's chain, so one planted on `Object.prototype` would otherwise decide the verdict.
+ *
+ * @param value - The fields of the object.
+ * @returns The same fields on an object that inherits nothing.
+ */
+function outcomeOf<T extends object>(value: T): T {
+  return { __proto__: null, ...value } as T
+}
+
+/**
  * Read one indicator's result as an outcome. A rejection, a synchronous throw and an unreadable
  * result are all `down`: the conversion never rejects, so it cannot hide another indicator's result.
  *
@@ -119,7 +130,9 @@ async function checkIndicator(
   exposeErrors: boolean
 ): Promise<IndicatorOutcome> {
   try {
-    const result = await indicator.check(signal)
+    const returned = indicator.check(signal)
+    assertPromiseIntact()
+    const result = await returned
     // The details are whatever the indicator chose to return, and the response is usually
     // reachable without credentials, so they are served only with the diagnostics switch on.
     // Switch off: only `status` is read, so an unreadable diagnostic cannot turn an up indicator down.
@@ -129,17 +142,17 @@ async function checkIndicator(
     // Anything that is not `up` counts as down, matching how the aggregate status reads the same
     // field, so a misbehaving indicator cannot be down in the response and up in the log.
     return status === 'up'
-      ? { entry, isUp: true }
-      : { entry, isUp: false, cause: { kind: 'reported-down' } }
+      ? outcomeOf({ entry, isUp: true })
+      : outcomeOf({ entry, isUp: false, cause: { kind: 'reported-down' } })
   } catch (reason) {
     const message = summarizeRejection(reason)
-    return {
+    return outcomeOf({
       entry: exposeErrors
         ? { name, status: 'down', details: { error: message } }
         : { name, status: 'down' },
       isUp: false,
       cause: { kind: 'rejected', message }
-    }
+    })
   }
 }
 
@@ -172,11 +185,13 @@ function runIndicator(
     (win) => {
       const timer = setTimeout(() => {
         controller.abort()
-        win({
-          entry: { name, status: 'down', details: { timedOutAfterMs: timeoutMs } },
-          isUp: false,
-          cause: { kind: 'timed-out', timeoutMs }
-        })
+        win(
+          outcomeOf({
+            entry: { name, status: 'down', details: { timedOutAfterMs: timeoutMs } },
+            isUp: false,
+            cause: { kind: 'timed-out', timeoutMs }
+          })
+        )
       }, timeoutMs)
       return () => clearTimeout(timer)
     }
@@ -260,6 +275,9 @@ export class HealthService implements OnApplicationBootstrap, BeforeApplicationS
 
   /** The readiness run in progress, shared by every probe that arrives while it lasts. */
   private inflight: Promise<HealthResponse> | undefined
+
+  /** Whether the line for a refused runtime was written and no probe has answered since. */
+  private refusing = false
 
   /**
    * The last finished readiness answer and when it finished, reused for `readinessCacheMs`. The time is
@@ -544,11 +562,10 @@ export class HealthService implements OnApplicationBootstrap, BeforeApplicationS
    */
   async checkReadiness(): Promise<HealthResponse> {
     if (this.draining) {
-      return { status: 'error', checks: [{ name: 'shutdown', status: 'down' }] }
+      return outcomeOf({ status: 'error', checks: [{ name: 'shutdown', status: 'down' }] })
     }
-    if (promiseAltered()) {
-      return { status: 'error', checks: [{ name: 'runtime', status: 'down' }] }
-    }
+    // No user code runs between this and the `await` below, so the read the `await` makes is checked.
+    if (promiseAltered()) return this.refused()
     const cached = this.cached
     if (
       cached !== undefined &&
@@ -556,42 +573,71 @@ export class HealthService implements OnApplicationBootstrap, BeforeApplicationS
     ) {
       return cached.response
     }
-    this.inflight ??= this.shareRun()
+    this.inflight ??= this.runReadiness()
     return await this.inflight
   }
 
   /**
-   * The run every concurrent probe awaits, forgotten once it ends.
+   * The answer while what a promise's settling reads is not as at load: not ready, and one line the
+   * first time, since a verdict awaited through a replaced constructor could be forged.
+   *
+   * @returns The not-ready response, on an object that inherits nothing.
+   */
+  private refused(): HealthResponse {
+    if (!this.refusing) {
+      this.refusing = true
+      this.writeLine(
+        {
+          event: 'CORE_HEALTH_RUNTIME_ALTERED',
+          message: 'A promise built-in was replaced: readiness answers not ready',
+          check: 'runtime'
+        },
+        true
+      )
+    }
+    return outcomeOf({ status: 'error', checks: [{ name: 'runtime', status: 'down' }] })
+  }
+
+  /**
+   * Run every indicator once and record the answer; the run every concurrent probe awaits, forgotten once
+   * it ends.
    *
    * @returns The aggregated health response.
    */
-  private async shareRun(): Promise<HealthResponse> {
+  private async runReadiness(): Promise<HealthResponse> {
     try {
-      return await this.runReadiness()
+      return await this.collect()
+    } catch (cause) {
+      if (!promiseAltered()) throw cause
+      return this.refused()
     } finally {
       this.inflight = undefined
     }
   }
 
   /**
-   * Run every indicator once and record the answer.
+   * Start every indicator and read each outcome in turn, then record the answer.
    *
    * @returns The aggregated health response.
    */
-  private async runReadiness(): Promise<HealthResponse> {
+  private async collect(): Promise<HealthResponse> {
     const timeoutMs = this.options.health.indicatorTimeoutMs
     const exposeErrors = this.options.health.exposeIndicatorErrors
     // Taken before the probes run, so an outcome is ordered by when its probe
     // started rather than by when it happened to finish.
     const seq = ++this.probeSequence
-    // None rejects, so awaiting the started checks in turn leaves no rejection unhandled.
     const started = this.resolveIndicators().map((entry) =>
       runIndicator(entry, timeoutMs, exposeErrors)
     )
+    // Every check is marked handled before the first `await`: one that rejects while an earlier one is
+    // awaited would otherwise be an unhandled rejection.
+    for (let at = 0; at < started.length; at += 1) ignoreRejection(started[at] as Promise<unknown>)
     const outcomes: IndicatorOutcome[] = []
     for (let at = 0; at < started.length; at += 1) {
+      assertPromiseIntact()
       outcomes.push(await (started[at] as Promise<IndicatorOutcome>))
     }
+    assertPromiseIntact()
     // After every indicator has settled, not as each one does, so the lines
     // follow the declared indicator order rather than which dependency answered
     // first — otherwise two readings of one outage order their logs differently.
@@ -600,8 +646,9 @@ export class HealthService implements OnApplicationBootstrap, BeforeApplicationS
     }
     const checks = outcomes.map((outcome) => outcome.entry)
     const status = checks.every((check) => check.status === 'up') ? 'ok' : 'error'
-    const response: HealthResponse = { status, checks }
+    const response = outcomeOf<HealthResponse>({ status, checks })
     this.cached = { at: performance.now(), response }
+    this.refusing = false
     return response
   }
 }
