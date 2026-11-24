@@ -653,20 +653,27 @@ export class HealthService implements OnApplicationBootstrap, BeforeApplicationS
     // Every check is marked handled before the first `await`: one that rejects while an earlier one is
     // awaited would otherwise be an unhandled rejection.
     for (let at = 0; at < started.length; at += 1) ignoreRejection(started[at] as Promise<unknown>)
+    // Index reads and writes only: an indicator has run by now, and a `push`, `map` or `every` it replaced
+    // would otherwise decide the answer.
     const outcomes: IndicatorOutcome[] = []
     for (let at = 0; at < started.length; at += 1) {
       assertPromiseIntact()
-      outcomes.push(await (started[at] as Promise<IndicatorOutcome>))
+      outcomes[at] = await (started[at] as Promise<IndicatorOutcome>)
     }
     assertPromiseIntact()
     // After every indicator has settled, not as each one does, so the lines
     // follow the declared indicator order rather than which dependency answered
     // first — otherwise two readings of one outage order their logs differently.
-    for (const outcome of outcomes) {
+    const entries: HealthCheckEntry[] = []
+    let allUp = true
+    for (let at = 0; at < outcomes.length; at += 1) {
+      const outcome = outcomes[at] as IndicatorOutcome
       this.reportTransition(outcome, seq)
+      entries[at] = outcome.entry
+      if (outcome.entry.status !== 'up') allUp = false
     }
-    const checks = frozen(outcomes.map((outcome) => outcome.entry))
-    const status = checks.every((check) => check.status === 'up') ? 'ok' : 'error'
+    const checks = frozen(entries)
+    const status = allUp ? 'ok' : 'error'
     const response = outcomeOf<HealthResponse>({ status, checks })
     this.cached = { at: performance.now(), response }
     this.refusing = false

@@ -330,13 +330,17 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 // 2026-11-24, a refused own-slot promise keeps its run in flight and aborts its indicator signal: root 29.12 KiB (measured
 // 29791 B). The growth is code, with no module added to a bundle: `afterSettled`, the pin of the promise it returns, `listen`
 // and the own-data reads of a constructor descriptor.
+// 2026-11-24, PM grant (core 16b.17(g)): root 29.37 KiB (measured 30041 B), `./openapi` 11.02 KiB (measured 11253 B) and
+// `./http` 8.54 KiB (measured 8718 B). The growth is code, with no module added to a bundle: the `Promise[Symbol.species]`
+// entry and its load-time check, and the option copy and the readiness collection rewritten as index loops, which every
+// subpath that copies options inlines.
 const BUDGETS = [
-  { name: '. (root)', path: 'dist/index.mjs', brotli: 29.12 * 1024 },
+  { name: '. (root)', path: 'dist/index.mjs', brotli: 29.37 * 1024 },
   { name: './pagination', path: 'dist/pagination/index.mjs', brotli: 1.5 * 1024 },
   { name: './health', path: 'dist/health/index.mjs', brotli: 0.5 * 1024 },
-  { name: './openapi', path: 'dist/openapi/index.mjs', brotli: 10.87 * 1024 },
+  { name: './openapi', path: 'dist/openapi/index.mjs', brotli: 11.02 * 1024 },
   { name: './metrics', path: 'dist/metrics/index.mjs', brotli: 0.5 * 1024 },
-  { name: './http', path: 'dist/http/index.mjs', brotli: 8.3 * 1024 }
+  { name: './http', path: 'dist/http/index.mjs', brotli: 8.54 * 1024 }
 ]
 
 const fmt = (n) => `${(n / 1024).toFixed(2)} kB`

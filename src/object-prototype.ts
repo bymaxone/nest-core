@@ -42,6 +42,8 @@ const getOwnPropertyDescriptors = Object.getOwnPropertyDescriptors
 const getOwnPropertyNames = Object.getOwnPropertyNames
 const getPrototypeOf = Object.getPrototypeOf
 const buildRealm = runInNewContext
+if (typeof getOwnPropertyDescriptor(IntrinsicPromise, Symbol.species)?.get !== 'function')
+  throw new ErrorConstructor('Promise[Symbol.species] is not an intrinsic accessor')
 
 /** `Function.prototype`'s call, apply and bind, as they were at load. */
 const CALL = getOwnPropertyDescriptor(FunctionPrototype, 'call')?.value
@@ -78,6 +80,7 @@ function capture(list: ReadonlyArray<readonly [object, readonly PropertyKey[]]>)
  */
 const PROMISE_WATCHED: Watched = capture([
   [PromisePrototype, ['constructor']],
+  [IntrinsicPromise, [Symbol.species]],
   [ObjectPrototype, ['then']],
   [Array.prototype, ['then']],
   [FunctionPrototype, ['then']]
