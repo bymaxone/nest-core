@@ -4,7 +4,7 @@
  * Layer: integration.
  * Goal: a getter that replaces `Array.prototype` or `Set.prototype` members when it is read cannot drop, add or
  * refuse an item of the options being copied.
- * Mocks: none; each case replaces a built-in for good, so it runs in a child process.
+ * Mocks: none; the first case replaces nothing, and every other case replaces a built-in for good, so it runs in a child process.
  */
 import { resolve } from 'node:path'
 
