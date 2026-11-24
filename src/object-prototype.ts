@@ -232,7 +232,8 @@ export function pinned(promise: unknown): boolean {
 /**
  * Run `onValue` or `onFailure` once `promise` settles, never reading what its settling would read live. A
  * native promise whose own `constructor` is the intrinsic one is awaited, which reads neither `then` nor
- * `Symbol.species`; any other is heard through the intrinsic `then`.
+ * `Symbol.species`; any other is heard through the intrinsic `then`. A native promise no listener could be
+ * attached to has not been seen to settle, so neither callback runs for it.
  */
 function listen(
   promise: PromiseLike<unknown>,
@@ -253,7 +254,7 @@ function listen(
       })()
     } else apply(IntrinsicThen, promise, [onValue, onFailure])
   } catch {
-    onValue()
+    if (getPrototypeOf(promise) !== PromisePrototype) onValue()
   }
 }
 

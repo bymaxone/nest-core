@@ -657,6 +657,50 @@ describe('a rejecting promise whose constructor is an accessor while Object.prot
   })
 })
 
+describe('a pending promise whose foreign constructor makes attaching a listener throw', () => {
+  /** A pending native promise whose non-configurable foreign `constructor` has a throwing `Symbol.species`. */
+  const STUCK = `
+    const Foreign = function Foreign() {}
+    Object.defineProperty(Foreign, Symbol.species, { get() { throw new Error('species') } })
+    const stuck = (ms) => {
+      const promise = new Promise((resolve) => setTimeout(resolve, ms))
+      Object.defineProperty(promise, 'constructor', { value: Foreign, writable: false, configurable: false })
+      return promise
+    }
+  `
+
+  it('does not resolve afterSettled while the promise is pending', () => {
+    const output = lastLineFromChild(`
+      ${STUCK}
+      const { afterSettled } = require('./src/object-prototype')
+      let done = 0
+      void (async () => { await afterSettled(stuck(40)); done += 1 })()
+      setTimeout(() => console.log('done=' + done), 20)
+    `)
+
+    expect(output).toBe('done=0')
+  })
+
+  it('starts no second scrape collection while the first is pending', () => {
+    const output = lastLineFromChild(`
+      ${STUCK}
+      const { createMetricsController } = require('./src/metrics/metrics.controller')
+      const { normalizeCoreOptions } = require('./src/core.options')
+      let calls = 0
+      const pending = stuck(150)
+      const registry = { contentType: 'text/plain', metrics: () => { calls += 1; return pending } }
+      const host = { httpAdapter: { setHeader() {}, reply() {} } }
+      const Controller = createMetricsController('metrics')
+      const controller = new Controller(registry, normalizeCoreOptions({ metrics: { enabled: true, path: 'metrics' } }), host)
+      controller.scrape({}, {}).catch(() => undefined)
+      setTimeout(() => controller.scrape({}, {}).catch(() => undefined), 30)
+      setTimeout(() => console.log('calls=' + calls), 80)
+    `)
+
+    expect(output).toBe('calls=1')
+  })
+})
+
 describe('the intrinsic Promise this package builds its verdict promises with', () => {
   it.each([
     ['a function that is not Promise', Object],
