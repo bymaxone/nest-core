@@ -77,6 +77,29 @@ describe('the readiness verdict beside forged promise machinery', () => {
     ])
   })
 
+  it('says so again for a second alteration after a probe was answered from the cache', async () => {
+    const up: IHealthIndicator = { name: 'db', check: async () => ({ status: 'up' }) }
+    const service = new HealthService(
+      [up],
+      normalizeCoreOptions({ health: { readinessCacheMs: 10_000 } })
+    )
+    await service.checkReadiness()
+
+    plantThen(Array.prototype)
+    await service.checkReadiness()
+    removeThen(Array.prototype)
+    const cached = await service.checkReadiness()
+    plantThen(Array.prototype)
+    await service.checkReadiness()
+    removeThen(Array.prototype)
+
+    expect(cached.status).toBe('ok')
+    expect(warn.mock.calls.map(([entry]) => (entry as { event: string }).event)).toEqual([
+      'CORE_HEALTH_RUNTIME_ALTERED',
+      'CORE_HEALTH_RUNTIME_ALTERED'
+    ])
+  })
+
   it.each([
     ['Object.prototype', Object.prototype],
     ['Array.prototype', Array.prototype],

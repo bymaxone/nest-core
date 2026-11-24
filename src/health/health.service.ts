@@ -581,6 +581,7 @@ export class HealthService implements OnApplicationBootstrap, BeforeApplicationS
     if (promiseAltered()) return this.refused()
     const cached = this.cached
     if (cached !== undefined && now - cached.at < this.options.health.readinessCacheMs) {
+      this.refusing = false
       return cached.response
     }
     const run = (this.inflight ??= this.runReadiness())
