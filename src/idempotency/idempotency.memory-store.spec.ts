@@ -91,6 +91,17 @@ describe('InMemoryIdempotencyStore', () => {
     })
   })
 
+  it('replays an empty body as an empty body, distinct from an absent one', async () => {
+    const { store } = storeWithClock()
+    const claim = await store.begin('k', 'fp', 60)
+    if (!claim.claimed) throw new Error('expected a claim')
+    await store.complete('k', claim.token, { status: 204, headers: {}, body: '' }, 3600)
+
+    const held = await store.begin('k', 'fp', 60)
+
+    expect(held).toMatchObject({ claimed: false, record: { response: { body: '' } } })
+  })
+
   it('frees the key on release so a retry can claim it', async () => {
     const { store } = storeWithClock()
     const claim = await store.begin('k', 'fp', 60)

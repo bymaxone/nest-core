@@ -24,8 +24,9 @@ export interface StoredResponseHeaders {
 /**
  * The answer of a completed request, as stored and replayed.
  *
- * `body` is absent when the original answer exceeded the size limit: the request is then known to
- * have completed but cannot be replayed.
+ * `body` is absent when the original answer exceeded a size bound: the request is then known to have
+ * completed but cannot be replayed. An empty answer (a 204, an empty 200) is stored as `''`, which is
+ * a body, and replays.
  */
 export interface IdempotencyStoredResponse {
   /** The HTTP status of the original answer. */
@@ -88,13 +89,16 @@ export type IdempotencyBeginResult =
  * completed but not replayable, and a store never receives an oversized value. A store may still
  * enforce its own limit; its `complete` then rejects.
  *
- * **A rejected `complete`.** The claim is not released: it stays until its lease ends, so the key
- * never runs twice at once, and the client receives the handler's own response. The interceptor
- * logs a warning. A retry in that window is told the request is in progress.
+ * **A rejected `complete`.** The claim is not released and the client receives the handler's own
+ * response; the interceptor logs a warning without the key or the body. The write may nonetheless
+ * have happened (a lost reply), so a retry gets one of two outcomes: the replay, when the record was
+ * written, or `in_progress` until the lease ends, when it was not.
  *
- * **Lease.** A claim whose holder never answers, or whose answer was lost after the handler
- * succeeded, stays `in_progress` until its lease ends: a retry in that window is told the request
- * is in progress. Choose the lease with that wait in mind.
+ * **Lease.** The lease must outlive the longest handler, downstream timeouts included: a handler
+ * that outlives its lease can be claimed again and run in parallel with the first. A claim whose
+ * holder never answers, or whose answer was lost after the handler succeeded, stays `in_progress`
+ * until its lease ends, and a retry in that window is told the request is in progress. Choose the
+ * lease with both in mind.
  */
 export interface IIdempotencyStore {
   /**
