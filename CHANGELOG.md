@@ -16,6 +16,13 @@ heading here.
 
 A patch release. The health and metrics routes answer at the path their options name under any versioning.
 
+**Known limits:**
+
+- The response guard of the request deadline does not cover the native writers `writeHead`, `removeHeader`,
+  `writeContinue` and `writeEarlyHints`. After the `504` has been sent, a call to one of them from a handler
+  that holds the response (`@Res()`) throws `ERR_HTTP_HEADERS_SENT` into that handler. The client has already
+  received the `504`, and the throw writes nothing more to it.
+
 **Fixed:**
 
 - The health and metrics routes are `VERSION_NEUTRAL`: they answer at the path `health.path` and
@@ -139,7 +146,7 @@ as plain data`, naming the option), when it has more than 1000 keys, before any 
   the `prototype` of `Promise.prototype.constructor` is not `Promise.prototype`, so a slot set to
   another constructor never builds the verdict promises. A replacement that passes that check is not detected.
 - The response guard does not yet cover the native writers `writeHead`, `removeHeader`, `writeContinue` and
-  `writeEarlyHints`; they are scheduled for 1.6.23.
+  `writeEarlyHints`; they are scheduled for a later release.
 
 ## [1.6.21] - 2026-11-21
 
