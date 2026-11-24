@@ -9,6 +9,7 @@
 import { resolve } from 'node:path'
 
 import { lastLineFromChild } from './__tests__/promise-forgery.harness'
+import { readOptions } from './read-options'
 
 /**
  * The options as `readOptions` returned them, in a child where the host's getter for `key` ran `plant`
@@ -29,6 +30,22 @@ function readAfter(shape: string, key: string, plant: string, value: string): st
 function replace(owner: string, name: string, body: string): string {
   return `Object.defineProperty(${owner}, ${name}, { value: function () { ${body} }, configurable: true, writable: true })`
 }
+
+describe('options read with nothing replaced', () => {
+  it('copies a list of maps, a list of blocks and a map of settings whole', () => {
+    const given = {
+      list: [{ a: 1 }, { b: 2 }],
+      blocks: [{ n: 1 }, { n: 2 }],
+      named: { a: 1, b: 2 }
+    }
+
+    const copy = readOptions(given, { list: 0, blocks: [{ n: 0 }], named: 1 })
+
+    expect(JSON.stringify(copy)).toBe(
+      '{"list":[{"a":1},{"b":2}],"blocks":[{"n":1},{"n":2}],"named":{"a":1,"b":2}}'
+    )
+  })
+})
 
 describe('options read while a getter replaces a built-in the copy is made with', () => {
   it.each([

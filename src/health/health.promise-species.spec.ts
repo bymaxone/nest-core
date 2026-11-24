@@ -8,7 +8,9 @@
  */
 import { resolve } from 'node:path'
 
+import { normalizeCoreOptions } from '../core.options'
 import { lastLineFromChild } from '../__tests__/promise-forgery.harness'
+import { HealthService } from './health.service'
 
 /** What a probe answered in a child where indicator `first` ran `plant` and answered up, and `db` answered down. */
 function answerAfter(plant: string): string {
@@ -26,6 +28,20 @@ function answerAfter(plant: string): string {
     })
   `)
 }
+
+describe('the readiness verdict with nothing replaced', () => {
+  it('answers error with each check in the order it was given, the later one down', async () => {
+    const first = { name: 'first', check: async () => ({ status: 'up' as const }) }
+    const db = { name: 'db', check: async () => ({ status: 'down' as const }) }
+
+    const answer = await new HealthService([first, db], normalizeCoreOptions()).checkReadiness()
+
+    expect([answer.status, answer.checks.map((one) => `${one.name}:${one.status}`)]).toEqual([
+      'error',
+      ['first:up', 'db:down']
+    ])
+  })
+})
 
 describe('the readiness verdict beside a replaced Promise[Symbol.species]', () => {
   it('answers runtime down while the species is an accessor that returns another constructor', () => {
