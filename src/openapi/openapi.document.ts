@@ -686,7 +686,7 @@ function augmentPaths(
  *   deployment, and which features that deployment serves is not an OpenAPI
  *   setting.
  * @param pathPrefixes - Every prefix the application serves this package's own
- *   routes under: its global prefix combined with each URI version segment. The
+ *   routes under: its global prefix, since they are version-neutral. The
  *   peer documents paths as the application serves them, so this package cannot
  *   recognize its own routes without them — and must not guess them from the
  *   document, which would mistake a consumer's shared controller prefix for the

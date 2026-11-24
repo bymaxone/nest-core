@@ -16,7 +16,7 @@
  * 503) without depending on either platform's response type.
  * @layer Controller
  */
-import { Controller, Get, HttpStatus, Inject, Res } from '@nestjs/common'
+import { Controller, Get, HttpStatus, Inject, Res, VERSION_NEUTRAL } from '@nestjs/common'
 import type { Type } from '@nestjs/common'
 import { HttpAdapterHost } from '@nestjs/core'
 
@@ -67,7 +67,7 @@ function assertControllerMatchesOptions(
  * @returns A controller class ready to be added to a module's `controllers` array.
  */
 export function createHealthController(registeredPath: string): Type<object> {
-  @Controller(registeredPath)
+  @Controller({ path: registeredPath, version: VERSION_NEUTRAL })
   class HealthController {
     /**
      * @param healthService - The readiness and liveness aggregator.
