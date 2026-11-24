@@ -80,7 +80,7 @@ as plain data`, naming the option), when it has more than 1000 keys, before any 
   inherit nothing, so a `then` planted on `Object.prototype` cannot answer for them.
 - While `Promise.prototype.constructor` is replaced, or a `then` sits on `Object.prototype`,
   `Array.prototype` or `Function.prototype`, readiness answers not ready with a `runtime` check down and
-  writes one `CORE_HEALTH_RUNTIME_ALTERED` warning (the level of `CORE_HEALTH_DOWN`), the scrape answers
+  writes one `CORE_HEALTH_RUNTIME_ALTERED` warning, the scrape answers
   `503`, the CORS decision lists no origin, and the request deadline treats no path as excluded. The check
   runs again right before each verdict is awaited and before the answer is cached, so a constructor swapped
   and restored during a probe is caught too.
@@ -89,12 +89,11 @@ as plain data`, naming the option), when it has more than 1000 keys, before any 
 
 **Known limits:**
 
-- No `Promise` static is read on a verdict path, and no `.then`, `.catch` or `.finally` is attached to one;
-  `src/promise-statics.scan.spec.ts` holds it per site.
-- The scrape body is still produced by `prom-client`, whose `registry.metrics()` awaits `Promise.all`
-  (15.1.3, `registry.js`). Code that replaces `Promise.all` targets that dependency and is outside what this
-  package can answer for; the scrape's deadline and
-  refusal are this package's own code.
+- The rule that a verdict path reads no `Promise` static and attaches no `.then`, `.catch` or `.finally` is
+  held by `src/promise-statics.scan.spec.ts`.
+- The scrape body is still produced by `prom-client`, whose `registry.metrics()` awaits `Promise.all`. Code
+  that replaces `Promise.all` targets that dependency and is outside what this package can answer for; the
+  scrape's deadline and refusal are this package's own code.
 - The response guard does not yet cover the native writers `writeHead`, `removeHeader`, `writeContinue` and
   `writeEarlyHints`; they are scheduled for 1.6.23.
 
