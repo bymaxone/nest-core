@@ -88,9 +88,8 @@ as plain data`, naming the option), when it has more than 1000 keys, before any 
   unhandled rejection, and neither does a promise this package abandons when it refuses: it is given its own
   intrinsic `constructor` before it is awaited, so a `constructor` getter that throws cannot leave its
   rejection unhandled.
-- A built-in that runs between a check and the `await` it guards (the timer armed for a scrape, the clock read
-  for a readiness probe) can no longer swap the constructor unseen: the clock is read first, and the check is
-  made again after a scrape or a probe starts. A scrape refused for this writes one
+- The check is made again after a scrape or a probe starts, right before its `await`, so a built-in that runs
+  in between cannot swap the constructor unseen. A scrape refused for this writes one
   `CORE_METRICS_RUNTIME_ALTERED` warning until a scrape passes again.
 - A readiness run that fails because the guard refused answers not ready even when what was altered has been
   put back by then, instead of rethrowing the refusal.
@@ -103,8 +102,7 @@ as plain data`, naming the option), when it has more than 1000 keys, before any 
   that replaces `Promise.all` targets that dependency and is outside what this package can answer for; the
   scrape's deadline and refusal are this package's own code.
 - Replacements made before this package loads, and a `then` planted after the check on an indicator's own
-  promise, are outside what the guard can see; the same holds for any other built-in a host replaces between
-  a check and the `await` it guards that this package does not call.
+  promise, are outside what the guard can see.
 - The response guard does not yet cover the native writers `writeHead`, `removeHeader`, `writeContinue` and
   `writeEarlyHints`; they are scheduled for 1.6.23.
 
