@@ -22,6 +22,8 @@ const ArrayBinding = Array
 const JsonBinding = JSON
 const ErrorConstructor = Error
 const FunctionPrototype = Function.prototype
+const PromisePrototype = Promise.prototype
+const PromiseConstructor = Promise.prototype.constructor
 const ObjectPrototype = Object.prototype
 const hasOwn = Object.hasOwn
 const defineProperty = Object.defineProperty
@@ -52,7 +54,8 @@ const WATCHED: Watched = ((): Watched => {
       [Array.prototype, ['join', 'slice', 'filter', 'includes', Symbol.iterator]],
       [RegExp.prototype, [Symbol.replace]],
       [proto([][Symbol.iterator]()), ['next']],
-      [proto(new Set().values()), ['next']]
+      [proto(new Set().values()), ['next']],
+      [Promise.prototype, ['constructor']]
     ] as ReadonlyArray<readonly [object, readonly PropertyKey[]]>
   ).map(([owner, names]) => [
     owner,
@@ -138,6 +141,13 @@ function replacedBindings(): number {
  */
 export function builtinsAltered(): boolean {
   return replacedBindings() > 0
+}
+
+/** Whether `Promise.prototype.constructor` is not the one captured at load; `await` reads it. */
+export function promiseAltered(): boolean {
+  return (
+    field(getOwnPropertyDescriptor(PromisePrototype, 'constructor'), 'value') !== PromiseConstructor
+  )
 }
 
 /** Whether `name` of `now` is as a fresh realm holds it, and the function this module met. */

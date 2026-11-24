@@ -300,13 +300,17 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 // 2026-11-23, PR 246 (second entry): `./http` 8.09 KiB, measured 8.08 KiB on a clean build. The growth is code, with no
 // module added: the loop that removes the headers describing the body a handler began, and their names, before the 504
 // envelope. Trimming the list from eight names to five measured 8.07 KiB, so the loop is the cost.
+// 2026-11-23, no verdict reads a `Promise` static: root 27.80 KiB (measured 27.77) and `./http` 8.11 KiB (measured 8.10).
+// The growth is code, with no module added to a bundle: the helper that settles a check or a collection against its
+// timer from the constructor captured at load, the check split into its own function, the shared run, and the
+// `Promise.prototype.constructor` entry of the table of built-ins the guard watches (inlined in `./http`).
 const BUDGETS = [
-  { name: '. (root)', path: 'dist/index.mjs', brotli: 27.64 * 1024 },
+  { name: '. (root)', path: 'dist/index.mjs', brotli: 27.8 * 1024 },
   { name: './pagination', path: 'dist/pagination/index.mjs', brotli: 1.5 * 1024 },
   { name: './health', path: 'dist/health/index.mjs', brotli: 0.5 * 1024 },
   { name: './openapi', path: 'dist/openapi/index.mjs', brotli: 10.7 * 1024 },
   { name: './metrics', path: 'dist/metrics/index.mjs', brotli: 0.5 * 1024 },
-  { name: './http', path: 'dist/http/index.mjs', brotli: 8.09 * 1024 }
+  { name: './http', path: 'dist/http/index.mjs', brotli: 8.11 * 1024 }
 ]
 
 const fmt = (n) => `${(n / 1024).toFixed(2)} kB`
