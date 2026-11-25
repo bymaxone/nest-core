@@ -247,10 +247,17 @@ describe('applyHttpFloors, options', () => {
     await app.listen(0, '127.0.0.1')
     try {
       const server = app.getHttpServer() as SweepingServer
-      const before = server.connectionsCheckingInterval
+      const before = {
+        headers: server.headersTimeout,
+        request: server.requestTimeout,
+        sweep: server.connectionsCheckingInterval
+      }
       await expect(applyHttpFloors(app)).rejects.toThrow(/before listen/)
-      expect(server.headersTimeout).not.toBe(15_000)
-      expect(server.connectionsCheckingInterval).toBe(before)
+      expect({
+        headers: server.headersTimeout,
+        request: server.requestTimeout,
+        sweep: server.connectionsCheckingInterval
+      }).toEqual(before)
     } finally {
       await app.close()
     }
