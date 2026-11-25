@@ -243,6 +243,9 @@
       ],
       "http": [
         "./dist/http/index.d.cts"
+      ],
+      "idempotency": [
+        "./dist/idempotency/index.d.cts"
       ]
     }
   }
