@@ -338,13 +338,39 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 // 8774 B, was 8719 B). The growth is code, with no module added to a bundle: the length read once into a local, and the
 // `!==` comparison it ends the loop on, in the cycle check, the list copy, the option reads and the readiness collection.
 // `./openapi` measured 11276 B against its unchanged 11.02 KiB.
+// 2026-11-25, the writers of the response left out by the request deadline: root 29.49 KiB (measured 30161 B) and `./http`
+// 8.74 KiB (measured 8915 B). The growth is code, with no module added to a bundle: the guard of the head writers, the
+// wider list of writers and the late `writeHead` that passes only the status.
+// 2026-11-25, `./idempotency` 5.47 KiB (measured 5566 B), up from the 1 KiB of the port and the in-memory store alone. The
+// growth is the decorator, the interceptor, the key and fingerprint, the capture and replay of an answer, and the options;
+// the shared host-error, log and option-check modules every subpath inlines come with them. No module that is not already
+// in another bundle entered it, and the rationale of each file sits in its header and in types-only files. The last 48 B are the
+// pattern that reads only a built-in parameter key, which keeps a custom parameter decorator from being refused at boot.
+// 2026-11-25, `./idempotency` 5.62 KiB (measured 5747 B): the status the handler set is captured and replayed, the stored body is
+// `JSON.stringify` with the binary, stream and non-object-JSON answers refused, a serialisation failure is logged, and the interceptor
+// awaits instead of chaining `.then`, which the Promise-statics scan refuses. All code; the comment of each was cut to one line and
+// the rationale sits in the README and the types-only files.
+// 2026-11-24, `./idempotency` 5.66 KiB (measured 5780 B): a status of 500 or more set through the response releases the claim like a
+// thrown error, and a body is refused when its serialisation differs between two calls. Two statements, with no module added.
+// 2026-11-25, `./idempotency` 6.14 KiB (measured 6.13 KiB), up from 5.66 KiB: the stored answer is the one taken at the wire, so the
+// tap on the raw response (hold, size bound, substitute on replay) replaces the stringify path that read the handler's value. All code,
+// with no module added to the bundle; the tap is split into three functions to stay under the 50-line limit, which costs the extra parameters. The rationale of the tap sits in the README and in the doc comment of each function.
+// 2026-11-25, `./idempotency` 6.17 KiB (measured 6.16 KiB), from 6.14: the serialised-header bound the store port states is checked before a
+// stored answer is kept. One constant and one statement; no module added to the bundle.
+// 2026-11-25, `./idempotency` 6.62 KiB (measured 6.61 KiB), from 6.17: the tap and the replacement now read every signature of the three
+// writers of `node:http` (reason phrase, flat or paired header lists, write and end callbacks), set the length of a held body that has none,
+// leave a 204 replay without one, and refuse `@Render` at boot. All code, no module added to the bundle; stripped of comments the bundle is
+// 6.02 KiB, so the prose that remains is the doc comments of the functions, which state the constraints of the signatures they parse.
+// 2026-11-25, `./idempotency` 6796 B (measured 6766 B, plus 30 B of headroom), from 6.62 KiB: a held body sent without a head of its own
+// is given the status the route set, so its length is stated like that of a body with one. One statement; no module added to the bundle.
 const BUDGETS = [
-  { name: '. (root)', path: 'dist/index.mjs', brotli: 29.46 * 1024 },
+  { name: '. (root)', path: 'dist/index.mjs', brotli: 29.49 * 1024 },
   { name: './pagination', path: 'dist/pagination/index.mjs', brotli: 1.5 * 1024 },
   { name: './health', path: 'dist/health/index.mjs', brotli: 0.5 * 1024 },
   { name: './openapi', path: 'dist/openapi/index.mjs', brotli: 11.02 * 1024 },
   { name: './metrics', path: 'dist/metrics/index.mjs', brotli: 0.5 * 1024 },
-  { name: './http', path: 'dist/http/index.mjs', brotli: 8.6 * 1024 }
+  { name: './http', path: 'dist/http/index.mjs', brotli: 8.74 * 1024 },
+  { name: './idempotency', path: 'dist/idempotency/index.mjs', brotli: 6796 }
 ]
 
 const fmt = (n) => `${(n / 1024).toFixed(2)} kB`

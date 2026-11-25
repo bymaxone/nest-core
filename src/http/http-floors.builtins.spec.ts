@@ -139,6 +139,7 @@ describe('the 504 body for a path that holds a quote, a backslash or a control c
       end: (text: string) => {
         body = text
       },
+      destroy: () => undefined,
       once: () => undefined
     }
     const path = '/a"b\\c\n\u0001d'

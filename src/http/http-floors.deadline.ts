@@ -111,8 +111,23 @@ const WRITERS = [
   'cookie',
   'setHeader',
   'write',
-  'end'
+  'end',
+  'writeContinue',
+  'writeEarlyHints',
+  'writeProcessing',
+  'appendHeader',
+  'setHeaders',
+  'writeInformation',
+  'writeHeader'
 ]
+
+/**
+ * The writers that stay live until the head is out, and are no-ops after it. `writeHead` is reached by Node's
+ * own `end` (`_implicitHeader`), so a host that wrapped `end` and finishes it after the `504` was written needs it.
+ * `removeHeader` is not reached by `end` (measured, Node 24); it stays live for a host wrapper's own call before
+ * that flush. `writeHead` writes the status already set and nothing a caller passes (no status, reason phrase or headers).
+ */
+const HEAD_WRITERS = ['writeHead', 'removeHeader']
 
 /** Headers that describe the body a handler began; left in place they frame or label the `504` envelope wrongly. */
 const BODY_HEADERS = [
@@ -141,6 +156,21 @@ function silence(response: DeadlineResponse): void {
       writable: true
     } as PropertyDescriptor)
   }
+  for (const name of HEAD_WRITERS) guardHeadWriter(response, name)
+}
+
+/** Replace `name` on the answered response with a version that is a no-op once its head is out. */
+function guardHeadWriter(response: DeadlineResponse, name: string): void {
+  const original = Reflect.get(response, name) as (...args: unknown[]) => unknown
+  Object.defineProperty(response, name, {
+    __proto__: null,
+    value: (...args: unknown[]) => {
+      if (response.headersSent) return response
+      return original.apply(response, name === 'writeHead' ? [response.statusCode] : args)
+    },
+    configurable: true,
+    writable: true
+  } as PropertyDescriptor)
 }
 
 /**
