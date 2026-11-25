@@ -82,7 +82,9 @@ export class TimingInterceptor implements NestInterceptor {
   constructor(
     @Inject(BYMAX_CORE_OPTIONS) private readonly options: ResolvedCoreOptions,
     @Optional() @Inject(BYMAX_TIMING_SINK) sink: ITimingSink | undefined,
-    @Inject(BYMAX_TIMING_CLOCK) private readonly clock: MonotonicClock = DEFAULT_MONOTONIC_CLOCK,
+    @Optional()
+    @Inject(BYMAX_TIMING_CLOCK)
+    private readonly clock: MonotonicClock = DEFAULT_MONOTONIC_CLOCK,
     @Optional() @Inject(BYMAX_TRACE_CONTEXT) traceContext?: ITraceContextProvider
   ) {
     this.sink = sink ?? new NoopTimingSink()
