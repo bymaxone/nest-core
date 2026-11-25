@@ -1650,8 +1650,8 @@ ships `InMemoryIdempotencyStore` for one process; a deployment with several inst
 - **Refused at boot**: a handler that uses `@Res()` without passthrough, `@Next()`, `@Sse()`, `@Render()`, an
   uploaded file or a raw body. Write `@Idempotent` above `@Sse` and `@Render`.
 - **Limits**: a multipart or otherwise unparsed body is not fingerprinted, so a key reused with another one
-  replays; a replayed `HEAD` sends `content-length: 0`; `@Sse` written above `@Idempotent` truncates the
-  stream and `@Render` written above it escapes the boot check (the first answer is sent, its replay answers `500`); a full in-memory store with `fail-open` runs the handler unprotected; a scope that holds a lone surrogate collides with the same scope
+  replays; a replayed `HEAD` sends `content-length: 0`; `@Render` written above it escapes the boot
+  check (the replay renders the view again with no model, so a view that fails without one answers `500`); a full in-memory store with `fail-open` runs the handler unprotected; a scope that holds a lone surrogate collides with the same scope
   written with `U+FFFD`.
 
 | Code                                  | Status | Meaning                                                       |

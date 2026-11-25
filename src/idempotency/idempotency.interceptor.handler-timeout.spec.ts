@@ -17,8 +17,14 @@ import { Idempotent } from './idempotency.decorator'
 import { InMemoryIdempotencyStore } from './idempotency.memory-store'
 import { BYMAX_IDEMPOTENCY_STORE } from './idempotency.store'
 
+const BOUND_MS = 300
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
 const runs = { count: 0 }
+/** What the handler waits on; the test ends the handler by calling `finish`. */
+const handler: { gate: Promise<void>; finish: () => void } = {
+  gate: Promise.resolve(),
+  finish: () => {}
+}
 
 @Controller('t')
 class SlowController {
@@ -26,14 +32,14 @@ class SlowController {
   @Idempotent({ unscoped: true })
   async slow(): Promise<{ done: true }> {
     runs.count += 1
-    await sleep(150)
+    await handler.gate
     return { done: true }
   }
 }
 
-async function open(timeoutMs: number): Promise<INestApplication> {
+async function open(): Promise<INestApplication> {
   @Module({
-    imports: [BymaxCoreModule.forRoot({ handlerTimeout: { enabled: true, timeoutMs } })],
+    imports: [BymaxCoreModule.forRoot({ handlerTimeout: { enabled: true, timeoutMs: BOUND_MS } })],
     controllers: [SlowController],
     providers: [{ provide: BYMAX_IDEMPOTENCY_STORE, useValue: new InMemoryIdempotencyStore() }]
   })
@@ -49,23 +55,54 @@ const post = (app: INestApplication): request.Test =>
     .post('/t/slow')
     .set('Idempotency-Key', 'timeout-key')
 
-describe('@Idempotent under handlerTimeout, with a handler of 150 ms', () => {
+/** Retry until the claim has left the in-progress state, for at most `limit` tries. */
+async function settled(app: INestApplication, limit: number): Promise<request.Response> {
+  let retry = await post(app)
+  for (
+    let tries = 1;
+    tries < limit && retry.body.code === 'BYMAX_IDEMPOTENCY_IN_PROGRESS';
+    tries++
+  ) {
+    await sleep(25)
+    retry = await post(app)
+  }
+  return retry
+}
+
+describe('@Idempotent under handlerTimeout, on the two sides of the release', () => {
   beforeEach(() => {
     runs.count = 0
+    handler.gate = new Promise<void>((resolve) => {
+      handler.finish = resolve
+    })
   })
 
-  it.each([
-    [100, 409, 'BYMAX_IDEMPOTENCY_NOT_REPLAYABLE'],
-    [60, 409, 'BYMAX_IDEMPOTENCY_IN_PROGRESS']
-  ])('after a bound of %i ms the retry answers %i %s', async (timeoutMs, status, code) => {
-    const app = await open(timeoutMs)
+  it('keeps the claim without a body when the handler ends within one more bound of the 504', async () => {
+    const app = await open()
     try {
       const first = await post(app)
-      await sleep(250)
+      handler.finish()
+      const retry = await settled(app, 80)
+
+      expect(first.status).toBe(504)
+      expect([retry.status, retry.body.code]).toEqual([409, 'BYMAX_IDEMPOTENCY_NOT_REPLAYABLE'])
+      expect(runs.count).toBe(1)
+    } finally {
+      await app.close()
+    }
+  })
+
+  it('leaves the key in progress when the handler ends after the release', async () => {
+    const app = await open()
+    try {
+      const first = await post(app)
+      await sleep(1000)
+      handler.finish()
+      await sleep(100)
       const retry = await post(app)
 
       expect(first.status).toBe(504)
-      expect([retry.status, retry.body.code]).toEqual([status, code])
+      expect([retry.status, retry.body.code]).toEqual([409, 'BYMAX_IDEMPOTENCY_IN_PROGRESS'])
       expect(runs.count).toBe(1)
     } finally {
       await app.close()
