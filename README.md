@@ -1629,7 +1629,7 @@ ships `InMemoryIdempotencyStore` for one process; a deployment with several inst
   elsewhere) makes the inner one answer `409` `BYMAX_IDEMPOTENCY_IN_PROGRESS`, which the outer one stores and
   replays for `ttlSeconds` unless `storeClientErrors: false`. One between them that calls the chain again (a
   retry, a hedge, a race) can run the handler more than once, under the same claim. An outer interceptor that
-  calls the chain again is answered `409`.
+  calls the chain again while the claim is held is answered `409`.
 - **The answer is replayed** with
   `Idempotent-Replayed: true`. A `4xx` answer is replayed too unless `storeClientErrors: false`; `408`, `425`
   and `429` never are, and a `5xx` releases the claim so the retry runs.
