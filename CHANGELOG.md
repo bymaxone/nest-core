@@ -12,6 +12,10 @@ heading here.
 
 ## [Unreleased]
 
+## [1.6.24] - 2026-11-25
+
+A patch release. It adds the `./idempotency` subpath, lets a host use the timing interceptor and middleware without binding the clock, and covers the response writers of the request deadline that earlier releases left out.
+
 ### Added
 
 - **`@bymax-one/nest-core/idempotency`: `@Idempotent()` replays the first answer of a request that repeats an `Idempotency-Key`.** A route needs a `scope` or `unscoped: true`; the storage key is a digest of the scope and the header, and the request fingerprint covers method, path, query and JSON body. A store failure runs the handler unprotected by default and answers `503` on a `required` route or with `onStoreError: 'fail-closed'`. A handler that writes its own response, streams, renders a view or reads a multipart or raw body is refused at boot. The stored answer is what the client was sent, taken at the response writers, so a replay sends the body the client first received, not what an outer interceptor or serializer made of it.
@@ -2043,6 +2047,7 @@ have regressed from. They are kept because the reasoning is worth having.
 [1.6.13]: https://github.com/bymaxone/nest-core/compare/v1.6.10...v1.6.13
 [1.6.14]: https://github.com/bymaxone/nest-core/compare/v1.6.13...v1.6.14
 [1.6.15]: https://github.com/bymaxone/nest-core/compare/v1.6.14...v1.6.15
+[1.6.24]: https://github.com/bymaxone/nest-core/compare/v1.6.23...v1.6.24
 [1.6.23]: https://github.com/bymaxone/nest-core/compare/v1.6.22...v1.6.23
 [1.6.22]: https://github.com/bymaxone/nest-core/compare/v1.6.21...v1.6.22
 [1.6.21]: https://github.com/bymaxone/nest-core/compare/v1.6.20...v1.6.21
@@ -2051,4 +2056,4 @@ have regressed from. They are kept because the reasoning is worth having.
 [1.6.18]: https://github.com/bymaxone/nest-core/compare/v1.6.17...v1.6.18
 [1.6.17]: https://github.com/bymaxone/nest-core/compare/v1.6.16...v1.6.17
 [1.6.16]: https://github.com/bymaxone/nest-core/compare/v1.6.15...v1.6.16
-[Unreleased]: https://github.com/bymaxone/nest-core/compare/v1.6.23...HEAD
+[Unreleased]: https://github.com/bymaxone/nest-core/compare/v1.6.24...HEAD
