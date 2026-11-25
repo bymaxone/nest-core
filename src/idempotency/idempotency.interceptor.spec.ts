@@ -482,7 +482,7 @@ describe('@Idempotent at boot', () => {
     }
   })
 
-  it('refuses @Res without passthrough, @Next and @Sse', () => {
+  it('refuses @Res without passthrough, @Sse and @Render', () => {
     const decorate = (build: () => void): void => build()
     expect(() =>
       decorate(() => {

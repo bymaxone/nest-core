@@ -127,7 +127,7 @@ describe('tap', () => {
     ])
   })
 
-  it('sends a streamed answer as it is written and ends it after settle', async () => {
+  it('sends a streamed answer as it is written and ends it', async () => {
     const raw = recorder()
     const { settle, wire } = settled()
     tap(raw, 100, true, settle)
@@ -146,7 +146,7 @@ describe('tap', () => {
     ])
   })
 
-  it('lets a second end through at once and does not send the held answer after it', async () => {
+  it('lets a second end through and does not send the held answer after it', async () => {
     const raw = recorder()
     const { settle } = settled()
     tap(raw, 100, false, settle)
@@ -350,7 +350,7 @@ describe('tap, every signature of the writers', () => {
     expect(realEnd).toHaveBeenLastCalledWith(ended)
   })
 
-  it('sets the length of a held body that has none, and leaves one that has it', async () => {
+  it('leaves the head alone for a held body with a length, a chunked one and none', async () => {
     const sized = recorder({ 'content-length': '5' })
     const chunked = recorder({ 'transfer-encoding': 'chunked' })
     const empty = recorder()
@@ -397,7 +397,7 @@ describe('substitute, every write and signature', () => {
     ])
   })
 
-  it('keeps the headers of writeHead(status, reason, headers) and calls the callbacks', () => {
+  it('keeps the headers of writeHead(status, reason, headers) and forwards the end callback', () => {
     const raw = recorder()
     const realEnd = jest.spyOn(raw, 'end')
     substitute(raw, 200, stored, 'x')

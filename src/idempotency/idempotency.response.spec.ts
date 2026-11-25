@@ -22,7 +22,7 @@ const answer = (
 })
 
 describe('storable', () => {
-  it('keeps a success whether or not the route keeps client errors', () => {
+  it('keeps a success on a route that does not keep client errors', () => {
     expect(storable(answer(201, '{"a":1}'), false)).toEqual({
       status: 201,
       headers: {},
@@ -91,7 +91,7 @@ describe('storable', () => {
   it.each([
     ['has no body', answer(200, null)],
     ['is a 304', answer(304, '')]
-  ])('keeps an answer that %s without one, so its replay is refused', (_name, wire) => {
+  ])('keeps an answer that %s as a status with no headers and no body', (_name, wire) => {
     expect(storable(wire, true)).toEqual({ status: wire.status, headers: {} })
   })
 })

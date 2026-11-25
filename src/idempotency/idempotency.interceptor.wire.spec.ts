@@ -230,7 +230,7 @@ describe.each([
     expect(runs.count).toBe(1)
   })
 
-  it('answers with an outer interceptor that throws another status on a replay, and does not store it', async () => {
+  it('lets an outer interceptor answer a replay with another status, the handler having run once', async () => {
     const app = await track(new InMemoryIdempotencyStore(), [Late])
     const first = await post(app, '/w/plain', key('late')).set('X-Late', 'none')
     const refused = await post(app, '/w/plain', key('late')).set('X-Late', 'forbidden')
@@ -302,7 +302,7 @@ describe.each([
     expect(runs.count).toBe(1)
   })
 
-  it('stores a client error from the wire, with the allow-listed headers and never a cookie', async () => {
+  it('stores a client error from the wire and replays it with no cookie', async () => {
     const app = await track(new InMemoryIdempotencyStore(), [])
     const first = await post(app, '/w/bad', key('bad'))
     const second = await post(app, '/w/bad', key('bad'))
@@ -360,7 +360,7 @@ describe('the request deadline of applyHttpFloors on Express', () => {
     }
   })
 
-  it('ends the request once when it answers while the handler runs, and keeps the retry out', async () => {
+  it('answers 504 while the handler runs, keeps the retry out, and runs the handler once', async () => {
     const app = await open(moduleWith(new InMemoryIdempotencyStore()), false, 80)
     try {
       const first = await post(app, '/w/slow', 'deadline-running')
@@ -377,7 +377,7 @@ describe('the request deadline of applyHttpFloors on Express', () => {
     }
   })
 
-  it('ends the request once when it answers while the store records the answer', async () => {
+  it('answers 504 while the store records the answer, and the retry then gets the stored answer', async () => {
     const store = new InMemoryIdempotencyStore()
     const complete = store.complete.bind(store)
     jest.spyOn(store, 'complete').mockImplementation(async (...args) => {

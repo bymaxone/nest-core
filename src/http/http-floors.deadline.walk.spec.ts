@@ -88,7 +88,7 @@ describe('the deadline signal when the client goes away', () => {
 })
 
 describe('the 504 body under fake timers', () => {
-  it('is answered with the captured clock while the global Date is replaced', () => {
+  it('is answered with its status and path while the global Date is replaced', () => {
     jest.useFakeTimers({ now: new Date('2030-01-01T00:00:00.000Z') })
     try {
       let body = ''

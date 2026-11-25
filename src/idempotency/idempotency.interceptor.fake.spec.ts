@@ -6,6 +6,7 @@
  * one, a subscriber that leaves keeps the claim, and a failed release after a handler error is logged.
  * Mocks: the execution context, the call handler and the store.
  */
+import { Logger } from '@nestjs/common'
 import type { CallHandler, ExecutionContext } from '@nestjs/common'
 import { Reflector } from '@nestjs/core'
 import { of, Subject, throwError } from 'rxjs'
@@ -81,7 +82,7 @@ describe('IdempotencyInterceptor, outside the route it was made for', () => {
 })
 
 describe('IdempotencyInterceptor, request shapes', () => {
-  it('reads the url of a Fastify request, and survives one with no url or method', async () => {
+  it('survives a Fastify request with no url or method, and fingerprints it apart from one with both', async () => {
     const { interceptor, store } = build({ [IDEMPOTENT_OPTIONS]: options })
     const begin = jest.spyOn(store, 'begin')
 
@@ -119,6 +120,7 @@ describe('IdempotencyInterceptor, a subscriber that leaves', () => {
   it('logs and goes on when the release after a handler error fails', async () => {
     const { interceptor, store } = build({ [IDEMPOTENT_OPTIONS]: options })
     jest.spyOn(store, 'release').mockRejectedValue(new Error('down'))
+    const warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined)
 
     const response = fakeResponse()
     const realEnd = response.end
@@ -136,6 +138,9 @@ describe('IdempotencyInterceptor, a subscriber that leaves', () => {
     expect(store.release).toHaveBeenCalledTimes(1)
     expect(realEnd).toHaveBeenCalledTimes(1)
     expect((outcome as Error).message).toBe('boom')
+    expect(warn).toHaveBeenCalledWith(
+      expect.objectContaining({ event: 'CORE_IDEMPOTENCY_RELEASE_FAILED' })
+    )
   })
 })
 
