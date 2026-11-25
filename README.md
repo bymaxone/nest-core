@@ -1621,7 +1621,7 @@ ships `InMemoryIdempotencyStore` for one process; a deployment with several inst
   is a digest of the scope and the header, so one caller's key never resolves another's record.
 - **The fingerprint** covers the method, the path, the query and the JSON body (keys sorted). A key reused
   by a different request is `422`.
-- **The answer is replayed**, status, body and the `content-type`, `location`, `content-location` and `etag` headers, with
+- **The answer is replayed** with
   `Idempotent-Replayed: true`. A `4xx` answer is replayed too unless `storeClientErrors: false`; `408`, `425`
   and `429` never are, and a `5xx` releases the claim so the retry runs.
 - **A request that is still running** gets `409` with `Retry-After: 1`. A caller that times out or
