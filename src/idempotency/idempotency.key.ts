@@ -54,7 +54,7 @@ function canonical(value: unknown, depth: number): string {
   }
   if (typeof value === 'number' && Number.isFinite(value)) return JSON.stringify(value)
   if (Array.isArray(value)) {
-    return `[${value.map((item: unknown) => canonical(item ?? null, depth + 1)).join(',')}]`
+    return `[${Array.from(value as unknown[], (item) => canonical(item ?? null, depth + 1)).join(',')}]`
   }
   if (typeof value === 'object' && isPlain(value)) {
     const members = Object.entries(value)

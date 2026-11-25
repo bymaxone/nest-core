@@ -49,8 +49,10 @@ describe('canonicalBody', () => {
     )
   })
 
-  it('reads a hole in an array as null, as JSON does', () => {
+  it('reads an undefined element and a hole in an array as null, as JSON does', () => {
     expect(canonicalBody([1, undefined, 3])).toBe('[1,null,3]')
+    expect(canonicalBody(new Array<unknown>(1))).toBe('[null]')
+    expect(canonicalBody(new Array<unknown>(2))).not.toBe(canonicalBody([]))
   })
 
   it('sorts keys by code unit, not by locale', () => {
