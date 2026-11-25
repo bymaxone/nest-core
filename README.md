@@ -631,7 +631,7 @@ export interface RequestTimingSample {
 `TimingInterceptor` is still exported and is **deprecated**: nothing registers it, and
 registering it alongside the middleware records a second sample for every request that reaches
 a handler, so leave it out. A second `BymaxTimingMiddleware` that a host
-applies itself while the core's own is on records a second sample for every request. Neither needs a `BYMAX_TIMING_CLOCK` binding of its own.
+applies itself while the core's own is on records a second sample for every request. Neither needs a binding of the clock token, `Symbol.for('@bymax-one/nest-core:timing-clock')`, of its own.
 
 ### Rejected requests are counted too
 
@@ -1619,8 +1619,14 @@ ships `InMemoryIdempotencyStore` for one process; a deployment with several inst
 
 - **A scope is required**: a function returning the caller's identity, or `unscoped: true`. The storage key
   is a digest of the scope and the header, so one caller's key never resolves another's record.
-- **The fingerprint** covers the method, the path, the query and the JSON body (keys sorted). A key reused
-  by a different request is `422`.
+- **The fingerprint** covers the method, the path, the query and the parsed JSON or urlencoded body (keys
+  sorted). A key reused by a different request is `422`. A keyed request whose body is nested deeper than
+  32 levels is `400` `BYMAX_IDEMPOTENCY_KEY_INVALID`, on Express and on Fastify. A `__proto__` field in a form body is
+  refused by Nest's Fastify adapter itself, before the route.
+- **Registered more than once** on a route (a global `APP_INTERCEPTOR` or `@UseInterceptors` beside
+  `@Idempotent`), the outermost instance does the work and the ones inside its chain pass the call through.
+  An interceptor between two of them that runs the chain from another async context (a queue drained
+  elsewhere) makes the inner one answer `409`, as does an outer interceptor that calls the chain again.
 - **The answer is replayed** with
   `Idempotent-Replayed: true`. A `4xx` answer is replayed too unless `storeClientErrors: false`; `408`, `425`
   and `429` never are, and a `5xx` releases the claim so the retry runs.
