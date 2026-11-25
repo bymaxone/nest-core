@@ -60,7 +60,7 @@ function textOf(body: Buffer): string | undefined {
 }
 
 /** The writers of `raw` as they were, bound to it. */
-function originals(raw: WireResponse): Pick<WireResponse, 'writeHead' | 'write' | 'end'> {
+function originals(raw: WireResponse): Writers {
   return {
     writeHead: raw.writeHead.bind(raw),
     write: raw.write.bind(raw),
@@ -69,11 +69,49 @@ function originals(raw: WireResponse): Pick<WireResponse, 'writeHead' | 'write' 
 }
 
 /** Replace the three writers of `raw`; the replacements stay in place and delegate once they are done. */
-function install(
-  raw: WireResponse,
-  writers: Pick<WireResponse, 'writeHead' | 'write' | 'end'>
-): void {
+function install(raw: WireResponse, writers: Writers): void {
   Object.assign(raw, writers)
+}
+
+/** What the tap has seen of the answer so far. */
+interface Held {
+  chunks: Buffer[]
+  passed: Record<string, unknown>
+  status: number | undefined
+  size: number
+  holding: boolean
+}
+
+type Writers = Pick<WireResponse, 'writeHead' | 'write' | 'end'>
+
+/** Stop holding: send the head and the chunks seen so far through the original writers. */
+function release(held: Held, real: Writers): void {
+  held.holding = false
+  if (held.status !== undefined) real.writeHead(held.status, held.passed)
+  for (const chunk of held.chunks.splice(0)) real.write(chunk)
+}
+
+/** Tell `settle` what was sent, then send it unless something else already ended the response. */
+async function deliver(
+  raw: WireResponse,
+  real: Writers,
+  held: Held,
+  settle: (answer: Wire) => Promise<void>
+): Promise<void> {
+  const head = merged(raw, held.passed)
+  const encoded = typeof head['content-encoding'] === 'string'
+  await settle({
+    status: held.status ?? raw.statusCode,
+    headers: head,
+    body: held.holding && !encoded ? textOf(Buffer.concat(held.chunks)) : undefined
+  })
+  if (raw.writableEnded || (held.holding && raw.headersSent)) return
+  try {
+    if (held.holding) release(held, real)
+    real.end()
+  } catch {
+    raw.destroy()
+  }
 }
 
 /**
@@ -95,51 +133,24 @@ export function tap(
   settle: (answer: Wire) => Promise<void>
 ): void {
   const real = originals(raw)
-  const chunks: Buffer[] = []
-  let passed: Record<string, unknown> = {}
-  let status: number | undefined
-  let size = 0
-  let holding = !streamed
+  const held: Held = { chunks: [], passed: {}, status: undefined, size: 0, holding: !streamed }
   let ending = false
 
   const hold = (bytes: Buffer): void => {
-    size += bytes.length
-    chunks.push(bytes)
-    if (size > limit) release()
-  }
-  const release = (): void => {
-    holding = false
-    if (status !== undefined) real.writeHead(status, passed)
-    for (const chunk of chunks.splice(0)) real.write(chunk)
-  }
-  const sent = async (): Promise<void> => {
-    const body = Buffer.concat(chunks)
-    const head = merged(raw, passed)
-    const code = status ?? raw.statusCode
-    const encoded = typeof head['content-encoding'] === 'string'
-    await settle({
-      status: code,
-      headers: head,
-      body: holding && !encoded ? textOf(body) : undefined
-    })
-    if (raw.writableEnded || (holding && raw.headersSent)) return
-    try {
-      if (holding) release()
-      real.end()
-    } catch {
-      raw.destroy()
-    }
+    held.size += bytes.length
+    held.chunks.push(bytes)
+    if (held.size > limit) release(held, real)
   }
 
   install(raw, {
     writeHead: (code, headers) => {
       if (ending) return real.writeHead(code, headers)
-      status = code
-      passed = headersOf(headers)
-      return holding ? raw : real.writeHead(code, headers)
+      held.status = code
+      held.passed = headersOf(headers)
+      return held.holding ? raw : real.writeHead(code, headers)
     },
     write: (chunk, encoding) => {
-      if (!holding || ending) return real.write(chunk, encoding)
+      if (!held.holding || ending) return real.write(chunk, encoding)
       hold(bytesOf(chunk, encoding))
       return true
     },
@@ -147,9 +158,9 @@ export function tap(
       if (ending) return real.end(chunk, encoding)
       ending = true
       const bytes = bytesOf(chunk, encoding)
-      if (holding) hold(bytes)
+      if (held.holding) hold(bytes)
       else if (bytes.length > 0) real.write(bytes)
-      void sent()
+      void deliver(raw, real, held, settle)
       return raw
     }
   })

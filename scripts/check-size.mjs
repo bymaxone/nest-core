@@ -352,9 +352,9 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 // the rationale sits in the README and the types-only files.
 // 2026-11-24, `./idempotency` 5.66 KiB (measured 5780 B): a status of 500 or more set through the response releases the claim like a
 // thrown error, and a body is refused when its serialisation differs between two calls. Two statements, with no module added.
-// 2026-11-25, `./idempotency` 6.11 KiB (measured 6.10 KiB), up from 5.66 KiB: the stored answer is the one taken at the wire, so the
+// 2026-11-25, `./idempotency` 6.14 KiB (measured 6.13 KiB), up from 5.66 KiB: the stored answer is the one taken at the wire, so the
 // tap on the raw response (hold, size bound, substitute on replay) replaces the stringify path that read the handler's value. All code,
-// with no module added to the bundle; the rationale of the tap sits in the README and in the doc comment of each function.
+// with no module added to the bundle; the tap is split into three functions to stay under the 50-line limit, which costs the extra parameters. The rationale of the tap sits in the README and in the doc comment of each function.
 const BUDGETS = [
   { name: '. (root)', path: 'dist/index.mjs', brotli: 29.49 * 1024 },
   { name: './pagination', path: 'dist/pagination/index.mjs', brotli: 1.5 * 1024 },
@@ -362,7 +362,7 @@ const BUDGETS = [
   { name: './openapi', path: 'dist/openapi/index.mjs', brotli: 11.02 * 1024 },
   { name: './metrics', path: 'dist/metrics/index.mjs', brotli: 0.5 * 1024 },
   { name: './http', path: 'dist/http/index.mjs', brotli: 8.74 * 1024 },
-  { name: './idempotency', path: 'dist/idempotency/index.mjs', brotli: 6.11 * 1024 }
+  { name: './idempotency', path: 'dist/idempotency/index.mjs', brotli: 6.14 * 1024 }
 ]
 
 const fmt = (n) => `${(n / 1024).toFixed(2)} kB`
