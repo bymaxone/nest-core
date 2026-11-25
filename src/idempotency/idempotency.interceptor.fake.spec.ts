@@ -261,15 +261,26 @@ describe('IdempotencyInterceptor, a key that is already held', () => {
     })
   })
 
-  it('replays a completed record that carries its answer', async () => {
+  it('replays a completed record that carries its answer, and does not run the handler', async () => {
+    const answer = { status: 201, headers: { location: '/x' }, body: '{"a":1}' }
     const { interceptor } = build(
       { [IDEMPOTENT_OPTIONS]: options },
-      holding({ state: 'completed', response: stored })
+      holding({ state: 'completed', response: answer })
     )
+    const response = Object.assign(fakeResponse(), { setHeader: jest.fn() })
+    const { writeHead, end } = response
+    const handle = jest.fn(() => of({ ok: true }))
 
-    expect(
-      await settled(interceptor.intercept(context({ headers: keyed }), handler()))
-    ).toBeUndefined()
+    const outcome = await settled(
+      interceptor.intercept(context({ headers: keyed }, 'http', response), { handle })
+    )
+    ;(response.end as () => void)()
+
+    expect(outcome).toBeUndefined()
+    expect(handle).not.toHaveBeenCalled()
+    expect(response.setHeader).toHaveBeenCalledWith('Idempotent-Replayed', 'true')
+    expect(writeHead).toHaveBeenCalledWith(201, { location: '/x', 'content-length': 7 })
+    expect(end).toHaveBeenCalledWith(Buffer.from('{"a":1}'), undefined)
   })
 })
 
