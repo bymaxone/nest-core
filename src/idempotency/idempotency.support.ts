@@ -12,6 +12,9 @@ const ROUTE_ARGUMENTS = '__routeArguments__'
 const RESPONSE_PASSTHROUGH = '__responsePassthrough__'
 const SSE = '__sse__'
 
+/** A built-in parameter key, `type:index`; a custom decorator's key starts with a random id instead. */
+const BUILT_IN_ARGUMENT = /^\d+:\d+$/
+
 /** `@Res`, `@Next`, `@UploadedFile`, `@UploadedFiles` and `@RawBody`, by Nest's parameter type. */
 const REFUSED_PARAMETERS: ReadonlyMap<number, string> = new Map([
   [1, '@Res() without `passthrough: true`'],
@@ -42,6 +45,7 @@ export function assertSupportedHandler(
     Readonly<Record<string, unknown>> | undefined
   const passthrough = Reflect.getMetadata(RESPONSE_PASSTHROUGH, controller, name) === true
   for (const argument of Object.keys(used ?? {})) {
+    if (!BUILT_IN_ARGUMENT.test(argument)) continue
     const type = Number.parseInt(argument, 10)
     const refused = REFUSED_PARAMETERS.get(type)
     if (refused !== undefined && !(passthrough && type === 1)) {

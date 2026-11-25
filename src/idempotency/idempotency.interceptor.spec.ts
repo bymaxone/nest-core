@@ -8,6 +8,7 @@
  * Mocks: a store wrapper that can be made to reject; everything else is a real Express Nest application.
  */
 import {
+  Header,
   BadRequestException,
   Body,
   Controller,
@@ -81,6 +82,14 @@ class IdempotentController {
   @HttpCode(200)
   @Idempotent({ scope })
   ok(): { ok: true } {
+    runs.count += 1
+    return { ok: true }
+  }
+
+  @Post('located')
+  @Header('Location', '/fixed')
+  @Idempotent({ scope })
+  located(): { ok: true } {
     runs.count += 1
     return { ok: true }
   }
@@ -421,6 +430,21 @@ describe('@Idempotent', () => {
   })
 })
 
+describe('@Idempotent with a static @Header', () => {
+  it('replays the header the route sets', async () => {
+    const send = (): Promise<request.Response> =>
+      request(server()).post('/i/located').set('x-user', 'u1').set('Idempotency-Key', 'k-located')
+    runs.count = 0
+    const first = await send()
+    const second = await send()
+
+    expect(first.headers['location']).toBe('/fixed')
+    expect(second.headers['location']).toBe('/fixed')
+    expect(second.headers['idempotent-replayed']).toBe('true')
+    expect(runs.count).toBe(1)
+  })
+})
+
 describe('@Idempotent at boot', () => {
   it('refuses @Next and the uploaded-file and raw-body parameters', () => {
     for (const parameter of [Next(), UploadedFile(), UploadedFiles(), RawBody()]) {
@@ -432,6 +456,26 @@ describe('@Idempotent at boot', () => {
         }
         return void D
       }).toThrow(/does not support/)
+    }
+  })
+
+  it('accepts a custom parameter decorator whatever digits its generated id starts with', () => {
+    for (const id of ['1abc', '2abc', '8abc', '9abc', '12abc']) {
+      class Custom {
+        m(): void {}
+      }
+      Reflect.defineMetadata(
+        '__routeArguments__',
+        { [`${id}__customRouteArgs__:0`]: { index: 0, data: undefined, pipes: [] } },
+        Custom,
+        'm'
+      )
+      const descriptor = Object.getOwnPropertyDescriptor(
+        Custom.prototype,
+        'm'
+      ) as PropertyDescriptor
+
+      expect(() => Idempotent({ unscoped: true })(Custom.prototype, 'm', descriptor)).not.toThrow()
     }
   })
 
