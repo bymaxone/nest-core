@@ -27,7 +27,7 @@ const REFUSED_PARAMETERS: ReadonlyMap<number, string> = new Map([
 
 /**
  * Refuse a handler whose answer or request body cannot be fingerprinted and replayed whole: one that
- * writes its own response, streams, or reads a multipart or raw body.
+ * writes its own response, is `@Sse`, or takes an uploaded file or a raw body.
  *
  * @param controller - The controller class.
  * @param name - The handler's method name.
