@@ -33,7 +33,14 @@ describe('assertSupportedHandler, the parameter keys', () => {
     expect(() => check({ '2:0': {} })).toThrow(/@Next\(\)/)
   })
 
-  it.each(['2x1:0', '2:0x', '2:0 '])(
+  it.each(['2:10', '2:123'])(
+    'refuses %j: a built-in key whose index has more than one digit is still a built-in key',
+    (key) => {
+      expect(() => check({ [key]: {} })).toThrow(/@Next\(\)/)
+    }
+  )
+
+  it.each(['2x1:0', '2:0x', '2:0 ', '2:1x0'])(
     'reads %j as a custom decorator, not as the type it starts with',
     (key) => {
       expect(() => check({ [key]: {} })).not.toThrow()
