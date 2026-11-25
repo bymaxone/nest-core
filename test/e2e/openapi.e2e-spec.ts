@@ -340,14 +340,13 @@ describe('OpenAPI document, deployment fidelity', () => {
   })
 
   /**
-   * URI versioning shifts the documented paths, and the filter follows.
+   * The package's own routes are version-neutral, and recognition follows.
    *
-   * `enableVersioning({ type: URI })` inserts a version segment *after* the
-   * global prefix, so this package's scrape endpoint is documented as
-   * `/api/v1/metrics`. Neither the prefix alone nor the document reveals that
-   * segment; it comes from the application's versioning options. Without
-   * reproducing the composition, a disabled feature stays advertised in every
-   * versioned application — the over-listing this whole module exists to remove.
+   * `enableVersioning({ type: URI })` inserts a version segment into the host's
+   * routes, but health and metrics answer without one, so they are documented
+   * as `/api/health/live` and the document never lists a `/api/v1/...` copy.
+   * Recognition has to find them at that path: a missed route loses its schema,
+   * and a disabled feature stays advertised.
    */
   it('recognizes its own routes under a global prefix and a URI version', async () => {
     const moduleRef = await Test.createTestingModule({
@@ -373,9 +372,10 @@ describe('OpenAPI document, deployment fidelity', () => {
 
     expect(paths).not.toHaveProperty('/api/v1/metrics')
     expect(paths).toHaveProperty('/api/v1/invoices')
-    // The health probe keeps its route and gains what this package knows about
+    expect(paths).not.toHaveProperty('/api/v1/health/live')
+    // The health probe is version-neutral, so it keeps the prefixed route and gains what this package knows about
     // it, which the same recognition drives.
-    expect(paths['/api/v1/health/live']?.['get']).toMatchObject({
+    expect(paths['/api/health/live']?.['get']).toMatchObject({
       responses: {
         200: {
           content: {

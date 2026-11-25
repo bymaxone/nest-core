@@ -297,31 +297,30 @@ describe('applyBymaxOpenApi', () => {
   })
 
   /**
-   * Every URI-versioning shape maps to the segments the peer documents.
-   *
-   * Measured against the real scan before being encoded here: a plain default
-   * version documents `/v1/…`, a custom `prefix` replaces the `v`, `prefix:
-   * false` drops it, an array documents the route once per version, and
-   * `VERSION_NEUTRAL` — like every non-URI type — inserts nothing. Asserted
-   * through the served document rather than on a private helper, so the mapping
-   * is pinned to what a consumer actually gets.
+   * The scrape route is removed when disabled under every versioning shape, and is documented
+   * nowhere under a version segment: the controllers are `VERSION_NEUTRAL`, so each row names the
+   * path a versioned controller would have produced beside `/metrics`.
    */
   it.each([
-    ['a default version', { type: VersioningType.URI, defaultVersion: '1' }, ['/v1/metrics']],
+    [
+      'a default version',
+      { type: VersioningType.URI, defaultVersion: '1' },
+      ['/metrics', '/v1/metrics']
+    ],
     [
       'a custom version prefix',
       { type: VersioningType.URI, defaultVersion: '2', prefix: 'rev' },
-      ['/rev2/metrics']
+      ['/metrics', '/rev2/metrics']
     ],
     [
       'no version prefix',
       { type: VersioningType.URI, defaultVersion: '3', prefix: false },
-      ['/3/metrics']
+      ['/metrics', '/3/metrics']
     ],
     [
       'several default versions',
       { type: VersioningType.URI, defaultVersion: ['1', '2'] },
-      ['/v1/metrics', '/v2/metrics']
+      ['/metrics', '/v1/metrics', '/v2/metrics']
     ],
     [
       'a neutral default version',
@@ -333,9 +332,6 @@ describe('applyBymaxOpenApi', () => {
       { type: VersioningType.HEADER, header: 'X-Version', defaultVersion: '1' },
       ['/metrics']
     ],
-    // URI versioning with no default documents the routes unsegmented, which
-    // was measured rather than assumed — a segment invented here would leave
-    // the disabled route advertised.
     ['URI versioning with no default', { type: VersioningType.URI }, ['/metrics']]
   ])('removes the disabled scrape route under %s', async (_label, versioning, documented) => {
     process.env['NODE_ENV'] = 'test'
@@ -362,12 +358,8 @@ describe('applyBymaxOpenApi', () => {
   })
 
   /**
-   * The prefix and the version segment compose, in that order.
-   *
-   * Measured against the real scan: the version follows the global prefix, so
-   * the scrape endpoint is documented as `/api/v1/metrics`. Joining the two the
-   * wrong way — or not joining them at all — leaves the disabled route
-   * advertised, which is the failure this recognition exists to prevent.
+   * The global prefix is part of the path the package's own routes are recognised by: under a
+   * prefix and a URI default version the scrape endpoint is `/api/metrics`, with no version segment.
    */
   it('removes the disabled scrape route under a prefix and a version together', async () => {
     process.env['NODE_ENV'] = 'test'
@@ -389,7 +381,32 @@ describe('applyBymaxOpenApi', () => {
       unknown
     >
 
+    expect(paths).not.toHaveProperty('/api/metrics')
     expect(paths).not.toHaveProperty('/api/v1/metrics')
+  })
+
+  /** The own health route keeps the package schema at its prefixed path. */
+  it('documents the health route at its prefixed path with the package schema', async () => {
+    process.env['NODE_ENV'] = 'test'
+    const moduleRef = await Test.createTestingModule({
+      imports: [BymaxCoreModule.forRoot({ openapi: { enabled: true } })]
+    }).compile()
+    app = moduleRef.createNestApplication()
+    app.setGlobalPrefix('api')
+    app.enableVersioning({ type: VersioningType.URI, defaultVersion: '1' })
+    await applyBymaxOpenApi(app)
+    await app.init()
+
+    const paths = (await request(app.getHttpServer()).get('/docs-json')).body['paths'] as Record<
+      string,
+      { get: { responses: { 200: { content: Record<string, { schema: { $ref: string } }> } } } }
+    >
+
+    expect(
+      paths['/api/health/live']?.get.responses[200].content['application/json']?.schema
+    ).toEqual({
+      $ref: '#/components/schemas/BymaxHealthResponse'
+    })
   })
 
   /**
@@ -457,7 +474,7 @@ describe('applyBymaxOpenApi', () => {
    */
   it('keeps the version in the published operation id', async () => {
     process.env['NODE_ENV'] = 'test'
-    app = await bootApp({ openapi: { enabled: true } })
+    app = await bootApp({ openapi: { enabled: true } }, [ExampleController])
     app.enableVersioning({ type: VersioningType.URI, defaultVersion: '2' })
     const swagger = await import('@nestjs/swagger')
     const config = new swagger.DocumentBuilder().setTitle('t').setVersion('1').build()
@@ -467,8 +484,11 @@ describe('applyBymaxOpenApi', () => {
     await app.init()
     const ourIds = operationIdsOf((await request(app.getHttpServer()).get('/docs-json')).body)
 
-    expect(ourIds).not.toEqual([])
-    expect(ourIds.every((id) => id.endsWith('_v2'))).toBe(true)
+    const neutral = ourIds.filter((id) => /^(Health|Metrics)Controller_/.test(id))
+    const versioned = ourIds.filter((id) => !neutral.includes(id))
+    expect(versioned).not.toEqual([])
+    expect(versioned.every((id) => id.endsWith('_v2'))).toBe(true)
+    expect(neutral.some((id) => id.endsWith('_v2'))).toBe(false)
     expect(ourIds).toEqual(peerIds)
   })
 
