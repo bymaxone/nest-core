@@ -1652,7 +1652,9 @@ ships `InMemoryIdempotencyStore` for one process; a deployment with several inst
   uploaded file or a raw body. Write `@Idempotent` above `@Sse` and `@Render`.
 - **Limits**: a multipart or otherwise unparsed body is not fingerprinted, so a key reused with another one
   replays; a replayed `HEAD` sends `content-length: 0`; `@Render` written above it escapes the boot
-  check (the replay renders the view again with no model, so a view that fails without one answers `500`); a scope that holds a lone surrogate collides with the same scope
+  check (the replay renders the view again with no model, so a view that fails without one answers `500`);
+  on a route whose own status is `4xx`, an outer interceptor's error at exactly that status is answered with
+  the stored answer; a scope that holds a lone surrogate collides with the same scope
   written with `U+FFFD`.
 
 | Code                                  | Status | Meaning                                                       |

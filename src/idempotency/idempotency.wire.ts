@@ -222,10 +222,10 @@ const BODY_HEADERS = [
 ]
 
 /**
- * Send `stored` in place of the first write that is not an error answer: a first write below `400`,
- * whatever status the route or an outer interceptor gave it, is replaced, and so is one at the status the
- * response already had when this was called, a client-error default of the route; any other write at `400` or
- * above, such as the error of an interceptor outside this one, goes out as it is.
+ * Send `stored` in place of the first write that is not an error answer: one below `400`, whatever its
+ * status, or at the status the response had when this was called, which is the route's own. Any other
+ * write at `400` or above, such as the error of an interceptor outside this one, goes out as it is; an
+ * outer error at exactly the route's own `4xx` status cannot be told from the replay and is replaced.
  *
  * @param raw - The raw response.
  * @param status - The stored status, the one the replacement is sent with.
