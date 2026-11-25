@@ -1628,11 +1628,9 @@ ships `InMemoryIdempotencyStore` for one process; a deployment with several inst
   disconnects while the handler runs leaves the key in progress until `leaseSeconds` ends, because the
   handler is not stopped by it.
 - **What is stored** is `JSON.stringify` of what the handler returned and the status the response had at
-  completion. An answer that is not
-  replayable completes without being stored and replays as `409`: a body over `maxBodyBytes` (default
-  64 KiB), a `Buffer`, typed array, stream or `StreamableFile`, a value that does not serialise (`BigInt`,
-  a cycle, a throwing `toJSON`), an object whose JSON is not an object or array, and a status of `400` or
-  more set through the response.
+  completion. An answer that cannot be replayed byte for byte is stored without a body and replays as `409`:
+  one over `maxBodyBytes`, a binary or streamed value, a value that does not serialise to a JSON object or
+  array, or a status of `400` or more set through the response.
 - **A store that fails** runs the handler unprotected (`onStoreError: 'fail-open'`, the default) or answers
   `503`; a `required` route always answers `503`.
 - **Options**: `required` (missing header is `400`), `leaseSeconds` (60), `ttlSeconds` (86400, at most 7 days),
