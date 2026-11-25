@@ -209,7 +209,7 @@ export class IdempotencyInterceptor implements NestInterceptor {
    */
   private watch(call: Call, token: string, value: unknown, failed: boolean): void {
     const raw = rawOf(call.reply)
-    if (raw.writableEnded || raw.headersSent) {
+    if (raw.headersSent) {
       const sent = { status: raw.statusCode, headers: {} }
       void (failed ? this.drop(call, token) : this.keep(call, token, sent))
       return

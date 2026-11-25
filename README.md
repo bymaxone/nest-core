@@ -1623,9 +1623,9 @@ ships `InMemoryIdempotencyStore` for one process; a deployment with several inst
 - **The answer is replayed** with
   `Idempotent-Replayed: true`. A `4xx` answer is replayed too unless `storeClientErrors: false`; `408`, `425`
   and `429` never are, and a `5xx` releases the claim so the retry runs.
-- **A request that is still running** gets `409` with `Retry-After: 1`. A caller that times out or
-  disconnects while the handler runs leaves the key in progress until `leaseSeconds` ends, because the
-  handler is not stopped by it.
+- **A request that is still running** gets `409` with `Retry-After: 1`. A caller that disconnects
+  does not stop a handler that runs without `handlerTimeout`: a retry gets `409` while it runs and replays
+  the stored answer once it has ended.
 - **What is stored** is what the client was sent, taken at the response writers: the status, the body as
   text, and `content-type`, `location`, `content-location` and `etag`; never `set-cookie`. A replay sends
   those bytes with their own `content-length`, so an interceptor or serializer outside `@Idempotent` neither
@@ -1633,11 +1633,11 @@ ships `InMemoryIdempotencyStore` for one process; a deployment with several inst
   over `maxBodyBytes`, a body that is not UTF-8 or a `304` is sent untouched and replays as `409`. A `4xx` from
   an exception filter is stored the same way.
 - **A failure after the handler returned** (an outer interceptor or serializer that throws) answers `5xx` and
-  releases the claim, so the retry runs the handler again. A timeout that answers while the handler is still
-  running does not: with `handlerTimeout` the subscription ends, so the key stays in progress and the retry
-  gets `409` until `leaseSeconds` ends; with the request deadline the handler keeps running, and when it
-  succeeds the claim is kept without a body, so the retry gets `409` `BYMAX_IDEMPOTENCY_NOT_REPLAYABLE` and
-  the handler ran once (a handler that fails after the deadline releases the claim). A replay replaces the
+  releases the claim, so the retry runs the handler again. An answer sent while the handler is still
+  running, such as a timeout's, does not: when the handler then succeeds the claim is kept without a body,
+  so the retry gets `409` `BYMAX_IDEMPOTENCY_NOT_REPLAYABLE` and the handler ran once; when it fails the
+  claim is released; and a handler that `handlerTimeout` releases before it ends, more than one `timeoutMs`
+  after the answer, leaves the key in progress until `leaseSeconds` ends. A replay replaces the
   first write below `400`, whatever its status: an outer interceptor that maps the replay's `undefined` to
   `204` is replaced too, while a write at `400` or above, such as an outer interceptor's error, goes out as it
   is.
@@ -1651,7 +1651,7 @@ ships `InMemoryIdempotencyStore` for one process; a deployment with several inst
   uploaded file or a raw body. Write `@Idempotent` above `@Sse` and `@Render`.
 - **Limits**: a multipart or otherwise unparsed body is not fingerprinted, so a key reused with another one
   replays; a replayed `HEAD` sends `content-length: 0`; `@Sse` written above `@Idempotent` truncates the
-  stream; a full in-memory store with `fail-open` runs the handler unprotected; a scope that holds a lone surrogate collides with the same scope
+  stream and `@Render` written above it escapes the boot check (the first answer is sent, its replay answers `500`); a full in-memory store with `fail-open` runs the handler unprotected; a scope that holds a lone surrogate collides with the same scope
   written with `U+FFFD`.
 
 | Code                                  | Status | Meaning                                                       |

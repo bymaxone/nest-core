@@ -78,6 +78,19 @@ describe('canonicalBody', () => {
   })
 })
 
+describe('canonicalBody, the depth bound', () => {
+  const nest = (levels: number, wrap: (inner: unknown) => unknown): unknown =>
+    Array.from({ length: levels }).reduce<unknown>((inner) => wrap(inner), 1)
+
+  it.each([
+    ['arrays', (inner: unknown) => [inner]],
+    ['objects', (inner: unknown) => ({ a: inner })]
+  ])('accepts 32 levels of %s and refuses 33', (_name, wrap) => {
+    expect(() => canonicalBody(nest(32, wrap))).not.toThrow()
+    expect(() => canonicalBody(nest(33, wrap))).toThrow(UnfingerprintableBody)
+  })
+})
+
 describe('fingerprint', () => {
   it('ignores member order and nothing else', () => {
     const same = fingerprint({ ...parts, body: { n: 1, a: 2 } })

@@ -57,10 +57,11 @@ function canonical(value: unknown, depth: number): string {
     return `[${Array.from(value as unknown[], (item) => canonical(item ?? null, depth + 1)).join(',')}]`
   }
   if (typeof value === 'object' && isPlain(value)) {
-    const members = Object.entries(value)
-      .filter(([, member]) => member !== undefined)
-      .sort(([left], [right]) => (left < right ? -1 : 1))
-      .map(([name, member]) => `${JSON.stringify(name)}:${canonical(member, depth + 1)}`)
+    const fields = new Map(Object.entries(value))
+    const members = [...fields.keys()]
+      .sort()
+      .filter((name) => fields.get(name) !== undefined)
+      .map((name) => `${JSON.stringify(name)}:${canonical(fields.get(name), depth + 1)}`)
     return `{${members.join(',')}}`
   }
   throw new UnfingerprintableBody('not JSON')

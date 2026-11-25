@@ -97,6 +97,8 @@ interface Answer {
   readonly reason: string
   readonly headers: IncomingHttpHeaders
   readonly body: string
+  /** The status codes of the interim responses that came before the final one. */
+  readonly interim: number[]
 }
 
 /** Start a server whose handler calls `setup.call` once the deadline has answered, before or after the flush. */
@@ -130,6 +132,7 @@ function serve(setup: Setup, late: Late): Promise<Server> {
 function get(server: Server): Promise<Answer> {
   const { port } = server.address() as AddressInfo
   return new Promise((resolve, reject) => {
+    const interim: number[] = []
     send({ host: '127.0.0.1', port, path: '/late', agent: false }, (res) => {
       let body = ''
       res.setEncoding('utf8')
@@ -139,10 +142,12 @@ function get(server: Server): Promise<Answer> {
           status: res.statusCode as number,
           reason: res.statusMessage ?? '',
           headers: res.headers,
-          body
+          body,
+          interim
         })
       )
     })
+      .on('information', (info) => interim.push(info.statusCode))
       .on('error', reject)
       .end()
   })
@@ -189,7 +194,7 @@ describe('the request deadline and the writers called after its answer', () => {
   })
 
   it.each(CALLS)(
-    '%s before a deferred end is flushed leaves the client the 504 envelope, byte for byte',
+    '%s before a deferred end is flushed leaves the client the 504 envelope, byte for byte, and no interim response',
     async (_name, call) => {
       const { answer, late } = await exchange({ deferEnd: true, call })
 
@@ -198,6 +203,7 @@ describe('the request deadline and the writers called after its answer', () => {
       expect(answer.reason).toBe('Gateway Timeout')
       expect(answer.headers['x-late']).toBeUndefined()
       expect(answer.body).toMatch(ENVELOPE)
+      expect(answer.interim).toEqual([])
     }
   )
 

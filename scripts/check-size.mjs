@@ -361,6 +361,8 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 // writers of `node:http` (reason phrase, flat or paired header lists, write and end callbacks), set the length of a held body that has none,
 // leave a 204 replay without one, and refuse `@Render` at boot. All code, no module added to the bundle; stripped of comments the bundle is
 // 6.02 KiB, so the prose that remains is the doc comments of the functions, which state the constraints of the signatures they parse.
+// 2026-11-25, `./idempotency` 6796 B (measured 6766 B, plus 30 B of headroom), from 6.62 KiB: a held body sent without a head of its own
+// is given the status the route set, so its length is stated like that of a body with one. One statement; no module added to the bundle.
 const BUDGETS = [
   { name: '. (root)', path: 'dist/index.mjs', brotli: 29.49 * 1024 },
   { name: './pagination', path: 'dist/pagination/index.mjs', brotli: 1.5 * 1024 },
@@ -368,7 +370,7 @@ const BUDGETS = [
   { name: './openapi', path: 'dist/openapi/index.mjs', brotli: 11.02 * 1024 },
   { name: './metrics', path: 'dist/metrics/index.mjs', brotli: 0.5 * 1024 },
   { name: './http', path: 'dist/http/index.mjs', brotli: 8.74 * 1024 },
-  { name: './idempotency', path: 'dist/idempotency/index.mjs', brotli: 6.62 * 1024 }
+  { name: './idempotency', path: 'dist/idempotency/index.mjs', brotli: 6796 }
 ]
 
 const fmt = (n) => `${(n / 1024).toFixed(2)} kB`

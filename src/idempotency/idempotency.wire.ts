@@ -58,7 +58,7 @@ function partsOf(args: unknown[]): { bytes: Buffer; done: (() => void) | undefin
   const [first, second, third] = args
   const done = [first, second, third].find((arg) => typeof arg === 'function') as
     (() => void) | undefined
-  return { bytes: typeof first === 'function' ? Buffer.alloc(0) : bytesOf(first, second), done }
+  return { bytes: bytesOf(first, second), done }
 }
 
 /** The bytes of one chunk a writer was given. */
@@ -115,7 +115,7 @@ function release(held: Held, real: Writers): void {
   if (held.status !== undefined && held.reason === undefined)
     real.writeHead(held.status, held.passed)
   else if (held.status !== undefined) real.writeHead(held.status, held.reason, held.passed)
-  for (const chunk of held.chunks.splice(0)) real.write(chunk)
+  for (const chunk of held.chunks) real.write(chunk)
 }
 
 /** Tell `settle` what was sent, then send it unless something else already ended the response. */
@@ -137,7 +137,10 @@ async function deliver(
     if (held.holding) {
       const unsized =
         head['content-length'] === undefined && head['transfer-encoding'] === undefined
-      if (held.size > 0 && unsized) held.passed = { ...held.passed, 'content-length': held.size }
+      if (held.size > 0 && unsized) {
+        held.status ??= raw.statusCode
+        held.passed = { ...held.passed, 'content-length': held.size }
+      }
       release(held, real)
     }
     real.end(held.done)

@@ -53,6 +53,24 @@ describe('storable', () => {
     expect(storable(fits, true)?.body).toBe('{"a":1}')
   })
 
+  it('keeps the body when the serialised headers are exactly at the bound', () => {
+    const overhead = Buffer.byteLength(JSON.stringify({ location: '' }))
+    const atBound = answer(201, '{"a":1}', { location: 'x'.repeat(65_536 - overhead) })
+
+    expect(Buffer.byteLength(JSON.stringify({ location: atBound.headers.location }))).toBe(65_536)
+    expect(storable(atBound, true)?.body).toBe('{"a":1}')
+  })
+
+  it('drops a kept header whose value is not a string', () => {
+    const wire = answer(201, '{"a":1}', {
+      location: ['/a', '/b'],
+      etag: 5,
+      'content-type': 'application/json'
+    })
+
+    expect(storable(wire, true)?.headers).toEqual({ 'content-type': 'application/json' })
+  })
+
   it.each([500, 503, 504, 408, 425, 429])('gives the claim back for %s', (status) => {
     expect(storable(answer(status), true)).toBeUndefined()
   })

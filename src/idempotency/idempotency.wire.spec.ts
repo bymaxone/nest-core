@@ -415,3 +415,140 @@ describe('substitute, every write and signature', () => {
     expect(raw.sent[0]).toEqual(['head', 204, {}])
   })
 })
+
+describe('tap and substitute, the boundaries', () => {
+  it('reads a null head as no headers', async () => {
+    const raw = recorder()
+    const { settle, wire } = settled()
+    tap(raw, 100, false, settle)
+
+    raw.writeHead(200, null)
+    raw.end('x')
+    await flush()
+
+    expect(wire()).toEqual({ status: 200, headers: {}, body: 'x' })
+  })
+
+  it('holds a body of exactly the limit', async () => {
+    const raw = recorder()
+    const { settle, wire } = settled()
+    tap(raw, 3, false, settle)
+
+    raw.end('abc')
+    await flush()
+
+    expect(wire().body).toBe('abc')
+  })
+
+  it('sends nothing of a held answer when the head is already out and the response is not ended', async () => {
+    const raw = recorder()
+    const { settle } = settled()
+    tap(raw, 100, false, settle)
+    raw.headersSent = true
+
+    raw.end('x')
+    await flush()
+
+    expect(raw.sent).toEqual([])
+  })
+
+  it('does not end a streamed answer that something else has ended', async () => {
+    const raw = recorder()
+    const { settle } = settled()
+    tap(raw, 100, true, settle)
+    raw.writableEnded = true
+
+    raw.end()
+    await flush()
+
+    expect(raw.sent).toEqual([])
+  })
+
+  it('writes a chunk given after end straight through, before the answer is released', () => {
+    const raw = recorder()
+    const { settle } = settled()
+    tap(raw, 100, false, settle)
+
+    raw.end('a')
+    raw.write('b')
+
+    expect(raw.sent).toEqual([['write', 'b']])
+  })
+
+  it.each(['content-length', 'content-type', 'content-encoding', 'etag', 'transfer-encoding'])(
+    'drops %s of the route, set or passed, when the stored body is sent',
+    (name) => {
+      const raw = recorder({ [name]: 'route', 'x-keep': '1' })
+      substitute(raw, 200, {}, 'x')
+
+      raw.writeHead(200, { [name.toUpperCase()]: 'route', 'X-Own': '1' })
+      raw.end()
+
+      expect(raw.getHeaders()).toEqual({ 'x-keep': '1' })
+      expect(raw.sent[0]).toEqual(['head', 200, { 'X-Own': '1', 'content-length': 1 }])
+    }
+  )
+})
+
+describe('tap and substitute, the return values and the arguments they pass on', () => {
+  it('reads a flat header list whose value is a list', async () => {
+    const raw = recorder()
+    const { settle, wire } = settled()
+    tap(raw, 100, false, settle)
+
+    raw.writeHead(200, ['Set-Cookie', ['a=1', 'b=2']])
+    raw.end('x')
+    await flush()
+
+    expect(wire().headers).toEqual({ 'set-cookie': ['a=1', 'b=2'] })
+  })
+
+  it('sets the length of a one-byte body, with or without a head of its own', async () => {
+    const implicit = recorder()
+    const explicit = recorder()
+    for (const raw of [implicit, explicit]) tap(raw, 100, false, settled().settle)
+
+    explicit.writeHead(200, {})
+    implicit.end('x')
+    explicit.end('x')
+    await flush()
+
+    expect(implicit.sent[0]).toEqual(['head', 200, { 'content-length': 1 }])
+    expect(explicit.sent[0]).toEqual(['head', 200, { 'content-length': 1 }])
+  })
+
+  it('answers true to a held write, and to a replaced one', () => {
+    const held = recorder()
+    const replaced = recorder()
+    tap(held, 100, false, settled().settle)
+    substitute(replaced, 200, {}, 'x')
+
+    expect(held.write('a')).toBe(true)
+    expect(replaced.write('a')).toBe(true)
+  })
+
+  it('replaces a first write at 399, the last status below 400', () => {
+    const raw = recorder()
+    substitute(raw, 201, {}, 'x')
+
+    raw.writeHead(399, {})
+    raw.end('route')
+
+    expect(raw.sent).toEqual([
+      ['head', 201, { 'content-length': 1 }],
+      ['end', Buffer.from('x')]
+    ])
+  })
+
+  it('passes the encoding and the callback of an error answer to the write', () => {
+    const raw = recorder()
+    const write = jest.spyOn(raw, 'write')
+    substitute(raw, 200, {}, 'x')
+    const done = jest.fn()
+
+    raw.writeHead(500, {})
+    raw.write('a', 'latin1', done)
+
+    expect(write).toHaveBeenCalledWith('a', 'latin1', done)
+  })
+})

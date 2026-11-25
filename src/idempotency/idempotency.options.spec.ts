@@ -38,6 +38,13 @@ describe('resolveIdempotentOptions', () => {
     )
   })
 
+  it('accepts a lease exactly as long as the answer is kept', () => {
+    expect(resolveIdempotentOptions({ scope, leaseSeconds: 50, ttlSeconds: 50 })).toMatchObject({
+      leaseSeconds: 50,
+      ttlSeconds: 50
+    })
+  })
+
   it('needs a scope function or unscoped: true, and not both', () => {
     expect(() => resolveIdempotentOptions({} as never)).toThrow(/needs a `scope`/)
     expect(() => resolveIdempotentOptions({ scope: 'x', unscoped: true } as never)).toThrow(
