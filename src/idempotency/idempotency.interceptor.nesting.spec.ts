@@ -311,6 +311,14 @@ describe.each([
     ])
   })
 
+  it('runs the handler twice for an interceptor between the two that hedges', async () => {
+    const server = await boot(moduleOf(PlainController, IdempotencyInterceptor, Hedge), fastify)
+
+    const answer = await post(server, '/n/slow')
+
+    expect([answer.status, runs.count]).toEqual([201, 2])
+  })
+
   it('protects the next request of a connection whose first one was given up', async () => {
     await boot(moduleOf(PlainController, GiveUp, IdempotencyInterceptor), fastify)
     const app = open[0] as INestApplication
