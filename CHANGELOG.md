@@ -12,6 +12,14 @@ heading here.
 
 ## [Unreleased]
 
+### Added
+
+- **`@bymax-one/nest-core/idempotency`: `@Idempotent()` replays the first answer of a request that repeats an `Idempotency-Key`.** A route needs a `scope` or `unscoped: true`; the storage key is a digest of the scope and the header, and the request fingerprint covers method, path, query and JSON body. A store failure runs the handler unprotected by default and answers `503` on a `required` route or with `onStoreError: 'fail-closed'`. A handler that writes its own response, streams, renders a view or reads a multipart or raw body is refused at boot. The stored answer is what the client was sent, taken at the response writers, so a replay sends the body the client first received, not what an outer interceptor or serializer made of it.
+
+### Fixed
+
+- **The request deadline's response guard now covers the native writers of the response that earlier releases left out.** After the `504` has been sent, a call from an `@Res()` handler to one of them (`writeHead`, `appendHeader`, `writeEarlyHints` and the like) used to throw `ERR_HTTP_HEADERS_SENT` into that handler; each is now a no-op, like the other writers, and nothing more is written to the client. `writeHead` and `removeHeader` stay live until the head is out, because Node's own `end` calls `writeHead`: a host that wraps `end` and finishes it later still delivers the `504`. In that window a late `writeHead` writes the `504` status already set and nothing it passes (no status, reason phrase or headers). **Known limits:** a late `removeHeader` before the flush is delegated, since it cannot be told from a host wrapper's own, so a handler that removes `content-type` there still affects the envelope; and a handler that sets `response.statusCode` itself before the flush changes the status of the deferred answer (a property, not a writer).
+
 ## [1.6.23] - 2026-11-24
 
 A patch release. The health and metrics routes answer at the path their options name under any versioning.

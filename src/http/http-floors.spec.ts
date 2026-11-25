@@ -46,17 +46,17 @@ async function start(options?: HttpFloorsOptions): Promise<INestApplication> {
 }
 
 describe('applyHttpFloors, defaults', () => {
-  let app: INestApplication
+  let app: INestApplication | undefined
 
   beforeAll(async () => {
     app = await start()
   })
 
   afterAll(async () => {
-    await app.close()
+    await app?.close()
   })
 
-  const server = (): SweepingServer => app.getHttpServer() as SweepingServer
+  const server = (): SweepingServer => (app as INestApplication).getHttpServer() as SweepingServer
 
   it('sends the security headers and no Strict-Transport-Security', async () => {
     const res = await request(server()).post('/p/echo').send({ a: 1 })
@@ -93,7 +93,7 @@ describe('applyHttpFloors, defaults', () => {
     expect(res.status).toBe(415)
   })
 
-  it('keeps the security headers on the refusal', async () => {
+  it('sends the nosniff header on a refused request', async () => {
     /* The refusal is raised in the parser, after helmet, so the order is what carries them. */
     const res = await request(server())
       .post('/p/echo')
@@ -240,23 +240,30 @@ describe('applyHttpFloors, options', () => {
     await app.close()
   })
 
-  it('throws when the server is already listening, and applies nothing', async () => {
+  it('throws when the server is already listening, and leaves its timeouts and sweep interval alone', async () => {
     /* Node reads the sweep interval when the server starts listening, so later is too late. */
     const moduleRef = await Test.createTestingModule({ imports: [EchoModule] }).compile()
     const app = moduleRef.createNestApplication()
     await app.listen(0, '127.0.0.1')
     try {
       const server = app.getHttpServer() as SweepingServer
-      const before = server.connectionsCheckingInterval
+      const before = {
+        headers: server.headersTimeout,
+        request: server.requestTimeout,
+        sweep: server.connectionsCheckingInterval
+      }
       await expect(applyHttpFloors(app)).rejects.toThrow(/before listen/)
-      expect(server.headersTimeout).not.toBe(15_000)
-      expect(server.connectionsCheckingInterval).toBe(before)
+      expect({
+        headers: server.headersTimeout,
+        request: server.requestTimeout,
+        sweep: server.connectionsCheckingInterval
+      }).toEqual(before)
     } finally {
       await app.close()
     }
   })
 
-  it('rejects an application that is not on Express rather than half-applying', async () => {
+  it('rejects an application that is not on Express', async () => {
     const moduleRef = await Test.createTestingModule({ imports: [EchoModule] }).compile()
     const app = moduleRef.createNestApplication(new FastifyAdapter())
     await expect(applyHttpFloors(app)).rejects.toThrow(/Express/)
@@ -265,7 +272,7 @@ describe('applyHttpFloors, options', () => {
 })
 
 describe('applyHttpFloors, order', () => {
-  it('refuses an application that is already initialised and applies nothing', async () => {
+  it('refuses an application that is already initialised and leaves its timeouts alone', async () => {
     /* After init Nest's own parsers and the routes sit ahead of anything mounted now, so a
        partial application would succeed while only the timeouts took effect. */
     const moduleRef = await Test.createTestingModule({

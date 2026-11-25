@@ -73,6 +73,16 @@
         "default": "./dist/http/index.cjs"
       }
     },
+    "./idempotency": {
+      "import": {
+        "types": "./dist/idempotency/index.d.ts",
+        "default": "./dist/idempotency/index.mjs"
+      },
+      "require": {
+        "types": "./dist/idempotency/index.d.cts",
+        "default": "./dist/idempotency/index.cjs"
+      }
+    },
     "./openapi": {
       "import": {
         "types": "./dist/openapi/index.d.ts",
@@ -233,6 +243,9 @@
       ],
       "http": [
         "./dist/http/index.d.cts"
+      ],
+      "idempotency": [
+        "./dist/idempotency/index.d.cts"
       ]
     }
   }

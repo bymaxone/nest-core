@@ -164,15 +164,15 @@ async function start(timeoutMs = 100): Promise<INestApplication> {
   return app
 }
 
-let app: INestApplication
-const server = (): Server => app.getHttpServer() as Server
+let app: INestApplication | undefined
+const server = (): Server => (app as INestApplication).getHttpServer() as Server
 
 beforeAll(async () => {
   app = await start()
 })
 
 afterAll(async () => {
-  await app.close()
+  await app?.close()
 })
 
 beforeEach(() => {

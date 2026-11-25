@@ -111,8 +111,7 @@ leave off never loads its peer, which the release gate asserts against the packe
 
 ### 🧩 Developer Experience
 
-- ✅ **Subpaths** — the module, plus `./pagination`, `./health`, `./metrics`, `./http` and
-  `./openapi` that a package can import without pulling the module in
+- ✅ **Subpaths** — each feature a package can import without pulling the module in
 - ✅ **Dual-format output** — ESM + CJS with declarations for each format, verified against
   the packed tarball on every run
 - ✅ **Independent features** — each is enabled on its own; the providers for the rest are
@@ -124,14 +123,15 @@ leave off never loads its peer, which the release gate asserts against the packe
 
 ## 📦 Subpath Exports
 
-| Subpath        | Contents                                                                                                                                                                                                                                                            |
-| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `.`            | `BymaxCoreModule`, the error envelope and its code catalog, the request-timing middleware, the DI tokens, and every option type                                                                                                                                     |
-| `./pagination` | `normalizePageQuery`, `buildPageResult`, `normalizeCursorQuery`, `buildCursorResult`, `encodeCursor`, `decodeCursor` and their types — pure functions, no NestJS provider involved                                                                                  |
-| `./health`     | `IHealthIndicator`, `HealthResponse`, the indicator contracts and the `@BymaxHealthIndicator()` marker, so a package that only implements an indicator does not import the module                                                                                   |
-| `./metrics`    | `IMetricsContributor` and the `@BymaxMetricsContributor()` marker, so a package that only publishes metrics imports neither the module nor its DI tokens. The one subpath whose types name `prom-client`, which anyone implementing the contract already depends on |
-| `./http`       | `applyHttpFloors`, the one bootstrap call for the HTTP-level floors: security headers, compressed request bodies refused, and the header and request timeouts — separate so an application that never calls it never loads `helmet`                                 |
-| `./openapi`    | `applyBymaxOpenApi`, the one bootstrap call that builds and mounts the OpenAPI document — separate so an application that never documents its API never loads the code that does                                                                                    |
+| Subpath         | Contents                                                                                                                                                                                                                                                            |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `.`             | `BymaxCoreModule`, the error envelope and its code catalog, the request-timing middleware, the DI tokens, and every option type                                                                                                                                     |
+| `./pagination`  | `normalizePageQuery`, `buildPageResult`, `normalizeCursorQuery`, `buildCursorResult`, `encodeCursor`, `decodeCursor` and their types — pure functions, no NestJS provider involved                                                                                  |
+| `./health`      | `IHealthIndicator`, `HealthResponse`, the indicator contracts and the `@BymaxHealthIndicator()` marker, so a package that only implements an indicator does not import the module                                                                                   |
+| `./metrics`     | `IMetricsContributor` and the `@BymaxMetricsContributor()` marker, so a package that only publishes metrics imports neither the module nor its DI tokens. The one subpath whose types name `prom-client`, which anyone implementing the contract already depends on |
+| `./http`        | `applyHttpFloors`, the one bootstrap call for the HTTP-level floors: security headers, compressed request bodies refused, and the header and request timeouts — separate so an application that never calls it never loads `helmet`                                 |
+| `./idempotency` | `@Idempotent()`, the interceptor, the `IIdempotencyStore` port, `InMemoryIdempotencyStore` and the `BYMAX_IDEMPOTENCY_*` codes                                                                                                                                      |
+| `./openapi`     | `applyBymaxOpenApi`, the one bootstrap call that builds and mounts the OpenAPI document — separate so an application that never documents its API never loads the code that does                                                                                    |
 
 Each subpath ships ESM and CommonJS with its own `.d.ts` and `.d.cts`, so
 `require()` and `import` both resolve the declarations meant for them.
@@ -1593,6 +1593,79 @@ explained.
   `health.indicatorTimeoutMs`, but pass the `signal` on so the work stops too.
 - Leave the OpenAPI document off in production; it is refused there anyway.
 
+## 🔁 HTTP Idempotency
+
+`@Idempotent()` (from `@bymax-one/nest-core/idempotency`) makes a route safe to retry: a repeat of a request
+that carries the same `Idempotency-Key` header replays the first answer instead of running the handler again.
+
+```ts
+import { Body, Controller, Post } from '@nestjs/common'
+import { Idempotent } from '@bymax-one/nest-core/idempotency'
+
+@Controller('payments')
+export class PaymentsController {
+  @Post()
+  @Idempotent({ scope: (request) => (request.user as { id?: string } | undefined)?.id ?? '' })
+  create(@Body() body: { amount: number }): { id: string } {
+    return { id: `pay_${body.amount}` }
+  }
+}
+```
+
+The module that declares the controller provides the store under `BYMAX_IDEMPOTENCY_STORE`. The package
+ships `InMemoryIdempotencyStore` for one process; a deployment with several instances implements
+`IIdempotencyStore` over a shared store (the port's atomicity contract is in its doc comment).
+
+- **A scope is required**: a function returning the caller's identity, or `unscoped: true`. The storage key
+  is a digest of the scope and the header, so one caller's key never resolves another's record.
+- **The fingerprint** covers the method, the path, the query and the JSON body (keys sorted). A key reused
+  by a different request is `422`.
+- **The answer is replayed** with
+  `Idempotent-Replayed: true`. A `4xx` answer is replayed too unless `storeClientErrors: false`; `408`, `425`
+  and `429` never are, and a `5xx` releases the claim so the retry runs.
+- **A request that is still running** gets `409` with `Retry-After: 1`. A caller that disconnects
+  does not stop a handler that runs without `handlerTimeout`: a retry gets `409` while it runs and replays
+  the stored answer once it has ended.
+- **What is stored** is what the client was sent, taken at the response writers: the status, the body as
+  text, and `content-type`, `location`, `content-location` and `etag`; never `set-cookie`. A replay sends
+  those bytes with their own `content-length`, so an interceptor or serializer outside `@Idempotent` neither
+  leaks a field into it nor wraps it twice. An answer with `content-encoding`, a stream, a `Buffer`, a body
+  over `maxBodyBytes`, a body that is not UTF-8 or a `304` is sent untouched and replays as `409`. A `4xx` from
+  an exception filter is stored the same way.
+- **A failure after the handler returned** (an outer interceptor or serializer that throws) answers `5xx` and
+  releases the claim, so the retry runs the handler again. An answer sent while the handler is still
+  running, such as a timeout's, does not: when the handler then succeeds the claim is kept without a body,
+  so the retry gets `409` `BYMAX_IDEMPOTENCY_NOT_REPLAYABLE` and the handler ran once; when it fails the
+  claim is released; and a handler that `handlerTimeout` releases before it ends, more than one `timeoutMs`
+  after the answer, leaves the key in progress until `leaseSeconds` ends. A replay replaces the
+  first write below `400`, whatever its status: an outer interceptor that maps the replay's `undefined` to
+  `204` is replaced too, and so is a write at the status the route set with `@HttpCode(4xx)`, while any other
+  write at `400` or above, such as an outer interceptor's error, goes out as it is and still carries
+  `Idempotent-Replayed: true`.
+- **The answer waits for the store** to record it, and is sent even when the store rejects. A store whose
+  `complete` never settles holds the answer.
+- **A store that fails, a full in-memory store included,** runs the handler unprotected (`onStoreError: 'fail-open'`, the default) or answers
+  `503`; a `required` route always answers `503`.
+- **Options**: `required` (missing header is `400`), `leaseSeconds` (60), `ttlSeconds` (86400, at most 7 days),
+  `maxBodyBytes`, `storeClientErrors`, `onStoreError`. The lease must outlive the longest handler.
+- **Refused at boot**: a handler that uses `@Res()` without passthrough, `@Next()`, `@Sse()`, `@Render()`, an
+  uploaded file or a raw body. Write `@Idempotent` above `@Sse` and `@Render`.
+- **Limits**: a multipart or otherwise unparsed body is not fingerprinted, so a key reused with another one
+  replays; a replayed `HEAD` sends `content-length: 0`; `@Render` written above it escapes the boot
+  check (the replay renders the view again with no model, so a view that fails without one answers `500`);
+  on a route whose own status is `4xx`, an outer interceptor's error at exactly that status is answered with
+  the stored answer; a scope that holds a lone surrogate collides with the same scope
+  written with `U+FFFD`.
+
+| Code                                  | Status | Meaning                                                       |
+| ------------------------------------- | ------ | ------------------------------------------------------------- |
+| `BYMAX_IDEMPOTENCY_KEY_INVALID`       | 400    | The header is malformed, or the body cannot be fingerprinted. |
+| `BYMAX_IDEMPOTENCY_KEY_REQUIRED`      | 400    | A required route got no header.                               |
+| `BYMAX_IDEMPOTENCY_IN_PROGRESS`       | 409    | The first request is still running.                           |
+| `BYMAX_IDEMPOTENCY_NOT_REPLAYABLE`    | 409    | The first answer could not be stored.                         |
+| `BYMAX_IDEMPOTENCY_KEY_REUSED`        | 422    | The key belongs to a different request.                       |
+| `BYMAX_IDEMPOTENCY_STORE_UNAVAILABLE` | 503    | The store, or the scope function, failed.                     |
+
 ## 🏗️ Architecture
 
 ```
@@ -1852,6 +1925,19 @@ in the sections above.
 | `HttpFloorsOptions`, `HttpFloorsHelmetOptions` | types    | The `helmet`, `headersTimeoutMs` and `requestTimeoutMs` options.                          |
 | `HttpFloorsCorsOptions`                        | type     | The `cors` allowlist.                                                                     |
 | `HttpFloorsBodyLimit`, `HttpBodyLimit`         | types    | The `bodyLimit` object, and one parser's limit (a byte count or a size string).           |
+
+### `./idempotency`
+
+| Export                                               | Kind     | Description                                                                                                    |
+| ---------------------------------------------------- | -------- | -------------------------------------------------------------------------------------------------------------- |
+| `Idempotent`                                         | function | The route decorator; takes `IdempotentOptions`, a `ScopedIdempotentOptions` or an `UnscopedIdempotentOptions`. |
+| `IdempotencyInterceptor`                             | class    | The interceptor `@Idempotent` attaches; it reads `BYMAX_IDEMPOTENCY_STORE`.                                    |
+| `BYMAX_IDEMPOTENCY_STORE`                            | token    | Where the application provides its store.                                                                      |
+| `IIdempotencyStore`                                  | type     | The port: `begin`, `complete` and `release`, addressed by a hashed key.                                        |
+| `IdempotencyBeginResult`, `IdempotencyRecord`        | types    | What `begin` returns, and what a store holds under a key.                                                      |
+| `IdempotencyStoredResponse`, `StoredResponseHeaders` | types    | The answer a store keeps and its allow-listed headers.                                                         |
+| `InMemoryIdempotencyStore`                           | class    | A single-process store.                                                                                        |
+| `IdempotencyRequest`, `IdempotencyStoreErrorMode`    | types    | The request a `scope` function reads, and `'fail-open'` or `'fail-closed'`.                                    |
 
 ### `./openapi`
 
