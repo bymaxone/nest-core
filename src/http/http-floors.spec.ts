@@ -46,17 +46,17 @@ async function start(options?: HttpFloorsOptions): Promise<INestApplication> {
 }
 
 describe('applyHttpFloors, defaults', () => {
-  let app: INestApplication
+  let app: INestApplication | undefined
 
   beforeAll(async () => {
     app = await start()
   })
 
   afterAll(async () => {
-    await app.close()
+    await app?.close()
   })
 
-  const server = (): SweepingServer => app.getHttpServer() as SweepingServer
+  const server = (): SweepingServer => (app as INestApplication).getHttpServer() as SweepingServer
 
   it('sends the security headers and no Strict-Transport-Security', async () => {
     const res = await request(server()).post('/p/echo').send({ a: 1 })
