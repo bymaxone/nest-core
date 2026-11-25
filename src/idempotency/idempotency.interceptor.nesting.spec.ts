@@ -8,6 +8,7 @@
  * Mocks: none; real Express and Fastify Nest applications over supertest.
  */
 import { BadRequestException, Controller, Injectable, Module, Post } from '@nestjs/common'
+import { RequestTimeoutException } from '@nestjs/common'
 import { UseInterceptors } from '@nestjs/common'
 import type {
   CallHandler,
@@ -20,12 +21,14 @@ import type {
 import { APP_INTERCEPTOR } from '@nestjs/core'
 import { FastifyAdapter } from '@nestjs/platform-fastify'
 import { Test } from '@nestjs/testing'
-import { from, merge, mergeMap, Observable, retry, take, timeout, timer, catchError } from 'rxjs'
+import { catchError, from, merge, mergeMap, Observable, retry, take, throwError } from 'rxjs'
+import { timeout, timer } from 'rxjs'
 import request from 'supertest'
 import { once } from 'node:events'
 import { connect } from 'node:net'
 import type { Socket } from 'node:net'
-import type { Server } from 'node:http'
+import { Agent, request as send } from 'node:http'
+import type { IncomingMessage, Server } from 'node:http'
 
 import { BymaxCoreModule } from '../core.module'
 import { Idempotent } from './idempotency.decorator'
@@ -114,6 +117,17 @@ class TimeoutAndHandleAgain implements NestInterceptor {
     return next.handle().pipe(
       timeout(20),
       catchError(() => next.handle())
+    )
+  }
+}
+
+/** Gives up on a slow chain, which unsubscribes it. */
+@Injectable()
+class GiveUp implements NestInterceptor {
+  intercept(_context: ExecutionContext, next: CallHandler): Observable<unknown> {
+    return next.handle().pipe(
+      timeout(20),
+      catchError(() => throwError(() => new RequestTimeoutException()))
     )
   }
 }
@@ -263,6 +277,17 @@ async function twice(server: Server): Promise<unknown[]> {
 
 const replayedOnce = [201, undefined, 201, 'true', { n: 1 }, 1]
 
+/** One keyed POST through `agent`: the status, the replay header and the connection it went over. */
+async function over(agent: Agent, port: number, path: string, key: string): Promise<unknown[]> {
+  const sent = send({ agent, port, path, method: 'POST', headers: { 'idempotency-key': key } })
+  sent.end()
+  const [answer] = (await once(sent, 'response')) as [IncomingMessage]
+  const socket = sent.socket as Socket
+  answer.resume()
+  await once(answer, 'end')
+  return [answer.statusCode, answer.headers['idempotent-replayed'], socket]
+}
+
 describe.each([
   ['Express', false],
   ['Fastify', true]
@@ -293,6 +318,27 @@ describe.each([
       'BYMAX_IDEMPOTENCY_IN_PROGRESS',
       0
     ])
+  })
+
+  it('protects the next request of a connection whose first one was given up', async () => {
+    await boot(moduleOf(PlainController, GiveUp, IdempotencyInterceptor), fastify)
+    const app = open[0] as INestApplication
+    await app.listen(0, '127.0.0.1')
+    const port = Number(new URL(await app.getUrl()).port)
+    const agent = new Agent({ keepAlive: true, maxSockets: 1 })
+
+    const first = await over(agent, port, '/n/slow', 'a')
+    const second = await over(agent, port, '/n/ok', 'b')
+    const third = await over(agent, port, '/n/ok', 'b')
+    agent.destroy()
+
+    expect([first[0], second.slice(0, 2), third.slice(0, 2), runs.count]).toEqual([
+      408,
+      [201, undefined],
+      [201, 'true'],
+      2
+    ])
+    expect(new Set([first[2], second[2], third[2]]).size).toBe(1)
   })
 
   it('runs each of 500 keys once under 1000 concurrent requests', async () => {

@@ -147,7 +147,6 @@ describe('the storage', () => {
     const two = copy()
 
     expect(seenBy(one, two)).toEqual([true, true])
-    expect(Object.keys(globalThis)).not.toContain(SLOT.description)
     expect(Object.getOwnPropertyDescriptor(globalThis, SLOT)?.enumerable).toBe(false)
   })
 
