@@ -1639,8 +1639,9 @@ ships `InMemoryIdempotencyStore` for one process; a deployment with several inst
   claim is released; and a handler that `handlerTimeout` releases before it ends, more than one `timeoutMs`
   after the answer, leaves the key in progress until `leaseSeconds` ends. A replay replaces the
   first write below `400`, whatever its status: an outer interceptor that maps the replay's `undefined` to
-  `204` is replaced too, while a write at `400` or above, such as an outer interceptor's error, goes out as it
-  is.
+  `204` is replaced too, and so is a write at the status the route set with `@HttpCode(4xx)`, while any other
+  write at `400` or above, such as an outer interceptor's error, goes out as it is and still carries
+  `Idempotent-Replayed: true`.
 - **The answer waits for the store** to record it, and is sent even when the store rejects. A store whose
   `complete` never settles holds the answer.
 - **A store that fails, a full in-memory store included,** runs the handler unprotected (`onStoreError: 'fail-open'`, the default) or answers
