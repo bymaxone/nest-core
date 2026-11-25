@@ -222,6 +222,28 @@ describe('substitute', () => {
     ])
   })
 
+  it('replaces a write at the client-error status the route already had, and sends another error as it is', () => {
+    const replaced = recorder()
+    replaced.statusCode = 400
+    substitute(replaced, 400, stored, 'x')
+    replaced.end()
+    const other = recorder()
+    other.statusCode = 400
+    substitute(other, 400, stored, 'x')
+    other.writeHead(403, {})
+    other.end('err')
+
+    expect(replaced.sent[0]).toEqual([
+      'head',
+      400,
+      { 'content-type': 'application/json', 'content-length': 1 }
+    ])
+    expect(other.sent).toEqual([
+      ['head', 403, {}],
+      ['end', 'err']
+    ])
+  })
+
   it('sends any other first write as it is, and every later one too', () => {
     const raw = recorder()
     substitute(raw, 201, stored, 'x')

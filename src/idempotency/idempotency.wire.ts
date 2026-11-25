@@ -223,8 +223,9 @@ const BODY_HEADERS = [
 
 /**
  * Send `stored` in place of the first write that is not an error answer: a first write below `400`,
- * whatever status the route or an outer interceptor gave it, is replaced; one at `400` or above, such as
- * the error of an interceptor outside this one, goes out as it is.
+ * whatever status the route or an outer interceptor gave it, is replaced, and so is one at the status the
+ * response already had when this was called, a client-error default of the route; any other write at `400` or
+ * above, such as the error of an interceptor outside this one, goes out as it is.
  *
  * @param raw - The raw response.
  * @param status - The stored status, the one the replacement is sent with.
@@ -238,10 +239,11 @@ export function substitute(
   body: string
 ): void {
   const real = originals(raw)
+  const initial = raw.statusCode
   let passed: Record<string, unknown> | undefined
   let taken: boolean | undefined
 
-  const take = (code: number): boolean => (taken ??= code < 400)
+  const take = (code: number): boolean => (taken ??= code < 400 || code === initial)
   const answer = (done?: () => void): void => {
     const own = Object.fromEntries(
       Object.entries(passed ?? {}).filter(([name]) => {
