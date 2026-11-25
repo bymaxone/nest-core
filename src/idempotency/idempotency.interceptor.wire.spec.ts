@@ -100,6 +100,14 @@ class WireController {
     return { done: true }
   }
 
+  @Post('slow-fail')
+  @Idempotent(unscoped)
+  async slowFail(): Promise<never> {
+    runs.count += 1
+    await sleep(250)
+    throw new Error('late failure')
+  }
+
   @Post('encoded')
   @Idempotent(unscoped)
   @Header('Content-Encoding', 'identity')
@@ -338,6 +346,20 @@ describe('the request deadline of applyHttpFloors on Express', () => {
     runs.count = 0
   })
 
+  it('gives the claim back when the handler fails after the deadline answered', async () => {
+    const app = await open(moduleWith(new InMemoryIdempotencyStore()), false, 80)
+    try {
+      const first = await post(app, '/w/slow-fail', 'deadline-fails')
+      await sleep(300)
+      const later = await post(app, '/w/slow-fail', 'deadline-fails')
+
+      expect([first.status, later.status]).toEqual([504, 504])
+      expect(runs.count).toBe(2)
+    } finally {
+      await app.close()
+    }
+  })
+
   it('ends the request once when it answers while the handler runs, and keeps the retry out', async () => {
     const app = await open(moduleWith(new InMemoryIdempotencyStore()), false, 80)
     try {
@@ -347,8 +369,9 @@ describe('the request deadline of applyHttpFloors on Express', () => {
       const later = await post(app, '/w/slow', 'deadline-running')
 
       expect([first.status, retry.status]).toEqual([504, 409])
-      expect(later.status).toBe(504)
-      expect(runs.count).toBe(2)
+      expect(retry.body.code).toBe('BYMAX_IDEMPOTENCY_IN_PROGRESS')
+      expect([later.status, later.body.code]).toEqual([409, 'BYMAX_IDEMPOTENCY_NOT_REPLAYABLE'])
+      expect(runs.count).toBe(1)
     } finally {
       await app.close()
     }

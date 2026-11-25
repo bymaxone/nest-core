@@ -22,6 +22,7 @@ import {
   UploadedFile,
   UploadedFiles,
   Post,
+  Render,
   Res,
   Sse
 } from '@nestjs/common'
@@ -505,6 +506,16 @@ describe('@Idempotent at boot', () => {
         return void B
       })
     ).toThrow(/@Sse/)
+    expect(() =>
+      decorate(() => {
+        class D {
+          @Idempotent({ unscoped: true })
+          @Render('view')
+          d(): void {}
+        }
+        return void D
+      })
+    ).toThrow(/@Render/)
   })
 
   it('accepts @Res with passthrough', () => {

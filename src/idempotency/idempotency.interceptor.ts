@@ -188,11 +188,11 @@ export class IdempotencyInterceptor implements NestInterceptor {
           value = item
         },
         error: (error: unknown) => {
-          this.watch(call, token, undefined)
+          this.watch(call, token, undefined, true)
           subscriber.error(error)
         },
         complete: () => {
-          this.watch(call, token, value)
+          this.watch(call, token, value, false)
           subscriber.next(value)
           subscriber.complete()
         }
@@ -203,13 +203,15 @@ export class IdempotencyInterceptor implements NestInterceptor {
   }
 
   /**
-   * Settle the claim with what the client is sent next. An answer already sent while the handler ran,
-   * such as a request deadline's, is kept without a body.
+   * Settle the claim with what the client is sent next. An answer already sent while the handler ran, such
+   * as a request deadline's, is kept without a body when the handler then succeeded, because the handler
+   * ran to its end; when it failed the claim is given back.
    */
-  private watch(call: Call, token: string, value: unknown): void {
+  private watch(call: Call, token: string, value: unknown, failed: boolean): void {
     const raw = rawOf(call.reply)
     if (raw.writableEnded || raw.headersSent) {
-      void this.settle(call, token, { status: raw.statusCode, headers: {} })
+      const sent = { status: raw.statusCode, headers: {} }
+      void (failed ? this.drop(call, token) : this.keep(call, token, sent))
       return
     }
     tap(raw, call.options.maxBodyBytes, streamed(value), (answer) =>

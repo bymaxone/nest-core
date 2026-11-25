@@ -53,12 +53,12 @@ function document(handler: object, options: ResolvedIdempotentOptions): void {
  * answer instead of running the handler again.
  *
  * The module that declares the controller must provide `BYMAX_IDEMPOTENCY_STORE`. Write it above `@Sse`
- * and `@HttpCode`: decorators apply bottom-up, and the boot check reads the metadata they set.
+ * and `@Render`: decorators apply bottom-up, and the boot check reads the metadata they set.
  *
  * @param options - A `scope` (or `unscoped: true`) and the optional lease, TTL and size bounds.
  * @returns A method decorator.
- * @throws Error At boot, on invalid options or a handler that writes its own response, streams, or
- *   reads a multipart or raw body.
+ * @throws Error At boot, on invalid options or a handler that writes its own response, streams, renders
+ *   a view, or reads a multipart or raw body.
  */
 export function Idempotent(options: IdempotentOptions): MethodDecorator {
   const resolved = resolveIdempotentOptions(options)

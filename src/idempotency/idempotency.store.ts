@@ -33,7 +33,7 @@ export interface IdempotencyStoredResponse {
   readonly status: number
   /** The allow-listed headers of the original answer, lower-cased. */
   readonly headers: StoredResponseHeaders
-  /** The JSON body serialised once, exactly as it was sent; absent when it was too large to keep or is not replayable JSON. */
+  /** The body as text, exactly as it was sent; absent when it was too large to keep, encoded or not UTF-8. */
   readonly body?: string
 }
 

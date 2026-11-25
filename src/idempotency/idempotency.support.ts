@@ -11,6 +11,7 @@ export const IDEMPOTENT_OPTIONS = Symbol.for('@bymax-one/nest-core:idempotent-op
 const ROUTE_ARGUMENTS = '__routeArguments__'
 const RESPONSE_PASSTHROUGH = '__responsePassthrough__'
 const SSE = '__sse__'
+const RENDER = '__renderTemplate__'
 
 /** A built-in parameter key, `type:index`; a custom decorator's key starts with a random id instead. */
 const BUILT_IN_ARGUMENT = /^\d+:\d+$/
@@ -40,6 +41,9 @@ export function assertSupportedHandler(
 ): void {
   if (Reflect.getMetadata(SSE, handler) === true) {
     throw new Error('@Idempotent does not support an @Sse() handler: a stream cannot be replayed')
+  }
+  if (Reflect.getMetadata(RENDER, handler) !== undefined) {
+    throw new Error('@Idempotent does not support @Render(): a rendered view cannot be replayed')
   }
   const used = Reflect.getMetadata(ROUTE_ARGUMENTS, controller, name) as
     Readonly<Record<string, unknown>> | undefined

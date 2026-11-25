@@ -12,9 +12,9 @@ export interface WireResponse {
   destroy(): unknown
   getHeaders(): Record<string, unknown>
   removeHeader(name: string): void
-  writeHead(status: number, headers?: unknown): unknown
-  write(chunk: unknown, encoding?: unknown): boolean
-  end(chunk?: unknown, encoding?: unknown): unknown
+  writeHead(status: number, ...rest: unknown[]): unknown
+  write(chunk: unknown, ...rest: unknown[]): boolean
+  end(...args: unknown[]): unknown
 }
 
 /** What the client was sent. */
@@ -31,11 +31,34 @@ export function rawOf(reply: object): WireResponse {
   return ((reply as { raw?: WireResponse }).raw ?? reply) as WireResponse
 }
 
-/** The headers a `writeHead` call passes, as an object. */
+/** The headers a `writeHead` call passes, as an object: an object, a flat list or a list of pairs. */
 function headersOf(value: unknown): Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : {}
+  if (typeof value !== 'object' || value === null) return {}
+  if (!Array.isArray(value)) return value as Record<string, unknown>
+  const pairs = value.every(Array.isArray)
+    ? (value as unknown[][])
+    : Array.from({ length: value.length >> 1 }, (_, at) => [value[2 * at], value[2 * at + 1]])
+  const out = new Map<string, unknown>()
+  for (const [name, item] of pairs) {
+    const key = String(name).toLowerCase()
+    out.set(key, out.has(key) ? [out.get(key), item].flat() : item)
+  }
+  return Object.fromEntries(out)
+}
+
+/** The reason phrase and headers of `writeHead(status, reason?, headers?)`. */
+function headOf(rest: unknown[]): { reason?: string; headers: Record<string, unknown> } {
+  return typeof rest[0] === 'string'
+    ? { reason: rest[0], headers: headersOf(rest[1]) }
+    : { headers: headersOf(rest[0]) }
+}
+
+/** The bytes and the completion callback of `write(chunk, encoding?, callback?)` or `end(...)`. */
+function partsOf(args: unknown[]): { bytes: Buffer; done: (() => void) | undefined } {
+  const [first, second, third] = args
+  const done = [first, second, third].find((arg) => typeof arg === 'function') as
+    (() => void) | undefined
+  return { bytes: typeof first === 'function' ? Buffer.alloc(0) : bytesOf(first, second), done }
 }
 
 /** The bytes of one chunk a writer was given. */
@@ -77,6 +100,8 @@ function install(raw: WireResponse, writers: Writers): void {
 interface Held {
   chunks: Buffer[]
   passed: Record<string, unknown>
+  reason: string | undefined
+  done: (() => void) | undefined
   status: number | undefined
   size: number
   holding: boolean
@@ -87,7 +112,9 @@ type Writers = Pick<WireResponse, 'writeHead' | 'write' | 'end'>
 /** Stop holding: send the head and the chunks seen so far through the original writers. */
 function release(held: Held, real: Writers): void {
   held.holding = false
-  if (held.status !== undefined) real.writeHead(held.status, held.passed)
+  if (held.status !== undefined && held.reason === undefined)
+    real.writeHead(held.status, held.passed)
+  else if (held.status !== undefined) real.writeHead(held.status, held.reason, held.passed)
   for (const chunk of held.chunks.splice(0)) real.write(chunk)
 }
 
@@ -107,8 +134,13 @@ async function deliver(
   })
   if (raw.writableEnded || (held.holding && raw.headersSent)) return
   try {
-    if (held.holding) release(held, real)
-    real.end()
+    if (held.holding) {
+      const unsized =
+        head['content-length'] === undefined && head['transfer-encoding'] === undefined
+      if (held.size > 0 && unsized) held.passed = { ...held.passed, 'content-length': held.size }
+      release(held, real)
+    }
+    real.end(held.done)
   } catch {
     raw.destroy()
   }
@@ -133,7 +165,15 @@ export function tap(
   settle: (answer: Wire) => Promise<void>
 ): void {
   const real = originals(raw)
-  const held: Held = { chunks: [], passed: {}, status: undefined, size: 0, holding: !streamed }
+  const held: Held = {
+    chunks: [],
+    passed: {},
+    reason: undefined,
+    done: undefined,
+    status: undefined,
+    size: 0,
+    holding: !streamed
+  }
   let ending = false
 
   const hold = (bytes: Buffer): void => {
@@ -143,21 +183,24 @@ export function tap(
   }
 
   install(raw, {
-    writeHead: (code, headers) => {
-      if (ending) return real.writeHead(code, headers)
+    writeHead: (code, ...rest) => {
+      if (ending) return real.writeHead(code, ...rest)
       held.status = code
-      held.passed = headersOf(headers)
-      return held.holding ? raw : real.writeHead(code, headers)
+      ;({ reason: held.reason, headers: held.passed } = headOf(rest))
+      return held.holding ? raw : real.writeHead(code, ...rest)
     },
-    write: (chunk, encoding) => {
-      if (!held.holding || ending) return real.write(chunk, encoding)
-      hold(bytesOf(chunk, encoding))
+    write: (chunk, ...rest) => {
+      if (!held.holding || ending) return real.write(chunk, ...rest)
+      const { bytes, done } = partsOf([chunk, ...rest])
+      hold(bytes)
+      if (done !== undefined) process.nextTick(done)
       return true
     },
-    end: (chunk, encoding) => {
-      if (ending) return real.end(chunk, encoding)
+    end: (...args) => {
+      if (ending) return real.end(...args)
       ending = true
-      const bytes = bytesOf(chunk, encoding)
+      const { bytes, done } = partsOf(args)
+      held.done = done
       if (held.holding) hold(bytes)
       else if (bytes.length > 0) real.write(bytes)
       void deliver(raw, real, held, settle)
@@ -176,12 +219,12 @@ const BODY_HEADERS = [
 ]
 
 /**
- * Send `stored` in place of the first write that carries the stored status or the status the route was
- * given before the handler; any other first write, such as the error of an interceptor outside this
- * one, goes out as it is.
+ * Send `stored` in place of the first write that is not an error answer: a first write below `400`,
+ * whatever status the route or an outer interceptor gave it, is replaced; one at `400` or above, such as
+ * the error of an interceptor outside this one, goes out as it is.
  *
  * @param raw - The raw response.
- * @param status - The stored status, the one the write to replace carries.
+ * @param status - The stored status, the one the replacement is sent with.
  * @param headers - The stored headers.
  * @param body - The stored body.
  */
@@ -194,29 +237,37 @@ export function substitute(
   const real = originals(raw)
   let passed: Record<string, unknown> | undefined
   let taken: boolean | undefined
-  const route = raw.statusCode
 
-  const take = (code: number): boolean => (taken ??= code === status || code === route)
-  const answer = (): void => {
+  const take = (code: number): boolean => (taken ??= code < 400)
+  const answer = (done?: () => void): void => {
     const own = Object.fromEntries(
-      Object.entries(passed ?? {}).filter(([name]) => !BODY_HEADERS.includes(name.toLowerCase()))
+      Object.entries(passed ?? {}).filter(([name]) => {
+        const lower = name.toLowerCase()
+        return !BODY_HEADERS.includes(lower) && !(lower in headers)
+      })
     )
     for (const name of BODY_HEADERS) raw.removeHeader(name)
     const bytes = Buffer.from(body, 'utf8')
-    real.writeHead(status, { ...own, ...headers, 'content-length': bytes.length })
-    real.end(bytes)
+    const sized = status === 204 ? {} : { 'content-length': bytes.length }
+    real.writeHead(status, { ...own, ...headers, ...sized })
+    real.end(bytes, done)
   }
 
   install(raw, {
-    writeHead: (code, passedHeaders) => {
-      if (!take(code)) return real.writeHead(code, passedHeaders)
-      passed = headersOf(passedHeaders)
+    writeHead: (code, ...rest) => {
+      if (!take(code)) return real.writeHead(code, ...rest)
+      passed = headOf(rest).headers
       return raw
     },
-    write: (chunk, encoding) => (take(raw.statusCode) ? true : real.write(chunk, encoding)),
-    end: (chunk, encoding) => {
-      if (!take(raw.statusCode)) return real.end(chunk, encoding)
-      if (!raw.writableEnded) answer()
+    write: (chunk, ...rest) => {
+      if (!take(raw.statusCode)) return real.write(chunk, ...rest)
+      const { done } = partsOf([chunk, ...rest])
+      if (done !== undefined) process.nextTick(done)
+      return true
+    },
+    end: (...args) => {
+      if (!take(raw.statusCode)) return real.end(...args)
+      if (!raw.writableEnded) answer(partsOf(args).done)
       return raw
     }
   })

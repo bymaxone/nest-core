@@ -357,6 +357,10 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 // with no module added to the bundle; the tap is split into three functions to stay under the 50-line limit, which costs the extra parameters. The rationale of the tap sits in the README and in the doc comment of each function.
 // 2026-11-25, `./idempotency` 6.17 KiB (measured 6.16 KiB), from 6.14: the serialised-header bound the store port states is checked before a
 // stored answer is kept. One constant and one statement; no module added to the bundle.
+// 2026-11-25, `./idempotency` 6.62 KiB (measured 6.61 KiB), from 6.17: the tap and the replacement now read every signature of the three
+// writers of `node:http` (reason phrase, flat or paired header lists, write and end callbacks), set the length of a held body that has none,
+// leave a 204 replay without one, and refuse `@Render` at boot. All code, no module added to the bundle; stripped of comments the bundle is
+// 6.02 KiB, so the prose that remains is the doc comments of the functions, which state the constraints of the signatures they parse.
 const BUDGETS = [
   { name: '. (root)', path: 'dist/index.mjs', brotli: 29.49 * 1024 },
   { name: './pagination', path: 'dist/pagination/index.mjs', brotli: 1.5 * 1024 },
@@ -364,7 +368,7 @@ const BUDGETS = [
   { name: './openapi', path: 'dist/openapi/index.mjs', brotli: 11.02 * 1024 },
   { name: './metrics', path: 'dist/metrics/index.mjs', brotli: 0.5 * 1024 },
   { name: './http', path: 'dist/http/index.mjs', brotli: 8.74 * 1024 },
-  { name: './idempotency', path: 'dist/idempotency/index.mjs', brotli: 6.17 * 1024 }
+  { name: './idempotency', path: 'dist/idempotency/index.mjs', brotli: 6.62 * 1024 }
 ]
 
 const fmt = (n) => `${(n / 1024).toFixed(2)} kB`
