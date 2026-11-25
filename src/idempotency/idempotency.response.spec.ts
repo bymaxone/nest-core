@@ -45,6 +45,14 @@ describe('storable', () => {
     })
   })
 
+  it('stores an answer without its body and headers when the serialised headers pass the bound', () => {
+    const over = answer(201, '{"a":1}', { location: 'x'.repeat(65_537) })
+    const fits = answer(201, '{"a":1}', { location: 'x'.repeat(65_000) })
+
+    expect(storable(over, true)).toEqual({ status: 201, headers: {} })
+    expect(storable(fits, true)?.body).toBe('{"a":1}')
+  })
+
   it.each([500, 503, 504, 408, 425, 429])('gives the claim back for %s', (status) => {
     expect(storable(answer(status), true)).toBeUndefined()
   })

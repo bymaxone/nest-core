@@ -11,6 +11,9 @@ import type { Wire } from './idempotency.wire'
 /** Headers of an answer that are kept and replayed. */
 const KEPT_HEADERS = ['content-type', 'location', 'content-location', 'etag'] as const
 
+/** The most bytes the serialised headers of a stored answer may take, the bound the store port states. */
+const MAX_HEADER_BYTES = 65_536
+
 /** Client errors that say nothing about the request itself, so a retry must run again. */
 const TRANSIENT_CLIENT_ERRORS: ReadonlySet<number> = new Set([408, 425, 429])
 
@@ -46,7 +49,9 @@ export function storable(
   if (status >= 500 || TRANSIENT_CLIENT_ERRORS.has(status)) return undefined
   if (status >= 400 && !storeClientErrors) return undefined
   if (body === undefined || status === 304) return { status, headers: {} }
-  return { status, headers: keptHeaders(answer.headers), body }
+  const headers = keptHeaders(answer.headers)
+  if (Buffer.byteLength(JSON.stringify(headers)) > MAX_HEADER_BYTES) return { status, headers: {} }
+  return { status, headers, body }
 }
 
 /** Whether a value reaches the client as a stream or as bytes, which the tap never holds. */

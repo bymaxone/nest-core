@@ -268,14 +268,18 @@ describe.each([
     expect(runs.count).toBe(1)
   })
 
-  it('still sends the answer when the store fails to record it, and the retry runs again', async () => {
+  it('still sends the answer when the store fails to record it, and leaves the key in progress', async () => {
     const store = new InMemoryIdempotencyStore()
     jest.spyOn(store, 'complete').mockRejectedValue(new Error('down'))
     const app = await track(store, [])
     const first = await post(app, '/w/plain', key('down'))
+    const retry = await post(app, '/w/plain', key('down'))
 
     expect(first.status).toBe(201)
     expect(first.body).toEqual({ ok: true })
+    expect(retry.status).toBe(409)
+    expect(retry.body.code).toBe('BYMAX_IDEMPOTENCY_IN_PROGRESS')
+    expect(runs.count).toBe(1)
   })
 
   it('passes an encoded answer through untouched and refuses its replay', async () => {
