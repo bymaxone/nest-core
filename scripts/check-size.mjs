@@ -338,14 +338,21 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 // 8774 B, was 8719 B). The growth is code, with no module added to a bundle: the length read once into a local, and the
 // `!==` comparison it ends the loop on, in the cycle check, the list copy, the option reads and the readiness collection.
 // `./openapi` measured 11276 B against its unchanged 11.02 KiB.
+// 2026-11-25, the writers of the response left out by the request deadline: root 29.49 KiB (measured 30161 B) and `./http`
+// 8.74 KiB (measured 8915 B). The growth is code, with no module added to a bundle: the guard of the head writers, the
+// wider list of writers and the late `writeHead` that passes only the status.
+// 2026-11-25, `./idempotency` 5.42 KiB (measured 5518 B), up from the 1 KiB of the port and the in-memory store alone. The
+// growth is the decorator, the interceptor, the key and fingerprint, the capture and replay of an answer, and the options;
+// the shared host-error, log and option-check modules every subpath inlines come with them. No module that is not already
+// in another bundle entered it, and the rationale of each file sits in its header and in types-only files.
 const BUDGETS = [
-  { name: '. (root)', path: 'dist/index.mjs', brotli: 29.46 * 1024 },
+  { name: '. (root)', path: 'dist/index.mjs', brotli: 29.49 * 1024 },
   { name: './pagination', path: 'dist/pagination/index.mjs', brotli: 1.5 * 1024 },
   { name: './health', path: 'dist/health/index.mjs', brotli: 0.5 * 1024 },
   { name: './openapi', path: 'dist/openapi/index.mjs', brotli: 11.02 * 1024 },
   { name: './metrics', path: 'dist/metrics/index.mjs', brotli: 0.5 * 1024 },
-  { name: './http', path: 'dist/http/index.mjs', brotli: 8.6 * 1024 },
-  { name: './idempotency', path: 'dist/idempotency/index.mjs', brotli: 1 * 1024 }
+  { name: './http', path: 'dist/http/index.mjs', brotli: 8.74 * 1024 },
+  { name: './idempotency', path: 'dist/idempotency/index.mjs', brotli: 5.42 * 1024 }
 ]
 
 const fmt = (n) => `${(n / 1024).toFixed(2)} kB`
