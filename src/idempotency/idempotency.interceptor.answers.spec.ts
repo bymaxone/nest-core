@@ -52,6 +52,16 @@ class Custom {
   }
 }
 
+/** An instance whose JSON changes each time it is serialised. */
+class Unstable {
+  private calls = 0
+
+  toJSON(): { calls: number } {
+    this.calls += 1
+    return { calls: this.calls }
+  }
+}
+
 /** Gives up on the handler after 50 ms, the way an application-wide timeout does. */
 @Injectable()
 class Outer implements NestInterceptor {
@@ -168,6 +178,21 @@ class AnswersController {
     runs.count += 1
     response.status(202)
     return { ok: true }
+  }
+
+  @Post('unstable')
+  @Idempotent(unscoped)
+  unstable(): Unstable {
+    runs.count += 1
+    return new Unstable()
+  }
+
+  @Post('refused')
+  @Idempotent(unscoped)
+  refused(@Res({ passthrough: true }) response: { status(code: number): unknown }): { ok: false } {
+    runs.count += 1
+    response.status(400)
+    return { ok: false }
   }
 
   @Post('failed')
@@ -298,11 +323,31 @@ describe.each([
     expect(runs.count).toBe(1)
   })
 
-  it('does not replay an answer whose status the handler set to an error', async () => {
+  it('refuses the replay of an answer whose status the handler set to a client error', async () => {
+    const first = await send(app, '/a/refused', key('refused'))
+    const second = await send(app, '/a/refused', key('refused'))
+
+    expect([first.status, second.status]).toEqual([400, 409])
+    expect(JSON.parse(bytes(second)).code).toBe('BYMAX_IDEMPOTENCY_NOT_REPLAYABLE')
+    expect(runs.count).toBe(1)
+  })
+
+  it('lets the retry run again when the handler set a server error status', async () => {
     const first = await send(app, '/a/failed', key('failed'))
     const second = await send(app, '/a/failed', key('failed'))
 
-    expect([first.status, second.status]).toEqual([500, 409])
+    expect([first.status, second.status]).toEqual([500, 500])
+    expect(second.headers['idempotent-replayed']).toBeUndefined()
+    expect(runs.count).toBe(2)
+  })
+
+  it('refuses the replay of an answer whose serialisation changes between calls', async () => {
+    const first = await send(app, '/a/unstable', key('unstable'))
+    const second = await send(app, '/a/unstable', key('unstable'))
+
+    expect(first.status).toBe(201)
+    expect(second.status).toBe(409)
+    expect(JSON.parse(bytes(second)).code).toBe('BYMAX_IDEMPOTENCY_NOT_REPLAYABLE')
     expect(runs.count).toBe(1)
   })
 

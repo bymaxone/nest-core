@@ -51,6 +51,7 @@ function bodyOf(value: unknown, maxBodyBytes: number, onFailure: OnFailure): str
   let text: string | undefined
   try {
     text = JSON.stringify(value) as string | undefined
+    if (JSON.stringify(value) !== text) return undefined
   } catch (cause) {
     onFailure(cause)
     return undefined

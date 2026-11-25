@@ -210,7 +210,9 @@ export class IdempotencyInterceptor implements NestInterceptor {
             call.options.maxBodyBytes,
             this.unserialisable
           )
-          void this.after(this.keep(call, token, stored), () => {
+          const work =
+            stored.status >= 500 ? this.drop(call, token) : this.keep(call, token, stored)
+          void this.after(work, () => {
             subscriber.next(value)
             subscriber.complete()
           })

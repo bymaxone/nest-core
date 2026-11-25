@@ -1629,8 +1629,9 @@ ships `InMemoryIdempotencyStore` for one process; a deployment with several inst
   handler is not stopped by it.
 - **What is stored** is `JSON.stringify` of what the handler returned and the status the response had at
   completion. An answer that cannot be replayed byte for byte is stored without a body and replays as `409`:
-  one over `maxBodyBytes`, a binary or streamed value, a value that does not serialise to a JSON object or
-  array, or a status of `400` or more set through the response.
+  one over `maxBodyBytes`, a binary or streamed value, an object whose JSON is not an object or array, an
+  object whose `toJSON` differs between two calls, or a status of `400` to `499` set through the response. A
+  status of `500` or more set through the response releases the claim, as a thrown `5xx` does.
 - **A store that fails** runs the handler unprotected (`onStoreError: 'fail-open'`, the default) or answers
   `503`; a `required` route always answers `503`.
 - **Options**: `required` (missing header is `400`), `leaseSeconds` (60), `ttlSeconds` (86400, at most 7 days),
