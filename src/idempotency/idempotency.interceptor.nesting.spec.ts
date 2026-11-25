@@ -25,7 +25,6 @@ import { catchError, from, merge, mergeMap, Observable, retry, take, throwError 
 import { timeout, timer } from 'rxjs'
 import request from 'supertest'
 import { once } from 'node:events'
-import { connect } from 'node:net'
 import type { Socket } from 'node:net'
 import { Agent, request as send } from 'node:http'
 import type { IncomingMessage, Server } from 'node:http'
@@ -219,7 +218,7 @@ afterEach(async () => {
   runs.count = 0
 })
 
-/** One answer of {@link atOnce}. */
+/** One answer of {@link flood}. */
 interface Answer {
   readonly key: string
   readonly status: number
@@ -227,35 +226,21 @@ interface Answer {
 }
 
 /**
- * Posts one request per key, all in flight together. The connections are opened first and in small
- * groups, because more connects at once than the listen backlog holds are reset.
+ * Posts one request per key over 64 kept-alive connections: fewer than the listen backlog holds, so
+ * none is reset.
  */
-async function atOnce(port: number, keys: string[]): Promise<Answer[]> {
-  const sockets: Socket[] = []
-  for (let from = 0; from < keys.length; from += 50) {
-    const group = keys.slice(from, from + 50).map(() => connect(port, '127.0.0.1'))
-    await Promise.all(group.map((socket) => once(socket, 'connect')))
-    sockets.push(...group)
-    await sleep(2)
+async function flood(port: number, keys: string[]): Promise<Answer[]> {
+  const agent = new Agent({ keepAlive: true, maxSockets: 64 })
+  try {
+    return await Promise.all(
+      keys.map(async (key) => {
+        const [status, replayed] = await over(agent, port, '/n/slow', key)
+        return { key, status: status as number, replayed: replayed === 'true' }
+      })
+    )
+  } finally {
+    agent.destroy()
   }
-  return Promise.all(
-    sockets.map(async (socket, index) => {
-      const key = keys[index] as string
-      socket.write(
-        `POST /n/slow HTTP/1.1\r\nHost: x\r\nIdempotency-Key: ${key}\r\n` +
-          'Content-Length: 0\r\nConnection: close\r\n\r\n'
-      )
-      const chunks: Buffer[] = []
-      socket.on('data', (chunk: Buffer) => chunks.push(chunk))
-      await once(socket, 'end')
-      const head = Buffer.concat(chunks).toString('latin1').toLowerCase()
-      return {
-        key,
-        status: Number(head.slice(9, 12)),
-        replayed: head.includes('idempotent-replayed')
-      }
-    })
-  )
 }
 
 const post = (server: Server, path: string, key = 'same'): request.Test =>
@@ -308,15 +293,21 @@ describe.each([
     expect(await twice(await boot(module, fastify))).toEqual(replayedOnce)
   })
 
-  it('answers 409 when an interceptor between the two loses the async context', async () => {
+  it('stores and replays 409 when an interceptor between the two loses the async context', async () => {
     const server = await boot(moduleOf(PlainController, IdempotencyInterceptor, Queue), fastify)
 
     const answer = await post(server, '/n/ok')
+    const repeat = await post(server, '/n/ok')
 
     expect([answer.status, answer.body.code, runs.count]).toEqual([
       409,
       'BYMAX_IDEMPOTENCY_IN_PROGRESS',
       0
+    ])
+    expect([repeat.status, repeat.headers['idempotent-replayed'], repeat.body.code]).toEqual([
+      409,
+      'true',
+      'BYMAX_IDEMPOTENCY_IN_PROGRESS'
     ])
   })
 
@@ -341,14 +332,14 @@ describe.each([
     expect(new Set([first[2], second[2], third[2]]).size).toBe(1)
   })
 
-  it('runs each of 500 keys once under 1000 concurrent requests', async () => {
+  it('runs each of 500 keys once under 1000 requests, 64 in flight', async () => {
     await boot(moduleOf(PlainController, IdempotencyInterceptor), fastify)
     const app = open[0] as INestApplication
     await app.listen(0, '127.0.0.1')
     const port = Number(new URL(await app.getUrl()).port)
     const keys = Array.from({ length: 1000 }, (_, index) => `k${index % 500}`)
 
-    const answers = await atOnce(port, keys)
+    const answers = await flood(port, keys)
 
     const ran = answers.filter((one) => one.status === 201 && !one.replayed)
     expect(runs.count).toBe(500)

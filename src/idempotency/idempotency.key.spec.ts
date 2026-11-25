@@ -100,6 +100,10 @@ describe('canonicalBody', () => {
       Object.defineProperty({}, 'a', { get: () => 1, enumerable: true })
     ],
     [
+      'a setter with no getter',
+      Object.defineProperty({}, 'a', { set: jest.fn(), enumerable: true })
+    ],
+    [
       'an own accessor on a parser result',
       parsed({
         get a() {

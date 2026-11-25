@@ -1622,11 +1622,14 @@ ships `InMemoryIdempotencyStore` for one process; a deployment with several inst
 - **The fingerprint** covers the method, the path, the query and the parsed JSON or urlencoded body (keys
   sorted). A key reused by a different request is `422`. A keyed request whose body is nested deeper than
   32 levels is `400` `BYMAX_IDEMPOTENCY_KEY_INVALID`, on Express and on Fastify. A `__proto__` field in a form body is
-  refused by Nest's Fastify adapter itself, before the route.
+  refused by default by Nest's Fastify adapter itself (`onProtoPoisoning`), before the route.
 - **Registered more than once** on a route (a global `APP_INTERCEPTOR` or `@UseInterceptors` beside
   `@Idempotent`), the outermost instance does the work and the ones inside its chain pass the call through.
-  An interceptor between two of them that runs the chain from another async context (a queue drained
-  elsewhere) makes the inner one answer `409`, as does an outer interceptor that calls the chain again.
+  An interceptor between two of them that calls `handle()` from another async context (a queue drained
+  elsewhere) makes the inner one answer `409` `BYMAX_IDEMPOTENCY_IN_PROGRESS`, which the outer one stores and
+  replays for `ttlSeconds` unless `storeClientErrors: false`. One between them that calls the chain again (a
+  retry, a hedge, a race) can run the handler more than once, under the same claim. An outer interceptor that
+  calls the chain again is answered `409`.
 - **The answer is replayed** with
   `Idempotent-Replayed: true`. A `4xx` answer is replayed too unless `storeClientErrors: false`; `408`, `425`
   and `429` never are, and a `5xx` releases the claim so the retry runs.
@@ -1651,8 +1654,9 @@ ships `InMemoryIdempotencyStore` for one process; a deployment with several inst
   `Idempotent-Replayed: true`.
 - **The answer waits for the store** to record it, and is sent even when the store rejects. A store whose
   `complete` never settles holds the answer.
-- **A store that fails, a full in-memory store included,** runs the handler unprotected (`onStoreError: 'fail-open'`, the default) or answers
-  `503`; a `required` route always answers `503`.
+- **A store that fails to claim the key, a full in-memory store included,** runs the handler unprotected
+  (`onStoreError: 'fail-open'`, the default) or answers `503`; a `required` route always answers `503`. Only a
+  failing `begin` does this: a failing `complete` or `release` is logged and the answer is sent.
 - **Options**: `required` (missing header is `400`), `leaseSeconds` (60), `ttlSeconds` (86400, at most 7 days),
   `maxBodyBytes`, `storeClientErrors`, `onStoreError`. The lease must outlive the longest handler.
 - **Refused at boot**: a handler that uses `@Res()` without passthrough, `@Next()`, `@Sse()`, `@Render()`, an

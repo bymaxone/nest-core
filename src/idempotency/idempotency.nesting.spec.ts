@@ -6,6 +6,8 @@
  * the module share one storage, a slot of another shape is not used, and nothing is made before use.
  * Mocks: the call handler; the shared slot on `globalThis` is set and restored by hand.
  */
+import { AsyncLocalStorage } from 'node:async_hooks'
+
 import type { CallHandler } from '@nestjs/common'
 import { Observable, of, Subject, throwError } from 'rxjs'
 
@@ -142,16 +144,20 @@ describe('the storage', () => {
     expect(slot()).toBeUndefined()
   })
 
-  it('is one for two copies of the module', () => {
+  it('is one for two copies of the module, in a hidden, read-only, removable slot', () => {
     const one = copy()
     const two = copy()
 
     expect(seenBy(one, two)).toEqual([true, true])
-    expect(Object.getOwnPropertyDescriptor(globalThis, SLOT)?.enumerable).toBe(false)
+    expect(Object.getOwnPropertyDescriptor(globalThis, SLOT)).toMatchObject({
+      enumerable: false,
+      writable: false,
+      configurable: true
+    })
   })
 
   it.each([
-    ['another version', { version: 2, storage: undefined as unknown }],
+    ['another version', { version: 2, storage: new AsyncLocalStorage() }],
     ['this version with no storage', { version: 1, storage: {} }],
     ['null', null]
   ])('is a copy of its own when the slot holds %s, which is left alone', (_name, found) => {
