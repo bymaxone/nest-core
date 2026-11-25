@@ -1643,7 +1643,7 @@ ships `InMemoryIdempotencyStore` for one process; a deployment with several inst
   is.
 - **The answer waits for the store** to record it, and is sent even when the store rejects. A store whose
   `complete` never settles holds the answer.
-- **A store that fails** runs the handler unprotected (`onStoreError: 'fail-open'`, the default) or answers
+- **A store that fails, a full in-memory store included,** runs the handler unprotected (`onStoreError: 'fail-open'`, the default) or answers
   `503`; a `required` route always answers `503`.
 - **Options**: `required` (missing header is `400`), `leaseSeconds` (60), `ttlSeconds` (86400, at most 7 days),
   `maxBodyBytes`, `storeClientErrors`, `onStoreError`. The lease must outlive the longest handler.
