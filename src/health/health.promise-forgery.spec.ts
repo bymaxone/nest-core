@@ -189,6 +189,10 @@ describe('the readiness verdict beside forged promise machinery', () => {
   })
 
   it('answers runtime down when the constructor is swapped and restored while a check is pending', async () => {
+    let timerFired: () => void = () => undefined
+    const timer = new Promise<void>((done) => {
+      timerFired = done
+    })
     const swapper: IHealthIndicator = {
       name: 'swapper',
       check: () => {
@@ -197,6 +201,7 @@ describe('the readiness verdict beside forged promise machinery', () => {
           setTimeout(() => {
             restorePromise()
             resolve({ status: 'up' })
+            timerFired()
           }, 5)
         )
       }
@@ -204,6 +209,7 @@ describe('the readiness verdict beside forged promise machinery', () => {
     const service = new HealthService([swapper], normalizeCoreOptions())
 
     expect(await service.checkReadiness()).toEqual(RUNTIME_DOWN)
+    await timer
   })
 
   it('leaves no unhandled rejection when a later check rejects while an earlier one is awaited', () => {
