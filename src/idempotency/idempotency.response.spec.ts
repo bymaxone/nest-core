@@ -1,174 +1,97 @@
 /**
- * Unit tests for what is kept of an answer and how it is put back.
+ * Unit tests for what is kept of an answer and how a replay sets its header.
  *
  * Layer: unit.
- * Goal: only a replayable answer is stored with its body, only a stable client error is kept, and the
- * replay sets its headers on either response API.
- * Mocks: plain reply objects.
+ * Goal: only a replayable answer is stored with its body, a server error or a transient client error gives
+ * the claim back, a client error is kept only when the route keeps them, and a stream or bytes are never held.
+ * Mocks: none.
  */
+import { StreamableFile } from '@nestjs/common'
 import { Readable } from 'node:stream'
 
-import { BadRequestException, HttpException, StreamableFile } from '@nestjs/common'
+import { setReplyHeader, storable, streamed } from './idempotency.response'
 
-import { captureClientError, captureResult, replay, setReplyHeader } from './idempotency.response'
-
-const ignore = (): void => undefined
-
-const reply = (headers: Record<string, unknown> = {}): { getHeader(name: string): unknown } => ({
-  getHeader: (name) => headers[name]
+const answer = (
+  status: number,
+  body: string | null = '{}',
+  headers: Record<string, unknown> = {}
+) => ({
+  status,
+  headers,
+  body: body ?? undefined
 })
 
-describe('captureResult', () => {
-  it('stores the JSON and the kept headers', () => {
-    expect(captureResult(201, { a: 1 }, reply({ location: '/x', etag: 'e' }), 100, ignore)).toEqual(
-      {
-        status: 201,
-        headers: { location: '/x' },
-        body: '{"a":1}'
-      }
-    )
+describe('storable', () => {
+  it('keeps the status, the allow-listed headers and the body of a success', () => {
+    const wire = answer(201, '{"a":1}', {
+      'content-type': 'application/json',
+      location: '/x',
+      'content-location': '/y',
+      etag: 'W/"1"',
+      'set-cookie': 'a=1',
+      'x-other': 'z',
+      'content-length': 7
+    })
+
+    expect(storable(wire, true)).toEqual({
+      status: 201,
+      headers: {
+        'content-type': 'application/json',
+        location: '/x',
+        'content-location': '/y',
+        etag: 'W/"1"'
+      },
+      body: '{"a":1}'
+    })
   })
 
-  it('stores an empty answer as an empty body', () => {
-    expect(captureResult(204, undefined, {}, 100, ignore)).toEqual({
-      status: 204,
-      headers: {},
-      body: ''
-    })
+  it.each([500, 503, 504, 408, 425, 429])('gives the claim back for %s', (status) => {
+    expect(storable(answer(status), true)).toBeUndefined()
+  })
+
+  it('keeps a client error only when the route keeps them', () => {
+    expect(storable(answer(400), true)).toEqual({ status: 400, headers: {}, body: '{}' })
+    expect(storable(answer(400), false)).toBeUndefined()
   })
 
   it.each([
-    ['over the bound', { text: 'x'.repeat(50) }, {}],
-    ['a Buffer', Buffer.from('x'), {}],
-    ['a typed array', new Uint8Array(1), {}],
-    ['a StreamableFile', new StreamableFile(Buffer.from('x')), {}],
-    ['a stream', Readable.from(['x']), {}],
-    ['a Date, which would replay as text', new Date(0), {}],
-    ['an object whose toJSON is undefined', { toJSON: () => undefined }, {}],
-    ['with headers over the bound', { a: 1 }, { location: 'x'.repeat(70_000) }]
-  ])('stores no body for an answer %s', (_name, value, headers) => {
-    expect(captureResult(200, value, reply(headers), 10, ignore)).toEqual({
-      status: 200,
-      headers: {}
-    })
+    ['has no body', answer(200, null)],
+    ['is a 304', answer(304, '')]
+  ])('keeps an answer that %s without one, so its replay is refused', (_name, wire) => {
+    expect(storable(wire, true)).toEqual({ status: wire.status, headers: {} })
   })
 })
 
-describe('captureResult, the status and what does not serialise', () => {
-  it('keeps the status the handler set on the response, and the default without one', () => {
-    expect(captureResult(201, { a: 1 }, { statusCode: 202 }, 100, ignore).status).toBe(202)
-    expect(captureResult(201, { a: 1 }, {}, 100, ignore).status).toBe(201)
-  })
-
-  it('stores no body for a status of 400 or more set through the response', () => {
-    expect(captureResult(201, { a: 1 }, { statusCode: 500 }, 100, ignore)).toEqual({
-      status: 500,
-      headers: {}
-    })
+describe('streamed', () => {
+  it.each([
+    ['a Buffer', Buffer.from('a')],
+    ['an ArrayBuffer', new ArrayBuffer(1)],
+    ['a StreamableFile', new StreamableFile(Buffer.from('a'))],
+    ['a stream', Readable.from(['a'])]
+  ])('is true for %s', (_name, value) => {
+    expect(streamed(value)).toBe(true)
   })
 
   it.each([
-    ['a BigInt', { n: BigInt(1) }],
-    [
-      'a throwing toJSON',
-      {
-        toJSON: (): never => {
-          throw new Error('no json')
-        }
-      }
-    ]
-  ])('stores no body for %s and says why', (_name, value) => {
-    const failed: unknown[] = []
-
-    expect(captureResult(200, value, {}, 100, (cause) => failed.push(cause))).toEqual({
-      status: 200,
-      headers: {}
-    })
-    expect(failed).toHaveLength(1)
-  })
-
-  it('stores a string and a number as their JSON', () => {
-    expect(captureResult(200, 'a"b', {}, 100, ignore).body).toBe('"a\\"b"')
-    expect(captureResult(200, 5, {}, 100, ignore).body).toBe('5')
-  })
-
-  it('keeps no body for a client error whose response does not serialise', () => {
-    const response: Record<string, unknown> = {}
-    response['self'] = response
-    const failed: unknown[] = []
-
-    expect(
-      captureClientError(new BadRequestException(response), 100, (cause) => failed.push(cause))
-    ).toEqual({ status: 400, headers: {} })
-    expect(failed).toHaveLength(1)
+    ['an object', { a: 1 }],
+    ['a string', 'a'],
+    ['null', null],
+    ['undefined', undefined]
+  ])('is false for %s', (_name, value) => {
+    expect(streamed(value)).toBe(false)
   })
 })
 
-describe('captureClientError', () => {
-  it('keeps a 4xx HttpException with its response', () => {
-    expect(captureClientError(new BadRequestException({ code: 'X' }), 100, ignore)).toEqual({
-      status: 400,
-      headers: {},
-      body: '{"code":"X"}'
-    })
-  })
+describe('setReplyHeader', () => {
+  it('uses header on a Fastify reply and setHeader on an Express response', () => {
+    const header = jest.fn()
+    const setHeader = jest.fn()
 
-  it.each([
-    ['a server error', new HttpException('x', 500)],
-    ['a 408', new HttpException('x', 408)],
-    ['a 429', new HttpException('x', 429)],
-    ['a redirect', new HttpException('x', 302)],
-    ['a plain Error', new Error('x')]
-  ])('keeps nothing for %s', (_name, error) => {
-    expect(captureClientError(error, 100, ignore)).toBeUndefined()
-  })
+    setReplyHeader({ header }, 'a', '1')
+    setReplyHeader({ setHeader }, 'b', '2')
+    setReplyHeader({}, 'c', '3')
 
-  it('keeps no body for an error response over the bound', () => {
-    expect(captureClientError(new BadRequestException('x'.repeat(50)), 10, ignore)).toEqual({
-      status: 400,
-      headers: {}
-    })
-  })
-})
-
-describe('replay', () => {
-  it('sets the kept headers and the marker on a header() reply', () => {
-    const set: Array<[string, string]> = []
-    const value = replay({ status: 201, headers: { location: '/x' }, body: '{"a":1}' }, '{"a":1}', {
-      header: (name, v) => set.push([name, v])
-    })
-
-    expect(value).toEqual({ a: 1 })
-    expect(set).toEqual([
-      ['location', '/x'],
-      ['Idempotent-Replayed', 'true']
-    ])
-  })
-
-  it('sets the stored status of a success on the response, and none for an error', () => {
-    const codes: number[] = []
-    replay({ status: 202, headers: {}, body: '' }, '', { status: (code) => codes.push(code) })
-    expect(() =>
-      replay({ status: 409, headers: {}, body: '"x"' }, '"x"', {
-        status: (code) => codes.push(code)
-      })
-    ).toThrow(HttpException)
-
-    expect(codes).toEqual([202])
-  })
-
-  it('falls back to setHeader and tolerates a reply with neither', () => {
-    const set: string[] = []
-    replay({ status: 200, headers: {}, body: '' }, '', { setHeader: (name) => set.push(name) })
-    setReplyHeader({}, 'x', 'y')
-
-    expect(set).toEqual(['Idempotent-Replayed'])
-  })
-
-  it('replays an empty body as undefined and a stored client error as an HttpException', () => {
-    expect(replay({ status: 204, headers: {}, body: '' }, '', {})).toBeUndefined()
-    expect(() =>
-      replay({ status: 400, headers: {}, body: '{"code":"X"}' }, '{"code":"X"}', {})
-    ).toThrow(HttpException)
+    expect(header).toHaveBeenCalledWith('a', '1')
+    expect(setHeader).toHaveBeenCalledWith('b', '2')
   })
 })

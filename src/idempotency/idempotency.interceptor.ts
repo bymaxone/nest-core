@@ -3,7 +3,7 @@
  * `Idempotency-Key` and replay its first answer afterwards.
  * @layer Utility
  */
-import { HttpException, Inject, Injectable, Logger, RequestMethod } from '@nestjs/common'
+import { HttpException, Inject, Injectable, Logger } from '@nestjs/common'
 import type { CallHandler, ExecutionContext, NestInterceptor } from '@nestjs/common'
 import { Reflector } from '@nestjs/core'
 import { from, mergeMap, Observable, of } from 'rxjs'
@@ -20,15 +20,13 @@ import {
 } from './idempotency.codes'
 import { digest, fingerprint, validKey } from './idempotency.key'
 import type { IdempotencyRequest, ResolvedIdempotentOptions } from './idempotency.options'
-import { captureClientError, captureResult, replay, setReplyHeader } from './idempotency.response'
+import { setReplyHeader, storable, streamed } from './idempotency.response'
 import type { ReplyLike } from './idempotency.response'
 import { BYMAX_IDEMPOTENCY_STORE } from './idempotency.store'
 import type { IdempotencyStoredResponse, IIdempotencyStore } from './idempotency.store'
 import { IDEMPOTENT_OPTIONS } from './idempotency.support'
-
-/** Nest's metadata keys, read as strings. */
-const HTTP_CODE = '__httpCode__'
-const METHOD = 'method'
+import { rawOf, substitute, tap } from './idempotency.wire'
+import type { Wire } from './idempotency.wire'
 
 /** What a client is told to wait, in seconds, while the first request is in progress. */
 const RETRY_AFTER_SECONDS = 1
@@ -46,7 +44,6 @@ interface Call {
   readonly key: string
   readonly print: string
   readonly options: ResolvedIdempotentOptions
-  readonly status: number
   readonly reply: ReplyLike
   readonly next: CallHandler
 }
@@ -97,7 +94,6 @@ export class IdempotencyInterceptor implements NestInterceptor {
       key: this.keyOf(request, header as string, options),
       print: this.printOf(request),
       options,
-      status: this.statusOf(context),
       reply: http.getResponse<ReplyLike>(),
       next
     }
@@ -131,16 +127,6 @@ export class IdempotencyInterceptor implements NestInterceptor {
     } catch {
       throw refusal(400, BYMAX_IDEMPOTENCY_KEY_INVALID, 'The request body cannot be fingerprinted')
     }
-  }
-
-  /** The status Nest sends for a handler that returns: its `@HttpCode`, else 201 for POST, else 200. */
-  private statusOf(context: ExecutionContext): number {
-    const handler = context.getHandler()
-    const declared = this.reflector.get<number | undefined>(HTTP_CODE, handler)
-    if (declared !== undefined) return declared
-    return this.reflector.get<number | undefined>(METHOD, handler) === RequestMethod.POST
-      ? 201
-      : 200
   }
 
   /** Claim the key, or answer from what holds it. */
@@ -184,14 +170,16 @@ export class IdempotencyInterceptor implements NestInterceptor {
       setReplyHeader(call.reply, 'Retry-After', String(RETRY_AFTER_SECONDS))
       throw refusal(409, BYMAX_IDEMPOTENCY_IN_PROGRESS, 'A request with this key is in progress')
     }
-    const { body } = record.response
-    if (body === undefined) {
+    const stored = record.response
+    if (stored.body === undefined) {
       throw refusal(409, BYMAX_IDEMPOTENCY_NOT_REPLAYABLE, 'The first answer cannot be replayed')
     }
-    return of(replay(record.response, body, call.reply))
+    setReplyHeader(call.reply, 'Idempotent-Replayed', 'true')
+    substitute(rawOf(call.reply), stored.status, stored.headers, stored.body)
+    return of(undefined)
   }
 
-  /** Run the handler under the claim; keep its answer, or drop the claim when it has none to keep. */
+  /** Run the handler under the claim; the answer the client is sent decides whether it is kept or given back. */
   private run(call: Call, token: string): Observable<unknown> {
     return new Observable<unknown>((subscriber) => {
       let value: unknown
@@ -200,22 +188,13 @@ export class IdempotencyInterceptor implements NestInterceptor {
           value = item
         },
         error: (error: unknown) => {
-          void this.after(this.fail(call, token, error), () => subscriber.error(error))
+          this.watch(call, token, undefined)
+          subscriber.error(error)
         },
         complete: () => {
-          const stored = captureResult(
-            call.status,
-            value,
-            call.reply,
-            call.options.maxBodyBytes,
-            this.unserialisable
-          )
-          const work =
-            stored.status >= 500 ? this.drop(call, token) : this.keep(call, token, stored)
-          void this.after(work, () => {
-            subscriber.next(value)
-            subscriber.complete()
-          })
+          this.watch(call, token, value)
+          subscriber.next(value)
+          subscriber.complete()
         }
       })
       // The claim is not given back here: a promise handler still runs; the lease ends it.
@@ -223,25 +202,24 @@ export class IdempotencyInterceptor implements NestInterceptor {
     })
   }
 
-  /** Runs `deliver` once `work`, which never rejects, is done. */
-  private async after(work: Promise<void>, deliver: () => void): Promise<void> {
-    await work
-    deliver()
+  /**
+   * Settle the claim with what the client is sent next. An answer already sent while the handler ran,
+   * such as a request deadline's, is kept without a body.
+   */
+  private watch(call: Call, token: string, value: unknown): void {
+    const raw = rawOf(call.reply)
+    if (raw.writableEnded || raw.headersSent) {
+      void this.settle(call, token, { status: raw.statusCode, headers: {} })
+      return
+    }
+    tap(raw, call.options.maxBodyBytes, streamed(value), (answer) =>
+      this.settle(call, token, answer)
+    )
   }
 
-  /** Logs an answer that cannot be serialised. */
-  private readonly unserialisable = (cause: unknown): void =>
-    this.warn(
-      'CORE_IDEMPOTENCY_CAPTURE_FAILED',
-      'The answer could not be serialised to store',
-      cause
-    )
-
-  /** After a handler error: keep a replayable client error, drop the claim for anything else. */
-  private async fail(call: Call, token: string, error: unknown): Promise<void> {
-    const stored = call.options.storeClientErrors
-      ? captureClientError(error, call.options.maxBodyBytes, this.unserialisable)
-      : undefined
+  /** Keep the answer that was sent, or give the claim back when it is not one to keep. */
+  private async settle(call: Call, token: string, answer: Wire): Promise<void> {
+    const stored = storable(answer, call.options.storeClientErrors)
     if (stored === undefined) await this.drop(call, token)
     else await this.keep(call, token, stored)
   }

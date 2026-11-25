@@ -1621,15 +1621,25 @@ ships `InMemoryIdempotencyStore` for one process; a deployment with several inst
   is a digest of the scope and the header, so one caller's key never resolves another's record.
 - **The fingerprint** covers the method, the path, the query and the JSON body (keys sorted). A key reused
   by a different request is `422`.
-- **The answer is replayed**, status, body and the `location` and `content-location` headers, with
+- **The answer is replayed**, status, body and the `content-type`, `location`, `content-location` and `etag` headers, with
   `Idempotent-Replayed: true`. A `4xx` answer is replayed too unless `storeClientErrors: false`; `408`, `425`
   and `429` never are, and a `5xx` releases the claim so the retry runs.
 - **A request that is still running** gets `409` with `Retry-After: 1`. A caller that times out or
   disconnects while the handler runs leaves the key in progress until `leaseSeconds` ends, because the
   handler is not stopped by it.
-- **What is stored** is `JSON.stringify` of what the handler returned and the status the response had at
-  completion. An answer that cannot be replayed byte for byte is stored without a body and replays as `409`.
-  A status of `500` or more set through the response releases the claim, as a thrown `5xx` does.
+- **What is stored** is what the client was sent, taken at the response writers: the status, the body as
+  text, and `content-type`, `location`, `content-location` and `etag`; never `set-cookie`. A replay sends
+  those bytes with their own `content-length`, so an interceptor or serializer outside `@Idempotent` neither
+  leaks a field into it nor wraps it twice. An answer with `content-encoding`, a stream, a `Buffer`, a body
+  over `maxBodyBytes`, a body that is not UTF-8 or a `304` is sent untouched and replays as `409`. A `4xx` from
+  an exception filter is stored the same way.
+- **A failure after the handler returned** (an outer interceptor or serializer that throws) answers `5xx` and
+  releases the claim, so the retry runs the handler again. A timeout that answers while the handler is still
+  running does not: the key stays in progress and the retry gets `409`. An outer interceptor that throws on a
+  replay with a status other than the stored one has its own answer sent; one that throws with the same
+  status is answered with the stored bytes.
+- **The answer waits for the store** to record it, and is sent even when the store rejects. A store whose
+  `complete` never settles holds the answer.
 - **A store that fails** runs the handler unprotected (`onStoreError: 'fail-open'`, the default) or answers
   `503`; a `required` route always answers `503`.
 - **Options**: `required` (missing header is `400`), `leaseSeconds` (60), `ttlSeconds` (86400, at most 7 days),
@@ -1637,14 +1647,14 @@ ships `InMemoryIdempotencyStore` for one process; a deployment with several inst
 - **Refused at boot**: a handler that uses `@Res()` without passthrough, `@Next()`, `@Sse()`, an uploaded
   file or a raw body. Write `@Idempotent` above `@Sse` and `@HttpCode`.
 
-| Code                                  | Status | Meaning                                                        |
-| ------------------------------------- | ------ | -------------------------------------------------------------- |
-| `BYMAX_IDEMPOTENCY_KEY_INVALID`       | 400    | The header is malformed, or the body cannot be fingerprinted.  |
-| `BYMAX_IDEMPOTENCY_KEY_REQUIRED`      | 400    | A required route got no header.                                |
-| `BYMAX_IDEMPOTENCY_IN_PROGRESS`       | 409    | The first request is still running.                            |
-| `BYMAX_IDEMPOTENCY_NOT_REPLAYABLE`    | 409    | The first answer could not be stored (too large, or not JSON). |
-| `BYMAX_IDEMPOTENCY_KEY_REUSED`        | 422    | The key belongs to a different request.                        |
-| `BYMAX_IDEMPOTENCY_STORE_UNAVAILABLE` | 503    | The store, or the scope function, failed.                      |
+| Code                                  | Status | Meaning                                                              |
+| ------------------------------------- | ------ | -------------------------------------------------------------------- |
+| `BYMAX_IDEMPOTENCY_KEY_INVALID`       | 400    | The header is malformed, or the body cannot be fingerprinted.        |
+| `BYMAX_IDEMPOTENCY_KEY_REQUIRED`      | 400    | A required route got no header.                                      |
+| `BYMAX_IDEMPOTENCY_IN_PROGRESS`       | 409    | The first request is still running.                                  |
+| `BYMAX_IDEMPOTENCY_NOT_REPLAYABLE`    | 409    | The first answer could not be stored (too large, a stream, encoded). |
+| `BYMAX_IDEMPOTENCY_KEY_REUSED`        | 422    | The key belongs to a different request.                              |
+| `BYMAX_IDEMPOTENCY_STORE_UNAVAILABLE` | 503    | The store, or the scope function, failed.                            |
 
 ## 🏗️ Architecture
 

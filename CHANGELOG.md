@@ -14,7 +14,7 @@ heading here.
 
 ### Added
 
-- **`@bymax-one/nest-core/idempotency`: `@Idempotent()` replays the first answer of a request that repeats an `Idempotency-Key`.** The subpath carries the decorator, `IdempotencyInterceptor`, the `IIdempotencyStore` port with `BYMAX_IDEMPOTENCY_STORE` and `InMemoryIdempotencyStore`, and the `BYMAX_IDEMPOTENCY_*` error codes. A route needs a `scope` or `unscoped: true`; the storage key is a digest of both, and the request fingerprint covers method, path, query and JSON body. A store failure runs the handler unprotected by default and answers `503` on a `required` route or with `onStoreError: 'fail-closed'`. A handler that writes its own response, streams or reads a multipart or raw body is refused at boot.
+- **`@bymax-one/nest-core/idempotency`: `@Idempotent()` replays the first answer of a request that repeats an `Idempotency-Key`.** The subpath carries the decorator, `IdempotencyInterceptor`, the `IIdempotencyStore` port with `BYMAX_IDEMPOTENCY_STORE` and `InMemoryIdempotencyStore`, and the `BYMAX_IDEMPOTENCY_*` error codes. A route needs a `scope` or `unscoped: true`; the storage key is a digest of both, and the request fingerprint covers method, path, query and JSON body. A store failure runs the handler unprotected by default and answers `503` on a `required` route or with `onStoreError: 'fail-closed'`. A handler that writes its own response, streams or reads a multipart or raw body is refused at boot. The stored answer is what the client was sent, taken at the response writers, so a replay is byte-equal to the first answer under any outer interceptor or serializer.
 
 ### Fixed
 

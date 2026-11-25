@@ -302,15 +302,14 @@ describe.each([
   })
 
   it.each([['bigint'], ['cyclic'], ['throwing']])(
-    'answers a result that cannot be serialised (%s), and leaves its retries to a 409',
+    'answers 500 for a result the framework cannot serialise (%s) and gives the claim back',
     async (path) => {
       const first = await send(app, `/a/${path}`, key(path)).timeout(2000)
       const second = await send(app, `/a/${path}`, key(path)).timeout(2000)
 
-      expect(first.status).toBe(500)
-      expect(second.status).toBe(409)
-      expect(JSON.parse(bytes(second)).code).toBe('BYMAX_IDEMPOTENCY_NOT_REPLAYABLE')
-      expect(runs.count).toBe(1)
+      expect([first.status, second.status]).toEqual([500, 500])
+      expect(second.headers['idempotent-replayed']).toBeUndefined()
+      expect(runs.count).toBe(2)
     }
   )
 
@@ -323,12 +322,13 @@ describe.each([
     expect(runs.count).toBe(1)
   })
 
-  it('refuses the replay of an answer whose status the handler set to a client error', async () => {
+  it('replays an answer whose status the handler set to a client error', async () => {
     const first = await send(app, '/a/refused', key('refused'))
     const second = await send(app, '/a/refused', key('refused'))
 
-    expect([first.status, second.status]).toEqual([400, 409])
-    expect(JSON.parse(bytes(second)).code).toBe('BYMAX_IDEMPOTENCY_NOT_REPLAYABLE')
+    expect([first.status, second.status]).toEqual([400, 400])
+    expect(bytes(second)).toBe(bytes(first))
+    expect(second.headers['idempotent-replayed']).toBe('true')
     expect(runs.count).toBe(1)
   })
 
@@ -341,13 +341,12 @@ describe.each([
     expect(runs.count).toBe(2)
   })
 
-  it('refuses the replay of an answer whose serialisation changes between calls', async () => {
+  it('replays the bytes the client was sent when the serialisation changes between calls', async () => {
     const first = await send(app, '/a/unstable', key('unstable'))
     const second = await send(app, '/a/unstable', key('unstable'))
 
-    expect(first.status).toBe(201)
-    expect(second.status).toBe(409)
-    expect(JSON.parse(bytes(second)).code).toBe('BYMAX_IDEMPOTENCY_NOT_REPLAYABLE')
+    expect([first.status, second.status]).toEqual([201, 201])
+    expect(bytes(second)).toBe(bytes(first))
     expect(runs.count).toBe(1)
   })
 

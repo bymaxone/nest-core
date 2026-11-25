@@ -26,12 +26,31 @@ function build(metadata: Record<string | symbol, unknown>, store = new InMemoryI
   return { interceptor: new IdempotencyInterceptor(store, reflector), store }
 }
 
+/** A raw response whose writers record nothing and whose `end` is the one the interceptor replaces. */
+function fakeResponse(): { end: jest.Mock; [key: string]: unknown } {
+  return {
+    statusCode: 500,
+    headersSent: false,
+    writableEnded: false,
+    destroy: jest.fn(),
+    getHeaders: () => ({}),
+    removeHeader: () => undefined,
+    writeHead: jest.fn(),
+    write: () => true,
+    end: jest.fn()
+  }
+}
+
 /** An HTTP context over `request`. */
-function context(request: object, type = 'http'): ExecutionContext {
+function context(
+  request: object,
+  type = 'http',
+  response: object = fakeResponse()
+): ExecutionContext {
   return {
     getType: () => type,
     getHandler: () => () => undefined,
-    switchToHttp: () => ({ getRequest: () => request, getResponse: () => ({}) })
+    switchToHttp: () => ({ getRequest: () => request, getResponse: () => response })
   } as unknown as ExecutionContext
 }
 
@@ -99,16 +118,21 @@ describe('IdempotencyInterceptor, a subscriber that leaves', () => {
     const { interceptor, store } = build({ [IDEMPOTENT_OPTIONS]: options })
     jest.spyOn(store, 'release').mockRejectedValue(new Error('down'))
 
+    const response = fakeResponse()
+    const realEnd = response.end
     const outcome = await new Promise<unknown>((resolve) =>
       interceptor
         .intercept(
-          context({ headers: { 'idempotency-key': 'k' } }),
+          context({ headers: { 'idempotency-key': 'k' } }, 'http', response),
           handler(throwError(() => new Error('boom')))
         )
         .subscribe({ error: resolve })
     )
+    response.end()
+    await new Promise((resolve) => setImmediate(resolve))
 
     expect(store.release).toHaveBeenCalledTimes(1)
+    expect(realEnd).toHaveBeenCalledTimes(1)
     expect((outcome as Error).message).toBe('boom')
   })
 })
