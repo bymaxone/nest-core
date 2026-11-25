@@ -258,7 +258,6 @@ interface ExposedClientError {
  * @returns The status and safe message when the error is an exposed client error, else `undefined`.
  */
 function resolveExposedClientError(exception: unknown): ExposedClientError | undefined {
-  // Stryker disable next-line ConditionalExpression: killed, not equivalent — replacing this guard with `false` makes `catch(null)` read `.expose` off `null` and throw, and the "collapses a thrown null to the generic 500" test goes red when the mutation is applied by hand. Stryker fails to attribute that killing test to this mutant under its perTest coverage analysis and reports it surviving; the directive records the measured verdict.
   if (typeof exception !== 'object' || exception === null) {
     return undefined
   }

@@ -630,7 +630,8 @@ export interface RequestTimingSample {
 
 `TimingInterceptor` is still exported and is **deprecated**: nothing registers it, and
 registering it alongside the middleware records a second sample for every request that reaches
-a handler, so leave it out.
+a handler, so leave it out. A second `BymaxTimingMiddleware` that a host
+applies itself while the core's own is on records a second sample for every request. Neither needs a `BYMAX_TIMING_CLOCK` binding of its own.
 
 ### Rejected requests are counted too
 

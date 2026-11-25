@@ -27,3 +27,8 @@ src/check-spec-headers.spec.ts
 # Vendored copy of a shared template. It stays byte-identical to its source, which uses another
 # trailing-comma style than this repository's Prettier configuration.
 scripts/commitlint-no-ai-attribution.cjs
+
+# Vendored copies of a shared script template, kept byte-identical to their source, which is formatted
+# at its own print width.
+scripts/check-dist-fresh.mjs
+scripts/check-dist-fresh.test.mjs

@@ -524,7 +524,7 @@ describe('BymaxExceptionFilter, context handling', () => {
       code: 'BYMAX_INTERNAL_ERROR',
       message: 'Internal server error'
     })
-    expect(JSON.stringify(captured.body)).not.toContain('502')
+    expect(JSON.stringify(captured.body)).not.toContain('upstream said')
   })
 
   /**
