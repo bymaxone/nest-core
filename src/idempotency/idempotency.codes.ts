@@ -16,7 +16,7 @@ export const BYMAX_IDEMPOTENCY_IN_PROGRESS = 'BYMAX_IDEMPOTENCY_IN_PROGRESS'
 /** `422`: the key was used by a request that differs in method, path, query or body. */
 export const BYMAX_IDEMPOTENCY_KEY_REUSED = 'BYMAX_IDEMPOTENCY_KEY_REUSED'
 
-/** `409` without `Retry-After`: the first request completed, but its answer was too large to keep. */
+/** `409` without `Retry-After`: the first request completed, but its answer could not be kept (too large, or not JSON). */
 export const BYMAX_IDEMPOTENCY_NOT_REPLAYABLE = 'BYMAX_IDEMPOTENCY_NOT_REPLAYABLE'
 
 /** `503`: the store could not be reached and the route does not run unprotected. */

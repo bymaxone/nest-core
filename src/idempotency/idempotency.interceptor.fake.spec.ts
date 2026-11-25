@@ -3,12 +3,12 @@
  *
  * Layer: unit.
  * Goal: a non-HTTP or unmarked call passes through, a Fastify-shaped request is read as well as an Express
- * one, and a subscriber that leaves before the handler answers gives the claim back.
+ * one, a subscriber that leaves keeps the claim, and a failed release after a handler error is logged.
  * Mocks: the execution context, the call handler and the store.
  */
 import type { CallHandler, ExecutionContext } from '@nestjs/common'
 import { Reflector } from '@nestjs/core'
-import { NEVER, of, Subject } from 'rxjs'
+import { of, Subject, throwError } from 'rxjs'
 import type { Observable } from 'rxjs'
 
 import { IdempotencyInterceptor } from './idempotency.interceptor'
@@ -79,7 +79,7 @@ describe('IdempotencyInterceptor, request shapes', () => {
 })
 
 describe('IdempotencyInterceptor, a subscriber that leaves', () => {
-  it('gives the claim back when it unsubscribes before the handler answers', async () => {
+  it('keeps the claim when it unsubscribes, and stops the handler it subscribed', async () => {
     const { interceptor, store } = build({ [IDEMPOTENT_OPTIONS]: options })
     const release = jest.spyOn(store, 'release')
     const pending = new Subject<unknown>()
@@ -91,20 +91,24 @@ describe('IdempotencyInterceptor, a subscriber that leaves', () => {
     subscription.unsubscribe()
     await new Promise((resolve) => setImmediate(resolve))
 
-    expect(release).toHaveBeenCalledTimes(1)
+    expect(release).not.toHaveBeenCalled()
+    expect(pending.observed).toBe(false)
   })
 
-  it('logs and goes on when the release fails', async () => {
+  it('logs and goes on when the release after a handler error fails', async () => {
     const { interceptor, store } = build({ [IDEMPOTENT_OPTIONS]: options })
     jest.spyOn(store, 'release').mockRejectedValue(new Error('down'))
 
-    const subscription = interceptor
-      .intercept(context({ headers: { 'idempotency-key': 'k' } }), handler(NEVER))
-      .subscribe()
-    await new Promise((resolve) => setImmediate(resolve))
-    subscription.unsubscribe()
-    await new Promise((resolve) => setImmediate(resolve))
+    const outcome = await new Promise<unknown>((resolve) =>
+      interceptor
+        .intercept(
+          context({ headers: { 'idempotency-key': 'k' } }),
+          handler(throwError(() => new Error('boom')))
+        )
+        .subscribe({ error: resolve })
+    )
 
     expect(store.release).toHaveBeenCalledTimes(1)
+    expect((outcome as Error).message).toBe('boom')
   })
 })

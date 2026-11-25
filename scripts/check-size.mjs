@@ -346,6 +346,10 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 // the shared host-error, log and option-check modules every subpath inlines come with them. No module that is not already
 // in another bundle entered it, and the rationale of each file sits in its header and in types-only files. The last 48 B are the
 // pattern that reads only a built-in parameter key, which keeps a custom parameter decorator from being refused at boot.
+// 2026-11-25, `./idempotency` 5.62 KiB (measured 5747 B): the status the handler set is captured and replayed, the stored body is
+// `JSON.stringify` with the binary, stream and non-object-JSON answers refused, a serialisation failure is logged, and the interceptor
+// awaits instead of chaining `.then`, which the Promise-statics scan refuses. All code; the comment of each was cut to one line and
+// the rationale sits in the README and the types-only files.
 const BUDGETS = [
   { name: '. (root)', path: 'dist/index.mjs', brotli: 29.49 * 1024 },
   { name: './pagination', path: 'dist/pagination/index.mjs', brotli: 1.5 * 1024 },
@@ -353,7 +357,7 @@ const BUDGETS = [
   { name: './openapi', path: 'dist/openapi/index.mjs', brotli: 11.02 * 1024 },
   { name: './metrics', path: 'dist/metrics/index.mjs', brotli: 0.5 * 1024 },
   { name: './http', path: 'dist/http/index.mjs', brotli: 8.74 * 1024 },
-  { name: './idempotency', path: 'dist/idempotency/index.mjs', brotli: 5.47 * 1024 }
+  { name: './idempotency', path: 'dist/idempotency/index.mjs', brotli: 5.62 * 1024 }
 ]
 
 const fmt = (n) => `${(n / 1024).toFixed(2)} kB`

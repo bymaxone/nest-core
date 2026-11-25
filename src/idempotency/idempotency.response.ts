@@ -3,9 +3,8 @@
  * result or client error as a stored response, and the replay of a stored one.
  * @layer Utility
  */
-import { HttpException } from '@nestjs/common'
+import { HttpException, StreamableFile } from '@nestjs/common'
 
-import { canonicalBody } from './idempotency.key'
 import type { IdempotencyStoredResponse, StoredResponseHeaders } from './idempotency.store'
 
 /** Headers of an answer that are kept and replayed. */
@@ -16,6 +15,8 @@ const MAX_HEADER_BYTES = 65_536
 
 /** The response methods the interceptor uses, on Express and on Fastify. */
 export interface ReplyLike {
+  statusCode?: number
+  status?(code: number): unknown
   getHeader?(name: string): unknown
   header?(name: string, value: string): unknown
   setHeader?(name: string, value: string): unknown
@@ -34,38 +35,59 @@ function keptHeaders(reply: ReplyLike): StoredResponseHeaders {
   )
 }
 
-/** The stored form of a body: its JSON, or `undefined` when it is not plain JSON or exceeds the bound. */
-function bodyOf(value: unknown, maxBodyBytes: number): string | undefined {
-  try {
-    canonicalBody(value)
-  } catch {
+/** Called with what made a body unserialisable. */
+type OnFailure = (cause: unknown) => void
+
+/** The body's `JSON.stringify`; `undefined` when a replay could not send the same bytes, or it exceeds the bound. */
+function bodyOf(value: unknown, maxBodyBytes: number, onFailure: OnFailure): string | undefined {
+  if (
+    ArrayBuffer.isView(value) ||
+    value instanceof ArrayBuffer ||
+    value instanceof StreamableFile ||
+    typeof (value as { pipe?: unknown } | null)?.pipe === 'function'
+  ) {
     return undefined
   }
-  const text = (JSON.stringify(value) as string | undefined) ?? ''
+  let text: string | undefined
+  try {
+    text = JSON.stringify(value) as string | undefined
+  } catch (cause) {
+    onFailure(cause)
+    return undefined
+  }
+  if (typeof value === 'object' && value !== null && !/^[{[]/.test(text ?? '')) return undefined
+  text ??= ''
   return Buffer.byteLength(text) > maxBodyBytes ? undefined : text
 }
 
 /**
  * The stored form of a handler's result.
  *
- * @param status - The status Nest will send.
+ * @param status - The status Nest sends unless the handler set another on the response.
  * @param value - What the handler returned.
- * @param reply - The response, for the kept headers.
+ * @param reply - The response, for its status and the kept headers.
  * @param maxBodyBytes - The largest body that is kept.
- * @returns The response to store; without a body when the result is not replayable.
+ * @param onFailure - Told what made the value unserialisable.
+ * @returns The response to store; without a body when it is not replayable.
  */
 export function captureResult(
   status: number,
   value: unknown,
   reply: ReplyLike,
-  maxBodyBytes: number
+  maxBodyBytes: number,
+  onFailure: OnFailure
 ): IdempotencyStoredResponse {
+  const sent = reply.statusCode ?? status
   const headers = keptHeaders(reply)
-  const body = bodyOf(value, maxBodyBytes)
-  if (body === undefined || Buffer.byteLength(JSON.stringify(headers)) > MAX_HEADER_BYTES) {
-    return { status, headers: {} }
+  const body = bodyOf(value, maxBodyBytes, onFailure)
+  if (
+    body === undefined ||
+    sent >= 400 ||
+    Buffer.byteLength(JSON.stringify(headers)) > MAX_HEADER_BYTES
+  ) {
+    return { status: sent, headers: {} }
   }
-  return { status, headers, body }
+  return { status: sent, headers, body }
 }
 
 /**
@@ -74,16 +96,18 @@ export function captureResult(
  *
  * @param error - What the handler threw.
  * @param maxBodyBytes - The largest body that is kept.
+ * @param onFailure - Told what made the body unserialisable.
  * @returns The response to store.
  */
 export function captureClientError(
   error: unknown,
-  maxBodyBytes: number
+  maxBodyBytes: number,
+  onFailure: OnFailure
 ): IdempotencyStoredResponse | undefined {
   if (!(error instanceof HttpException)) return undefined
   const status = error.getStatus()
   if (status < 400 || status > 499 || TRANSIENT_CLIENT_ERRORS.has(status)) return undefined
-  const body = bodyOf(error.getResponse(), maxBodyBytes)
+  const body = bodyOf(error.getResponse(), maxBodyBytes, onFailure)
   return body === undefined ? { status, headers: {} } : { status, headers: {}, body }
 }
 
@@ -99,13 +123,14 @@ export function setReplyHeader(reply: ReplyLike, name: string, value: string): v
  *
  * @param stored - A stored response.
  * @param body - Its body, known to be present.
- * @param reply - The response, given the kept headers and `Idempotent-Replayed: true`.
+ * @param reply - The response, given the status, the kept headers and `Idempotent-Replayed: true`.
  * @returns The value to emit.
  * @throws HttpException For a stored client error.
  */
 export function replay(stored: IdempotencyStoredResponse, body: string, reply: ReplyLike): unknown {
   for (const [name, value] of Object.entries(stored.headers)) setReplyHeader(reply, name, value)
   setReplyHeader(reply, 'Idempotent-Replayed', 'true')
+  if (stored.status < 400) reply.status?.(stored.status)
   const value: unknown = body === '' ? undefined : JSON.parse(body)
   if (stored.status >= 400) {
     throw new HttpException(value as string | Record<string, unknown>, stored.status)

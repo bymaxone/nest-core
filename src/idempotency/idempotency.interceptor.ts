@@ -186,11 +186,7 @@ export class IdempotencyInterceptor implements NestInterceptor {
     }
     const { body } = record.response
     if (body === undefined) {
-      throw refusal(
-        409,
-        BYMAX_IDEMPOTENCY_NOT_REPLAYABLE,
-        'The first answer was too large to replay'
-      )
+      throw refusal(409, BYMAX_IDEMPOTENCY_NOT_REPLAYABLE, 'The first answer cannot be replayed')
     }
     return of(replay(record.response, body, call.reply))
   }
@@ -198,38 +194,51 @@ export class IdempotencyInterceptor implements NestInterceptor {
   /** Run the handler under the claim; keep its answer, or drop the claim when it has none to keep. */
   private run(call: Call, token: string): Observable<unknown> {
     return new Observable<unknown>((subscriber) => {
-      let settled = false
       let value: unknown
       const subscription = call.next.handle().subscribe({
         next: (item) => {
           value = item
         },
         error: (error: unknown) => {
-          settled = true
-          void this.fail(call, token, error).then(() => subscriber.error(error))
+          void this.after(this.fail(call, token, error), () => subscriber.error(error))
         },
         complete: () => {
-          settled = true
-          const stored = captureResult(call.status, value, call.reply, call.options.maxBodyBytes)
-          void this.keep(call, token, stored).then(() => {
+          const stored = captureResult(
+            call.status,
+            value,
+            call.reply,
+            call.options.maxBodyBytes,
+            this.unserialisable
+          )
+          void this.after(this.keep(call, token, stored), () => {
             subscriber.next(value)
             subscriber.complete()
           })
         }
       })
-      return () => {
-        subscription.unsubscribe()
-        if (settled) return
-        settled = true
-        void this.drop(call, token)
-      }
+      // The claim is not given back here: a promise handler still runs; the lease ends it.
+      return () => subscription.unsubscribe()
     })
   }
+
+  /** Runs `deliver` once `work`, which never rejects, is done. */
+  private async after(work: Promise<void>, deliver: () => void): Promise<void> {
+    await work
+    deliver()
+  }
+
+  /** Logs an answer that cannot be serialised. */
+  private readonly unserialisable = (cause: unknown): void =>
+    this.warn(
+      'CORE_IDEMPOTENCY_CAPTURE_FAILED',
+      'The answer could not be serialised to store',
+      cause
+    )
 
   /** After a handler error: keep a replayable client error, drop the claim for anything else. */
   private async fail(call: Call, token: string, error: unknown): Promise<void> {
     const stored = call.options.storeClientErrors
-      ? captureClientError(error, call.options.maxBodyBytes)
+      ? captureClientError(error, call.options.maxBodyBytes, this.unserialisable)
       : undefined
     if (stored === undefined) await this.drop(call, token)
     else await this.keep(call, token, stored)

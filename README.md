@@ -1624,8 +1624,15 @@ ships `InMemoryIdempotencyStore` for one process; a deployment with several inst
 - **The answer is replayed**, status, body and the `location` and `content-location` headers, with
   `Idempotent-Replayed: true`. A `4xx` answer is replayed too unless `storeClientErrors: false`; `408`, `425`
   and `429` never are, and a `5xx` releases the claim so the retry runs.
-- **A request that is still running** gets `409` with `Retry-After: 1`. A body over `maxBodyBytes`
-  (default 64 KiB) completes without being stored and replays as `409`.
+- **A request that is still running** gets `409` with `Retry-After: 1`. A caller that times out or
+  disconnects while the handler runs leaves the key in progress until `leaseSeconds` ends, because the
+  handler is not stopped by it.
+- **What is stored** is `JSON.stringify` of what the handler returned and the status the response had at
+  completion. An answer that is not
+  replayable completes without being stored and replays as `409`: a body over `maxBodyBytes` (default
+  64 KiB), a `Buffer`, typed array, stream or `StreamableFile`, a value that does not serialise (`BigInt`,
+  a cycle, a throwing `toJSON`), an object whose JSON is not an object or array, and a status of `400` or
+  more set through the response.
 - **A store that fails** runs the handler unprotected (`onStoreError: 'fail-open'`, the default) or answers
   `503`; a `required` route always answers `503`.
 - **Options**: `required` (missing header is `400`), `leaseSeconds` (60), `ttlSeconds` (86400, at most 7 days),
@@ -1633,14 +1640,14 @@ ships `InMemoryIdempotencyStore` for one process; a deployment with several inst
 - **Refused at boot**: a handler that uses `@Res()` without passthrough, `@Next()`, `@Sse()`, an uploaded
   file or a raw body. Write `@Idempotent` above `@Sse` and `@HttpCode`.
 
-| Code                                  | Status | Meaning                                                       |
-| ------------------------------------- | ------ | ------------------------------------------------------------- |
-| `BYMAX_IDEMPOTENCY_KEY_INVALID`       | 400    | The header is malformed, or the body cannot be fingerprinted. |
-| `BYMAX_IDEMPOTENCY_KEY_REQUIRED`      | 400    | A required route got no header.                               |
-| `BYMAX_IDEMPOTENCY_IN_PROGRESS`       | 409    | The first request is still running.                           |
-| `BYMAX_IDEMPOTENCY_NOT_REPLAYABLE`    | 409    | The first answer was too large to store.                      |
-| `BYMAX_IDEMPOTENCY_KEY_REUSED`        | 422    | The key belongs to a different request.                       |
-| `BYMAX_IDEMPOTENCY_STORE_UNAVAILABLE` | 503    | The store, or the scope function, failed.                     |
+| Code                                  | Status | Meaning                                                        |
+| ------------------------------------- | ------ | -------------------------------------------------------------- |
+| `BYMAX_IDEMPOTENCY_KEY_INVALID`       | 400    | The header is malformed, or the body cannot be fingerprinted.  |
+| `BYMAX_IDEMPOTENCY_KEY_REQUIRED`      | 400    | A required route got no header.                                |
+| `BYMAX_IDEMPOTENCY_IN_PROGRESS`       | 409    | The first request is still running.                            |
+| `BYMAX_IDEMPOTENCY_NOT_REPLAYABLE`    | 409    | The first answer could not be stored (too large, or not JSON). |
+| `BYMAX_IDEMPOTENCY_KEY_REUSED`        | 422    | The key belongs to a different request.                        |
+| `BYMAX_IDEMPOTENCY_STORE_UNAVAILABLE` | 503    | The store, or the scope function, failed.                      |
 
 ## 🏗️ Architecture
 

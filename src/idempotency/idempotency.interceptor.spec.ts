@@ -401,7 +401,7 @@ describe('@Idempotent', () => {
     expect(runs.count).toBe(2)
   })
 
-  it('lets a request with the claim lost to the client go and releases it', async () => {
+  it('keeps the key in progress when the client gives up while the handler runs', async () => {
     const aborted = post('/i/slow', 'k-abort')
       .timeout(30)
       .then(
@@ -409,10 +409,12 @@ describe('@Idempotent', () => {
         () => 'aborted'
       )
     expect(await aborted).toBe('aborted')
-    await sleep(200)
     const retry = await post('/i/slow', 'k-abort')
+    await sleep(300)
 
-    expect([201, 409]).toContain(retry.status)
+    expect(retry.status).toBe(409)
+    expect(retry.body.code).toBe('BYMAX_IDEMPOTENCY_IN_PROGRESS')
+    expect(runs.count).toBe(1)
   })
 
   it('documents the header and the refusals for OpenAPI', () => {

@@ -17,7 +17,7 @@ const API_RESPONSE = 'swagger/apiResponse'
 /** What each refusal means, for the document. */
 const RESPONSES: ReadonlyArray<readonly [number, string]> = [
   [400, 'The Idempotency-Key header is invalid or, on a required route, missing'],
-  [409, 'A request with this key is in progress, or its answer is too large to replay'],
+  [409, 'A request with this key is in progress, or its answer cannot be replayed'],
   [422, 'The Idempotency-Key was used by a different request'],
   [503, 'The idempotency store is unavailable']
 ]
