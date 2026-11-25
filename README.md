@@ -111,8 +111,7 @@ leave off never loads its peer, which the release gate asserts against the packe
 
 ### 🧩 Developer Experience
 
-- ✅ **Subpaths** — the module, plus `./pagination`, `./health`, `./metrics`, `./http`, `./idempotency`
-  and `./openapi` that a package can import without pulling the module in
+- ✅ **Subpaths** — each feature a package can import without pulling the module in
 - ✅ **Dual-format output** — ESM + CJS with declarations for each format, verified against
   the packed tarball on every run
 - ✅ **Independent features** — each is enabled on its own; the providers for the rest are
@@ -1652,8 +1651,7 @@ ships `InMemoryIdempotencyStore` for one process; a deployment with several inst
   uploaded file or a raw body. Write `@Idempotent` above `@Sse` and `@Render`.
 - **Limits**: a multipart or otherwise unparsed body is not fingerprinted, so a key reused with another one
   replays; a replayed `HEAD` sends `content-length: 0`; `@Sse` written above `@Idempotent` truncates the
-  stream; the in-memory store sweeps in time linear in its size on every `begin`, and a full store with
-  `fail-open` runs the handler unprotected; a scope that holds a lone surrogate collides with the same scope
+  stream; a full in-memory store with `fail-open` runs the handler unprotected; a scope that holds a lone surrogate collides with the same scope
   written with `U+FFFD`.
 
 | Code                                  | Status | Meaning                                                       |
