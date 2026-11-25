@@ -22,6 +22,14 @@ const answer = (
 })
 
 describe('storable', () => {
+  it('keeps a success whether or not the route keeps client errors', () => {
+    expect(storable(answer(201, '{"a":1}'), false)).toEqual({
+      status: 201,
+      headers: {},
+      body: '{"a":1}'
+    })
+  })
+
   it('keeps the status, the allow-listed headers and the body of a success', () => {
     const wire = answer(201, '{"a":1}', {
       'content-type': 'application/json',

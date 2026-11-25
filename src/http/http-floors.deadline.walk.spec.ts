@@ -33,9 +33,14 @@ function fakeResponse(finished = false): { response: never; emit: (event: string
 function runs(excludePaths: string[], path: string): { bounded: boolean; ms: number } {
   const middleware = requestDeadline({ timeoutMs: 60_000, excludePaths })
   const request: Held = { originalUrl: path }
+  const { response, emit } = fakeResponse()
   const started = Date.now()
-  middleware(request as never, fakeResponse().response, () => undefined)
-  return { bounded: DEADLINE_SIGNAL in request, ms: Date.now() - started }
+  middleware(request as never, response, () => undefined)
+  const ms = Date.now() - started
+  // The answer finished: the middleware clears its 60 s timer, so none outlives the row and fires on a
+  // stub that has no `removeHeader` or `destroy`.
+  emit('finish')
+  return { bounded: DEADLINE_SIGNAL in request, ms }
 }
 
 describe('the deadline exclusion match on a long path', () => {
@@ -94,6 +99,7 @@ describe('the 504 body under fake timers', () => {
         statusCode: 0,
         setHeader: () => undefined,
         removeHeader: () => undefined,
+        destroy: () => undefined,
         end: (text: string) => {
           body = text
         },

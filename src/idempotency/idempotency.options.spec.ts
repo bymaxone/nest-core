@@ -32,6 +32,12 @@ describe('resolveIdempotentOptions', () => {
     )
   })
 
+  it('refuses a scope that is not a function', () => {
+    expect(() => resolveIdempotentOptions({ scope: 'caller' as unknown as () => string })).toThrow(
+      /takes `scope` as a function/
+    )
+  })
+
   it('refuses a lease longer than the answer is kept', () => {
     expect(() => resolveIdempotentOptions({ scope, leaseSeconds: 100, ttlSeconds: 50 })).toThrow(
       /leaseSeconds must not exceed/

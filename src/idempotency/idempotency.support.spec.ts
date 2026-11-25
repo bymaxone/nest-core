@@ -8,7 +8,7 @@
  */
 import 'reflect-metadata'
 
-import { assertSupportedHandler } from './idempotency.support'
+import { assertSupportedHandler, IDEMPOTENT_OPTIONS } from './idempotency.support'
 
 /** A controller whose `handler` carries `args` as route arguments, and `passthrough` as Nest sets it. */
 function controller(
@@ -39,6 +39,26 @@ describe('assertSupportedHandler, the parameter keys', () => {
       expect(() => check({ [key]: {} })).not.toThrow()
     }
   )
+})
+
+describe('assertSupportedHandler, the refusal text', () => {
+  it.each([
+    ['1:0', '@Res() without `passthrough: true`'],
+    ['2:0', '@Next()'],
+    ['8:0', '@UploadedFile()'],
+    ['9:0', '@UploadedFiles()'],
+    ['12:0', '@RawBody()']
+  ])('names the parameter of type %s', (key, refused) => {
+    expect(() => check({ [key]: {} })).toThrow(
+      new Error(`@Idempotent does not support ${refused}: the answer cannot be stored whole`)
+    )
+  })
+})
+
+describe('IDEMPOTENT_OPTIONS', () => {
+  it('is the registry symbol of a fixed key, one per realm', () => {
+    expect(IDEMPOTENT_OPTIONS).toBe(Symbol.for('@bymax-one/nest-core:idempotent-options'))
+  })
 })
 
 describe('assertSupportedHandler, passthrough', () => {

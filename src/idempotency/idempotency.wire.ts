@@ -63,9 +63,7 @@ function partsOf(args: unknown[]): { bytes: Buffer; done: (() => void) | undefin
 
 /** The bytes of one chunk a writer was given. */
 function bytesOf(chunk: unknown, encoding: unknown): Buffer {
-  if (typeof chunk === 'string') {
-    return Buffer.from(chunk, typeof encoding === 'string' ? (encoding as BufferEncoding) : 'utf8')
-  }
+  if (typeof chunk === 'string') return Buffer.from(chunk, encoding as BufferEncoding)
   return chunk instanceof Uint8Array ? Buffer.from(chunk) : Buffer.alloc(0)
 }
 

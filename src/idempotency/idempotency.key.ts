@@ -48,11 +48,11 @@ function isPlain(value: object): value is Record<string, unknown> {
 
 /** The canonical JSON of one node: sorted keys, no whitespace, `undefined` members dropped. */
 function canonical(value: unknown, depth: number): string {
-  if (depth > MAX_BODY_DEPTH) throw new UnfingerprintableBody('nested too deep')
+  if (depth > MAX_BODY_DEPTH) throw new UnfingerprintableBody()
   if (value === null || typeof value === 'string' || typeof value === 'boolean') {
     return JSON.stringify(value)
   }
-  if (typeof value === 'number' && Number.isFinite(value)) return JSON.stringify(value)
+  if (Number.isFinite(value)) return JSON.stringify(value)
   if (Array.isArray(value)) {
     return `[${Array.from(value as unknown[], (item) => canonical(item ?? null, depth + 1)).join(',')}]`
   }
@@ -64,7 +64,7 @@ function canonical(value: unknown, depth: number): string {
       .map((name) => `${JSON.stringify(name)}:${canonical(fields.get(name), depth + 1)}`)
     return `{${members.join(',')}}`
   }
-  throw new UnfingerprintableBody('not JSON')
+  throw new UnfingerprintableBody()
 }
 
 /**
