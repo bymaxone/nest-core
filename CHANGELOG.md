@@ -12,6 +12,10 @@ heading here.
 
 ## [Unreleased]
 
+### Fixed
+
+- **The request deadline's response guard now covers the native writers of the response that 1.6.22 and 1.6.23 left out.** After the `504` has been sent, a call from an `@Res()` handler to `writeHead`, `writeHeader`, `removeHeader`, `appendHeader`, `setHeaders`, `writeContinue`, `writeProcessing`, `writeInformation` or `writeEarlyHints` used to throw `ERR_HTTP_HEADERS_SENT` into that handler; each is now a no-op, like the other writers, and nothing more is written to the client. `writeHead` and `removeHeader` stay live until the head is out, because Node's own `end` calls `writeHead`: a host that wraps `end` and finishes it later still delivers the `504`. In that window a late `writeHead` writes the `504` status already set and nothing it passes (no status, reason phrase or headers). **Known limits:** a late `removeHeader` before the flush is delegated, since it cannot be told from a host wrapper's own, so a handler that removes `content-type` there still affects the envelope; and a handler that sets `response.statusCode` itself before the flush changes the status of the deferred answer (a property, not a writer, and the same as before this change).
+
 ## [1.6.23] - 2026-11-24
 
 A patch release. The health and metrics routes answer at the path their options name under any versioning.
