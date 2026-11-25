@@ -1647,14 +1647,14 @@ ships `InMemoryIdempotencyStore` for one process; a deployment with several inst
 - **Refused at boot**: a handler that uses `@Res()` without passthrough, `@Next()`, `@Sse()`, an uploaded
   file or a raw body. Write `@Idempotent` above `@Sse` and `@HttpCode`.
 
-| Code                                  | Status | Meaning                                                              |
-| ------------------------------------- | ------ | -------------------------------------------------------------------- |
-| `BYMAX_IDEMPOTENCY_KEY_INVALID`       | 400    | The header is malformed, or the body cannot be fingerprinted.        |
-| `BYMAX_IDEMPOTENCY_KEY_REQUIRED`      | 400    | A required route got no header.                                      |
-| `BYMAX_IDEMPOTENCY_IN_PROGRESS`       | 409    | The first request is still running.                                  |
-| `BYMAX_IDEMPOTENCY_NOT_REPLAYABLE`    | 409    | The first answer could not be stored (too large, a stream, encoded). |
-| `BYMAX_IDEMPOTENCY_KEY_REUSED`        | 422    | The key belongs to a different request.                              |
-| `BYMAX_IDEMPOTENCY_STORE_UNAVAILABLE` | 503    | The store, or the scope function, failed.                            |
+| Code                                  | Status | Meaning                                                       |
+| ------------------------------------- | ------ | ------------------------------------------------------------- |
+| `BYMAX_IDEMPOTENCY_KEY_INVALID`       | 400    | The header is malformed, or the body cannot be fingerprinted. |
+| `BYMAX_IDEMPOTENCY_KEY_REQUIRED`      | 400    | A required route got no header.                               |
+| `BYMAX_IDEMPOTENCY_IN_PROGRESS`       | 409    | The first request is still running.                           |
+| `BYMAX_IDEMPOTENCY_NOT_REPLAYABLE`    | 409    | The first answer could not be stored.                         |
+| `BYMAX_IDEMPOTENCY_KEY_REUSED`        | 422    | The key belongs to a different request.                       |
+| `BYMAX_IDEMPOTENCY_STORE_UNAVAILABLE` | 503    | The store, or the scope function, failed.                     |
 
 ## 🏗️ Architecture
 
