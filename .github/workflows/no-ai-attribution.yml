@@ -4,7 +4,7 @@ on:
   pull_request:
     types: [opened, edited, synchronize, reopened]
 
-# The default token reads the contents and nothing else; the job asks for what it needs on top.
+# The default for a job that declares no permissions of its own; the job below declares its own.
 permissions:
   contents: read
 
