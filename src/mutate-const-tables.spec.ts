@@ -291,7 +291,7 @@ describe('mutate-const-tables', () => {
   })
 
   // A comment between an entry and its comma must go with the entry, or the mutant would not
-  // parse and a failing parse would be counted as a kill.
+  // parse, and a run that cannot parse the file says nothing about the entry.
   it('should remove an entry together with a comment before its comma', () => {
     const source = 'export const T = { a: 1 /* note */, b: 2 } as const\n'
     const root = repo({ 'src/table.ts': source }, [])
