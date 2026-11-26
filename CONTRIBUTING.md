@@ -57,7 +57,7 @@ All of the following must pass:
 Mutation testing (`pnpm mutation`) is a **release gate**, run manually before
 tagging a version, never on every PR.
 
-Stryker does not mutate the entries of an `as const` value table: it neither removes a property nor changes a number. `scripts/mutate-const-tables.mjs` does, one entry at a time, against a test command you give it. It is a development tool, not a CI step; its header has the usage.
+Stryker does not mutate the entries of an `as const` value table: it neither removes a property nor changes a number. `scripts/mutate-const-tables.mjs` does, one entry at a time, against a test command you give it. It counts a mutant as killed only when the command prints a test summary with a failed test, as Jest does; a crash, a timeout or a suite that fails to load is listed apart. It is a development tool, not a CI step; its header has the usage. After changing it, run `node --test scripts/mutate-const-tables.test.mjs`, which `pnpm test` does not run.
 
 ### Before a major
 
