@@ -1642,7 +1642,7 @@ A shared store implements `IIdempotencyStore`; the port's doc comment is the aut
   with a fresh token and expires after the lease; a held one is answered with its record. A read followed by a
   write lets two requests claim the same key.
 - `complete(key, token, response, ttlSeconds)` stores the answer and `release(key, token)` frees the key. Each
-  checks the token and writes in one atomic step, and does nothing when the token no longer holds the claim.
+  writes in one atomic step, only while the token still holds the key and the record is still `in_progress`.
 - An abandoned claim ends with its lease, a completed record with `ttlSeconds`.
 
 **Replayed bytes**

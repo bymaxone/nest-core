@@ -153,6 +153,23 @@ describe('@Idempotent, replay identity and reach', () => {
     ])
   })
 
+  it('logs no size line when the store no longer holds the claim', async () => {
+    jest.spyOn(store, 'complete').mockResolvedValueOnce(false)
+
+    await post('/r/big', 'k-lost')
+
+    expect(warn).not.toHaveBeenCalled()
+  })
+
+  it('logs only the store failure when an oversized answer cannot be stored', async () => {
+    jest.spyOn(store, 'complete').mockRejectedValueOnce(new Error('down'))
+
+    await post('/r/big', 'k-down')
+
+    expect(warn.mock.calls).toHaveLength(1)
+    expect(warn.mock.calls[0]?.[0]).toMatchObject({ event: 'CORE_IDEMPOTENCY_COMPLETE_FAILED' })
+  })
+
   it.each([
     ['an answer within the bound', '/r/small'],
     ['a streamed answer longer than the bound', '/r/streamed'],

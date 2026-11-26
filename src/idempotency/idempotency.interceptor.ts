@@ -237,24 +237,29 @@ export class IdempotencyInterceptor implements NestInterceptor {
       await this.drop(call, token)
       return
     }
-    if (answer.overBound) {
+    // Only a record the store accepted answers a repeat with 409, which is what the line reports.
+    if ((await this.keep(call, token, stored)) && answer.overBound) {
       writeLog(this.logger, 'warn', {
         event: 'CORE_IDEMPOTENCY_BODY_TOO_LARGE',
         message: 'The answer is over maxBodyBytes and is not kept for replay'
       })
     }
-    await this.keep(call, token, stored)
   }
 
   /** Write the answer; a failure is logged and leaves the claim to its lease. */
-  private async keep(call: Call, token: string, stored: IdempotencyStoredResponse): Promise<void> {
+  private async keep(
+    call: Call,
+    token: string,
+    stored: IdempotencyStoredResponse
+  ): Promise<boolean> {
     try {
-      await this.store.complete(call.key, token, stored, call.options.ttlSeconds)
+      return await this.store.complete(call.key, token, stored, call.options.ttlSeconds)
     } catch (cause) {
       this.warn(
         { event: 'CORE_IDEMPOTENCY_COMPLETE_FAILED', message: 'The answer could not be stored' },
         cause
       )
+      return false
     }
   }
 
