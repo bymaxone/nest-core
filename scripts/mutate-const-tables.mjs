@@ -270,6 +270,10 @@ function runCommand(root, command, file) {
         stderr.destroy()
       }, DRAIN_MS)
     })
+    // A character split between two chunks would otherwise decode as broken ones, and a crash
+    // line that starts with one would not be recognized.
+    running.stdout.setEncoding('utf8')
+    running.stderr.setEncoding('utf8')
     running.stdout.on('data', (chunk) => (output += chunk))
     running.stderr.on('data', (chunk) => (output += chunk))
     running.once('error', () => {

@@ -46,6 +46,17 @@ test('a suite that failed to run is a load failure, not a kill', async () => {
   assert.equal(await verdict(fixture(out, { code: 1 })), 'load-failure')
 })
 
+test('a crash line whose first character arrives in two chunks is still read', async () => {
+  // The pause lets the first byte of the three-byte marker arrive on its own.
+  const text = '● Test suite failed to run\n\nTests:       1 failed, 1 total\n'
+  const script = `
+    const bytes = Buffer.from(${JSON.stringify(text)})
+    process.stderr.write(bytes.subarray(0, 1))
+    setTimeout(() => { process.stderr.write(bytes.subarray(1)); process.exitCode = 1 }, 300)
+  `
+  assert.equal(await verdict([process.execPath, '-e', script, '--']), 'crash')
+})
+
 test('a run killed by a signal is crash-only', async () => {
   assert.equal(await verdict(fixture('', { signal: 'SIGKILL' })), 'crash')
 })
