@@ -237,7 +237,7 @@ export class IdempotencyInterceptor implements NestInterceptor {
       await this.drop(call, token)
       return
     }
-    // Only a record the store accepted answers a repeat with 409, which is what the line reports.
+    // Only a record the store accepted is known to be kept without its body.
     if ((await this.keep(call, token, stored)) && answer.overBound) {
       writeLog(this.logger, 'warn', {
         event: 'CORE_IDEMPOTENCY_BODY_TOO_LARGE',
