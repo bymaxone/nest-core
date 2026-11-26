@@ -113,7 +113,10 @@ export class IdempotencyInterceptor implements NestInterceptor {
     try {
       scope = options.scope(request)
     } catch (cause) {
-      this.warn('CORE_IDEMPOTENCY_SCOPE_FAILED', 'The scope function threw', cause)
+      this.warn(
+        { event: 'CORE_IDEMPOTENCY_SCOPE_FAILED', message: 'The scope function threw' },
+        cause
+      )
     }
     if (typeof scope !== 'string' || scope === '') {
       throw refusal(
@@ -150,8 +153,10 @@ export class IdempotencyInterceptor implements NestInterceptor {
         )
       }
       this.warn(
-        'CORE_IDEMPOTENCY_STORE_FAILED',
-        'The store failed; the handler runs unprotected',
+        {
+          event: 'CORE_IDEMPOTENCY_STORE_FAILED',
+          message: 'The store failed; the handler runs unprotected'
+        },
         cause
       )
       return call.next.handle()
@@ -228,16 +233,33 @@ export class IdempotencyInterceptor implements NestInterceptor {
   /** Keep the answer that was sent, or give the claim back when it is not one to keep. */
   private async settle(call: Call, token: string, answer: Wire): Promise<void> {
     const stored = storable(answer, call.options.storeClientErrors)
-    if (stored === undefined) await this.drop(call, token)
-    else await this.keep(call, token, stored)
+    if (stored === undefined) {
+      await this.drop(call, token)
+      return
+    }
+    // Only a record the store accepted is known to be kept without its body.
+    if ((await this.keep(call, token, stored)) && answer.overBound) {
+      writeLog(this.logger, 'warn', {
+        event: 'CORE_IDEMPOTENCY_BODY_TOO_LARGE',
+        message: 'The answer is over maxBodyBytes and is not kept for replay'
+      })
+    }
   }
 
   /** Write the answer; a failure is logged and leaves the claim to its lease. */
-  private async keep(call: Call, token: string, stored: IdempotencyStoredResponse): Promise<void> {
+  private async keep(
+    call: Call,
+    token: string,
+    stored: IdempotencyStoredResponse
+  ): Promise<boolean> {
     try {
-      await this.store.complete(call.key, token, stored, call.options.ttlSeconds)
+      return await this.store.complete(call.key, token, stored, call.options.ttlSeconds)
     } catch (cause) {
-      this.warn('CORE_IDEMPOTENCY_COMPLETE_FAILED', 'The answer could not be stored', cause)
+      this.warn(
+        { event: 'CORE_IDEMPOTENCY_COMPLETE_FAILED', message: 'The answer could not be stored' },
+        cause
+      )
+      return false
     }
   }
 
@@ -246,13 +268,16 @@ export class IdempotencyInterceptor implements NestInterceptor {
     try {
       await this.store.release(call.key, token)
     } catch (cause) {
-      this.warn('CORE_IDEMPOTENCY_RELEASE_FAILED', 'The claim could not be released', cause)
+      this.warn(
+        { event: 'CORE_IDEMPOTENCY_RELEASE_FAILED', message: 'The claim could not be released' },
+        cause
+      )
     }
   }
 
   /** One log line; never the key, the header or the body. */
-  private warn(event: string, message: string, cause: unknown): void {
-    writeLog(this.logger, 'warn', { event, message, err: asHostError(cause) })
+  private warn(entry: { event: string; message: string }, cause: unknown): void {
+    writeLog(this.logger, 'warn', { ...entry, err: asHostError(cause) })
   }
 }
 

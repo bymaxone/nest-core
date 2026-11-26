@@ -24,6 +24,8 @@ export interface Wire {
   readonly headers: Readonly<Record<string, unknown>>
   /** The body as text; absent when it could not be held or does not decode as UTF-8. */
   readonly body?: string | undefined
+  /** Set when the body went past the largest one held; a streamed one is never measured. */
+  readonly overBound?: true | undefined
 }
 
 /** The raw response of an Express response or a Fastify reply. */
@@ -128,7 +130,9 @@ async function deliver(
   await settle({
     status: held.status ?? raw.statusCode,
     headers: head,
-    body: held.holding && !encoded ? textOf(Buffer.concat(held.chunks)) : undefined
+    body: held.holding && !encoded ? textOf(Buffer.concat(held.chunks)) : undefined,
+    // Bytes are counted only while held, so some counted and no longer held means past the limit.
+    overBound: (!held.holding && held.size > 0) || undefined
   })
   if (raw.writableEnded || (held.holding && raw.headersSent)) return
   try {

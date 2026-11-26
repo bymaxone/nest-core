@@ -12,6 +12,18 @@ heading here.
 
 ## [Unreleased]
 
+## [1.6.25] - 2026-11-26
+
+A patch release. It logs an idempotent answer that is too large to keep, and states the client and store contracts of `./idempotency` in the README.
+
+### Added
+
+- **`./idempotency` warns when an answer it stores is over `maxBodyBytes`, so its body is not kept for replay.** One `warn` line per such answer, `CORE_IDEMPOTENCY_BODY_TOO_LARGE`, with no body content. A repeat of the key still answers `409` `BYMAX_IDEMPOTENCY_NOT_REPLAYABLE`.
+
+### Documentation
+
+- The README states when a client generates, reuses and replaces an `Idempotency-Key`, what a shared `IIdempotencyStore` must do atomically, and that a replayed body, an error envelope included, is the first response's bytes.
+
 ## [1.6.24] - 2026-11-26
 
 A patch release. It adds the `./idempotency` subpath, lets a host use the timing interceptor and middleware without binding the clock, and covers the response writers of the request deadline that earlier releases left out.
@@ -2056,4 +2068,5 @@ have regressed from. They are kept because the reasoning is worth having.
 [1.6.18]: https://github.com/bymaxone/nest-core/compare/v1.6.17...v1.6.18
 [1.6.17]: https://github.com/bymaxone/nest-core/compare/v1.6.16...v1.6.17
 [1.6.16]: https://github.com/bymaxone/nest-core/compare/v1.6.15...v1.6.16
-[Unreleased]: https://github.com/bymaxone/nest-core/compare/v1.6.24...HEAD
+[Unreleased]: https://github.com/bymaxone/nest-core/compare/v1.6.25...HEAD
+[1.6.25]: https://github.com/bymaxone/nest-core/compare/v1.6.24...v1.6.25

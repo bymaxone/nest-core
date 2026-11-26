@@ -251,11 +251,14 @@ describe('@Idempotent', () => {
     ['another body', '/i/create', { n: 2 }],
     ['another path', '/i/ok200', { n: 1 }]
   ])('refuses the key reused with %s with 422', async (_name, path, body) => {
-    await post('/i/create', 'k-reuse').send({ n: 1 })
-    const reused = await post(path, 'k-reuse').send(body)
+    const key = `k-reuse-${path}-${body.n}`
+    await post('/i/create', key).send({ n: 1 })
+    const reused = await post(path, key).send(body)
 
     expect(reused.status).toBe(422)
     expect(reused.body.code).toBe('BYMAX_IDEMPOTENCY_KEY_REUSED')
+    expect(reused.text).not.toContain('created')
+    expect(runs.count).toBe(1)
   })
 
   it('refuses the same key with another route parameter or query', async () => {
