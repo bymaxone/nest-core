@@ -267,7 +267,10 @@ like everything else. Portuguese anywhere in this tree is a finding.
 
 ## Release authority
 
-Standing order from the repository owner, in their words:
+The PM's GO, naming the version and the full SHA, is the maintainer's decision on version number,
+merge, tag and publish (owner standing order, 2026-11-26).
+
+The order in the owner's words:
 
 > The PM's GO with the full SHA is my decision on the version number, merge, tag and publish for
 > every release.
