@@ -18,7 +18,7 @@ A patch release. It logs an idempotent answer that is too large to keep, and sta
 
 ### Added
 
-- **`./idempotency` warns when an answer over `maxBodyBytes` is not kept for replay.** One `warn` line per such answer, `CORE_IDEMPOTENCY_BODY_TOO_LARGE`, with no body content. A repeat of the key still answers `409` `BYMAX_IDEMPOTENCY_NOT_REPLAYABLE`.
+- **`./idempotency` warns when an answer it stores is over `maxBodyBytes`, so its body is not kept for replay.** One `warn` line per such answer, `CORE_IDEMPOTENCY_BODY_TOO_LARGE`, with no body content. A repeat of the key still answers `409` `BYMAX_IDEMPOTENCY_NOT_REPLAYABLE`.
 
 ### Documentation
 

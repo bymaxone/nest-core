@@ -976,7 +976,7 @@ A boot error about something you declared has a message that is this package's o
 | `CORE_IDEMPOTENCY_STORE_FAILED`    | warn  | The store failed to claim a key and the route is fail-open, so the handler runs unprotected.                                                                                                    | `err`                                |
 | `CORE_IDEMPOTENCY_COMPLETE_FAILED` | warn  | The answer could not be stored; it is sent, and the claim ends with its lease.                                                                                                                  | `err`                                |
 | `CORE_IDEMPOTENCY_RELEASE_FAILED`  | warn  | The claim could not be released; it ends with its lease.                                                                                                                                        | `err`                                |
-| `CORE_IDEMPOTENCY_BODY_TOO_LARGE`  | warn  | An idempotent answer went over `maxBodyBytes`, so it is kept without a body and a repeat answers `409`. Written once per such answer, with no body content.                                     | (none)                               |
+| `CORE_IDEMPOTENCY_BODY_TOO_LARGE`  | warn  | A stored answer went over `maxBodyBytes`, so it is kept without a body and a repeat answers `409`. Written once per such answer, with no body content.                                          | (none)                               |
 | `CORE_HEALTH_DOWN`                 | warn  | A health check changed from up to down, or was first seen down; `cause` says why (`rejected`, `timed-out` or `reported-down`). Not written when a `BYMAX_HEALTH_TRANSITION_SINK` is bound.      | `check`, `cause`, `timeoutMs`, `err` |
 | `CORE_HEALTH_RUNTIME_ALTERED`      | warn  | A promise built-in was replaced or given a `then` after load, so readiness answers not ready with a `runtime` check down. Written once until a probe answers normally again, whatever the sink. | `check`                              |
 | `CORE_HEALTH_RECOVERED`            | log   | A health check that had been down is reachable again. Not written when a `BYMAX_HEALTH_TRANSITION_SINK` is bound.                                                                               | `check`                              |
@@ -1638,7 +1638,7 @@ ships `InMemoryIdempotencyStore` for one process; a deployment with several inst
 
 A shared store implements `IIdempotencyStore`; the port's doc comment is the authority.
 
-- `begin(key, fingerprint, leaseSeconds)` claims in **one atomic step**: a free key is stored as `in-progress`
+- `begin(key, fingerprint, leaseSeconds)` claims in **one atomic step**: a free key is stored as `in_progress`
   with a fresh token and expires after the lease; a held one is answered with its record. A read followed by a
   write lets two requests claim the same key.
 - `complete(key, token, response, ttlSeconds)` stores the answer and `release(key, token)` frees the key. Each
