@@ -40,10 +40,21 @@ export function digest(fields: readonly string[]): string {
   return hash.digest('hex')
 }
 
-/** Whether `value` is a plain object: a body parser's output, never a Buffer, stream or class instance. */
+/**
+ * Whether `prototype` is one a body parser gives its output: `Object.prototype`, none, or an empty
+ * object that has none, which is what `fast-querystring` (Fastify's urlencoded bodies) builds.
+ */
+function isParserPrototype(prototype: object | null): boolean {
+  if (prototype === Object.prototype || prototype === null) return true
+  return Object.getPrototypeOf(prototype) === null && Reflect.ownKeys(prototype).length === 0
+}
+
+/** Whether `value` is a body parser's output: never a Buffer, stream, class instance or accessor. */
 function isPlain(value: object): value is Record<string, unknown> {
-  const prototype = Object.getPrototypeOf(value) as unknown
-  return prototype === Object.prototype || prototype === null
+  if (!isParserPrototype(Object.getPrototypeOf(value) as object | null)) return false
+  return Object.values(Object.getOwnPropertyDescriptors(value)).every(
+    (property) => property.get === undefined && property.set === undefined
+  )
 }
 
 /** The canonical JSON of one node: sorted keys, no whitespace, `undefined` members dropped. */

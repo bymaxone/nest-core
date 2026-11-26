@@ -57,8 +57,8 @@ function document(handler: object, options: ResolvedIdempotentOptions): void {
  *
  * @param options - A `scope` (or `unscoped: true`) and the optional lease, TTL and size bounds.
  * @returns A method decorator.
- * @throws Error At boot, on invalid options or a handler that writes its own response, streams, renders
- *   a view, or reads a multipart or raw body.
+ * @throws Error At boot, on invalid options or a handler that writes its own response, is `@Sse`, renders
+ *   a view, or takes an uploaded file or a raw body.
  */
 export function Idempotent(options: IdempotentOptions): MethodDecorator {
   const resolved = resolveIdempotentOptions(options)

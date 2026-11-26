@@ -19,6 +19,7 @@ import {
   BYMAX_IDEMPOTENCY_STORE_UNAVAILABLE
 } from './idempotency.codes'
 import { digest, fingerprint, validKey } from './idempotency.key'
+import { asOwner, insideOwner } from './idempotency.nesting'
 import type { IdempotencyRequest, ResolvedIdempotentOptions } from './idempotency.options'
 import { setReplyHeader, storable, streamed } from './idempotency.response'
 import type { ReplyLike } from './idempotency.response'
@@ -69,7 +70,12 @@ export class IdempotencyInterceptor implements NestInterceptor {
       context.getHandler()
     )
     if (options === undefined || context.getType() !== 'http') return next.handle()
-    return from(this.admit(context, next, options)).pipe(mergeMap((answer) => answer))
+    const request = context.switchToHttp().getRequest<RequestLike>()
+    const handler = context.getHandler()
+    // A second registration on the route: the instance around this one holds the claim.
+    if (insideOwner(request, handler)) return next.handle()
+    const owned = asOwner(request, handler, next)
+    return from(this.admit(context, owned, options)).pipe(mergeMap((answer) => answer))
   }
 
   /** Decide what the request does: run unprotected, refuse, replay, or run and keep the answer. */

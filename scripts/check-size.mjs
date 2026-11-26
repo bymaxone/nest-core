@@ -363,6 +363,10 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 // 6.02 KiB, so the prose that remains is the doc comments of the functions, which state the constraints of the signatures they parse.
 // 2026-11-25, `./idempotency` 6796 B (measured 6766 B, plus 30 B of headroom), from 6.62 KiB: a held body sent without a head of its own
 // is given the status the route set, so its length is stated like that of a body with one. One statement; no module added to the bundle.
+// 2026-11-25, `./idempotency` 7190 B (measured 7160 B, plus 30 B of headroom), from 6796 B: a second registration of the
+// interceptor passes through, and a urlencoded body parsed on Fastify is fingerprinted. One module added, `idempotency.nesting`,
+// over `node:async_hooks`, and two predicates for the parser's prototype and its accessors. The growth is code: stripped of
+// comments the bundle went from 6124 B to 6533 B.
 const BUDGETS = [
   { name: '. (root)', path: 'dist/index.mjs', brotli: 29.49 * 1024 },
   { name: './pagination', path: 'dist/pagination/index.mjs', brotli: 1.5 * 1024 },
@@ -370,7 +374,7 @@ const BUDGETS = [
   { name: './openapi', path: 'dist/openapi/index.mjs', brotli: 11.02 * 1024 },
   { name: './metrics', path: 'dist/metrics/index.mjs', brotli: 0.5 * 1024 },
   { name: './http', path: 'dist/http/index.mjs', brotli: 8.74 * 1024 },
-  { name: './idempotency', path: 'dist/idempotency/index.mjs', brotli: 6796 }
+  { name: './idempotency', path: 'dist/idempotency/index.mjs', brotli: 7190 }
 ]
 
 const fmt = (n) => `${(n / 1024).toFixed(2)} kB`

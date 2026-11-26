@@ -65,6 +65,65 @@ describe('canonicalBody', () => {
     )
   })
 
+  /** An object as a query-string parser builds one: its prototype is empty and has no prototype. */
+  function parsed(fields: object, prototype: object = Object.create(null) as object): object {
+    return Object.defineProperties(
+      Object.create(prototype) as object,
+      Object.getOwnPropertyDescriptors(fields)
+    )
+  }
+
+  it('reads a parser result, empty or with arrays and prototype names, as its own data', () => {
+    expect(canonicalBody(parsed({}))).toBe('{}')
+    expect(
+      canonicalBody(
+        parsed(JSON.parse('{"b":["1","2"],"__proto__":"p","constructor":"c"}') as object)
+      )
+    ).toBe('{"__proto__":"p","b":["1","2"],"constructor":"c"}')
+  })
+
+  it.each([
+    [
+      'a parser-like prototype that has a member',
+      parsed({}, Object.assign(Object.create(null) as object, { inherited: 1 }))
+    ],
+    [
+      'a parser-like prototype that has an accessor',
+      parsed({}, Object.create(null, { trap: { get: () => 1, enumerable: false } }) as object)
+    ],
+    [
+      'a prototype with a prototype under it',
+      parsed({}, Object.create(Object.create(null) as object) as object)
+    ],
+    [
+      'an own accessor on a plain object',
+      Object.defineProperty({}, 'a', { get: () => 1, enumerable: true })
+    ],
+    [
+      'a setter with no getter',
+      Object.defineProperty({}, 'a', { set: jest.fn(), enumerable: true })
+    ],
+    [
+      'an own accessor on a parser result',
+      parsed({
+        get a() {
+          return 1
+        }
+      })
+    ]
+  ])('refuses %s', (_name, body) => {
+    expect(() => canonicalBody(body)).toThrow(UnfingerprintableBody)
+  })
+
+  it('does not call an accessor it refuses', () => {
+    const get = jest.fn(() => 1)
+
+    expect(() => canonicalBody(Object.defineProperty({}, 'a', { get, enumerable: true }))).toThrow(
+      UnfingerprintableBody
+    )
+    expect(get).not.toHaveBeenCalled()
+  })
+
   it.each([
     ['a Buffer', Buffer.from('x')],
     ['a Map', new Map()],
