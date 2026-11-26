@@ -265,6 +265,19 @@ The shared block leaves the language of `docs/` to each repository, and this one
 is a published library whose specification is read by consumers outside Bymax, so `docs/` is English
 like everything else. Portuguese anywhere in this tree is a finding.
 
+## Release authority
+
+The PM's GO, naming the version and the full SHA, is the maintainer's decision on version number,
+merge, tag and publish (owner standing order, 2026-11-26).
+
+The order in the owner's words:
+
+> The PM's GO with the full SHA is my decision on the version number, merge, tag and publish for
+> every release.
+
+The PM is the session that coordinates this repository's work for the owner. A GO covers the commit
+its full SHA names.
+
 ## Session memory (Obsidian vault)
 
 Lessons from earlier sessions live outside the repository, in the owner's Obsidian vault at `~/Documents/MyApps/obsidian/Brain/`, when it is present on this machine. Before a task, find this repository's hub under `02 - Areas/`: the table in `02 - Areas/Bymax/Bymax.md` maps each Bymax repository to its folder; for any other repository, search `02 - Areas/` for the repository name. Read the hub with its `Learnings.md` and `Decisions.md`, and the relevant stack notes under `03 - Resources/`. When the vault and the code disagree, the code wins. Record each non-obvious gotcha, root cause or decision in the hub as the vault's `_meta/conventions.md` describes; a repository without a hub gets one from `_meta/templates/project-hub.md`.
