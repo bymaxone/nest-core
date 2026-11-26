@@ -12,7 +12,7 @@ heading here.
 
 ## [Unreleased]
 
-## [1.6.24] - 2026-11-25
+## [1.6.24] - 2026-11-26
 
 A patch release. It adds the `./idempotency` subpath, lets a host use the timing interceptor and middleware without binding the clock, and covers the response writers of the request deadline that earlier releases left out.
 
