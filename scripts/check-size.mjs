@@ -367,6 +367,9 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 // interceptor passes through, and a urlencoded body parsed on Fastify is fingerprinted. One module added, `idempotency.nesting`,
 // over `node:async_hooks`, and two predicates for the parser's prototype and its accessors. The growth is code: stripped of
 // comments the bundle went from 6124 B to 6533 B.
+// 2026-11-26, `./idempotency` 7304 B (measured 7274 B, plus 30 B of headroom), from 7190 B: an answer over `maxBodyBytes` is
+// marked on the wire and logged, and the interceptor's log calls name their event as a literal the README catalog test reads.
+// Code and two comment lines; no module added to the bundle; stripped of comments the bundle went from 6533 B to 6601 B.
 const BUDGETS = [
   { name: '. (root)', path: 'dist/index.mjs', brotli: 29.49 * 1024 },
   { name: './pagination', path: 'dist/pagination/index.mjs', brotli: 1.5 * 1024 },
@@ -374,7 +377,7 @@ const BUDGETS = [
   { name: './openapi', path: 'dist/openapi/index.mjs', brotli: 11.02 * 1024 },
   { name: './metrics', path: 'dist/metrics/index.mjs', brotli: 0.5 * 1024 },
   { name: './http', path: 'dist/http/index.mjs', brotli: 8.74 * 1024 },
-  { name: './idempotency', path: 'dist/idempotency/index.mjs', brotli: 7190 }
+  { name: './idempotency', path: 'dist/idempotency/index.mjs', brotli: 7304 }
 ]
 
 const fmt = (n) => `${(n / 1024).toFixed(2)} kB`

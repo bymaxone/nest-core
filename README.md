@@ -970,21 +970,26 @@ A boot error about something you declared has a message that is this package's o
 | `label`                | a `metrics.defaultLabels` value that is not a string                                   | the label name                                |
 | `count`                | `Object.prototype` holding a name outside the standard ones, or a changed standard one | how many names or changes                     |
 
-| `event`                           | Level | When                                                                                                                                                                                            | Fields                               |
-| --------------------------------- | ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------ |
-| `CORE_HEALTH_DOWN`                | warn  | A health check changed from up to down, or was first seen down; `cause` says why (`rejected`, `timed-out` or `reported-down`). Not written when a `BYMAX_HEALTH_TRANSITION_SINK` is bound.      | `check`, `cause`, `timeoutMs`, `err` |
-| `CORE_HEALTH_RUNTIME_ALTERED`     | warn  | A promise built-in was replaced or given a `then` after load, so readiness answers not ready with a `runtime` check down. Written once until a probe answers normally again, whatever the sink. | `check`                              |
-| `CORE_HEALTH_RECOVERED`           | log   | A health check that had been down is reachable again. Not written when a `BYMAX_HEALTH_TRANSITION_SINK` is bound.                                                                               | `check`                              |
-| `CORE_HEALTH_SINK_FAILED`         | warn  | The bound health transition sink threw or rejected; the probe is unaffected. `err` is a new `Error` whose `cause` is what the sink threw (a `NonErrorThrownError` when it is not an `Error`).   | `err`                                |
-| `CORE_HANDLER_LATE_ERROR`         | error | A handler threw after its request was answered `504`; the handler's own error is `err`, or a `NonErrorThrownError` holding what it threw as `cause`.                                            | `err`                                |
-| `CORE_SHUTDOWN_DEADLINE`          | error | Shutdown did not finish within `shutdown.deadlineMs`; the process exits with code `1`.                                                                                                          | `deadlineMs`                         |
-| `CORE_METRICS_RUNTIME_ALTERED`    | warn  | A built-in was replaced or given a `then` after load, so scrapes answer `503`. Written once until a scrape passes again.                                                                        | (none)                               |
-| `CORE_METRICS_SCRAPE_SLOW`        | warn  | A metrics collection is past `metrics.scrapeTimeoutMs`; scrapes answer `503` until it ends.                                                                                                     | `timeoutMs`                          |
-| `CORE_METRICS_CONTRIBUTORS`       | log   | Contributors registered their metrics at boot; their labels follow.                                                                                                                             | `contributors`, `labels`             |
-| `CORE_OPENAPI_SERVED`             | log   | The OpenAPI document was mounted.                                                                                                                                                               | `path`, `jsonPath`                   |
-| `CORE_OPENAPI_PRODUCTION_REFUSED` | warn  | The OpenAPI document was requested in production and is never served there.                                                                                                                     |                                      |
-| `CORE_OPENAPI_UNSECURED`          | warn  | Operations state no security requirement while others in the document do.                                                                                                                       | `operations`, `routes`               |
-| `CORE_OPENAPI_COMPONENT_CONFLICT` | warn  | A library contributed a component the document already defines; the contributed one is not served.                                                                                              | `components`, `entries`              |
+| `event`                            | Level | When                                                                                                                                                                                            | Fields                               |
+| ---------------------------------- | ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------ |
+| `CORE_IDEMPOTENCY_SCOPE_FAILED`    | warn  | The `scope` function threw; the request is answered `503`.                                                                                                                                      | `err`                                |
+| `CORE_IDEMPOTENCY_STORE_FAILED`    | warn  | The store failed to claim a key and the route is fail-open, so the handler runs unprotected.                                                                                                    | `err`                                |
+| `CORE_IDEMPOTENCY_COMPLETE_FAILED` | warn  | The answer could not be stored; it is sent, and the claim ends with its lease.                                                                                                                  | `err`                                |
+| `CORE_IDEMPOTENCY_RELEASE_FAILED`  | warn  | The claim could not be released; it ends with its lease.                                                                                                                                        | `err`                                |
+| `CORE_IDEMPOTENCY_BODY_TOO_LARGE`  | warn  | An idempotent answer went over `maxBodyBytes`, so it is kept without a body and a repeat answers `409`. Written once per such answer, with no body content.                                     | (none)                               |
+| `CORE_HEALTH_DOWN`                 | warn  | A health check changed from up to down, or was first seen down; `cause` says why (`rejected`, `timed-out` or `reported-down`). Not written when a `BYMAX_HEALTH_TRANSITION_SINK` is bound.      | `check`, `cause`, `timeoutMs`, `err` |
+| `CORE_HEALTH_RUNTIME_ALTERED`      | warn  | A promise built-in was replaced or given a `then` after load, so readiness answers not ready with a `runtime` check down. Written once until a probe answers normally again, whatever the sink. | `check`                              |
+| `CORE_HEALTH_RECOVERED`            | log   | A health check that had been down is reachable again. Not written when a `BYMAX_HEALTH_TRANSITION_SINK` is bound.                                                                               | `check`                              |
+| `CORE_HEALTH_SINK_FAILED`          | warn  | The bound health transition sink threw or rejected; the probe is unaffected. `err` is a new `Error` whose `cause` is what the sink threw (a `NonErrorThrownError` when it is not an `Error`).   | `err`                                |
+| `CORE_HANDLER_LATE_ERROR`          | error | A handler threw after its request was answered `504`; the handler's own error is `err`, or a `NonErrorThrownError` holding what it threw as `cause`.                                            | `err`                                |
+| `CORE_SHUTDOWN_DEADLINE`           | error | Shutdown did not finish within `shutdown.deadlineMs`; the process exits with code `1`.                                                                                                          | `deadlineMs`                         |
+| `CORE_METRICS_RUNTIME_ALTERED`     | warn  | A built-in was replaced or given a `then` after load, so scrapes answer `503`. Written once until a scrape passes again.                                                                        | (none)                               |
+| `CORE_METRICS_SCRAPE_SLOW`         | warn  | A metrics collection is past `metrics.scrapeTimeoutMs`; scrapes answer `503` until it ends.                                                                                                     | `timeoutMs`                          |
+| `CORE_METRICS_CONTRIBUTORS`        | log   | Contributors registered their metrics at boot; their labels follow.                                                                                                                             | `contributors`, `labels`             |
+| `CORE_OPENAPI_SERVED`              | log   | The OpenAPI document was mounted.                                                                                                                                                               | `path`, `jsonPath`                   |
+| `CORE_OPENAPI_PRODUCTION_REFUSED`  | warn  | The OpenAPI document was requested in production and is never served there.                                                                                                                     |                                      |
+| `CORE_OPENAPI_UNSECURED`           | warn  | Operations state no security requirement while others in the document do.                                                                                                                       | `operations`, `routes`               |
+| `CORE_OPENAPI_COMPONENT_CONFLICT`  | warn  | A library contributed a component the document already defines; the contributed one is not served.                                                                                              | `components`, `entries`              |
 
 ## 📈 Metrics
 
@@ -1617,6 +1622,35 @@ The module that declares the controller provides the store under `BYMAX_IDEMPOTE
 ships `InMemoryIdempotencyStore` for one process; a deployment with several instances implements
 `IIdempotencyStore` over a shared store (the port's atomicity contract is in its doc comment).
 
+**Client contract**
+
+- **Generate** one key per operation the user intends (one payment, one order), before the first attempt: 1 to
+  255 visible ASCII characters. A random UUID is a good choice.
+- **Reuse** that key, with the same method, path, query and body, for every retry of that operation: after a
+  timeout, a dropped connection, a `5xx`, or a `409` `BYMAX_IDEMPOTENCY_IN_PROGRESS` (wait `Retry-After`).
+- **Use a new key** for a new operation, even with an identical body, and for a corrected request: a stored
+  `4xx` is replayed to its key, and another body under it is `422`. `409` `BYMAX_IDEMPOTENCY_NOT_REPLAYABLE`
+  means the first answer was not kept: find out what the first request did before sending it under a new key.
+- **Lifetime**: a completed answer is kept for the route's `ttlSeconds` (24 hours by default). After that the
+  same key runs the handler again, so retry within it.
+
+**Store contract**
+
+A shared store implements `IIdempotencyStore`; the port's doc comment is the authority.
+
+- `begin(key, fingerprint, leaseSeconds)` claims in **one atomic step**: a free key is stored as `in-progress`
+  with a fresh token and expires after the lease; a held one is answered with its record. A read followed by a
+  write lets two requests claim the same key.
+- `complete(key, token, response, ttlSeconds)` stores the answer and `release(key, token)` frees the key. Each
+  checks the token and writes in one atomic step, and does nothing when the token no longer holds the claim.
+- An abandoned claim ends with its lease, a completed record with `ttlSeconds`.
+
+**Replayed bytes**
+
+A replayed body is the first response's bytes, an error envelope included: its `correlationId`, `traceId` and
+`timestamp` are those of the first request. Only response headers your application sets on each request, such
+as a request-id header, carry the new request's id.
+
 - **A scope is required**: a function returning the caller's identity, or `unscoped: true`. The storage key
   is a digest of the scope and the header, so one caller's key never resolves another's record.
 - **The fingerprint** covers the method, the path, the query and the parsed JSON or urlencoded body (keys
@@ -1640,7 +1674,8 @@ ships `InMemoryIdempotencyStore` for one process; a deployment with several inst
   text, and `content-type`, `location`, `content-location` and `etag`; never `set-cookie`. A replay sends
   those bytes with their own `content-length`, so an interceptor or serializer outside `@Idempotent` neither
   leaks a field into it nor wraps it twice. An answer with `content-encoding`, a stream, a `Buffer`, a body
-  over `maxBodyBytes`, a body that is not UTF-8 or a `304` is sent untouched and replays as `409`. A `4xx` from
+  over `maxBodyBytes` (logged once per such answer as
+  `CORE_IDEMPOTENCY_BODY_TOO_LARGE`, with no body content), a body that is not UTF-8 or a `304` is sent untouched and replays as `409`. A `4xx` from
   an exception filter is stored the same way.
 - **A failure after the handler returned** (an outer interceptor or serializer that throws) answers `5xx` and
   releases the claim, so the retry runs the handler again. An answer sent while the handler is still
