@@ -86,7 +86,7 @@ describe('body-depth floor, enabled', () => {
 
   it('answers the same body with 400 on a library route', async () => {
     /* No credential and no route of the consumer's: the floor sits before routing. */
-    const res = await json(app, '/health/ready', nested(2000))
+    const res = await json(app, '/health/ready', nested(BEYOND_THE_STACK))
     expect(res.status).toBe(400)
     expect(res.body.code).toBe('BYMAX_BAD_REQUEST')
   })
