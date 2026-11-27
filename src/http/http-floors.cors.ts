@@ -78,13 +78,13 @@ function isExactOrigin(origin: unknown): origin is string {
 const HEADER_NAME = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/
 
 /**
- * The list an option holds, or `undefined` when it is unset. An empty slot of a sparse list counts as
+ * A copy of the list an option holds, or `undefined` when it is unset. An empty slot of a sparse list counts as
  * an entry that is not a string: `some` and `find` would skip it and let it become an empty item of a
  * header. An entry is named by its position and never shown.
  *
  * @throws Error When the value is set and is not a list of non-empty strings.
  */
-function namesOf(name: string, value: unknown): readonly string[] | undefined {
+function namesOf(name: string, value: unknown): string[] | undefined {
   if (value === undefined || value === null) return undefined
   if (!Array.isArray(value)) throw refusal(`cors.${name}`, 'a list of strings', value)
   const list = Array.from(value as readonly unknown[])
@@ -93,7 +93,7 @@ function namesOf(name: string, value: unknown): readonly string[] | undefined {
       throw new Error(`cors.${name} entry ${index + 1} must be a non-empty string`)
     }
   })
-  return list as readonly string[]
+  return list as string[]
 }
 
 /** Throws at the first entry of `list` that `isValid` refuses, naming the entry by position. */
@@ -183,10 +183,10 @@ export function resolveCors(given: unknown): CorsOptionsDelegate<CorsRequest> {
   // `Object.prototype` afterwards answers none of them. `headers` is the alias `cors` falls back to.
   const offers = {
     credentials,
-    methods: methods?.slice() ?? CORS_DEFAULT_METHODS,
-    allowedHeaders: allowedHeaders?.slice(),
+    methods: methods ?? CORS_DEFAULT_METHODS,
+    allowedHeaders,
     headers: undefined,
-    exposedHeaders: exposedHeaders?.slice(),
+    exposedHeaders,
     maxAge
   } as CorsOptions
   const listed: ReadonlySet<string> = new Set(origins as readonly string[])

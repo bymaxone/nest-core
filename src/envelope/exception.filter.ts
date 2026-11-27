@@ -50,7 +50,7 @@ import {
 import { NoopCorrelationIdProvider } from '../defaults.providers'
 import type { ICorrelationIdProvider } from './correlation.interfaces'
 import { BYMAX_INTERNAL_ERROR, BYMAX_VALIDATION_FAILED, codeForStatus } from './error-codes'
-import { buildErrorEnvelope } from './error-envelope'
+import { assembleEnvelope } from './error-envelope'
 import type { ErrorDetails, ErrorEnvelope } from './error-envelope'
 import { RepeatWindow } from './repeat-window'
 import type { IUnexpectedErrorSink, UnexpectedErrorReport } from './unexpected-error.sink'
@@ -718,22 +718,18 @@ export class BymaxExceptionFilter implements ExceptionFilter, OnModuleDestroy {
     details?: ErrorDetails
   ): ErrorEnvelope {
     const withheld = statusCode >= CLIENT_ERROR_MAX && !this.options.envelope.exposeInternals
-    return buildErrorEnvelope({
+    return assembleEnvelope({
       statusCode,
       code,
       message,
       path: context.path,
       now: this.now,
       ...(details !== undefined && !withheld ? { details } : {}),
-      // Stryker disable next-line ConditionalExpression: equivalent — the always-spread form hands the builder `correlationId: undefined`, and `buildErrorEnvelope` re-guards `input.correlationId !== undefined` and omits an undefined value, so the emitted envelope is byte-for-byte identical whether or not a correlation id is present.
-      ...(context.correlationId !== undefined ? { correlationId: context.correlationId } : {}),
+      correlationId: context.correlationId,
       // Gated separately from the context above: the trace id reaches the
       // observability seam either way, and the response body only when the
       // operator opted into publishing it.
-      // Stryker disable next-line ConditionalExpression: equivalent — same as the correlation id above. The always-spread form hands the builder `traceId: undefined`, which `buildErrorEnvelope` re-guards and omits. The call-site guard exists because `exactOptionalPropertyTypes` rejects an explicit `undefined` for an optional field, not because it changes the output.
-      ...(this.options.telemetry.exposeTraceId && context.traceId !== undefined
-        ? { traceId: context.traceId }
-        : {})
+      traceId: this.options.telemetry.exposeTraceId ? context.traceId : undefined
     })
   }
 
