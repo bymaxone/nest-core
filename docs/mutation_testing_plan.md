@@ -87,9 +87,11 @@ Classify every surviving mutant into one of three buckets and act accordingly.
    test can kill it. The comment is used only for a genuine equivalent (see the
    suppression policy below).
 
-**Hardening strengthens tests, never production code.** The production behavior
-is frozen at this point; a mutant is killed by a better test, never by reshaping
-the code to make the mutant impossible, and never by lowering a threshold.
+**Hardening starts with the tests and never changes behaviour.** A mutant a test
+can kill is killed by a better test, never by lowering a threshold. Production
+code is restructured for an equivalent mutant only, with behaviour unchanged: where
+a directive would also hide a mutant a test kills, the statement is split or
+rewritten, and code that does nothing observable may be removed.
 
 ---
 
