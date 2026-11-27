@@ -47,8 +47,6 @@ export function containRejection(returned: unknown, onFailure: (error: unknown) 
   // inside the block, emptying that block is a real regression the async,
   // thenable and cross-realm sink tests catch, where emptying an early-return
   // block would only have widened the guard harmlessly.
-  //
-  // Stryker disable next-line ConditionalExpression: equivalent in the `true` arm — assimilating a value that cannot reject resolves inertly, changing allocation and nothing observable; the `false` arm is a real regression, killed by the async, thenable and cross-realm sink tests.
   if (typeof (returned as PromiseLike<unknown> | undefined)?.then === 'function') {
     ignoreRejection(returned as PromiseLike<unknown>, onFailure)
   }

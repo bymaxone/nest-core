@@ -14,7 +14,7 @@ import { Test } from '@nestjs/testing'
 
 import { normalizeCoreOptions } from './core.options'
 import type { ResolvedCoreOptions } from './core.options'
-import { augmentModule, BymaxCoreModule } from './core.module'
+import { augmentModule, BUILDER_OPTIONS_TOKEN, BymaxCoreModule } from './core.module'
 import {
   BYMAX_CORE_OPTIONS,
   BYMAX_METRICS_REGISTRY,
@@ -178,6 +178,19 @@ describe('BymaxCoreModule.forRoot', () => {
 
   it('produces a non-global module when isGlobal is false', () => {
     expect(BymaxCoreModule.forRoot({ isGlobal: false }).global).toBe(false)
+  })
+
+  /**
+   * The builder strips the extras it has a default for from the options it provides; without the
+   * default `isGlobal` would reach the raw options.
+   */
+  it('keeps the isGlobal extra out of the raw options it provides', () => {
+    const given = BymaxCoreModule.forRoot({ isGlobal: false, timing: { enabled: false } })
+    const raw = given.providers?.find(
+      (entry) => (entry as { provide?: unknown }).provide === BUILDER_OPTIONS_TOKEN
+    ) as { useValue: object }
+
+    expect(raw.useValue).toEqual({ timing: { enabled: false } })
   })
 })
 

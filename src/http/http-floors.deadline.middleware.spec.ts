@@ -164,6 +164,24 @@ describe('the request-deadline middleware', () => {
     }
   })
 
+  it('leaves the head writers of an answered response configurable and writable', () => {
+    const answer = response() as unknown as Record<string, unknown>
+    requestDeadline({ timeoutMs: 50, excludePaths: [] })(
+      { url: '/a' },
+      answer as never,
+      () => undefined
+    )
+
+    jest.advanceTimersByTime(60)
+
+    for (const name of ['writeHead', 'removeHeader']) {
+      expect(Object.getOwnPropertyDescriptor(answer, name)).toMatchObject({
+        configurable: true,
+        writable: true
+      })
+    }
+  })
+
   it('leaves the deadline signal on the request, aborted with the reason, and survives a second pass', () => {
     const answer = response()
     const request: Record<symbol, unknown> & { url: string } = { url: '/a' }
