@@ -67,4 +67,19 @@ describe('the options handed to cors beside a planted name', () => {
       maxAge: 60
     })
   })
+
+  it('offers its own copy of each list, unchanged by a later write to the arrays given', () => {
+    const lists = { methods: ['GET'], allowedHeaders: ['x-a'], exposedHeaders: ['x-b'] }
+    const callback = callbackFor({ origins: ['https://app.example'], ...lists })
+
+    lists.methods.push('DELETE')
+    lists.allowedHeaders.push('x-late')
+    lists.exposedHeaders.push('x-late')
+
+    expect(offered(callback)).toMatchObject({
+      methods: ['GET'],
+      allowedHeaders: ['x-a'],
+      exposedHeaders: ['x-b']
+    })
+  })
 })

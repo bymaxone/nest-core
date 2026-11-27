@@ -80,6 +80,23 @@ export interface BuildErrorEnvelopeInput {
  * @returns A fully-formed envelope with no `undefined`-valued keys.
  */
 export function buildErrorEnvelope(input: BuildErrorEnvelopeInput): ErrorEnvelope {
+  return assembleEnvelope(input)
+}
+
+/** The builder input of a caller that holds its ids as possibly `undefined`. */
+type EnvelopeParts = Omit<BuildErrorEnvelopeInput, 'correlationId' | 'traceId'> & {
+  readonly correlationId?: string | undefined
+  readonly traceId?: string | undefined
+}
+
+/**
+ * {@link buildErrorEnvelope} for such a caller; an `undefined` id is omitted from the envelope. Not part
+ * of the published surface.
+ *
+ * @param input - The envelope fields plus the injectable clock.
+ * @returns A fully-formed envelope with no `undefined`-valued keys.
+ */
+export function assembleEnvelope(input: EnvelopeParts): ErrorEnvelope {
   const base: ErrorEnvelope = {
     statusCode: input.statusCode,
     code: input.code,

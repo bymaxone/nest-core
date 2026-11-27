@@ -76,11 +76,8 @@ const STATUS_CODES: ReadonlyMap<number, string> = new Map([
   [504, BYMAX_GATEWAY_TIMEOUT]
 ])
 
-/** Inclusive lower bound of the HTTP client-error range. */
+/** First status of the HTTP client-error class, the hundred it opens. */
 const CLIENT_ERROR_MIN = 400
-
-/** Exclusive upper bound of the HTTP client-error range. */
-const CLIENT_ERROR_MAX = 500
 
 /**
  * Derive the stable `BYMAX_*` code for an HTTP status when a thrown exception
@@ -99,8 +96,7 @@ export function codeForStatus(status: number): string {
   if (catalogued !== undefined) {
     return catalogued
   }
-  // Stryker disable next-line EqualityOperator: equivalent — the two mutants differ only at `status === 400` and `status === 500`, and both are catalogued rows returned by the `Map` lookup above before this branch is reached. Neither boundary is reachable here, so every status that gets this far resolves to the same code.
-  if (status >= CLIENT_ERROR_MIN && status < CLIENT_ERROR_MAX) {
+  if (status - (status % 100) === CLIENT_ERROR_MIN) {
     return BYMAX_CLIENT_ERROR
   }
   return BYMAX_INTERNAL_ERROR
