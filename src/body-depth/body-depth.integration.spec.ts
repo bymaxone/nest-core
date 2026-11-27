@@ -43,6 +43,13 @@ const nested = (levels: number): string => '['.repeat(levels) + ']'.repeat(level
 /** The application route's body: the arrays sit under `items`, so the body is one level deeper. */
 const wrapped = (levels: number): string => `{"items":${nested(levels)}}`
 
+/**
+ * A depth the recursion cannot survive, for the cases that need it to overflow. How deep it gets
+ * depends on whether V8 has optimized it: on Node 24 it overflows near 1,300 levels cold and reaches
+ * about 3,100 once optimized. These 80 KB stay under the parser's 100 kB limit.
+ */
+const BEYOND_THE_STACK = 40_000
+
 /** Start an application with the given core options. */
 async function start(options: BymaxCoreModuleOptions): Promise<INestApplication> {
   const moduleRef = await Test.createTestingModule({
@@ -68,7 +75,7 @@ describe('body-depth floor, enabled', () => {
   })
 
   it('answers a 4 KB body of 2,000 nested arrays with 400 on an application route', async () => {
-    /* Without the floor, the recursion below overflows the stack and the filter answers 500. */
+    /* 4 KB is enough to overflow the recursion before V8 optimizes it; the floor answers first. */
     const res = await json(app, '/app/echo', wrapped(2000))
     expect(res.status).toBe(400)
     expect(res.body).toMatchObject({
@@ -132,7 +139,7 @@ describe('body-depth floor, off by default', () => {
   it('does not mount: the deep body reaches the pipe and overflows it', async () => {
     const app = await start({})
     try {
-      expect((await json(app, '/app/echo', wrapped(2000))).status).toBe(500)
+      expect((await json(app, '/app/echo', wrapped(BEYOND_THE_STACK))).status).toBe(500)
     } finally {
       await app.close()
     }
@@ -141,7 +148,7 @@ describe('body-depth floor, off by default', () => {
   it('does not mount when enabled is false', async () => {
     const app = await start({ bodyDepth: { enabled: false } })
     try {
-      expect((await json(app, '/app/echo', wrapped(2000))).status).toBe(500)
+      expect((await json(app, '/app/echo', wrapped(BEYOND_THE_STACK))).status).toBe(500)
     } finally {
       await app.close()
     }
