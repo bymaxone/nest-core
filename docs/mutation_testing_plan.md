@@ -117,7 +117,7 @@ The reason belongs next to the code it explains, where it cannot drift away from
 separate report can, and does: line references rot after a reformatting, and a report can
 claim a score the branch no longer measures.
 
-Four rules keep that documentation real rather than decorative:
+These rules keep that documentation real rather than decorative:
 
 - **The reason goes after the colon, on one line.** Stryker parses a directive with
   `/^\s?Stryker (disable|restore)(?: (next-line))? ([a-zA-Z, ]+)(?::(.+)?)?/`. The mutator
@@ -129,9 +129,6 @@ Four rules keep that documentation real rather than decorative:
   catch-clause body, a multi-line call argument, or anything inside a builder chain. Those
   take `// Stryker disable <Mutator>` … `// Stryker restore <Mutator>` around the whole
   statement.
-- **The reason must be true.** Where a mutant is not equivalent but Stryker fails to
-  attribute the killing test to it, the directive says exactly that. Calling it equivalent
-  would be false, and a false justification is worth less than a lower score.
 - **A mutant a test could kill is never disabled.** Strengthen the test instead. The break
   threshold is never lowered to accommodate a survivor.
 

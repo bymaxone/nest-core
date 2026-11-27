@@ -12,6 +12,14 @@ heading here.
 
 ## [Unreleased]
 
+## [1.6.26] - 2026-11-27
+
+A patch release with no public API change and no change of behaviour.
+
+### Changed
+
+- **Shipped expressions are restructured so that no mutation-testing directive covers a mutant a test can kill.** The changes are in the HTTP status fallback code, the exception filter's envelope assembly, the longest excluded prefix of the request deadline, the cursor decode guards, the cursor page limit, and the CORS lists, which are no longer copied a second time. Directives that hid such mutants are removed.
+
 ## [1.6.25] - 2026-11-26
 
 A patch release. It logs an idempotent answer that is too large to keep, and states the client and store contracts of `./idempotency` in the README.
@@ -2068,5 +2076,6 @@ have regressed from. They are kept because the reasoning is worth having.
 [1.6.18]: https://github.com/bymaxone/nest-core/compare/v1.6.17...v1.6.18
 [1.6.17]: https://github.com/bymaxone/nest-core/compare/v1.6.16...v1.6.17
 [1.6.16]: https://github.com/bymaxone/nest-core/compare/v1.6.15...v1.6.16
-[Unreleased]: https://github.com/bymaxone/nest-core/compare/v1.6.25...HEAD
+[Unreleased]: https://github.com/bymaxone/nest-core/compare/v1.6.26...HEAD
+[1.6.26]: https://github.com/bymaxone/nest-core/compare/v1.6.25...v1.6.26
 [1.6.25]: https://github.com/bymaxone/nest-core/compare/v1.6.24...v1.6.25
