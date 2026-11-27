@@ -18,7 +18,7 @@ A patch release with no public API change and no change of behaviour.
 
 ### Changed
 
-- **Shipped expressions are restructured so that no mutation-testing directive covers a mutant a test can kill.** The changes are in the HTTP status fallback code, the exception filter's envelope assembly, the longest excluded prefix of the request deadline, the cursor encode and decode guards, the cursor page limit, and the CORS lists, which are no longer copied a second time. Directives that hid such mutants are removed, and one remains, over an equivalent mutant.
+- **Shipped expressions are restructured so that no mutation-testing directive covers a mutant a test can kill.** The changes are in the HTTP status fallback code, the exception filter's envelope assembly, the longest excluded prefix of the request deadline, the cursor decode guards, the cursor page limit, and the CORS lists, which are no longer copied a second time. Directives that hid such mutants are removed.
 
 ## [1.6.25] - 2026-11-26
 

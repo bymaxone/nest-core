@@ -117,7 +117,7 @@ The reason belongs next to the code it explains, where it cannot drift away from
 separate report can, and does: line references rot after a reformatting, and a report can
 claim a score the branch no longer measures.
 
-Three rules keep that documentation real rather than decorative:
+These rules keep that documentation real rather than decorative:
 
 - **The reason goes after the colon, on one line.** Stryker parses a directive with
   `/^\s?Stryker (disable|restore)(?: (next-line))? ([a-zA-Z, ]+)(?::(.+)?)?/`. The mutator
