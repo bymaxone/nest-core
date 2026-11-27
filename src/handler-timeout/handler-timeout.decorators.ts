@@ -14,7 +14,6 @@ import { DEADLINE_SIGNAL } from '../request-deadline-signal'
  * two different symbols, so a decorator from one build would be silently ignored by the interceptor
  * of the other.
  */
-// Stryker disable next-line StringLiteral: equivalent — an opaque key that the decorator and the interceptor share through this one constant; any other string, the empty one included, still pairs them.
 export const NO_HANDLER_TIMEOUT_KEY = 'bymax:no-handler-timeout'
 
 /** The signal of the handler running for each request, held by the request object itself. */

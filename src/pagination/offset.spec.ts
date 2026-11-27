@@ -326,4 +326,12 @@ describe('buildPageResult', () => {
 
     expect(result.meta.page).toBe(1)
   })
+
+  /** `toBe` tells `-0` from `0`: a total of negative zero is reported as zero. */
+  it('reports a total of negative zero as zero', () => {
+    const result = buildPageResult([], -0, { page: 1, limit: 20 })
+
+    expect(result.meta.totalItems).toBe(0)
+    expect(result.meta.totalPages).toBe(0)
+  })
 })

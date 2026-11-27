@@ -96,6 +96,17 @@ describe.each([false, true])('a changed Object.prototype (enumerable: %s)', (enu
     }
   })
 
+  it('carries the count as an ordinary property a host can read, copy and replace', async () => {
+    const error = await planted('one', 'x', async () => thrown(() => assertObjectPrototypeClean()))
+
+    expect(Object.getOwnPropertyDescriptor(error, 'count')).toEqual({
+      value: 1,
+      enumerable: true,
+      writable: true,
+      configurable: true
+    })
+  })
+
   it('counts every name that is planted, and says nothing else', async () => {
     Object.defineProperty(Object.prototype, 'one', {
       value: 1,
