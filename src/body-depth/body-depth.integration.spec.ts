@@ -44,7 +44,7 @@ const nested = (levels: number): string => '['.repeat(levels) + ']'.repeat(level
 const wrapped = (levels: number): string => `{"items":${nested(levels)}}`
 
 /**
- * A depth the recursion cannot survive, for the cases that need it to overflow. How deep it gets
+ * A depth the recursion cannot survive, for the cases whose outcome depends on it overflowing. How deep it gets
  * depends on whether V8 has optimized it: on Node 24 it overflows near 1,300 levels cold and reaches
  * about 3,100 once optimized. These 80 KB stay under the parser's 100 kB limit.
  */
@@ -74,9 +74,9 @@ describe('body-depth floor, enabled', () => {
     await app.close()
   })
 
-  it('answers a 4 KB body of 2,000 nested arrays with 400 on an application route', async () => {
-    /* 4 KB is enough to overflow the recursion before V8 optimizes it; the floor answers first. */
-    const res = await json(app, '/app/echo', wrapped(2000))
+  it('answers a body too deep for the recursion with 400 on an application route', async () => {
+    /* Without the floor, the recursion below overflows the stack and the filter answers 500. */
+    const res = await json(app, '/app/echo', wrapped(BEYOND_THE_STACK))
     expect(res.status).toBe(400)
     expect(res.body).toMatchObject({
       code: 'BYMAX_BAD_REQUEST',
@@ -86,7 +86,7 @@ describe('body-depth floor, enabled', () => {
 
   it('answers the same body with 400 on a library route', async () => {
     /* No credential and no route of the consumer's: the floor sits before routing. */
-    const res = await json(app, '/health/ready', nested(2000))
+    const res = await json(app, '/health/ready', nested(BEYOND_THE_STACK))
     expect(res.status).toBe(400)
     expect(res.body.code).toBe('BYMAX_BAD_REQUEST')
   })
