@@ -164,7 +164,7 @@ describe('the request-deadline middleware', () => {
     }
   })
 
-  it('leaves the head writers of an answered response replaceable, as a host wrapper needs', () => {
+  it('leaves the head writers of an answered response configurable and writable', () => {
     const answer = response() as unknown as Record<string, unknown>
     requestDeadline({ timeoutMs: 50, excludePaths: [] })(
       { url: '/a' },

@@ -1,6 +1,6 @@
 /**
  * Unit tests for the signal `@HandlerSignal()` returns when the handler timeout and the request deadline
- * both bind one, and for the keys they share.
+ * both bind one, and for the literals of the metadata key and the deadline signal key.
  *
  * Layer: unit.
  * Goal: with only one of the two bound, that signal is returned as it is; with both, the signal aborts as
@@ -19,8 +19,8 @@ function withDeadline(signal: AbortSignal): object {
   return Object.defineProperty({}, DEADLINE_SIGNAL, { value: signal })
 }
 
-describe('the keys the handler timeout and the request deadline share', () => {
-  it('namespaces the metadata key, so an application key does not exempt a route', () => {
+describe('the keys of the handler timeout metadata and the deadline signal', () => {
+  it('prefixes the metadata key with the bymax namespace', () => {
     expect(NO_HANDLER_TIMEOUT_KEY).toBe('bymax:no-handler-timeout')
   })
 

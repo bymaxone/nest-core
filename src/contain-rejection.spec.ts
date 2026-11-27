@@ -39,7 +39,7 @@ describe('containRejection', () => {
     expect(onFailure).not.toHaveBeenCalled()
   })
 
-  it('creates a promise for a thenable, so the count sees what it is meant to see', () => {
+  it('creates a promise for a thenable', () => {
     const thenable = { then: (): void => undefined }
 
     expect(promisesCreatedBy(() => containRejection(thenable, jest.fn()))).toBeGreaterThan(0)
