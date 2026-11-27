@@ -61,9 +61,8 @@ const config: Config = {
   maxWorkers: '50%',
   clearMocks: true,
   restoreMocks: true,
-  // No spec files exist yet at this stage of the repository; the placeholder
-  // barrels keep the coverage threshold green with zero tests.
-  passWithNoTests: true
+  // In CI a `testMatch` that matches nothing fails the run instead of passing it.
+  passWithNoTests: process.env['CI'] !== 'true'
 }
 
 export default config
