@@ -264,3 +264,33 @@ mutants surfaced during this work and neither became a tenth:
 
 The weekly `mutation-full.yml` run on `main` at 8049f62, with the incremental cache removed:
 [run 40298781550](https://github.com/bymaxone/nest-core/actions/runs/40298781550).
+
+---
+
+## RuntimeError ledger — 2026-11-27
+
+Stryker reports a mutant as `RuntimeError` when its test run ends in an error instead of a
+verdict, and leaves it out of the score. Each of the 211 such mutants of the cold run
+at 2e27836 was run by hand, to show that the tests detect it.
+
+| Result of the hand run                     | Mutants |
+| ------------------------------------------ | ------- |
+| A test fails an assertion                  | 147     |
+| Tests fail with a thrown error             | 58      |
+| The Jest process ends in `process.exit(1)` | 5       |
+| A suite fails to load                      | 1       |
+| Survived                                   | 0       |
+| Timed out                                  | 0       |
+
+Method: the files holding these mutants were instrumented with Stryker's instrumenter, one
+mutant at a time was activated through `__STRYKER_ACTIVE_MUTANT__`, and
+`jest --coverage=false --maxWorkers=1 --forceExit --findRelatedTests <file>` ran on Node 24. A
+first run that failed no assertion was repeated. Each file had a control run with no mutant
+active, and all 21 controls passed. The control of `src/metrics/metrics.registry.ts` first
+failed on two `body-depth` cases whose depth did not overflow a warm recursion; its one mutant
+was run with the corrected spec. No mutant's result rests on those two cases alone.
+
+[`mutation_runtime_error_ledger.jsonl`](./mutation_runtime_error_ledger.jsonl) has one line per
+mutant: its location and replacement, the outcome of each run (`assertion`, `test-error`,
+`crash` for the process exit, `suite-error`), and the first failing test where one was reported.
+Line and column refer to the sources at 2e27836.
