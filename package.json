@@ -106,7 +106,7 @@
     "check:runtime": "node scripts/check-consumer-runtime.mjs",
     "clean": "node -e \"const fs=require('node:fs');for(const d of ['dist','coverage'])fs.rmSync(d,{recursive:true,force:true})\"",
     "dogfood": "node scripts/dogfood-smoke-test.mjs",
-    "lint": "eslint --no-error-on-unmatched-pattern src scripts test && node --test scripts/check-mutation-directives.test.mjs",
+    "lint": "eslint --no-error-on-unmatched-pattern src scripts test && node --test scripts/check-mutation-directives.test.mjs scripts/check-esm-flag.test.mjs",
     "lint:fix": "eslint --no-error-on-unmatched-pattern src scripts test --fix",
     "mutation": "stryker run",
     "mutation:full": "node -e \"require('node:fs').rmSync('reports/stryker-incremental.json',{force:true,recursive:true})\" && stryker run",
@@ -115,11 +115,11 @@
     "prepublishOnly": "pnpm clean && pnpm typecheck && pnpm lint && pnpm check:mutants && pnpm test:cov:all && pnpm build && pnpm size && pnpm check:published",
     "release": "npm publish --provenance --access public",
     "size": "node scripts/check-dist-fresh.mjs --also tsup.config.ts --also package.json --also tsconfig.json --also tsconfig.build.json && node scripts/check-size.mjs",
-    "test": "jest",
-    "test:cov": "jest --coverage",
+    "test": "node --experimental-vm-modules --disable-warning=ExperimentalWarning node_modules/jest/bin/jest.js",
+    "test:cov": "node --experimental-vm-modules --disable-warning=ExperimentalWarning node_modules/jest/bin/jest.js --coverage",
     "test:cov:all": "node --experimental-vm-modules --disable-warning=ExperimentalWarning node_modules/jest/bin/jest.js --config jest.coverage.config.ts --coverage",
     "test:e2e": "node --experimental-vm-modules --disable-warning=ExperimentalWarning node_modules/jest/bin/jest.js --config jest.e2e.config.ts",
-    "test:watch": "jest --watch",
+    "test:watch": "node --experimental-vm-modules --disable-warning=ExperimentalWarning node_modules/jest/bin/jest.js --watch",
     "typecheck": "tsc --noEmit"
   },
   "lint-staged": {
