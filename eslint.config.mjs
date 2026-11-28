@@ -63,10 +63,13 @@ export default [
     },
     rules: {
       // TypeScript, strict: zero `any`, explicit return types on exports.
+      // typescript-eslint advises both off: the compiler reports undefined names, and the base
+      // unused rule can report incorrect errors beside its typed replacement.
       'no-undef': 'off',
       'no-unused-vars': 'off',
+      // `^_` mirrors TypeScript's own exemption; typescript-eslint documents the option.
       '@typescript-eslint/no-unused-vars': [
-        'warn',
+        'error',
         {
           argsIgnorePattern: '^_',
           varsIgnorePattern: '^_',
@@ -84,7 +87,7 @@ export default [
           fixStyle: 'separate-type-imports'
         }
       ],
-      '@typescript-eslint/no-empty-function': 'warn',
+      '@typescript-eslint/no-empty-function': 'error',
 
       // Code quality
       'prefer-const': 'error',
@@ -114,9 +117,11 @@ export default [
         }
       ],
 
-      // Security plugin rules
-      'security/detect-object-injection': 'warn',
-      'security/detect-non-literal-regexp': 'warn',
+      // Security plugin rules. `detect-object-injection` flags any computed member access and
+      // has no option to tell an own key from an inherited one; its README expects human triage.
+      // The controls here are `Object.hasOwn`, `Map` and null-prototype copies, held by specs.
+      'security/detect-object-injection': 'off',
+      'security/detect-non-literal-regexp': 'error',
       'security/detect-possible-timing-attacks': 'error',
 
       // Import ordering: node: -> external -> internal -> parent/sibling -> index
@@ -143,7 +148,7 @@ export default [
       'import/no-self-import': 'error',
 
       // Prettier reads from .prettierrc; no inline options to avoid conflicts.
-      'prettier/prettier': 'warn'
+      'prettier/prettier': 'error'
     }
   },
 
@@ -157,13 +162,9 @@ export default [
         ...globals.node
       }
     },
-    plugins: {
-      security
-    },
     rules: {
       'no-eval': 'error',
       'no-new-func': 'error',
-      'security/detect-object-injection': 'warn',
       'no-restricted-imports': [
         'error',
         {
@@ -193,9 +194,6 @@ export default [
         ...globals.node
       }
     },
-    plugins: {
-      security
-    },
     rules: {
       'no-eval': 'error',
       'no-new-func': 'error',
@@ -211,12 +209,11 @@ export default [
             { name: 'crypto-js', message: 'Use node:crypto instead.' }
           ]
         }
-      ],
-      'security/detect-object-injection': 'warn'
+      ]
     }
   },
 
-  // Test files, Jest + Node globals, relaxed rules. Covers unit specs
+  // Test files, Jest + Node globals, the rules specs are held to. Covers unit specs
   // (`**/*.spec.ts`), e2e specs (`**/*.e2e-spec.ts`, run under
   // jest.e2e.config.ts from test/e2e/), and the fixtures they share.
   {
@@ -234,14 +231,20 @@ export default [
         ...globals.node
       }
     },
+    plugins: {
+      '@typescript-eslint': tsPlugin
+    },
     rules: {
-      '@typescript-eslint/no-explicit-any': 'off',
-      '@typescript-eslint/explicit-function-return-type': 'off',
-      '@typescript-eslint/explicit-module-boundary-types': 'off',
-      '@typescript-eslint/no-unused-vars': 'off',
+      '@typescript-eslint/no-explicit-any': 'error',
+      '@typescript-eslint/explicit-module-boundary-types': 'error',
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        { argsIgnorePattern: '^_', varsIgnorePattern: '^_', caughtErrorsIgnorePattern: '^_' }
+      ],
+      'no-console': 'error',
+      // Off for the same reasons as in production code.
       'no-unused-vars': 'off',
-      'no-undef': 'off',
-      'no-console': 'off'
+      'no-undef': 'off'
     }
   },
 

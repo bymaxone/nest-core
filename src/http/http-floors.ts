@@ -16,13 +16,7 @@ import type { INestApplication } from '@nestjs/common'
 import type { HelmetOptions } from 'helmet'
 
 import { assertObjectPrototypeClean } from '../object-prototype'
-import {
-  booleanOption,
-  checkedBlock,
-  describeValue,
-  isPlainRecord,
-  refusal
-} from '../option-validation'
+import { checkedBlock, describeValue, isPlainRecord, refusal } from '../option-validation'
 import { MAX_TIMER_DELAY_MS, positiveSafeInteger } from '../positive-integer'
 import { readOptions } from '../read-options'
 import type { Shape } from '../read-options'

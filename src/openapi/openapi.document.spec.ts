@@ -11,7 +11,7 @@
  */
 import { augmentDocument } from './openapi.document'
 import { CORE_PARAMETERS, CORE_SCHEMAS } from './openapi.schemas'
-import { components, generated, options } from './__tests__/document.fixtures'
+import { components, options } from './__tests__/document.fixtures'
 
 describe('augmentDocument', () => {
   /**

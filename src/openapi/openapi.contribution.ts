@@ -26,11 +26,7 @@ import {
   BYMAX_OPENAPI_CONTRACT_VERSION,
   BYMAX_OPENAPI_CONTRIBUTOR_METADATA
 } from './openapi.contract'
-import type {
-  IOpenApiContributor,
-  OpenApiFragment,
-  OpenApiFragmentObject
-} from './openapi.contract'
+import type { IOpenApiContributor, OpenApiFragmentObject } from './openapi.contract'
 
 /**
  * One contributor's fragments, with its handler keys already resolved to the

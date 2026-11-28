@@ -20,20 +20,16 @@ import {
   Get,
   Logger,
   Module,
-  Post,
   VERSION_NEUTRAL,
   VersioningType
 } from '@nestjs/common'
-import type { INestApplication, LoggerService, Provider, Type } from '@nestjs/common'
+import type { INestApplication, Type } from '@nestjs/common'
 import { Test } from '@nestjs/testing'
 import request from 'supertest'
 
 import { DiscoveryService } from '@nestjs/core'
 
-import { BymaxOpenApiContributor, BYMAX_OPENAPI_CONTRACT_VERSION } from './openapi.contract'
-import type { IOpenApiContributor, OpenApiFragment } from './openapi.contract'
 import { BymaxCoreModule } from '../core.module'
-import type { BymaxCoreModuleOptions } from '../core.options'
 import { applyBymaxOpenApi } from './openapi.bootstrap'
 import { bootApp, ExampleController, logged, LOG_CONTEXT } from './__tests__/bootstrap.harness'
 

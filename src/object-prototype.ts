@@ -23,7 +23,11 @@ const JsonBinding = JSON
 const ErrorConstructor = Error
 const FunctionPrototype = Function.prototype
 /** The prototype an `async` function's promise inherits from, whatever the global `Promise` was bound to at load. */
-const PromisePrototype = Object.getPrototypeOf((async (): Promise<void> => {})()) as Promise<void>
+const PromisePrototype = Object.getPrototypeOf(
+  (async (): Promise<void> => {
+    // Empty: only the promise's prototype is read.
+  })()
+) as Promise<void>
 /** The intrinsic `Promise` constructor, read from that prototype at load, never from the global. */
 export const IntrinsicPromise = ((): PromiseConstructor => {
   const candidate = PromisePrototype.constructor as PromiseConstructor
@@ -375,4 +379,6 @@ export function assertObjectPrototypeClean(): void {
   if (found > 0) throw refusal(found)
 }
 
-function noop(): void {}
+function noop(): void {
+  // Empty: listening is what marks the promise handled.
+}
