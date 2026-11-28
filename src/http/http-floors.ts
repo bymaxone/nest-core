@@ -379,8 +379,7 @@ function helmetOrRefusal(
 /** The whole number of bytes a size string comes to, or `NaN` when it is not one. */
 function sizeInBytes(value: string): number {
   const size = SIZE_STRING.exec(value)
-  // Stryker disable next-line StringLiteral: equivalent — the pattern always captures a unit, and with no match the amount is `NaN` whatever the power, so the fallback is never read and only satisfies the index type.
-  const power = SIZE_UNITS.indexOf((size?.[2] ?? '').toLowerCase())
+  const power = SIZE_UNITS.indexOf(String(size?.[2]).toLowerCase())
   return Math.floor(Number(size?.[1]) * 1024 ** power)
 }
 
