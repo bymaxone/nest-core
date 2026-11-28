@@ -9,7 +9,7 @@
  * `BYMAX_TIMING_SINK`, `BYMAX_HEALTH_INDICATORS`) are deliberately NOT bound
  * here; their `@Optional()` fallback behavior and their real override paths
  * are covered where each token is consumed
- * (`envelope/exception.filter.spec.ts`, `timing/timing.interceptor.spec.ts`,
+ * (`envelope/exception.filter.context.spec.ts`, `timing/timing.interceptor.spec.ts`,
  * `health/health.service.spec.ts`) and proven end to end through a booted
  * application (`envelope/exception.filter.integration.spec.ts`,
  * `timing/timing.registration.spec.ts`, `health/health.contract.spec.ts`).

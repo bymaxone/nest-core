@@ -23,7 +23,7 @@ const MISSING_PEER_MESSAGE =
  */
 export async function loadHelmet(): Promise<HelmetFactory> {
   try {
-    const loaded = (await import('helmet')) as unknown as { default: HelmetFactory }
+    const loaded: { default: HelmetFactory } = await import('helmet')
     return loaded.default
   } catch (cause) {
     if (isMissingModuleError(cause)) {

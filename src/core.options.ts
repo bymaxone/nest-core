@@ -23,7 +23,6 @@ import type {
   HandlerTimeoutOptions,
   ResolvedHandlerTimeoutOptions
 } from './handler-timeout/handler-timeout.options'
-import { asHostError } from './host-error'
 import { assertObjectPrototypeClean } from './object-prototype'
 import {
   booleanOption,

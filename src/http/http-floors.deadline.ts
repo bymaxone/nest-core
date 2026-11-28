@@ -147,9 +147,8 @@ const BODY_HEADERS = [
  * log. The answer was already sent, and it is the only one.
  */
 function silence(response: DeadlineResponse): void {
-  const target = response as unknown as Record<string, unknown>
   for (const name of WRITERS) {
-    Object.defineProperty(target, name, {
+    Object.defineProperty(response, name, {
       __proto__: null,
       value: () => response,
       configurable: true,

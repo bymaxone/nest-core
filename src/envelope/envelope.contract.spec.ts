@@ -9,7 +9,7 @@
  * Mocks: a hand-built ArgumentsHost and HttpAdapter; a fixed system clock via
  * fake timers so the timestamp is deterministic; a stub correlation provider.
  */
-import { BadRequestException, HttpException, NotFoundException } from '@nestjs/common'
+import { BadRequestException, NotFoundException } from '@nestjs/common'
 import type { ArgumentsHost } from '@nestjs/common'
 import type { HttpAdapterHost } from '@nestjs/core'
 

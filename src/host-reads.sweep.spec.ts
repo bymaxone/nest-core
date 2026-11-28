@@ -20,7 +20,7 @@ import {
   BYMAX_OPENAPI_CONTRACT_VERSION,
   BYMAX_OPENAPI_CONTRIBUTOR_METADATA
 } from './openapi/openapi.contract'
-import type { IOpenApiContributor, OpenApiFragment } from './openapi/openapi.contract'
+import type { OpenApiFragment } from './openapi/openapi.contract'
 import { applyHttpFloors } from './http/http-floors'
 import type { HttpFloorsOptions } from './http/http-floors'
 import { discoverIndicators } from './health/health.discovery'

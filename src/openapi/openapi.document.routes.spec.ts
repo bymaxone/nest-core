@@ -10,14 +10,7 @@
  * this module pure.
  */
 import { augmentDocument } from './openapi.document'
-import {
-  generated,
-  health,
-  metrics,
-  operation,
-  options,
-  OWN_ROUTES
-} from './__tests__/document.fixtures'
+import { generated, health, metrics, options, OWN_ROUTES } from './__tests__/document.fixtures'
 
 describe('augmentDocument — disabled features', () => {
   /**
