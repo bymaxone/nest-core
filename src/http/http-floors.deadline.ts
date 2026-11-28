@@ -19,7 +19,7 @@ export interface HttpFloorsRequestDeadline {
    * Path prefixes whose requests are not bounded, each starting with `/` (`'/events'` covers `/events` and
    * what is under it). Required, and may be empty: the floors are mounted before the module, so nothing
    * can be taken from `handlerTimeout.excludePaths`; list the same paths in both. A WebSocket upgrade
-   * never goes through this middleware.
+   * never goes through this middleware, and `@NoHandlerTimeout()` does not lift this deadline.
    */
   readonly excludePaths: readonly string[]
 }

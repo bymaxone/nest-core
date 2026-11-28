@@ -37,7 +37,8 @@ export function handlerSignalOf(request: object): AbortSignal | undefined {
 
 /**
  * Exempt a controller or a route from the handler timeout: an upload, a long poll, a report. An
- * `@Sse()` route needs no marker; it is never bounded.
+ * `@Sse()` route needs no marker; it is never bounded. It does not lift the `requestDeadline` of
+ * `applyHttpFloors`: list such a route in its `excludePaths`.
  *
  * @returns The decorator, for a class or a method.
  */
