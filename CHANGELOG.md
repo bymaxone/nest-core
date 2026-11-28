@@ -12,6 +12,11 @@ heading here.
 
 ## [Unreleased]
 
+### Documentation
+
+- The README names the Redis store for `./idempotency`: `RedisIdempotencyStore` from `@bymax-one/nest-cache/idempotency`, 1.2.42 or later.
+- The doc comments say `@NoHandlerTimeout` does not lift the request deadline of `./http`.
+
 ## [1.6.26] - 2026-11-27
 
 A patch release with no public API change and no change of behaviour.
