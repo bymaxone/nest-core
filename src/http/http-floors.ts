@@ -134,13 +134,10 @@ interface FloorsServer {
   connectionsCheckingInterval: number
 }
 
-/** The parts of an Express-backed application this helper touches. */
+/** The members of an Express-backed application this helper needs beyond `INestApplication`. */
 interface ExpressApplicationShape {
-  use(handler: unknown): unknown
-  enableCors(options: unknown): unknown
   useBodyParser(type: 'json' | 'urlencoded', options: Record<string, unknown>): unknown
   getHttpServer(): FloorsServer
-  getHttpAdapter(): { getType?: () => string }
   isInitialized?: boolean
 }
 
@@ -444,17 +441,27 @@ function resolveFloors(given: unknown): ResolvedFloors {
 }
 
 /**
+ * Narrow the application to the Express-backed shape: the Express adapter is what provides
+ * `useBodyParser`, which `INestApplication` does not declare.
+ *
+ * @throws Error When the application runs on another adapter.
+ */
+function assertExpress(
+  app: INestApplication
+): asserts app is INestApplication & ExpressApplicationShape {
+  if (app.getHttpAdapter().getType?.() !== 'express') {
+    throw new Error('applyHttpFloors supports the Express adapter only')
+  }
+}
+
+/**
  * Check the application can still take the floors, and return its HTTP server.
  *
  * @param express - The application, viewed as the Express-backed shape this helper uses.
  * @returns The underlying HTTP server.
- * @throws Error When the adapter is not Express, the server is listening, or the application is
- * already initialised.
+ * @throws Error When the server is listening, or the application is already initialised.
  */
 function assertBootstrapState(express: ExpressApplicationShape): FloorsServer {
-  if (express.getHttpAdapter().getType?.() !== 'express') {
-    throw new Error('applyHttpFloors supports the Express adapter only')
-  }
   const server = express.getHttpServer()
   if (server.listening) {
     throw new Error('applyHttpFloors must run before listen(): the server is already listening')
@@ -483,8 +490,8 @@ export async function applyHttpFloors(
 ): Promise<void> {
   assertObjectPrototypeClean()
   const floors = resolveFloors(options)
-  const express = app as unknown as ExpressApplicationShape
-  const server = assertBootstrapState(express)
+  assertExpress(app)
+  const server = assertBootstrapState(app)
   const given = floors.helmet
   if (given !== false) {
     const helmet = await loadHelmet()
@@ -493,7 +500,7 @@ export async function applyHttpFloors(
     // helmet accepts `hsts` as an alias of `strictTransportSecurity` and throws when both are
     // present, so the default is left out when the caller used the alias. The caller's own
     // `strictTransportSecurity` needs no such care: it overrides the default by position.
-    express.use(
+    app.use(
       helmetOrRefusal(
         helmet,
         'hsts' in given
@@ -503,14 +510,14 @@ export async function applyHttpFloors(
     )
   }
   if (floors.cors !== undefined) {
-    express.enableCors(floors.cors)
+    app.enableCors(floors.cors)
   }
   // After helmet and cors, so a `504` carries their headers, and before the parsers and the routing.
-  if (floors.requestDeadline !== undefined) express.use(requestDeadline(floors.requestDeadline))
+  if (floors.requestDeadline !== undefined) app.use(requestDeadline(floors.requestDeadline))
   // A compressed body is refused with 415 on every route and before routing; the extended form
   // syntax is kept, and each parser has its own explicit size limit.
-  express.useBodyParser('json', { inflate: false, limit: floors.jsonLimit })
-  express.useBodyParser('urlencoded', {
+  app.useBodyParser('json', { inflate: false, limit: floors.jsonLimit })
+  app.useBodyParser('urlencoded', {
     inflate: false,
     extended: true,
     limit: floors.urlencodedLimit

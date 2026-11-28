@@ -170,12 +170,11 @@ function changed(table: Watched): number {
 
 /** How many of the bindings and functions this module relies on are not the ones it captured. */
 function replacedBindings(): number {
-  const global = globalThis as unknown as Record<string, unknown>
   let replaced = 0
-  if (global['Object'] !== ObjectBinding) replaced += 1
-  if (global['Reflect'] !== ReflectBinding) replaced += 1
-  if (global['Array'] !== ArrayBinding) replaced += 1
-  if (global['JSON'] !== JsonBinding) replaced += 1
+  if (globalThis.Object !== ObjectBinding) replaced += 1
+  if (globalThis.Reflect !== ReflectBinding) replaced += 1
+  if (globalThis.Array !== ArrayBinding) replaced += 1
+  if (globalThis.JSON !== JsonBinding) replaced += 1
   if (moved('call', CALL)) replaced += 1
   if (moved('apply', APPLY)) replaced += 1
   if (moved('bind', BIND)) replaced += 1
