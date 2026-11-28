@@ -1620,7 +1620,9 @@ export class PaymentsController {
 
 The module that declares the controller provides the store under `BYMAX_IDEMPOTENCY_STORE`. The package
 ships `InMemoryIdempotencyStore` for one process; a deployment with several instances implements
-`IIdempotencyStore` over a shared store (the port's atomicity contract is in its doc comment).
+`IIdempotencyStore` over a shared store (the port's atomicity contract is in its doc comment). For Redis,
+[`@bymax-one/nest-cache`](https://github.com/bymaxone/nest-cache#readme) 1.2.42 or later ships one,
+`RedisIdempotencyStore`, at `@bymax-one/nest-cache/idempotency`; its README shows how to bind it.
 
 **Client contract**
 
