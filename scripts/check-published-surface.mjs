@@ -24,8 +24,8 @@
  *    do not import it.
  * 3. The names a snippet takes from the surrounding prose are typed in
  *    `scripts/readme-prelude.d.ts`; an undeclared name is an error, and a typed one is
- *    checked instead of resolving to `any`. The prelude is compiled as a `.ts` file,
- *    because `skipLibCheck` never diagnoses a declaration file.
+ *    checked instead of resolving to `any`. The prelude is compiled as a `.ts` file, so
+ *    it is diagnosed even where `skipLibCheck` is on.
  * 4. A syntax error in a snippet is an error, and a snippet that restates a shipped
  *    interface must match the shipped one member for member.
  *
@@ -668,8 +668,8 @@ function scaffoldConsumer() {
   )
   // The names a snippet uses without introducing them, typed for real so a call
   // made through one is checked instead of silently resolving to `any`. Copied as a
-  // `.ts` file: `skipLibCheck` never diagnoses a declaration file, so a prelude import
-  // that stopped resolving would turn its types into `any` without a word.
+  // `.ts` file: `skipLibCheck`, where on, never diagnoses a declaration file, so a prelude
+  // import that stopped resolving would turn its types into `any` without a word.
   copyFileSync(join(ROOT, 'scripts', 'readme-prelude.d.ts'), join(GATE_DIR, 'prelude.ts'))
 }
 
