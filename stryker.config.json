@@ -14,8 +14,10 @@
   "typescriptChecker": {
     "prioritizePerformanceOverAccuracy": true
   },
+  "disableTypeChecks_comment": "Instrumented code must still transform under ts-jest; the typescript checker rejects type-invalid mutants.",
   "disableTypeChecks": "src/**/*.ts",
   "ignoreStatic": false,
+  "mutate_comment": "Specs, test scaffolding, declaration files and re-export barrels hold no behaviour to mutate.",
   "mutate": [
     "src/**/*.ts",
     "!src/**/*.spec.ts",

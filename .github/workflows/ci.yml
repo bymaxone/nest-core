@@ -129,6 +129,7 @@ jobs:
         run: pnpm check:published
 
   security:
+    # Dependency review needs a GitHub Code Security license on a repository that is not public.
     if: github.event_name == 'pull_request' && github.event.repository.visibility == 'public'
     uses: bymaxone/.github/.github/workflows/security.yml@v1
     with:

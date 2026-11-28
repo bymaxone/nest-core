@@ -42,6 +42,7 @@ const config: Config = {
       }
     ]
   },
+  // Specs, shared test scaffolding and declaration files are not production code.
   collectCoverageFrom: [
     'src/**/*.ts',
     '!src/**/*.spec.ts',
