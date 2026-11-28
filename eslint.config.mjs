@@ -89,8 +89,8 @@ export default [
       // Code quality
       'prefer-const': 'error',
       'no-var': 'error',
-      'no-empty': ['error', { allowEmptyCatch: true }],
-      'no-console': ['warn', { allow: ['warn', 'error'] }],
+      'no-empty': 'error',
+      'no-console': ['error', { allow: ['warn', 'error'] }],
 
       // Security, block dynamic code evaluation
       'no-eval': 'error',

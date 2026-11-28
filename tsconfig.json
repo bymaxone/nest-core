@@ -21,7 +21,7 @@
     "resolveJsonModule": true,
     "outDir": "./dist",
     "rootDir": "./src",
-    "skipLibCheck": true,
+    "skipLibCheck": false,
     "paths": {
       "@bymax-one/nest-core": ["./src/index.ts"],
       "@bymax-one/nest-core/pagination": ["./src/pagination/index.ts"],

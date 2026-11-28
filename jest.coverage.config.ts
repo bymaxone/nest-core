@@ -66,8 +66,8 @@ const config: Config = {
   maxWorkers: '50%',
   clearMocks: true,
   restoreMocks: true,
-  // In CI a `testMatch` that matches nothing fails the run instead of passing it.
-  passWithNoTests: process.env['CI'] !== 'true'
+  // A `testMatch` that matches nothing fails the run instead of passing it.
+  passWithNoTests: false
 }
 
 export default config
