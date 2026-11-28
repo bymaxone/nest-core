@@ -115,50 +115,46 @@ function assertScrapeSchemeIsOurs(
 }
 
 /**
- * Build the component members of the document to serve.
+ * Place this package's own catalogue into the members being assembled.
  *
- * @param components - The components the generated document already carries; not mutated.
- * @param options - The resolved core options.
- * @param contributions - What the libraries in this application contributed.
- * @returns The members to serve, and every contributed entry the document already declared.
- * @throws Error When a requirement names a scheme that is not defined, or the reserved scrape
- * scheme is already defined by someone else.
+ * @param merged - The members assembled so far; written to.
+ * @param includeCoreSchemas - Whether the catalogue is published at all.
  */
-export function assembleComponents(
-  components: Readonly<Record<string, unknown>>,
-  options: ResolvedCoreOptions,
-  contributions: readonly ResolvedContribution[]
-): {
-  readonly merged: ReadonlyMap<string, unknown>
-  readonly discarded: readonly DiscardedComponent[]
-} {
-  const { openapi } = options
-  // Accumulated in a `Map`, converted once at the end. Component member names
-  // reach this from contributors, and writing one onto an object is not merely
-  // the shape an analyser flags: `Object.assign` invokes the target's
-  // `__proto__` setter, so a member by that name would replace the prototype
-  // instead of becoming an own component — and inherited entries would then
-  // take part in the scheme validation below. A `Map` key cannot do that.
-  const merged = new Map(Object.entries(components))
-
+function placeCatalogue(merged: Map<string, unknown>, includeCoreSchemas: boolean): void {
   // The catalogue is placed by the rule contributors are, and before them: a
   // placeholder under a catalogue name is filled by the package's own
   // definition, so a library offering the same name later meets a declaration
   // rather than a vacancy. A document that declared the name keeps it, and that
   // is not reported — the catalogue is not a contributor.
-  if (openapi.includeCoreSchemas) {
-    const keep = (): void => undefined
-    // One literal names each member for the read, the rule and the write, so
-    // the three cannot disagree about which member they mean.
-    const catalogue = [
-      ['schemas', CORE_SCHEMAS],
-      ['parameters', CORE_PARAMETERS]
-    ] as const
-    for (const [member, entries] of catalogue) {
-      merged.set(member, placeComponentEntries(merged.get(member), member, entries, keep))
-    }
+  if (!includeCoreSchemas) {
+    return
   }
+  const keep = (): void => undefined
+  // One literal names each member for the read, the rule and the write, so
+  // the three cannot disagree about which member they mean.
+  const catalogue = [
+    ['schemas', CORE_SCHEMAS],
+    ['parameters', CORE_PARAMETERS]
+  ] as const
+  for (const [member, entries] of catalogue) {
+    merged.set(member, placeComponentEntries(merged.get(member), member, entries, keep))
+  }
+}
 
+/**
+ * Place the consumer's security schemes and this package's scrape scheme over the document's own.
+ *
+ * @param merged - The members assembled so far; written to.
+ * @param components - The components the generated document already carries.
+ * @param options - The resolved core options.
+ * @throws Error When the reserved scrape scheme is already defined by someone else.
+ */
+function placeSchemes(
+  merged: Map<string, unknown>,
+  components: Readonly<Record<string, unknown>>,
+  options: ResolvedCoreOptions
+): void {
+  const { openapi } = options
   // Contributed only when the scrape endpoint is actually protected, so the
   // document never advertises a credential the deployment does not check.
   const scrapeScheme =
@@ -185,18 +181,43 @@ export function assembleComponents(
   if (Object.keys(declaredSchemes).length > 0) {
     merged.set('securitySchemes', declaredSchemes)
   }
+}
+
+/**
+ * Build the component members of the document to serve.
+ *
+ * @param components - The components the generated document already carries; not mutated.
+ * @param options - The resolved core options.
+ * @param contributions - What the libraries in this application contributed.
+ * @returns The members to serve, and every contributed entry the document already declared.
+ * @throws Error When a requirement names a scheme that is not defined, or the reserved scrape
+ * scheme is already defined by someone else.
+ */
+export function assembleComponents(
+  components: Readonly<Record<string, unknown>>,
+  options: ResolvedCoreOptions,
+  contributions: readonly ResolvedContribution[]
+): {
+  readonly merged: ReadonlyMap<string, unknown>
+  readonly discarded: readonly DiscardedComponent[]
+} {
+  // Accumulated in a `Map`, converted once at the end. Component member names
+  // reach this from contributors, and writing one onto an object is not merely
+  // the shape an analyser flags: `Object.assign` invokes the target's
+  // `__proto__` setter, so a member by that name would replace the prototype
+  // instead of becoming an own component — and inherited entries would then
+  // take part in the scheme validation below. A `Map` key cannot do that.
+  const merged = new Map(Object.entries(components))
+
+  placeCatalogue(merged, options.openapi.includeCoreSchemas)
+  placeSchemes(merged, components, options)
 
   const discarded = mergeContributedComponents(merged, contributions)
 
   // Validated against everything the served document will define, libraries
   // included: rejecting a consumer for naming a scheme their own library
   // supplies would fail on the arrangement this lane exists to enable.
-  assertSchemesDeclared(openapi, asRecord(merged.get('securitySchemes')))
-
-  // Validated against everything the served document will define, libraries
-  // included: rejecting a consumer for naming a scheme their own library
-  // supplies would fail on the arrangement this lane exists to enable.
-  assertSchemesDeclared(openapi, asRecord(merged.get('securitySchemes')))
+  assertSchemesDeclared(options.openapi, asRecord(merged.get('securitySchemes')))
 
   return { merged, discarded }
 }
