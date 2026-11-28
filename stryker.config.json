@@ -3,6 +3,8 @@
   "packageManager": "pnpm",
   "plugins": ["@stryker-mutator/jest-runner", "@stryker-mutator/typescript-checker"],
   "testRunner": "jest",
+  "testRunnerNodeArgs_comment": "The same Node flags as the test scripts: ES-module-only dependencies load in Jest only under them.",
+  "testRunnerNodeArgs": ["--experimental-vm-modules", "--disable-warning=ExperimentalWarning"],
   "coverageAnalysis": "perTest",
   "jest": {
     "projectType": "custom",
