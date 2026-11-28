@@ -30,6 +30,7 @@ import type { INestApplication } from '@nestjs/common'
 import { Test } from '@nestjs/testing'
 import { Observable } from 'rxjs'
 import request from 'supertest'
+import { EventEmitter, once } from 'node:events'
 import type { Server } from 'node:http'
 
 import { BymaxCoreModule } from '../core.module'
@@ -38,12 +39,14 @@ import { InMemoryIdempotencyStore } from './idempotency.memory-store'
 import { BYMAX_IDEMPOTENCY_STORE } from './idempotency.store'
 import type { IIdempotencyStore } from './idempotency.store'
 
-const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
 const scope = (req: { headers?: Readonly<Record<string, unknown>> }): string =>
   String(req.headers?.['x-user'] ?? '')
 
 /** What the handlers ran, read back by the cases. */
 const runs = { count: 0 }
+
+/** Emits `entered` when the slow handler starts and waits for `release` before it answers. */
+const slowRoute = new EventEmitter()
 
 /** A store the cases can make fail, wrapping the in-memory one. */
 class FlakyStore implements IIdempotencyStore {
@@ -126,7 +129,9 @@ class IdempotentController {
   @Idempotent({ scope })
   async slow(): Promise<{ done: true }> {
     runs.count += 1
-    await sleep(150)
+    const released = once(slowRoute, 'release')
+    slowRoute.emit('entered')
+    await released
     return { done: true }
   }
 
@@ -308,9 +313,11 @@ describe('@Idempotent', () => {
   )
 
   it('answers 409 with Retry-After while the first request is running', async () => {
+    const entered = once(slowRoute, 'entered')
     const first = post('/i/slow', 'k-slow').then((res) => res)
-    await sleep(40)
+    await entered
     const second = await post('/i/slow', 'k-slow')
+    slowRoute.emit('release')
     await first
     const third = await post('/i/slow', 'k-slow')
 
@@ -406,15 +413,17 @@ describe('@Idempotent', () => {
   })
 
   it('keeps the key in progress when the client gives up while the handler runs', async () => {
-    const aborted = post('/i/slow', 'k-abort')
-      .timeout(30)
-      .then(
-        () => 'done',
-        () => 'aborted'
-      )
-    expect(await aborted).toBe('aborted')
+    const disconnected = new Promise<void>((resolve) => {
+      server().once('connection', (socket) => socket.once('close', () => resolve()))
+    })
+    const entered = once(slowRoute, 'entered')
+    const abandoned = post('/i/slow', 'k-abort')
+    abandoned.end(() => undefined)
+    await entered
+    abandoned.abort()
+    await disconnected
     const retry = await post('/i/slow', 'k-abort')
-    await sleep(300)
+    slowRoute.emit('release')
 
     expect(retry.status).toBe(409)
     expect(retry.body.code).toBe('BYMAX_IDEMPOTENCY_IN_PROGRESS')
