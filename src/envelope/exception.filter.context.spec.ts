@@ -2,8 +2,7 @@
  * Unit tests for BymaxExceptionFilter, around the mapping.
  *
  * Layer: unit.
- * Goal: prove the filter rethrows non-HTTP contexts, reads path and method
- * through neutral adapter accessors, hands unexpected errors to the
+ * Goal: prove the filter rethrows non-HTTP contexts, hands unexpected errors to the
  * observability seam, and omits the correlation and trace ids it does not have.
  * Mocks: the ArgumentsHost and HttpAdapter built by the shared harness.
  */

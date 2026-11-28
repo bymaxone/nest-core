@@ -217,7 +217,15 @@ export default [
   // (`**/*.spec.ts`), e2e specs (`**/*.e2e-spec.ts`, run under
   // jest.e2e.config.ts from test/e2e/), and the fixtures they share.
   {
-    files: ['**/*.spec.ts', '**/*.test.ts', '**/*.e2e-spec.ts', '**/__tests__/**/*.ts'],
+    files: [
+      '**/*.spec.ts',
+      '**/*.test.ts',
+      '**/*.e2e-spec.ts',
+      '**/__tests__/**/*.ts',
+      // Helpers the suites share, outside any spec's own directory.
+      'test/*.ts',
+      'test/support/**/*.ts'
+    ],
     languageOptions: {
       parser: tsParser,
       parserOptions: {
