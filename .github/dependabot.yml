@@ -54,11 +54,17 @@ updates:
         update-types: [version-update:semver-major]
       - dependency-name: prom-client
         update-types: [version-update:semver-major]
-      # A major of `typescript` or `eslint` is a toolchain migration: held for the whole
-      # 1.x line and taken in 2.0.
+      - dependency-name: helmet
+        update-types: [version-update:semver-major]
+      - dependency-name: '@opentelemetry/api'
+        update-types: [version-update:semver-major]
+      # A major of `typescript`, `eslint` or `@eslint/js` is a toolchain migration: held for
+      # the whole 1.x line and taken in 2.0.
       - dependency-name: typescript
         update-types: [version-update:semver-major]
       - dependency-name: eslint
+        update-types: [version-update:semver-major]
+      - dependency-name: '@eslint/js'
         update-types: [version-update:semver-major]
       # `@types/node` majors track the Node release line. `engines` declares
       # `>=24`, so typechecking against a newer major would let code compile
